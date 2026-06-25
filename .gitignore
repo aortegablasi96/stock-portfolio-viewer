@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+out/
+release/
+.vite/
+
+# Electron packaged artifacts
+*.exe
+*.dmg
+*.AppImage
+*.snap
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Local SQLite database files
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Claude Code local (machine-specific) settings
+.claude/settings.local.json
+
+# Editor / OS cruft
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Test / coverage output
+coverage/
+playwright-report/
+test-results/

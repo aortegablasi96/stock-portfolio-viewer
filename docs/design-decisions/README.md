@@ -1,0 +1,37 @@
+# Design Decision Records (DDRs)
+
+This directory holds **design decisions** for Stock Portfolio Viewer — UI/UX and lower-level design
+choices that are more granular than full ADRs but still worth recording. In the
+documentation hierarchy, DDRs sit just below ADRs in `docs/decisions/`.
+
+DDRs are authored via the `design-recorder` governance skill.
+
+## Conventions
+
+- One file per decision: `NNNN-short-title.md` (e.g. `0001-dashboard-layout.md`).
+- Numbers are zero-padded and increase monotonically.
+- If a design decision turns out to have architectural impact, promote it to an ADR in
+  `docs/decisions/` and reference it here.
+
+## Suggested Template
+
+```markdown
+# NNNN. <Title>
+
+- **Status:** Proposed | Accepted | Superseded by NNNN
+- **Date:** YYYY-MM-DD
+
+## Context
+
+The design problem and constraints.
+
+## Decision
+
+The chosen design and why.
+
+## Alternatives Considered
+
+Other options and why they were not chosen.
+```
+
+No DDRs have been recorded yet.

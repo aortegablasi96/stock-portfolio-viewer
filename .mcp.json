@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "interactive-brokers": {
+      "command": "REPLACE_WITH_RUNTIME",
+      "args": ["REPLACE_WITH_IBKR_MCP_SERVER"],
+      "env": {
+        "IBKR_GATEWAY_URL": "https://localhost:5000",
+        "IBKR_ACCOUNT_ID": "${IBKR_ACCOUNT_ID}"
+      }
+    }
+  }
+}
