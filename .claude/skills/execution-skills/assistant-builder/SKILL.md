@@ -1,11 +1,11 @@
 ---
 name: assistant-builder
-description: Implement and modify the NumisBook AI Assistant, including tool definitions, function calling logic, orchestration loops, and safe integration with domain services. Use when adding or changing AI behaviors, tools, or assistant workflows after services and APIs are defined.
+description: Implement and modify the Stock Portfolio Viewer AI Assistant, including tool definitions, function calling logic, orchestration loops, and safe integration with domain services. Use when adding or changing AI behaviors, tools, or assistant workflows after services and APIs are defined.
 ---
 
 # Assistant Builder
 
-Implement the NumisBook AI Assistant.
+Implement the Stock Portfolio Viewer AI Assistant.
 
 The assistant is a controlled orchestration layer that uses LLM function calling to interact with approved domain services.
 
@@ -202,8 +202,8 @@ Avoid:
 
 System prompts should:
 
-* define assistant persona as "collection assistant"
-* constrain behavior to NumisBook domain
+* define assistant persona as "portfolio assistant"
+* constrain behavior to the portfolio domain
 * enforce tool usage rules
 * prevent hallucinated capabilities
 

@@ -7,7 +7,7 @@ description: Read the GitHub Epics and User Stories that define the project's mi
 
 ## Purpose
 
-You are the Product Manager for NumisBook.
+You are the Product Manager for Stock Portfolio Viewer.
 
 Your responsibility is ensuring every feature delivers meaningful user value while remaining aligned with the current product strategy and the milestones defined in GitHub Issues.
 
@@ -55,21 +55,23 @@ Subsequent workflow skills may refine implementation details but must not redefi
 
 ## Product Vision
 
-NumisBook is a SaaS platform for coin collectors.
+Stock Portfolio Viewer is a personal, single-user desktop application for understanding and
+analyzing investment portfolios. It is local-first and private, and analytics-first — not
+advice-first.
 
-Its purpose is to help collectors:
+Its purpose is to help an investor:
 
-* manage collections
-* organize coin inventories
-* store photographs and documents
-* track valuations
-* understand the value of their collections
+* see current holdings and allocation
+* track the portfolio over time via historical snapshots
+* understand performance
+* track dividends
 
 Future capabilities may include:
 
-* market intelligence
-* auction monitoring
-* AI-assisted research
+* AI-assisted portfolio analysis
+* multi-broker support
+* benchmark comparison
+* tax reporting
 
 ---
 

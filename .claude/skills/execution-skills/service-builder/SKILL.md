@@ -1,6 +1,6 @@
 ---
 name: service-builder
-description: Implement or modify business services for NumisBook. Use when adding or changing domain behavior after the architecture and repository design have been approved.
+description: Implement or modify business services for Stock Portfolio Viewer. Use when adding or changing domain behavior after the architecture and repository design have been approved.
 ---
 
 # Service Builder

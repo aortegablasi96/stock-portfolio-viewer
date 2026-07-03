@@ -1,6 +1,6 @@
 ---
 name: repository-builder
-description: Implement or modify repository classes that encapsulate database access for NumisBook. Use when adding or changing persistence logic after the database design has been approved.
+description: Implement or modify repository classes that encapsulate database access for Stock Portfolio Viewer. Use when adding or changing persistence logic after the database design has been approved.
 ---
 
 # Repository Builder
@@ -94,10 +94,10 @@ Repository methods should describe business intent.
 
 Prefer:
 
-* `findCoinById()`
-* `listCollectionsForUser()`
-* `createValuation()`
-* `deleteCoinImage()`
+* `findHoldingById()`
+* `listHoldingsForPortfolio()`
+* `createSnapshot()`
+* `deleteSnapshot()`
 
 Avoid generic CRUD names when a more meaningful name exists.
 
@@ -145,8 +145,8 @@ Repositories define the canonical domain types.
 Prefer:
 
 ```ts
-export type Coin = typeof coins.$inferSelect;
-export type NewCoin = typeof coins.$inferInsert;
+export type Holding = typeof holdings.$inferSelect;
+export type NewHolding = typeof holdings.$inferInsert;
 ```
 
 Other layers should import these types from repositories rather than directly from the schema.

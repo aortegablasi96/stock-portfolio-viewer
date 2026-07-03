@@ -193,11 +193,10 @@ When appropriate, verify complete workflows using Playwright.
 
 Examples:
 
-* authentication
-* create collection
-* add coin
-* upload image
-* edit valuation
+* capture a snapshot on app open
+* view current holdings
+* view allocation breakdown
+* view performance over time
 * assistant workflow
 
 ---

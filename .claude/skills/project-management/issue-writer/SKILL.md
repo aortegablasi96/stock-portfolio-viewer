@@ -68,10 +68,10 @@ Create an Epic when the work:
 
 Examples:
 
-- Coin Images
-- Portfolio Analytics
-- Authentication
-- Production Readiness
+- Read-only Portfolio Dashboard
+- Historical Snapshots
+- Performance & Allocation Analytics
+- Dividend Tracking
 
 ---
 

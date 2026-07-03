@@ -69,12 +69,11 @@ Create Epics for major completed initiatives.
 
 Examples:
 
-- Initial Authentication
-- Coin Images
-- Portfolio Analytics
-- Figma UI Redesign
-- Assistant
-- Production Readiness
+- Project Scaffolding
+- Read-only Portfolio Dashboard
+- Historical Snapshots
+- Performance & Allocation Analytics
+- AI Assistant
 
 ---
 
@@ -85,15 +84,14 @@ Break each Epic into meaningful completed User Stories.
 Examples:
 
 Epic:
-Coin Images
+Historical Snapshots
 
 Stories:
 
-- Upload multiple images
-- Delete images
-- Image carousel
-- Image thumbnails
-- Object storage abstraction
+- Append-only snapshot storage
+- Capture-on-open
+- Manual snapshot capture
+- Snapshot-based analytics queries
 
 ---
 

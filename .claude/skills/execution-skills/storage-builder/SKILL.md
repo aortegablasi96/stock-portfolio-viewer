@@ -1,6 +1,6 @@
 ---
 name: storage-builder
-description: Implement storage-backed features using NumisBook's object storage abstraction. Use when adding or modifying functionality that stores, retrieves, transforms, or deletes binary objects such as images or documents.
+description: Implement storage-backed features using Stock Portfolio Viewer's local file storage abstraction. Use when adding or modifying functionality that stores, retrieves, transforms, or deletes binary objects such as documents or exported reports.
 ---
 
 # Storage Builder

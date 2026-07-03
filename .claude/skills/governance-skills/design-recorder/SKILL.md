@@ -92,7 +92,7 @@ Examples:
 ```text
 DDR-001-dashboard-layout.md
 DDR-002-data-table-standard.md
-DDR-003-coin-detail-layout.md
+DDR-003-allocation-chart-layout.md
 ```
 
 ---

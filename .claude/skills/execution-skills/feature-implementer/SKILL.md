@@ -1,6 +1,6 @@
 ---
 name: feature-implementer
-description: Implement approved NumisBook features by following the Implementation Plan and all approved planning artifacts. Use after planning is complete to build vertical slices across repositories, services, APIs, UI, and tests.
+description: Implement approved Stock Portfolio Viewer features by following the Implementation Plan and all approved planning artifacts. Use after planning is complete to build vertical slices across repositories, services, APIs, UI, and tests.
 ---
 
 # Feature Implementer

@@ -1,6 +1,6 @@
 ---
 name: ui-builder
-description: Implement or modify the NumisBook user interface using existing React patterns, the design system, and approved UX decisions. Use when building or updating pages, components, managers, or user interactions after UI and architecture reviews have been approved.
+description: Implement or modify the Stock Portfolio Viewer user interface using existing React patterns, the design system, and approved UX decisions. Use when building or updating pages, components, managers, or user interactions after UI and architecture reviews have been approved.
 ---
 
 # UI Builder
