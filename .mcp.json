@@ -1,5 +1,17 @@
 {
   "mcpServers": {
+    "context7": {
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp"]
+    },
+    "playwright": {
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp@latest"]
+    },
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "."]
+    },
     "interactive-brokers": {
       "command": "REPLACE_WITH_RUNTIME",
       "args": ["REPLACE_WITH_IBKR_MCP_SERVER"],
