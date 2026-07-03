@@ -217,8 +217,8 @@ Examples include:
 
 * infrastructure changes
 * storage providers
-* authentication strategy
-* deployment strategy
+* Interactive Brokers integration strategy
+* packaging / distribution strategy
 * architectural patterns
 * major dependencies
 

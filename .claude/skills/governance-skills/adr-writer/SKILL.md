@@ -85,8 +85,8 @@ Examples include:
 * architectural patterns
 * application structure
 * storage architecture
-* authentication strategy
-* deployment strategy
+* Interactive Brokers integration strategy
+* packaging / distribution strategy
 * AI architecture
 * integration architecture
 * major dependencies

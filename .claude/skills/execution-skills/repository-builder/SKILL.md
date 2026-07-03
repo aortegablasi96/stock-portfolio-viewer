@@ -20,14 +20,14 @@ Owns:
 * database queries
 * persistence logic
 * mapping database rows to domain objects
-* tenant isolation
+* data integrity at the storage boundary (e.g. append-only snapshot writes)
 * transaction boundaries (when appropriate)
 * repository domain types
 
 Does not own:
 
 * business rules
-* HTTP concerns
+* IPC concerns
 * UI
 * request validation
 * application workflows
@@ -122,19 +122,18 @@ Those belong in services.
 
 ---
 
-## Enforce Tenant Isolation
+## Single Owner — Enforce Data Integrity
 
-Repositories are responsible for enforcing tenant boundaries.
+This is a single-user, local-first app: there are **no tenants and no per-user scoping**. All
+rows belong to the one machine owner, so repositories do not require or filter by a `userId`.
 
-For user-owned entities:
+Repositories are instead responsible for enforcing **data-integrity rules** at the storage
+boundary. In particular:
 
-* require the authenticated user's `userId`
-* scope every query appropriately
-* never trust client-supplied ownership
+* historical snapshots are append-only — insert new rows, never update or delete stored snapshots
+* keep writes consistent (use a transaction when a logical change spans multiple rows)
 
-Operations affecting no visible rows should return an appropriate result for the service layer to handle (for example, allowing the service to raise `NotFoundError`).
-
-Never expose another tenant's data.
+Operations affecting no rows should return an appropriate result for the service layer to handle (for example, allowing the service to raise `NotFoundError`).
 
 ---
 
@@ -167,7 +166,7 @@ Schema changes belong to the Database Designer.
 
 Repositories coordinate persistence.
 
-When a feature involves object storage:
+When a feature involves local file storage:
 
 Repository
 
@@ -215,7 +214,7 @@ Implement repository methods.
 
 ## Step 4
 
-Verify tenant isolation.
+Verify data-integrity rules (e.g. append-only snapshot writes).
 
 ## Step 5
 
@@ -234,7 +233,7 @@ Repositories are generally tested indirectly through service tests.
 When repository-specific tests are required:
 
 * verify query behavior
-* verify tenant isolation
+* verify data-integrity rules (e.g. snapshot immutability)
 * verify persistence behavior
 * verify storage coordination
 * verify edge cases
@@ -265,9 +264,9 @@ Avoid testing business rules in repository tests.
 
 ---
 
-### Tenant Isolation
+### Data Integrity
 
-Describe how ownership is enforced.
+Describe how integrity rules (e.g. append-only snapshots) are enforced.
 
 ---
 
@@ -279,7 +278,7 @@ List any exported domain types.
 
 ### Storage Coordination
 
-Describe any interaction with object storage.
+Describe any interaction with local file storage.
 
 ---
 

@@ -5,9 +5,9 @@ description: Implement storage-backed features using Stock Portfolio Viewer's lo
 
 # Storage Builder
 
-Implement features that persist binary objects using the project's object storage abstraction.
+Implement features that persist binary files using the project's local file storage abstraction.
 
-All storage access must remain provider-independent and integrate cleanly with the repository layer.
+All storage access must go through that abstraction and integrate cleanly with the repository layer.
 
 ---
 
@@ -15,7 +15,7 @@ All storage access must remain provider-independent and integrate cleanly with t
 
 Owns:
 
-* object storage integration
+* local file storage integration
 * storage abstractions
 * upload workflows
 * download workflows
@@ -29,9 +29,9 @@ Does not own:
 * business rules
 * API design
 * UI
-* storage provider selection
+* the on-disk storage location and layout
 
-Storage providers are an implementation detail.
+Where files live on disk is an implementation detail behind the abstraction.
 
 ---
 
@@ -80,23 +80,22 @@ Review existing storage-backed features before introducing new ones.
 
 ## Always Use the Storage Abstraction
 
-Interact only through the project's `ObjectStorage` interface.
+Interact only through the project's `FileStorage` interface.
 
 Never couple feature code directly to:
 
-* Cloudflare R2
-* AWS SDK
-* local filesystem
+* raw `fs` / filesystem calls
+* absolute or hard-coded paths
 
-The storage backend must remain swappable.
+The on-disk layout must remain an implementation detail of the abstraction.
 
 ---
 
 ## Separate Metadata from Binary Data
 
-Binary objects belong in object storage.
+Binary files belong in local file storage.
 
-Metadata belongs in PostgreSQL.
+Metadata belongs in SQLite.
 
 Repositories coordinate both.
 
@@ -112,7 +111,7 @@ database metadata
 
 ↓
 
-object storage
+local file storage
 
 Storage Builder should extend this pattern rather than bypass it.
 
@@ -144,15 +143,11 @@ Prefer atomic behavior whenever practical.
 
 ---
 
-## Keep Providers Replaceable
+## Keep Storage Details Behind the Abstraction
 
-Do not expose provider-specific concepts outside the storage layer.
+Do not expose filesystem paths or layout details outside the storage layer.
 
-Features should work regardless of whether the active backend is:
-
-* local filesystem
-* Cloudflare R2
-* another S3-compatible provider
+Features should work regardless of where the abstraction chooses to place files on disk.
 
 ---
 
@@ -212,11 +207,11 @@ Verify:
 * invalid file types
 * oversized files
 * missing objects
-* storage provider failures
+* file I/O failures
 
-Mock storage providers during service tests.
+Mock the file storage abstraction during service tests.
 
-Avoid testing provider SDKs directly.
+Avoid testing the filesystem directly.
 
 ---
 

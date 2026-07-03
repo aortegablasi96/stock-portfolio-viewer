@@ -1,15 +1,19 @@
 ---
 name: api-builder
-description: Implement Next.js API routes by exposing approved services through thin HTTP endpoints. Use when adding or modifying API routes after the service layer has been designed or implemented.
+description: Implement thin Electron IPC handlers that expose approved services to the React renderer over IPC. Use when adding or modifying IPC handlers after the service layer has been designed or implemented.
 ---
 
 # API Builder
 
-Implement HTTP APIs that expose the application's business services.
+Implement the IPC handlers that let the React renderer call the Electron main process.
 
-API routes translate HTTP requests into service calls.
+An IPC handler translates an invocation from the renderer into a service call.
 
-They do not contain business logic.
+It does not contain business logic.
+
+Stock Portfolio Viewer is a **single-user, local-first desktop application**: there is no HTTP
+server, no network API, and no authentication. The "API" is the typed **IPC boundary** between
+the renderer and the main process.
 
 ---
 
@@ -17,12 +21,11 @@ They do not contain business logic.
 
 Owns:
 
-* API route handlers
-* request validation
-* authentication
-* response shaping
-* HTTP status codes
-* error mapping
+* IPC handler registration (`ipcMain.handle`)
+* validating the channel payload (Zod)
+* delegating to services
+* shaping the serializable result returned to the renderer
+* mapping domain errors into a serializable error result
 
 Does not own:
 
@@ -50,7 +53,7 @@ API Builder
 
 UI Builder
 
-API routes expose existing business capabilities.
+IPC handlers expose existing business capabilities to the renderer.
 
 ---
 
@@ -68,21 +71,17 @@ Review project documentation:
 * docs/architecture.md
 * docs/decisions/
 
-Review existing route implementations before creating new endpoints.
+Review the existing IPC handlers and the preload bridge before adding new channels.
 
 ---
 
 # Architectural Principles
 
-## Keep Routes Thin
+## Keep Handlers Thin
 
-Every route should follow the same pattern:
+Every handler follows the same pattern:
 
-Validate request
-
-↓
-
-Authenticate user
+Validate payload
 
 ↓
 
@@ -90,73 +89,44 @@ Call service
 
 ↓
 
-Return response
+Return serializable result
 
-Avoid placing business logic inside route handlers.
+Avoid placing business logic inside handlers.
 
 ---
 
-## Use Shared API Helpers
+## Name Channels by Domain
 
-Reuse existing helpers whenever possible.
-
-Current shared helpers include:
-
-* `currentUser()`
-* `unauthorized()`
-* `errorResponse()`
-
-Do not duplicate common API logic.
+Namespace channels by domain and action, for example `portfolio:getHoldings`,
+`snapshots:capture`, `analytics:performance`. Keep the channel list explicit and expose it to
+the renderer through the preload **contextBridge** as a typed API surface. The renderer must
+only reach the main process through that allowlisted bridge — never through `ipcRenderer`
+directly, and never by touching repositories or data sources.
 
 ---
 
 ## Validate Inputs
 
-Validate all client input using the project's Zod schemas.
-
-Validation belongs at the API boundary.
-
-Services should receive validated data.
+Validate every payload crossing the IPC boundary using the project's Zod schemas. Treat the
+renderer as untrusted input even though it runs locally. Services receive already-validated
+data.
 
 ---
 
-## Authentication
+## Single Owner — No Authentication
 
-Never trust user identifiers supplied by the client.
-
-Resolve the authenticated user from the session.
-
-Pass the resolved domain user into services.
-
-Tenant ownership must always be enforced by the service and repository layers.
+There is no user authentication and no multi-tenancy. All data belongs to the single machine
+owner, and the desktop OS account is the security boundary. Do not add user identifiers,
+sessions, or ownership scoping.
 
 ---
 
 ## Error Handling
 
-Services throw typed `AppError` instances.
-
-Routes translate them into HTTP responses using the shared error helpers.
-
-Avoid manual error mapping unless required by an endpoint.
-
----
-
-## Response Design
-
-Return concise, consistent JSON.
-
-Prefer existing response shapes over inventing new ones.
-
-Use appropriate HTTP status codes:
-
-* 200 OK
-* 201 Created
-* 204 No Content
-* 400 Bad Request
-* 401 Unauthorized
-* 404 Not Found
-* 500 Internal Server Error
+Services throw typed `AppError` instances. Handlers either re-throw (so `ipcRenderer.invoke`
+rejects in the renderer) or return a structured error result — follow the existing convention.
+Because IPC serializes values, never return non-serializable values (class instances,
+functions, `Date` where a primitive is expected); return plain, serializable data.
 
 ---
 
@@ -168,78 +138,75 @@ Review the existing service interface.
 
 ## Step 2
 
-Review similar API routes.
+Review similar IPC handlers and the preload bridge.
 
 ## Step 3
 
-Validate request inputs.
+Validate the channel payload with Zod.
 
 ## Step 4
 
-Authenticate the request.
+Invoke the service.
 
 ## Step 5
 
-Invoke the service.
+Return a serializable result (or structured error).
 
 ## Step 6
 
-Return the appropriate HTTP response.
+Expose the channel through the preload bridge if it is new.
 
 ## Step 7
 
-Add or update API route tests.
+Add or update handler tests.
 
 ---
 
 # Testing
 
-Follow the project's API testing conventions.
+Follow the project's testing conventions.
 
 Mock:
 
-* `@/auth`
-* `@/services/auth.service`
-* called service modules
+* the called service modules
 
 Use real Zod validation.
 
 Verify:
 
-* successful requests
+* successful invocations
 * validation failures
-* unauthorized requests
-* AppError mapping
-* response structure
-* expected status codes
+* `AppError` mapping to the error result / rejection
+* result serializability
+* the channel is exposed through the preload bridge
 
 ---
 
 # Output
 
-## API Implementation Summary
+## IPC Implementation Summary
 
-### Endpoints Added or Modified
+### Channels Added or Modified
 
 * ...
 
 ---
 
-### Request Validation
+### Payload Validation
 
 Describe any new or updated validation schemas.
 
 ---
 
-### Authentication
+### Error Handling
 
-Describe how authentication is enforced.
+Describe how domain errors surface to the renderer.
 
 ---
 
-### Response Changes
+### Result Changes
 
-Summarize any new or modified response shapes.
+Summarize any new or modified result shapes.
 
 ---
 
@@ -251,4 +218,4 @@ Summarize any new or modified response shapes.
 
 ### Notes
 
-Summarize any implementation details relevant to the API layer.
+Summarize any implementation details relevant to the IPC layer.

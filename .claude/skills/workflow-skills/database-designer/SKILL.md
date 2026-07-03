@@ -1,12 +1,12 @@
 ---
 name: database-designer
-description: Produce Database Reviews for approved features that require schema, persistence, migration, or indexing changes. Use after the Architecture Review and before implementation whenever a feature affects PostgreSQL, Drizzle schemas, relationships, constraints, or storage.
+description: Produce Database Reviews for approved features that require schema, persistence, migration, or indexing changes. Use after the Architecture Review and before implementation whenever a feature affects the SQLite schema, Drizzle schemas, relationships, constraints, or storage.
 ---
 
 # Database Designer
 
 Design database changes that support the approved architecture while preserving
-consistency, normalization, migration safety, and tenant isolation.
+consistency, normalization, migration safety, and the immutability of historical snapshots.
 
 The Database Designer owns the **Database Review** artifact.
 
@@ -104,7 +104,7 @@ Always prefer:
 
 * normalization
 * explicit relationships
-* tenant isolation
+* append-only, immutable snapshots
 * migration safety
 * simplicity
 * consistency with existing patterns
@@ -120,26 +120,25 @@ Avoid:
 
 # Current Stack
 
-* PostgreSQL
+* SQLite (embedded, local)
 * Drizzle ORM
-* UUID primary keys
 * Drizzle migrations
 
 ---
 
-# Tenant Isolation
+# Single-User, Local Data
 
-Every persistence proposal must preserve tenant isolation.
+This is a single-user, local-first desktop app. There are **no tenants, no user accounts, and
+no authorization boundaries** — all rows belong to the one machine owner. Do not add `userId`
+columns or ownership scoping.
 
-Verify:
+Instead, every persistence proposal must preserve **data integrity**, and especially the rules
+for historical snapshots:
 
-* user ownership
-* foreign-key chains
-* repository filtering
-* cascade behaviour
-* authorization boundaries
-
-Never introduce a schema that allows cross-tenant access.
+* snapshots are append-only, immutable, and timestamped
+* never introduce schema or constraints that allow a stored snapshot to be mutated in place
+* verify foreign-key chains and cascade behaviour
+* prefer constraints that make invalid history unrepresentable
 
 ---
 
@@ -200,9 +199,9 @@ When storage is affected, verify consistency with accepted ADRs.
 
 Examples:
 
-* object storage
+* local file storage
 * metadata tables
-* storage keys
+* file paths
 * lifecycle management
 
 Do not redesign storage architecture.
@@ -308,16 +307,16 @@ Describe:
 
 * migration order
 * compatibility
-* deployment considerations
+* migration-on-launch considerations
 
 ---
 
-## Tenant Isolation Review
+## Data Integrity Review
 
 Confirm:
 
-* ownership preserved
-* authorization preserved
+* snapshot immutability preserved (append-only, no in-place mutation)
+* constraints and foreign-key chains preserved
 * repository implications
 
 ---

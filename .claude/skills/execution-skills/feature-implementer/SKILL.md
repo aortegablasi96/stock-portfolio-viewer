@@ -142,7 +142,7 @@ Repositories
 
 * persistence
 * Drizzle queries
-* tenant isolation
+* data integrity (e.g. append-only snapshots)
 
 Database
 
@@ -172,7 +172,7 @@ Always:
 * preserve type safety
 * use existing validation
 * follow repository/service architecture
-* respect tenant isolation
+* keep snapshots append-only and immutable
 * reuse existing UI patterns
 * reuse existing storage abstractions
 

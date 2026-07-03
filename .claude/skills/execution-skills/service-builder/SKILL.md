@@ -9,7 +9,7 @@ Implement business services.
 
 Services contain the application's business rules and orchestrate interactions between repositories and other domain services.
 
-They are framework-agnostic and independent of HTTP, React, and database implementation details.
+They are framework-agnostic and independent of IPC, React, and database implementation details.
 
 ---
 
@@ -27,7 +27,7 @@ Owns:
 
 Does not own:
 
-* HTTP
+* IPC / transport concerns
 * request validation
 * UI
 * SQL queries
@@ -93,7 +93,7 @@ They should not contain:
 * SQL
 * Drizzle queries
 * React components
-* HTTP request handling
+* IPC handling
 
 ---
 
@@ -101,11 +101,10 @@ They should not contain:
 
 Services should not depend on:
 
-* Next.js
-* Route Handlers
+* Electron / IPC
+* `ipcMain` / `ipcRenderer`
+* the preload bridge
 * React
-* Request
-* Response
 
 Services operate on plain TypeScript values and return domain objects.
 
@@ -150,7 +149,7 @@ Known business failures should throw project-specific errors such as:
 
 Avoid throwing raw `Error` for expected domain failures.
 
-Routes are responsible for translating domain errors into HTTP responses.
+IPC handlers are responsible for translating domain errors into results returned to the renderer.
 
 ---
 
@@ -185,7 +184,7 @@ Services must never depend on:
 
 * database implementation
 * UI components
-* Route Handlers
+* IPC handlers
 
 ---
 
@@ -238,7 +237,7 @@ Verify:
 * domain errors
 * interactions with repositories
 
-Avoid testing SQL or HTTP behavior in service tests.
+Avoid testing SQL or IPC behavior in service tests.
 
 ---
 

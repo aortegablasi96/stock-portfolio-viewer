@@ -18,7 +18,7 @@ It must remain safe, deterministic where possible, and strictly bounded to the a
 Owns:
 
 * assistant orchestration logic
-* OpenAI function calling setup
+* Anthropic (Claude) tool-use setup
 * tool definitions and schemas
 * prompt design for assistant behavior
 * tool execution routing
@@ -30,7 +30,7 @@ Does not own:
 * business logic
 * database access
 * service implementation
-* API routes (outside assistant endpoint structure)
+* IPC handlers (outside assistant orchestration)
 * UI rendering logic
 
 The assistant orchestrates services; it does not replace them.
@@ -96,15 +96,20 @@ Never allow the model to access:
 
 ---
 
-## Strict Tenant Isolation
+## Single Owner & Analytics-Only
 
-All tool calls must enforce:
+This is a single-user, local-first app: there is **no user identity, no tenant, and no
+`userId`** — tools operate on the one owner's local data. There is no identity for the model
+to choose or modify.
 
-* authenticated `userId`
-* server-side injection of user context
-* no user-provided identity overrides
+The real safety boundary is behavioural: per the AI Principles in CLAUDE.md, the assistant is
+**analytics-only**. Tools must:
 
-The model must never choose or modify tenant identity.
+* read and analyze the owner's portfolio data
+* never place trades, modify holdings, or execute transactions
+* never recommend investments or decide allocations
+
+The user remains the decision maker.
 
 ---
 
@@ -181,7 +186,7 @@ All tools must:
 * map directly to a service method
 * accept validated inputs only
 * return structured JSON
-* enforce tenant isolation internally
+* remain analytics-only (never trade, mutate holdings, or execute transactions)
 * avoid side effects outside service scope
 
 Prefer:
@@ -231,7 +236,7 @@ Update assistant orchestration logic.
 
 ## Step 4
 
-Ensure tenant isolation is enforced.
+Ensure tools remain analytics-only (no trading or mutation).
 
 ## Step 5
 
@@ -249,14 +254,14 @@ Test:
 
 * tool invocation correctness
 * multi-step reasoning flows
-* tenant isolation safety
+* analytics-only safety (no trading or mutation)
 * invalid tool inputs
 * fallback behavior
 * error handling
 
 Mock:
 
-* OpenAI API
+* the Anthropic (Claude) API
 * service layer functions
 * tool execution layer
 
@@ -292,7 +297,7 @@ Summarize system prompt or behavior changes.
 
 ### Safety Considerations
 
-* tenant isolation
+* analytics-only (no trading, no order execution)
 * tool restrictions
 * failure handling
 
