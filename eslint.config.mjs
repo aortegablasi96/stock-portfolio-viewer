@@ -14,6 +14,13 @@ export default tseslint.config(
     },
   },
   {
+    // Playwright E2E runs in Node; its page.evaluate callbacks touch window.
+    files: ['e2e/**/*.{ts,tsx}'],
+    languageOptions: {
+      globals: { ...globals.node, ...globals.browser },
+    },
+  },
+  {
     // Renderer runs in the browser (Electron renderer process).
     files: ['src/renderer/**/*.{ts,tsx}'],
     languageOptions: {

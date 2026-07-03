@@ -2,6 +2,7 @@ import { join } from 'node:path'
 import { app, BrowserWindow, shell } from 'electron'
 import { registerIpcHandlers } from './ipc/handlers'
 import { runMigrations } from '@db/migrate'
+import { metaService } from '@services/meta/metaService'
 
 const isDev = !app.isPackaged
 
@@ -53,6 +54,8 @@ function createWindow(): void {
 app.whenReady().then(() => {
   // Bring the local schema up to date before anything reads the database.
   runMigrations()
+  // Exercise the service -> repository -> SQLite slice on every launch.
+  console.log(`[app] install id ${metaService.getInstallId()}`)
   registerIpcHandlers()
   createWindow()
 
