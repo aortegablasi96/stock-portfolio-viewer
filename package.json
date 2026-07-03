@@ -9,23 +9,31 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
-    "postbuild:typecheck": "tsc --noEmit -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "package": "electron-vite build && electron-builder",
     "lint": "eslint .",
-    "start": "electron-vite preview"
+    "start": "electron-vite preview",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio",
+    "postinstall": "electron-rebuild -f -w better-sqlite3"
   },
   "dependencies": {
+    "better-sqlite3": "^12.11.1",
+    "drizzle-orm": "^0.45.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@electron/rebuild": "^4.1.0",
     "@eslint/js": "^9.16.0",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.10.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",
+    "drizzle-kit": "^0.31.10",
     "electron": "^33.2.1",
     "electron-builder": "^25.1.8",
     "electron-vite": "^2.3.0",

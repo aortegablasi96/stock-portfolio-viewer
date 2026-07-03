@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import { app, BrowserWindow, shell } from 'electron'
 import { registerIpcHandlers } from './ipc/handlers'
+import { runMigrations } from '@db/migrate'
 
 const isDev = !app.isPackaged
 
@@ -50,6 +51,8 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
+  // Bring the local schema up to date before anything reads the database.
+  runMigrations()
   registerIpcHandlers()
   createWindow()
 

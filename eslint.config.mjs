@@ -22,7 +22,8 @@ export default tseslint.config(
     rules: {
       // Enforce the downward-only dependency rule: the renderer may only reach
       // the main process over the IPC bridge (window.api), never by importing
-      // services, repositories, or Electron/Node directly (see ADR-0002).
+      // services, repositories, the database, or Electron/Node directly
+      // (see ADR-0002 / ADR-0003).
       'no-restricted-imports': [
         'error',
         {
@@ -33,14 +34,36 @@ export default tseslint.config(
                 '@services/*',
                 '@repositories',
                 '@repositories/*',
+                '@db',
+                '@db/*',
                 '@main',
                 '@main/*',
                 '**/services/**',
                 '**/repositories/**',
+                '**/db/**',
                 'electron',
               ],
               message:
-                'The renderer must not import services, repositories, main, or electron directly. Communicate over the IPC bridge (window.api).',
+                'The renderer must not import services, repositories, the database, main, or electron directly. Communicate over the IPC bridge (window.api).',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    // Services hold pure business logic: they may use repositories, but must not
+    // reach the database directly or depend on Electron/main (see ADR-0003).
+    files: ['src/services/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@db', '@db/*', '**/db/**', '@main', '@main/*', 'electron'],
+              message:
+                'Services must not access the database or Electron directly. Go through a repository (@repositories/*).',
             },
           ],
         },

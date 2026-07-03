@@ -8,6 +8,7 @@ const alias = {
   '@renderer': resolve('src/renderer/src'),
   '@services': resolve('src/services'),
   '@repositories': resolve('src/repositories'),
+  '@db': resolve('src/db'),
   '@shared': resolve('src/shared'),
 }
 
