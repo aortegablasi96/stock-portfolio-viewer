@@ -1,5 +1,6 @@
 import { join } from 'node:path'
 import { app, BrowserWindow, shell } from 'electron'
+import { registerIpcHandlers } from './ipc/handlers'
 
 const isDev = !app.isPackaged
 
@@ -49,6 +50,7 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
+  registerIpcHandlers()
   createWindow()
 
   // macOS: re-create a window when the dock icon is clicked and none are open.

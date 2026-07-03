@@ -19,5 +19,32 @@ export default tseslint.config(
     languageOptions: {
       globals: { ...globals.browser },
     },
+    rules: {
+      // Enforce the downward-only dependency rule: the renderer may only reach
+      // the main process over the IPC bridge (window.api), never by importing
+      // services, repositories, or Electron/Node directly (see ADR-0002).
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: [
+                '@services',
+                '@services/*',
+                '@repositories',
+                '@repositories/*',
+                '@main',
+                '@main/*',
+                '**/services/**',
+                '**/repositories/**',
+                'electron',
+              ],
+              message:
+                'The renderer must not import services, repositories, main, or electron directly. Communicate over the IPC bridge (window.api).',
+            },
+          ],
+        },
+      ],
+    },
   },
 )
