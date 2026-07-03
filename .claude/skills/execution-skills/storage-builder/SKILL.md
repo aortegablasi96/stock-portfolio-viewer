@@ -1,15 +1,13 @@
 ---
 name: storage-builder
-description: Implement storage-backed features using Stock Portfolio Viewer's local file storage abstraction. Use when adding or modifying functionality that stores, retrieves, transforms, or deletes binary files such as documents or exported reports on the local machine.
+description: Implement storage-backed features using NumisBook's object storage abstraction. Use when adding or modifying functionality that stores, retrieves, transforms, or deletes binary objects such as images or documents.
 ---
 
 # Storage Builder
 
-Implement features that persist binary files using the project's file storage abstraction.
+Implement features that persist binary objects using the project's object storage abstraction.
 
-Because this is a local-first desktop app, binary files live on the **local filesystem**
-(within the app's data directory), not in cloud object storage. Storage access must remain
-behind the abstraction and integrate cleanly with the repository layer.
+All storage access must remain provider-independent and integrate cleanly with the repository layer.
 
 ---
 
@@ -17,7 +15,7 @@ behind the abstraction and integrate cleanly with the repository layer.
 
 Owns:
 
-* local file storage integration
+* object storage integration
 * storage abstractions
 * upload workflows
 * download workflows
@@ -82,20 +80,23 @@ Review existing storage-backed features before introducing new ones.
 
 ## Always Use the Storage Abstraction
 
-Interact only through the project's `FileStorage` interface.
+Interact only through the project's `ObjectStorage` interface.
 
-Never couple feature code directly to `fs` / Node path APIs or to absolute paths.
+Never couple feature code directly to:
 
-The storage backend (default: local filesystem under the app data directory) must remain
-swappable.
+* Cloudflare R2
+* AWS SDK
+* local filesystem
+
+The storage backend must remain swappable.
 
 ---
 
 ## Separate Metadata from Binary Data
 
-Binary files belong on the filesystem.
+Binary objects belong in object storage.
 
-Metadata belongs in SQLite.
+Metadata belongs in PostgreSQL.
 
 Repositories coordinate both.
 
@@ -111,13 +112,13 @@ database metadata
 
 ↓
 
-file storage
+object storage
 
 Storage Builder should extend this pattern rather than bypass it.
 
 ---
 
-## Handle the Entire File Lifecycle
+## Handle the Entire Object Lifecycle
 
 Storage implementations should consider:
 
@@ -145,12 +146,13 @@ Prefer atomic behavior whenever practical.
 
 ## Keep Providers Replaceable
 
-Do not expose backend-specific concepts (absolute paths, `fs` handles) outside the storage layer.
+Do not expose provider-specific concepts outside the storage layer.
 
 Features should work regardless of whether the active backend is:
 
-* the local filesystem (default)
-* a future alternative backend
+* local filesystem
+* Cloudflare R2
+* another S3-compatible provider
 
 ---
 
@@ -204,17 +206,17 @@ Verify:
 
 * successful uploads
 * successful downloads
-* file deletion
+* object deletion
 * metadata persistence
 * cleanup after failures
 * invalid file types
 * oversized files
-* missing files
-* storage backend failures
+* missing objects
+* storage provider failures
 
-Mock the storage abstraction during service tests.
+Mock storage providers during service tests.
 
-Avoid testing the filesystem directly in service tests.
+Avoid testing provider SDKs directly.
 
 ---
 
@@ -228,7 +230,7 @@ Avoid testing the filesystem directly in service tests.
 
 ---
 
-### Files Managed
+### Objects Managed
 
 * ...
 

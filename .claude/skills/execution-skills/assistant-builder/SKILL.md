@@ -1,11 +1,11 @@
 ---
 name: assistant-builder
-description: Implement and modify the Stock Portfolio Viewer AI Assistant, including tool definitions, function calling logic, orchestration loops, and safe integration with domain services. Use when adding or changing AI behaviors, tools, or assistant workflows after services and APIs are defined.
+description: Implement and modify the NumisBook AI Assistant, including tool definitions, function calling logic, orchestration loops, and safe integration with domain services. Use when adding or changing AI behaviors, tools, or assistant workflows after services and APIs are defined.
 ---
 
 # Assistant Builder
 
-Implement the Stock Portfolio Viewer AI Assistant.
+Implement the NumisBook AI Assistant.
 
 The assistant is a controlled orchestration layer that uses LLM function calling to interact with approved domain services.
 
@@ -18,7 +18,7 @@ It must remain safe, deterministic where possible, and strictly bounded to the a
 Owns:
 
 * assistant orchestration logic
-* LLM function calling setup
+* OpenAI function calling setup
 * tool definitions and schemas
 * prompt design for assistant behavior
 * tool execution routing
@@ -30,7 +30,7 @@ Does not own:
 * business logic
 * database access
 * service implementation
-* IPC handlers (outside the assistant's own channel structure)
+* API routes (outside assistant endpoint structure)
 * UI rendering logic
 
 The assistant orchestrates services; it does not replace them.
@@ -45,7 +45,7 @@ Service Builder
 
 ↓
 
-API Builder (IPC)
+API Builder
 
 ↓
 
@@ -96,11 +96,15 @@ Never allow the model to access:
 
 ---
 
-## Single-User, Local Context
+## Strict Tenant Isolation
 
-This is a single-user desktop app: there is no authentication and no tenant identity. The
-model must not invent or accept a `userId`/tenant. Tool calls operate on the owner's own
-local data, scoped by real domain concepts (e.g. `accountId`) — never by user identity.
+All tool calls must enforce:
+
+* authenticated `userId`
+* server-side injection of user context
+* no user-provided identity overrides
+
+The model must never choose or modify tenant identity.
 
 ---
 
@@ -177,6 +181,7 @@ All tools must:
 * map directly to a service method
 * accept validated inputs only
 * return structured JSON
+* enforce tenant isolation internally
 * avoid side effects outside service scope
 
 Prefer:
@@ -197,8 +202,8 @@ Avoid:
 
 System prompts should:
 
-* define assistant persona as "portfolio assistant"
-* constrain behavior to Stock Portfolio Viewer domain
+* define assistant persona as "collection assistant"
+* constrain behavior to NumisBook domain
 * enforce tool usage rules
 * prevent hallucinated capabilities
 
@@ -226,7 +231,7 @@ Update assistant orchestration logic.
 
 ## Step 4
 
-Ensure tools are bounded to approved services and safe inputs.
+Ensure tenant isolation is enforced.
 
 ## Step 5
 
@@ -244,19 +249,20 @@ Test:
 
 * tool invocation correctness
 * multi-step reasoning flows
+* tenant isolation safety
 * invalid tool inputs
 * fallback behavior
 * error handling
 
 Mock:
 
-* LLM provider API
+* OpenAI API
 * service layer functions
 * tool execution layer
 
 Verify:
 
-* no tool access outside the approved service surface
+* no unauthorized tool access
 * no direct data access bypass
 * correct mapping to services
 
@@ -286,8 +292,8 @@ Summarize system prompt or behavior changes.
 
 ### Safety Considerations
 
-* tool restrictions (bounded to approved services)
-* read-only vs. side-effecting tools
+* tenant isolation
+* tool restrictions
 * failure handling
 
 ---

@@ -66,6 +66,11 @@ Product Manager
 
 ↓
 
+Issue Writer
+→ GitHub Issues
+
+↓
+
 Implementation Engineer
 → Implementation Plan
 
@@ -133,6 +138,7 @@ Every review should evaluate:
 * business rules
 * regressions
 * edge cases
+* authorization
 * validation
 * accessibility
 * user workflows
@@ -157,13 +163,14 @@ Repositories and external providers should be mocked.
 
 ---
 
-## IPC Handler Tests
+## API Tests
 
 Verify:
 
 * validation
-* error mapping to structured results
-* result shape and serializability
+* authorization
+* status codes
+* error mapping
 
 ---
 
@@ -182,15 +189,15 @@ When UI changes are involved, verify:
 
 ## End-to-End Validation
 
-When appropriate, verify complete workflows using Playwright (driving the Electron app).
+When appropriate, verify complete workflows using Playwright.
 
 Examples:
 
-* launch the app
-* create portfolio
-* add holding
-* capture snapshot
-* view performance analytics
+* authentication
+* create collection
+* add coin
+* upload image
+* edit valuation
 * assistant workflow
 
 ---
@@ -232,7 +239,7 @@ Review relevant edge cases such as:
 * invalid input
 * missing data
 * duplicate operations
-* broker/gateway unavailable or returning errors
+* authorization failures
 * storage failures
 * database failures
 * concurrent operations
@@ -271,7 +278,7 @@ Confirm whether each acceptance criterion has been satisfied.
 Summarize:
 
 * service tests
-* IPC handler tests
+* API tests
 * UI validation
 * end-to-end validation
 

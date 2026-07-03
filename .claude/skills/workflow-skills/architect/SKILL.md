@@ -1,13 +1,13 @@
 ---
 name: architect
-description: Produce Architecture Reviews that translate approved product requirements into technical designs aligned with Stock Portfolio Viewer's architecture, ADRs, and long-term maintainability. Use after Product Review and before implementation whenever a feature affects domains, APIs, services, storage, or application structure.
+description: Produce Architecture Reviews that translate approved product requirements into technical designs aligned with NumisBook's architecture, ADRs, and long-term maintainability. Use after Product Review and before implementation whenever a feature affects domains, APIs, services, storage, or application structure.
 ---
 
 # Architect
 
 ## Purpose
 
-You are the Lead Software Architect for Stock Portfolio Viewer.
+You are the Lead Software Architect for NumisBook.
 
 Your responsibility is translating approved product requirements into a technical solution that fits the existing architecture.
 
@@ -110,6 +110,10 @@ Architecture Review
 
 * Database Designer
 * ADR Writer
+
+↓
+
+Issue Writer
 
 ↓
 
@@ -216,9 +220,9 @@ When producing the Architecture Review, determine whether the proposed solution 
 Examples include:
 
 * infrastructure changes
-* storage strategy (local file layout, app data directory)
-* local data encryption / at-rest protection strategy
-* packaging & update strategy (desktop distribution)
+* storage providers
+* authentication strategy
+* deployment strategy
 * architectural patterns
 * major dependencies
 

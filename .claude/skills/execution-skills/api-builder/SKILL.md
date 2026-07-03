@@ -1,18 +1,15 @@
 ---
 name: api-builder
-description: Implement Electron IPC handlers that expose approved services to the React renderer through a thin, typed bridge. Use when adding or modifying the renderer↔main IPC surface after the service layer has been designed or implemented.
+description: Implement Next.js API routes by exposing approved services through thin HTTP endpoints. Use when adding or modifying API routes after the service layer has been designed or implemented.
 ---
 
 # API Builder
 
-Implement the application's internal **API surface** — the Electron **IPC handlers** that
-expose business services to the React renderer.
+Implement HTTP APIs that expose the application's business services.
 
-In this desktop app there is no HTTP server and no browser-to-server network hop. The
-renderer (UI) calls the main process over a typed IPC bridge; handlers in the main process
-translate those calls into service calls.
+API routes translate HTTP requests into service calls.
 
-IPC handlers do not contain business logic.
+They do not contain business logic.
 
 ---
 
@@ -20,11 +17,12 @@ IPC handlers do not contain business logic.
 
 Owns:
 
-* IPC channel handlers (`ipcMain.handle` registrations)
-* the typed preload bridge exposed to the renderer
-* input validation at the IPC boundary
-* result/error shaping for IPC responses
-* mapping domain errors to structured IPC error results
+* API route handlers
+* request validation
+* authentication
+* response shaping
+* HTTP status codes
+* error mapping
 
 Does not own:
 
@@ -52,7 +50,7 @@ API Builder
 
 UI Builder
 
-IPC handlers expose existing business capabilities to the renderer.
+API routes expose existing business capabilities.
 
 ---
 
@@ -70,17 +68,21 @@ Review project documentation:
 * docs/architecture.md
 * docs/decisions/
 
-Review existing IPC handlers before creating new channels.
+Review existing route implementations before creating new endpoints.
 
 ---
 
 # Architectural Principles
 
-## Keep Handlers Thin
+## Keep Routes Thin
 
-Every handler should follow the same pattern:
+Every route should follow the same pattern:
 
-Validate input
+Validate request
+
+↓
+
+Authenticate user
 
 ↓
 
@@ -88,37 +90,45 @@ Call service
 
 ↓
 
-Return a serializable result
+Return response
 
-Avoid placing business logic inside IPC handlers.
-
----
-
-## A Single-User, Local Context
-
-This is a single-user desktop app. There is **no authentication, no session, and no
-tenant isolation** — the only actor is the owner of the machine. Do not invent `userId`
-parameters or ownership checks at the IPC boundary; scope data by domain concepts that
-actually exist (e.g. brokerage `accountId`), not by user identity.
+Avoid placing business logic inside route handlers.
 
 ---
 
-## Use a Typed, Minimal Bridge
+## Use Shared API Helpers
 
-Expose IPC to the renderer through a `contextBridge` preload that surfaces a small, typed
-API (e.g. `window.api.portfolio.get()`), not raw `ipcRenderer`. Keep `nodeIntegration`
-off and `contextIsolation` on. Never expose arbitrary channel access or Node APIs to the
-renderer.
+Reuse existing helpers whenever possible.
+
+Current shared helpers include:
+
+* `currentUser()`
+* `unauthorized()`
+* `errorResponse()`
+
+Do not duplicate common API logic.
 
 ---
 
 ## Validate Inputs
 
-Validate all input crossing the IPC boundary using the project's Zod schemas.
+Validate all client input using the project's Zod schemas.
 
-Validation belongs at the IPC boundary.
+Validation belongs at the API boundary.
 
 Services should receive validated data.
+
+---
+
+## Authentication
+
+Never trust user identifiers supplied by the client.
+
+Resolve the authenticated user from the session.
+
+Pass the resolved domain user into services.
+
+Tenant ownership must always be enforced by the service and repository layers.
 
 ---
 
@@ -126,20 +136,27 @@ Services should receive validated data.
 
 Services throw typed `AppError` instances.
 
-Handlers translate them into a consistent serializable error result (errors do not cross
-IPC as live `Error` objects — return a plain `{ ok: false, error }` shape or rethrow a
-sanitized message). Avoid leaking stack traces or internal details to the renderer.
+Routes translate them into HTTP responses using the shared error helpers.
+
+Avoid manual error mapping unless required by an endpoint.
 
 ---
 
-## Result Design
+## Response Design
 
-Return concise, consistent, **serializable** results (plain objects/arrays — no class
-instances, Dates become ISO strings, etc.). Prefer existing result shapes over inventing
-new ones. A common convention is a discriminated result:
+Return concise, consistent JSON.
 
-* `{ ok: true, data }`
-* `{ ok: false, error: { code, message } }`
+Prefer existing response shapes over inventing new ones.
+
+Use appropriate HTTP status codes:
+
+* 200 OK
+* 201 Created
+* 204 No Content
+* 400 Bad Request
+* 401 Unauthorized
+* 404 Not Found
+* 500 Internal Server Error
 
 ---
 
@@ -151,74 +168,78 @@ Review the existing service interface.
 
 ## Step 2
 
-Review similar IPC handlers and the preload bridge.
+Review similar API routes.
 
 ## Step 3
 
-Validate the input.
+Validate request inputs.
 
 ## Step 4
 
-Invoke the service.
+Authenticate the request.
 
 ## Step 5
 
-Return the appropriate serializable result.
+Invoke the service.
 
 ## Step 6
 
-Expose the channel through the typed preload bridge.
+Return the appropriate HTTP response.
 
 ## Step 7
 
-Add or update IPC handler tests.
+Add or update API route tests.
 
 ---
 
 # Testing
 
-Follow the project's testing conventions.
+Follow the project's API testing conventions.
 
 Mock:
 
+* `@/auth`
+* `@/services/auth.service`
 * called service modules
 
 Use real Zod validation.
 
 Verify:
 
-* successful calls
+* successful requests
 * validation failures
-* AppError mapping to error results
-* result structure and serializability
+* unauthorized requests
+* AppError mapping
+* response structure
+* expected status codes
 
 ---
 
 # Output
 
-## IPC Implementation Summary
+## API Implementation Summary
 
-### Channels Added or Modified
+### Endpoints Added or Modified
 
 * ...
 
 ---
 
-### Input Validation
+### Request Validation
 
 Describe any new or updated validation schemas.
 
 ---
 
-### Bridge Changes
+### Authentication
 
-Describe any additions to the typed preload bridge.
+Describe how authentication is enforced.
 
 ---
 
-### Result Changes
+### Response Changes
 
-Summarize any new or modified result shapes.
+Summarize any new or modified response shapes.
 
 ---
 
@@ -230,4 +251,4 @@ Summarize any new or modified result shapes.
 
 ### Notes
 
-Summarize any implementation details relevant to the IPC layer.
+Summarize any implementation details relevant to the API layer.

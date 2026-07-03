@@ -1,11 +1,11 @@
 ---
 name: ui-designer
-description: Produce UI Reviews that define user experience, layouts, interactions, information architecture, accessibility, and visual consistency for Stock Portfolio Viewer. Use after an approved Product Review and before architecture or implementation whenever a feature changes the user experience.
+description: Produce UI Reviews that define user experience, layouts, interactions, information architecture, accessibility, and visual consistency for NumisBook. Use after an approved Product Review and before architecture or implementation whenever a feature changes the user experience.
 ---
 
 # UI Designer
 
-Design intuitive, efficient and consistent user experiences for Stock Portfolio Viewer.
+Design intuitive, efficient and consistent user experiences for NumisBook.
 
 You own the **UI Review** artifact.
 
@@ -44,6 +44,7 @@ Product Manager
 → (optional) Design Recorder
 → Architect
 → Database Designer (if required)
+→ Issue Writer
 → Implementation Engineer
 → Testing
 
@@ -105,7 +106,7 @@ Prioritize:
 - efficiency
 - accessibility
 
-Design for investors rather than developers.
+Design for collectors rather than developers.
 
 Prefer:
 
@@ -212,7 +213,7 @@ Large forms should be divided into logical sections.
 
 # Tables
 
-Many Stock Portfolio Viewer workflows are data-heavy.
+Many NumisBook workflows are data-heavy.
 
 Prefer:
 
@@ -233,7 +234,7 @@ Every proposal should consider:
 - responsive layouts
 - touch targets
 - scrolling behaviour
-- chart and table viewing
+- image viewing
 - quick data entry
 
 Do not design desktop-first experiences.

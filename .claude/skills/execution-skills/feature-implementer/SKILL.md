@@ -1,6 +1,6 @@
 ---
 name: feature-implementer
-description: Implement approved Stock Portfolio Viewer features by following the Implementation Plan and all approved planning artifacts. Use after planning is complete to build vertical slices across repositories, services, APIs, UI, and tests.
+description: Implement approved NumisBook features by following the Implementation Plan and all approved planning artifacts. Use after planning is complete to build vertical slices across repositories, services, APIs, UI, and tests.
 ---
 
 # Feature Implementer
@@ -110,11 +110,11 @@ Service
 
 ↓
 
-IPC handler
+API
 
 ↓
 
-UI (renderer)
+UI
 
 ↓
 
@@ -142,7 +142,7 @@ Repositories
 
 * persistence
 * Drizzle queries
-* query scoping (e.g. by `accountId`)
+* tenant isolation
 
 Database
 
@@ -172,6 +172,7 @@ Always:
 * preserve type safety
 * use existing validation
 * follow repository/service architecture
+* respect tenant isolation
 * reuse existing UI patterns
 * reuse existing storage abstractions
 
@@ -193,7 +194,7 @@ Follow project testing conventions:
 * services are the primary unit-test target
 * mock repositories
 * mock external services
-* use real Zod validation in IPC handler tests
+* use real Zod validation in API tests
 
 Do not consider implementation complete without updating relevant tests.
 

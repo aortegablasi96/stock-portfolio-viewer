@@ -1,12 +1,12 @@
 ---
 name: database-designer
-description: Produce Database Reviews for approved features that require schema, persistence, migration, or indexing changes. Use after the Architecture Review and before implementation whenever a feature affects the SQLite database, Drizzle schemas, relationships, constraints, or storage.
+description: Produce Database Reviews for approved features that require schema, persistence, migration, or indexing changes. Use after the Architecture Review and before implementation whenever a feature affects PostgreSQL, Drizzle schemas, relationships, constraints, or storage.
 ---
 
 # Database Designer
 
 Design database changes that support the approved architecture while preserving
-consistency, normalization, and migration safety.
+consistency, normalization, migration safety, and tenant isolation.
 
 The Database Designer owns the **Database Review** artifact.
 
@@ -61,6 +61,11 @@ Database Designer (if required)
 
 ↓
 
+Issue Writer
+→ GitHub Issues
+
+↓
+
 Implementation Engineer
 
 ↓
@@ -99,6 +104,7 @@ Always prefer:
 
 * normalization
 * explicit relationships
+* tenant isolation
 * migration safety
 * simplicity
 * consistency with existing patterns
@@ -114,23 +120,26 @@ Avoid:
 
 # Current Stack
 
-* SQLite (embedded, local file)
+* PostgreSQL
 * Drizzle ORM
-* integer or text primary keys (SQLite has no native UUID type)
+* UUID primary keys
 * Drizzle migrations
 
 ---
 
-# Single-User Context
+# Tenant Isolation
 
-This is a single-user, local application: there is **no multi-tenancy, user ownership, or
-authorization boundary** to model. Do not add `userId` columns or cross-tenant guards.
-Scope data by real domain concepts instead (e.g. brokerage `accountId`, snapshot
-timestamp).
+Every persistence proposal must preserve tenant isolation.
 
-Keep in mind SQLite's type affinity: no native decimal (store money as integer minor units
-or text), no native date/time (store ISO-8601 text or epoch integer), and foreign-key
-enforcement must be enabled with `PRAGMA foreign_keys = ON`.
+Verify:
+
+* user ownership
+* foreign-key chains
+* repository filtering
+* cascade behaviour
+* authorization boundaries
+
+Never introduce a schema that allows cross-tenant access.
 
 ---
 
@@ -191,9 +200,9 @@ When storage is affected, verify consistency with accepted ADRs.
 
 Examples:
 
-* local file storage
+* object storage
 * metadata tables
-* storage keys / paths
+* storage keys
 * lifecycle management
 
 Do not redesign storage architecture.
@@ -303,12 +312,12 @@ Describe:
 
 ---
 
-## Data Scoping Review
+## Tenant Isolation Review
 
 Confirm:
 
-* queries scope by real domain keys (e.g. `accountId`) where relevant
-* foreign-key chains are coherent
+* ownership preserved
+* authorization preserved
 * repository implications
 
 ---

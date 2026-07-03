@@ -1,6 +1,6 @@
 ---
 name: repository-builder
-description: Implement or modify repository classes that encapsulate database access for Stock Portfolio Viewer. Use when adding or changing persistence logic after the database design has been approved.
+description: Implement or modify repository classes that encapsulate database access for NumisBook. Use when adding or changing persistence logic after the database design has been approved.
 ---
 
 # Repository Builder
@@ -20,13 +20,14 @@ Owns:
 * database queries
 * persistence logic
 * mapping database rows to domain objects
+* tenant isolation
 * transaction boundaries (when appropriate)
 * repository domain types
 
 Does not own:
 
 * business rules
-* IPC concerns
+* HTTP concerns
 * UI
 * request validation
 * application workflows
@@ -93,10 +94,10 @@ Repository methods should describe business intent.
 
 Prefer:
 
-* `findHoldingById()`
-* `listPortfoliosForAccount()`
-* `createSnapshot()`
-* `deleteStaleAnalyticsCache()`
+* `findCoinById()`
+* `listCollectionsForUser()`
+* `createValuation()`
+* `deleteCoinImage()`
 
 Avoid generic CRUD names when a more meaningful name exists.
 
@@ -121,13 +122,19 @@ Those belong in services.
 
 ---
 
-## Scope by Domain, Not by Tenant
+## Enforce Tenant Isolation
 
-This is a single-user, local application — there is **no multi-tenancy and no
-authenticated user** to scope by. Scope queries by the domain concepts that exist (e.g.
-brokerage `accountId`, snapshot timestamp) rather than by user identity.
+Repositories are responsible for enforcing tenant boundaries.
 
-Operations affecting no rows should return an appropriate result for the service layer to handle (for example, allowing the service to raise `NotFoundError`).
+For user-owned entities:
+
+* require the authenticated user's `userId`
+* scope every query appropriately
+* never trust client-supplied ownership
+
+Operations affecting no visible rows should return an appropriate result for the service layer to handle (for example, allowing the service to raise `NotFoundError`).
+
+Never expose another tenant's data.
 
 ---
 
@@ -138,8 +145,8 @@ Repositories define the canonical domain types.
 Prefer:
 
 ```ts
-export type Holding = typeof holdings.$inferSelect;
-export type NewHolding = typeof holdings.$inferInsert;
+export type Coin = typeof coins.$inferSelect;
+export type NewCoin = typeof coins.$inferInsert;
 ```
 
 Other layers should import these types from repositories rather than directly from the schema.
@@ -160,7 +167,7 @@ Schema changes belong to the Database Designer.
 
 Repositories coordinate persistence.
 
-When a feature involves stored files (e.g. exported reports):
+When a feature involves object storage:
 
 Repository
 
@@ -170,9 +177,9 @@ Storage abstraction
 
 ↓
 
-Local filesystem (app data directory)
+Provider
 
-Repositories should never depend directly on storage-implementation details.
+Repositories should never depend directly on provider-specific APIs.
 
 ---
 
@@ -208,7 +215,7 @@ Implement repository methods.
 
 ## Step 4
 
-Verify query scoping (e.g. by `accountId`) is correct.
+Verify tenant isolation.
 
 ## Step 5
 
@@ -227,7 +234,7 @@ Repositories are generally tested indirectly through service tests.
 When repository-specific tests are required:
 
 * verify query behavior
-* verify query scoping (e.g. by `accountId`)
+* verify tenant isolation
 * verify persistence behavior
 * verify storage coordination
 * verify edge cases
@@ -258,9 +265,9 @@ Avoid testing business rules in repository tests.
 
 ---
 
-### Query Scoping
+### Tenant Isolation
 
-Describe how queries are scoped (e.g. by `accountId`).
+Describe how ownership is enforced.
 
 ---
 
@@ -272,7 +279,7 @@ List any exported domain types.
 
 ### Storage Coordination
 
-Describe any interaction with local file storage.
+Describe any interaction with object storage.
 
 ---
 

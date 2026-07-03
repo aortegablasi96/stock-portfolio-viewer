@@ -85,8 +85,8 @@ Examples include:
 * architectural patterns
 * application structure
 * storage architecture
-* local data encryption / at-rest protection strategy
-* packaging & update strategy (desktop distribution)
+* authentication strategy
+* deployment strategy
 * AI architecture
 * integration architecture
 * major dependencies

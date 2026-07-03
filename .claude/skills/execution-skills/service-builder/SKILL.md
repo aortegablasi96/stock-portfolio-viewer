@@ -1,6 +1,6 @@
 ---
 name: service-builder
-description: Implement or modify business services for Stock Portfolio Viewer. Use when adding or changing domain behavior after the architecture and repository design have been approved.
+description: Implement or modify business services for NumisBook. Use when adding or changing domain behavior after the architecture and repository design have been approved.
 ---
 
 # Service Builder
@@ -9,7 +9,7 @@ Implement business services.
 
 Services contain the application's business rules and orchestrate interactions between repositories and other domain services.
 
-They are framework-agnostic and independent of IPC, React, and database implementation details.
+They are framework-agnostic and independent of HTTP, React, and database implementation details.
 
 ---
 
@@ -27,7 +27,7 @@ Owns:
 
 Does not own:
 
-* IPC handling
+* HTTP
 * request validation
 * UI
 * SQL queries
@@ -93,7 +93,7 @@ They should not contain:
 * SQL
 * Drizzle queries
 * React components
-* IPC request handling
+* HTTP request handling
 
 ---
 
@@ -101,10 +101,11 @@ They should not contain:
 
 Services should not depend on:
 
-* Electron
-* `ipcMain` / IPC handlers
+* Next.js
+* Route Handlers
 * React
-* the preload bridge
+* Request
+* Response
 
 Services operate on plain TypeScript values and return domain objects.
 
@@ -127,13 +128,14 @@ Repositories should never coordinate each other directly.
 
 ## Validate Domain Rules
 
-IPC handlers validate request shape.
+API routes validate request shape.
 
 Services validate business rules.
 
 Examples include:
 
 * preventing invalid state transitions
+* enforcing ownership rules
 * checking required domain conditions
 * rejecting duplicate operations where appropriate
 
@@ -148,7 +150,7 @@ Known business failures should throw project-specific errors such as:
 
 Avoid throwing raw `Error` for expected domain failures.
 
-IPC handlers are responsible for translating domain errors into structured IPC error results.
+Routes are responsible for translating domain errors into HTTP responses.
 
 ---
 
@@ -183,7 +185,7 @@ Services must never depend on:
 
 * database implementation
 * UI components
-* IPC handlers
+* Route Handlers
 
 ---
 
@@ -236,7 +238,7 @@ Verify:
 * domain errors
 * interactions with repositories
 
-Avoid testing SQL or IPC behavior in service tests.
+Avoid testing SQL or HTTP behavior in service tests.
 
 ---
 

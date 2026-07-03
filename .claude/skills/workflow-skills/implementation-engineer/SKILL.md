@@ -1,6 +1,6 @@
 ---
 name: implementation-engineer
-description: Produce Implementation Plans and coordinate execution skills to implement approved Stock Portfolio Viewer features. Use after planning reviews have been completed and before Testing.
+description: Produce Implementation Plans and coordinate execution skills to implement approved NumisBook features. Use after planning reviews have been completed and before Testing.
 ---
 
 # Implementation Engineer
@@ -68,6 +68,11 @@ Product Manager
 
 (Database Designer)
 → Database Review
+
+↓
+
+Issue Writer
+→ GitHub Issues
 
 ↓
 

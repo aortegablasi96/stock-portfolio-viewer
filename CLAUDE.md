@@ -17,7 +17,7 @@ the **intended** project; those commands will not run until the project is scaff
 
 ## Skills System (`.claude/skills/`)
 
-The artifact-driven workflow in this file is implemented as concrete skills in three tiers.
+The artifact-driven workflow in this file is implemented as concrete skills in four tiers.
 Each stage produces an artifact that becomes the input to the next; execution skills only
 consume *approved* artifacts and must not redefine requirements, design, or architecture.
 
@@ -36,15 +36,25 @@ The Implementation Engineer selects the minimum set of execution skills needed.
 `adr-writer` (ADRs → `docs/decisions/`), `design-recorder` (DDRs → `docs/design-decisions/`),
 `refactoring-reviewer` (Refactoring Review, required before significant restructuring).
 
+**project-management** — track work in GitHub Issues (Epics, User Stories, Bugs only):
+`issue-writer` (convert approved work into issues following the repo templates) and
+`project-historian` (reconstruct already-completed work as historical issues from
+`docs/history.md`, the roadmap, ADRs, and DDRs). These skills track work; they never
+design features, architecture, or implementation.
+
 Small bug fixes may skip planning artifacts. Any change to an already-approved decision
 must stop and return to the owning workflow skill rather than being made inline.
 
 ## Enabled MCP Servers
 
-`.claude/settings.local.json` enables: `context7`, `filesystem`, `postgres`, `playwright`.
-`.mcp.json` defines the `interactive-brokers` server (placeholder runtime), which is **not
-yet** listed in `enabledMcpjsonServers` — reconcile when its runtime is finalized. The
-`postgres` entry predates the move to SQLite and can be retired during scaffolding.
+`.claude/settings.local.json` lists `context7`, `filesystem`, `postgres`, `playwright`, and
+`interactive-brokers` in `enabledMcpjsonServers`. Note that the `interactive-brokers` entry
+in `.mcp.json` still uses a **placeholder runtime** (`REPLACE_WITH_RUNTIME`), so enabling it
+does not make it functional until the runtime is finalized. Separately, a connected
+`Interactive_Brokers_IBKR` MCP is available with read-only account/market tools allowlisted
+(positions, balances, price history, etc.) — no order-placing tools are allowlisted, in
+keeping with the analytics-first, no-trading stance. The `postgres` entry predates the move
+to SQLite and can be retired during scaffolding.
 
 ## Project Overview
 
