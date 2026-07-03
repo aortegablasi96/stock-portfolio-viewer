@@ -78,7 +78,6 @@ Review project documentation:
 * CLAUDE.md
 * docs/architecture.md
 * docs/decisions/
-* docs/history.md
 
 Determine whether the proposal aligns with existing architectural decisions.
 

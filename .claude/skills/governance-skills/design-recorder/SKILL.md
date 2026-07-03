@@ -22,8 +22,7 @@ You document them.
 Review:
 
 * docs/product.md
-* docs/roadmap.md
-* docs/history.md
+* the GitHub backlog (Epics / User Stories)
 * docs/design-decisions/
 
 Review any relevant:

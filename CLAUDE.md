@@ -36,10 +36,12 @@ The Implementation Engineer selects the minimum set of execution skills needed.
 `adr-writer` (ADRs → `docs/decisions/`), `design-recorder` (DDRs → `docs/design-decisions/`),
 `refactoring-reviewer` (Refactoring Review, required before significant restructuring).
 
-**project-management** — track work in GitHub Issues (Epics, User Stories, Bugs only):
-`issue-writer` (convert approved work into issues following the repo templates) and
-`project-historian` (reconstruct already-completed work as historical issues from
-`docs/history.md`, the roadmap, ADRs, and DDRs). These skills track work; they never
+**project-management** — the GitHub backlog (Epics, User Stories, Bugs only) is the
+**source of milestones**, authored by the owner and **read before planning**, not written
+after implementation: `issue-writer` helps the owner *draft* backlog issues that follow the
+repo templates; `project-historian` (secondary) backfills the tracker with historical issues
+from git history, ADRs, and DDRs for work that predates it. The `product-manager`
+workflow skill reads these issues to begin planning. These skills track work; they never
 design features, architecture, or implementation.
 
 Small bug fixes may skip planning artifacts. Any change to an already-approved decision
@@ -323,11 +325,16 @@ The user remains the decision maker.
 
 # Development Workflow
 
-Stock Portfolio Viewer follows an artifact-driven workflow.
+Stock Portfolio Viewer follows an artifact-driven workflow. Work **originates in GitHub
+Issues** — the owner authors Epics and User Stories (grouped under GitHub Milestones), and
+the Product Manager **reads them before planning**. Issues are never created after
+implementation to record work already done.
 
 Planning
 
 ```text
+GitHub Issues (Epics / User Stories)   ← owner-authored backlog = source of milestones
+        ↓  (read before planning)
 Product Manager
         ↓
 Product Review
@@ -385,8 +392,10 @@ Core documents:
 * architecture.md
 * database.md
 * product.md
-* roadmap.md
-* history.md
+
+Project history and milestones are **not** kept in local files. Milestones and work items
+live in GitHub Issues (Epics / User Stories, grouped under GitHub Milestones); the record of
+completed work is the git history and closed issues.
 
 Accepted decisions live in:
 
@@ -413,10 +422,9 @@ When making decisions, consult documentation in this order:
 1. docs/decisions/
 2. docs/design-decisions/
 3. docs/product.md
-4. docs/roadmap.md
+4. GitHub Issues (Epics / User Stories — current milestones and work items)
 5. docs/architecture.md
 6. docs/database.md
-7. docs/history.md
 
 If documentation conflicts:
 
@@ -479,10 +487,13 @@ Every completed feature should include:
 
 # Current Priority
 
-The active milestone is defined in:
+Milestones live in **GitHub Issues**, grouped under GitHub Milestones. Read the backlog to
+find the active milestone and its work items:
 
-```text
-docs/roadmap.md
+```bash
+gh issue list --state open --label epic        # milestone-sized Epics
+gh issue list --state open --milestone "<milestone title>"
+gh api repos/:owner/:repo/milestones --jq '.[].title'
 ```
 
-Prioritize the current milestone over future roadmap items unless explicitly instructed otherwise.
+Prioritize the current milestone over future ones unless explicitly instructed otherwise.

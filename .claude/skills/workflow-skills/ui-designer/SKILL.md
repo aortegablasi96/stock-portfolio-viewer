@@ -86,9 +86,8 @@ Review:
 Review project documentation for consistency:
 
 - docs/product.md
-- docs/roadmap.md
+- the GitHub backlog (Epics / User Stories)
 - docs/design-decisions/
-- docs/history.md
 
 Review the existing application before proposing changes.
 

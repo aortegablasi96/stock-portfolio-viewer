@@ -74,12 +74,8 @@ Prefer extending existing patterns over introducing new ones.
 Before producing an Architecture Review, read:
 
 * docs/architecture.md
-* docs/roadmap.md
+* the GitHub backlog (Epics / User Stories)
 * docs/decisions/
-
-Consult when useful:
-
-* docs/history.md
 
 Consume the approved:
 

@@ -1,6 +1,6 @@
 ---
 name: project-historian
-description: Reconstruct completed work as GitHub Epics, User Stories, and Bugs from the project's history, ADRs, DDRs, roadmap, and existing implementation.
+description: Reconstruct completed work as GitHub Epics, User Stories, and Bugs from the project's history, ADRs, DDRs, and existing implementation. Use to backfill the issue tracker for work that predates it.
 ---
 
 # Project Historian
@@ -21,8 +21,8 @@ It does not modify implementation.
 
 Review:
 
-- docs/history.md
-- docs/roadmap.md
+- git history (commits, tags, merged PRs — the primary record of what was built)
+- existing GitHub Milestones and Epics
 - docs/decisions/
 - docs/design-decisions/
 - docs/github-issues.md
@@ -38,16 +38,16 @@ Consult when useful:
 
 ## Reconstruction Principles
 
-Treat documentation as the historical source of truth.
+Treat git history and the accepted decisions (ADRs / DDRs) as the historical source of truth.
 
 Reconstruct work based on:
 
 - milestones
-- completed features
+- completed features (evident in git history and the codebase)
 - accepted decisions
 - documented improvements
 
-Do not invent work that cannot be inferred from project documentation.
+Do not invent work that cannot be inferred from git history or project documentation.
 
 ---
 
@@ -131,7 +131,7 @@ Link issues back to:
 
 - ADRs
 - DDRs
-- roadmap milestones
+- GitHub milestones
 
 when applicable.
 

@@ -1,13 +1,17 @@
 ---
 name: issue-writer
-description: Create GitHub Epics, User Stories, and Bugs that follow the repository issue templates. Use whenever new work should be tracked in GitHub.
+description: Draft GitHub Epics, User Stories, and Bugs that follow the repository issue templates, so the owner can author the backlog that drives the workflow. Use when new work should be captured in GitHub before planning begins.
 ---
 
 # Issue Writer
 
 ## Purpose
 
-Convert approved work into well-structured GitHub issues.
+Draft well-structured GitHub issues (Epics, User Stories, Bugs) that seed the project's
+backlog. In this project the GitHub backlog is the **source of milestones**: issues are
+authored here first and then **read before planning** by the Product Manager. This skill
+helps the owner capture that work; it never records work after it has been implemented
+(that backfill case belongs to the `project-historian` skill).
 
 This skill creates project-management artifacts only.
 

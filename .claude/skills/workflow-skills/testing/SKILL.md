@@ -101,7 +101,7 @@ Before starting, review:
 Review project documentation when needed:
 
 * docs/product.md
-* docs/roadmap.md
+* the GitHub backlog (Epics / User Stories)
 * docs/architecture.md
 * docs/database.md
 * docs/decisions/

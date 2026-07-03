@@ -89,7 +89,7 @@ Review project documentation for consistency:
 * docs/architecture.md
 * docs/decisions/
 * docs/product.md
-* docs/roadmap.md
+* the GitHub backlog (Epics / User Stories)
 
 Do not redefine product or architectural decisions.
 
