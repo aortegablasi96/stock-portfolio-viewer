@@ -1,0 +1,23 @@
+appId: com.aortegablasi.stock-portfolio-viewer
+productName: Stock Portfolio Viewer
+copyright: Copyright © 2026 Andreu Ortega Blasi
+
+directories:
+  output: release
+  buildResources: build
+
+# electron-vite emits the compiled app into out/; ship that plus the manifest.
+files:
+  - out/**
+  - package.json
+
+# Single-user, local-first app targeting the owner's Windows machine.
+win:
+  target:
+    - nsis
+    - portable
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
