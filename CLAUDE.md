@@ -4,16 +4,60 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current Repository State
 
-This repository is **greenfield**. The committed artifacts are this file, the
-`.claude/skills/` library, and the `docs/` documentation set. There is no application
-source yet — no `package.json` or `src/`. The Stack and Commands sections below describe
-the **intended** project; those commands will not run until the project is scaffolded.
+**Milestone M0 (scaffolding) is merged.** The app now boots: `package.json`, `src/`,
+`electron.vite.config.ts`, ESLint, Vitest, Playwright, and SQLite/Drizzle are all wired up,
+and a working end-to-end vertical slice (renderer → IPC → service → repository → SQLite)
+exists as the reference pattern. The Stack and Commands sections below are now **live** —
+those commands run. Domain features (holdings, snapshots, dividends, analytics) are **not
+yet built**; the real domain schema arrives in Milestone M2.
 
 > **Project name:** This project is **Stock Portfolio Viewer**, a **standalone,
 > single-user desktop application** for personal stock portfolio analytics. It is
 > **local-first and private** — it runs on the owner's machine, stores data locally, and
 > is not hosted or shared. Treat the workflow *structure* of the `.claude/skills/` library
 > as authoritative.
+
+### As-built layout & reference slice
+
+The current source tree (mirror it when adding features):
+
+```text
+src/
+  main/          Electron main: entry (index.ts) + ipc/handlers.ts (thin, Zod-validated)
+  preload/       contextBridge bridge → window.api (types + channel names only, no Zod)
+  renderer/      React + Vite UI (src/renderer/src/*)
+  services/      pure business logic — primary unit-test target (e.g. system/, meta/)
+  repositories/  the ONLY layer that touches the DB (e.g. meta/metaRepository.ts)
+  db/            client.ts (better-sqlite3 + Drizzle singleton), migrate.ts, schema.ts
+  shared/        ipc/contract.ts (Zod schemas + inferred types), ipc/channels.ts
+drizzle/         generated SQL migrations + meta journal
+e2e/             Playwright specs that launch the built Electron app
+```
+
+The `app:ping` flow (`contract.ts` → `preload` → `handlers.ts` → `systemService`) and
+`metaService.getInstallId()` (service → `metaRepository` → `app_meta` table) are the
+canonical examples of the layering and the repository-mocking test pattern
+(`services/meta/metaService.test.ts`).
+
+### Enforced boundaries & gotchas
+
+- **Layer boundaries are ESLint-enforced** (`eslint.config.mjs`, via ADR-0002/0003), not
+  just conventional. The **renderer** may not import `@services`/`@repositories`/`@db`/
+  `@main`/`electron` — only `window.api`. **Services** may not import `@db` or `electron` —
+  they go through a repository. Adding a feature the wrong way fails `npm run lint`.
+- **Path aliases** (`@main`, `@renderer`, `@services`, `@repositories`, `@db`, `@shared`)
+  are declared in **three** places that must stay in sync: `tsconfig.json`,
+  `electron.vite.config.ts`, and `vitest.config.ts`.
+- **`better-sqlite3` is a native module** rebuilt for Electron via the `postinstall`
+  (`electron-rebuild`) hook. If it errors with a Node/Electron ABI mismatch, re-run
+  `npm install` or `npx electron-rebuild -f -w better-sqlite3`.
+- **Runtime DB vs. tooling DB**: the app opens the database at
+  `app.getPath('userData')/portfolio.db`; drizzle-kit (`db:*` scripts) runs *outside*
+  Electron against `./local.dev.db` (override with `DATABASE_URL`). Migrations are applied
+  automatically on launch (`runMigrations()` in `main/index.ts`) and shipped under
+  `extraResources` when packaged.
+- **Electron security is locked down**: `sandbox: true`, `contextIsolation: true`,
+  `nodeIntegration: false`. Keep it that way; reach the main process only over IPC.
 
 ## Skills System (`.claude/skills/`)
 
@@ -49,14 +93,13 @@ must stop and return to the owning workflow skill rather than being made inline.
 
 ## Enabled MCP Servers
 
-`.claude/settings.local.json` lists `context7`, `filesystem`, `postgres`, `playwright`, and
-`interactive-brokers` in `enabledMcpjsonServers`. Note that the `interactive-brokers` entry
-in `.mcp.json` still uses a **placeholder runtime** (`REPLACE_WITH_RUNTIME`), so enabling it
-does not make it functional until the runtime is finalized. Separately, a connected
-`Interactive_Brokers_IBKR` MCP is available with read-only account/market tools allowlisted
-(positions, balances, price history, etc.) — no order-placing tools are allowlisted, in
-keeping with the analytics-first, no-trading stance. The `postgres` entry predates the move
-to SQLite and can be retired during scaffolding.
+`.claude/settings.local.json` enables `context7`, `filesystem`, `playwright`, and
+`interactive-brokers` (the `postgres` server has been retired following the move to SQLite).
+Note that the `interactive-brokers` entry in `.mcp.json` still uses a **placeholder runtime**
+(`REPLACE_WITH_RUNTIME`), so enabling it does not make it functional until the runtime is
+finalized. Separately, a connected `Interactive_Brokers_IBKR` MCP is available with read-only
+account/market tools allowlisted (positions, balances, price history, etc.) — no order-placing
+tools are allowlisted, in keeping with the analytics-first, no-trading stance.
 
 ## Project Overview
 
@@ -114,19 +157,32 @@ Avoid introducing additional dependencies unless they provide clear long-term va
 # Commands
 
 ```bash
-npm install
+npm install            # also runs postinstall: electron-rebuild for better-sqlite3 (native)
 
-npm run dev      # launch Electron with the Vite dev server (hot reload)
-npm run build    # build renderer + main process bundles
-npm run package  # produce a distributable desktop app (e.g. via electron-builder)
+npm run dev            # launch Electron + Vite dev server (hot reload) — electron-vite dev
+npm run build          # build main + preload + renderer bundles into out/ — electron-vite build
+npm start              # preview the built app — electron-vite preview
+npm run package        # build + produce a distributable via electron-builder
 
-npm run lint
-npm test
+npm run lint           # eslint . (also enforces the layer-boundary import rules)
+npm run typecheck      # tsc --noEmit (no emit; electron-vite/esbuild does the transpiling)
 
-npm run db:generate   # Drizzle migration generation (SQLite)
-npm run db:migrate
-npm run db:studio
+npm test               # vitest run — unit tests (services), Node env, *.test.ts under src/
+npm run test:watch     # vitest (watch mode)
+npm run test:e2e       # build, then Playwright launches the packaged app (e2e/*.spec.ts)
+
+# Run a single unit test:
+npx vitest run src/services/meta/metaService.test.ts
+npx vitest run -t "generates and persists"   # by test-name substring
+
+npm run db:generate    # drizzle-kit generate — emit SQL migration from schema.ts changes
+npm run db:migrate      # drizzle-kit migrate — apply to ./local.dev.db (dev tooling only)
+npm run db:studio      # drizzle-kit studio — inspect the dev DB
 ```
+
+> The app also applies migrations automatically on every launch; `db:migrate` is for the
+> standalone dev DB. There is no lint/format-fix or CI-wide `check` script — run `lint`,
+> `typecheck`, and `test` individually.
 
 ---
 
@@ -141,7 +197,7 @@ Typical servers:
 * playwright
 * filesystem
 
-(The `postgres` server predates the move to SQLite and is being retired.)
+(The `postgres` server has been retired following the move to SQLite.)
 
 Prefer Context7 over model memory when consulting framework or library documentation.
 
