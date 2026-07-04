@@ -34,4 +34,7 @@ The chosen design and why.
 Other options and why they were not chosen.
 ```
 
-No DDRs have been recorded yet.
+## Recorded DDRs
+
+- `0001` — Read-only dashboard layout and data-loading state pattern
+- `0002` — Model connection/load outcome as a discriminated-union IPC result
