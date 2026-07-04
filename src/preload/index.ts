@@ -1,6 +1,11 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IpcChannels } from '@shared/ipc/channels'
-import type { PingRequest, PingResponse, RendererApi } from '@shared/ipc/contract'
+import type {
+  PingRequest,
+  PingResponse,
+  PortfolioOverviewResult,
+  RendererApi,
+} from '@shared/ipc/contract'
 
 /**
  * The typed IPC bridge. This is the *only* surface the renderer can use to reach
@@ -13,6 +18,8 @@ import type { PingRequest, PingResponse, RendererApi } from '@shared/ipc/contrac
 const api: RendererApi = {
   ping: (request: PingRequest): Promise<PingResponse> =>
     ipcRenderer.invoke(IpcChannels.ping, request),
+  getPortfolioOverview: (): Promise<PortfolioOverviewResult> =>
+    ipcRenderer.invoke(IpcChannels.portfolioGetOverview),
 }
 
 contextBridge.exposeInMainWorld('api', api)

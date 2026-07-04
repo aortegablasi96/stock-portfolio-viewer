@@ -5,6 +5,7 @@
  */
 export const IpcChannels = {
   ping: 'app:ping',
+  portfolioGetOverview: 'portfolio:getOverview',
 } as const
 
 export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels]
