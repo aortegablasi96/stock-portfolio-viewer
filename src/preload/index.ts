@@ -1,10 +1,12 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IpcChannels } from '@shared/ipc/channels'
 import type {
+  CaptureSnapshotResult,
   PingRequest,
   PingResponse,
   PortfolioOverviewResult,
   RendererApi,
+  SnapshotList,
 } from '@shared/ipc/contract'
 
 /**
@@ -20,6 +22,15 @@ const api: RendererApi = {
     ipcRenderer.invoke(IpcChannels.ping, request),
   getPortfolioOverview: (): Promise<PortfolioOverviewResult> =>
     ipcRenderer.invoke(IpcChannels.portfolioGetOverview),
+  captureSnapshot: (): Promise<CaptureSnapshotResult> =>
+    ipcRenderer.invoke(IpcChannels.snapshotCapture),
+  listSnapshots: (): Promise<SnapshotList> => ipcRenderer.invoke(IpcChannels.snapshotList),
+  onSnapshotCaptured: (callback: () => void): (() => void) => {
+    // Wrap so the raw IpcRendererEvent is never handed to the renderer callback.
+    const listener = (): void => callback()
+    ipcRenderer.on(IpcChannels.snapshotCaptured, listener)
+    return () => ipcRenderer.removeListener(IpcChannels.snapshotCaptured, listener)
+  },
 }
 
 contextBridge.exposeInMainWorld('api', api)

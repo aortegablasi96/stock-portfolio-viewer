@@ -6,6 +6,11 @@
 export const IpcChannels = {
   ping: 'app:ping',
   portfolioGetOverview: 'portfolio:getOverview',
+  snapshotCapture: 'snapshot:capture',
+  snapshotList: 'snapshot:list',
+  // Main → renderer event: a snapshot was captured (e.g. on-open capture completed),
+  // so the renderer should refresh its history. Carries no payload.
+  snapshotCaptured: 'snapshot:captured',
 } as const
 
 export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels]

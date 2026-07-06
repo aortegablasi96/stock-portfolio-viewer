@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { formatCurrency, formatPercent, formatQuantity } from './format'
+import { formatCurrency, formatDateTime, formatPercent, formatQuantity } from './format'
 
 describe('formatCurrency', () => {
   it('formats a valid ISO currency with its symbol', () => {
@@ -30,5 +30,13 @@ describe('formatQuantity', () => {
   it('formats whole and fractional quantities without forcing decimals', () => {
     expect(formatQuantity(100)).toMatch(/^100$|^100(\.0+)?$/)
     expect(formatQuantity(1.5)).toMatch(/1\.5/)
+  })
+})
+
+describe('formatDateTime', () => {
+  it('renders an epoch-ms timestamp as a non-empty date-time string', () => {
+    const out = formatDateTime(Date.UTC(2026, 6, 4, 15, 30))
+    expect(out).toMatch(/2026/)
+    expect(out.length).toBeGreaterThan(0)
   })
 })

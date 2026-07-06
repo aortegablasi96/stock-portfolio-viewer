@@ -76,6 +76,56 @@ body {
   color: var(--muted);
 }
 
+.dashboard-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+/* ---- Capture now (Story #18) --------------------------------------------- */
+
+.capture-button {
+  padding: 0.5rem 1rem;
+  font: inherit;
+  font-weight: 600;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.capture-button:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.capture-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.capture-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.capture-status {
+  margin: 0;
+  padding: 0.6rem 0.9rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.capture-status-error {
+  border-color: #5a2b2b;
+  color: var(--text);
+}
+
 /* ---- State panels (loading / not connected / error / empty) -------------- */
 
 .state-panel {
@@ -278,4 +328,76 @@ body {
   max-width: 22rem;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* ---- Snapshot history (Story #19) ---------------------------------------- */
+
+.snapshot-history {
+  padding: 1.25rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.snapshot-history h2 {
+  margin: 0 0 1rem;
+  font-size: 0.9rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.snapshot-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.snapshot-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.snapshot-item {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: baseline;
+  gap: 1rem;
+  padding: 0.7rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.snapshot-item:last-child {
+  border-bottom: none;
+}
+
+.snapshot-time {
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+.snapshot-value {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.snapshot-count {
+  color: var(--muted);
+  font-size: 0.85rem;
+  min-width: 6rem;
+  text-align: right;
+}
+
+@media (max-width: 720px) {
+  .snapshot-item {
+    grid-template-columns: 1fr auto;
+  }
+
+  .snapshot-count {
+    grid-column: 2;
+    text-align: right;
+  }
 }

@@ -35,3 +35,11 @@ export function formatPercent(fraction: number): string {
     maximumFractionDigits: 1,
   }).format(fraction)
 }
+
+/** Format a snapshot capture time (epoch milliseconds, UTC) in the local locale. */
+export function formatDateTime(epochMs: number): string {
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date(epochMs))
+}

@@ -1,4 +1,6 @@
 import { join } from 'node:path'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import {
   test,
   expect,
@@ -11,10 +13,13 @@ let app: ElectronApplication
 let page: Page
 
 test.beforeAll(async () => {
-  // Launch the built app (electron-vite output). Not packaged, no dev server, so
-  // main loads the built renderer from out/renderer/index.html.
+  // Launch the built app (electron-vite output) with an isolated, empty user-data
+  // directory so the SQLite DB (and thus snapshot history) starts clean and the
+  // run is deterministic. No Client Portal Gateway is running, so the app resolves
+  // to its not_connected state and capture-on-open is skipped.
+  const userDataDir = mkdtempSync(join(tmpdir(), 'spv-e2e-'))
   app = await electron.launch({
-    args: [join(__dirname, '..', 'out', 'main', 'index.js')],
+    args: [join(__dirname, '..', 'out', 'main', 'index.js'), `--user-data-dir=${userDataDir}`],
   })
   page = await app.firstWindow()
   await page.waitForLoadState('domcontentloaded')
@@ -39,9 +44,24 @@ test('shows the not-connected state when no IBKR gateway is running', async () =
   await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible()
 })
 
-test('exposes the typed portfolio channel on window.api', async () => {
-  const hasChannel = await page.evaluate(
-    () => typeof window.api?.getPortfolioOverview === 'function',
-  )
-  expect(hasChannel).toBe(true)
+test('renders the snapshot history section, empty on a fresh database', async () => {
+  await expect(page.getByRole('heading', { name: 'History' })).toBeVisible()
+  await expect(page.getByText('No snapshots captured yet', { exact: false })).toBeVisible()
+})
+
+test('manual capture reports not-connected when the gateway is unavailable', async () => {
+  await page.getByRole('button', { name: 'Capture now' }).click()
+  // captureNow -> IbkrNotConnectedError -> not_connected variant -> inline status.
+  await expect(page.getByText('Not connected — connect to capture a snapshot.')).toBeVisible()
+  // No snapshot was written, so history stays empty.
+  await expect(page.getByText('No snapshots captured yet', { exact: false })).toBeVisible()
+})
+
+test('exposes the typed portfolio and snapshot channels on window.api', async () => {
+  const channels = await page.evaluate(() => ({
+    overview: typeof window.api?.getPortfolioOverview === 'function',
+    capture: typeof window.api?.captureSnapshot === 'function',
+    list: typeof window.api?.listSnapshots === 'function',
+  }))
+  expect(channels).toEqual({ overview: true, capture: true, list: true })
 })

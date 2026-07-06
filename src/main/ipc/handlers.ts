@@ -1,8 +1,14 @@
 import { ipcMain } from 'electron'
 import { IpcChannels } from '@shared/ipc/channels'
-import { pingRequestSchema, type PortfolioOverviewResult } from '@shared/ipc/contract'
+import {
+  pingRequestSchema,
+  type CaptureSnapshotResult,
+  type PortfolioOverviewResult,
+  type SnapshotList,
+} from '@shared/ipc/contract'
 import { systemService } from '@services/system/systemService'
 import { portfolioService } from '@services/portfolio/portfolioService'
+import { snapshotService } from '@services/snapshots/snapshotService'
 import { IbkrNotConnectedError } from '@shared/errors'
 
 /**
@@ -30,4 +36,22 @@ export function registerIpcHandlers(): void {
       return { status: 'error', message }
     }
   })
+
+  // Manual "Capture now". No payload. A disconnected gateway is returned as data
+  // (not thrown) so the renderer can prompt recovery (DDR-0003).
+  ipcMain.handle(IpcChannels.snapshotCapture, async (): Promise<CaptureSnapshotResult> => {
+    try {
+      const summary = await snapshotService.captureNow()
+      return { status: 'captured', summary }
+    } catch (err) {
+      if (err instanceof IbkrNotConnectedError) {
+        return { status: 'not_connected', message: err.message }
+      }
+      const message = err instanceof Error ? err.message : 'Unexpected error capturing the snapshot.'
+      return { status: 'error', message }
+    }
+  })
+
+  // Snapshot history (local read; independent of the gateway). No payload.
+  ipcMain.handle(IpcChannels.snapshotList, (): SnapshotList => snapshotService.getHistory())
 }

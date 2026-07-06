@@ -1,8 +1,10 @@
 import { join } from 'node:path'
 import { app, BrowserWindow, shell } from 'electron'
 import { registerIpcHandlers } from './ipc/handlers'
+import { IpcChannels } from '@shared/ipc/channels'
 import { runMigrations } from '@db/migrate'
 import { metaService } from '@services/meta/metaService'
+import { snapshotService } from '@services/snapshots/snapshotService'
 
 const isDev = !app.isPackaged
 
@@ -58,6 +60,23 @@ app.whenReady().then(() => {
   console.log(`[app] install id ${metaService.getInstallId()}`)
   registerIpcHandlers()
   createWindow()
+
+  // Capture a portfolio snapshot on open (de-duplicated within 12h; skipped
+  // silently when the gateway isn't connected). Fire-and-forget so it never
+  // blocks the window (DDR-0003). When a snapshot is written, signal the renderer
+  // to refresh its history (the network fetch resolves after the renderer has
+  // mounted and subscribed).
+  void snapshotService
+    .captureOnOpen()
+    .then((result) => {
+      console.log(`[snapshot] capture-on-open: ${result.status}`)
+      if (result.status === 'captured') {
+        for (const window of BrowserWindow.getAllWindows()) {
+          if (!window.isDestroyed()) window.webContents.send(IpcChannels.snapshotCaptured)
+        }
+      }
+    })
+    .catch((err) => console.error('[snapshot] capture-on-open failed', err))
 
   // macOS: re-create a window when the dock icon is clicked and none are open.
   app.on('activate', () => {
