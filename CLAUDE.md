@@ -4,12 +4,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current Repository State
 
-**Milestone M0 (scaffolding) is merged.** The app now boots: `package.json`, `src/`,
-`electron.vite.config.ts`, ESLint, Vitest, Playwright, and SQLite/Drizzle are all wired up,
-and a working end-to-end vertical slice (renderer → IPC → service → repository → SQLite)
-exists as the reference pattern. The Stack and Commands sections below are now **live** —
-those commands run. Domain features (holdings, snapshots, dividends, analytics) are **not
-yet built**; the real domain schema arrives in Milestone M2.
+**Milestones M0–M2 are merged.** Scaffolding (M0), the read-only portfolio dashboard
+(M1), and historical snapshots (M2) are all built and on `main`. The app boots, connects
+to the Interactive Brokers Client Portal Gateway, renders live holdings/balances/allocation,
+captures immutable snapshots (on open + on demand), and shows snapshot history. The Stack
+and Commands sections below are **live**. Still **not built**: dividends, performance
+analytics over the snapshot series, and any AI features — those are later milestones (read
+the GitHub backlog for the active one).
+
+Two live domains exist end-to-end as reference patterns:
+
+- **portfolio** — read-only overview from IBKR. `portfolioService` → `portfolioRepository`
+  → `ibkrGateway` (HTTP + Zod against the local Client Portal Gateway). No SQLite; live only.
+- **snapshots** — immutable local history. `snapshotService` (capture policy: 12h de-dupe
+  on open, always-write on demand) → `snapshotRepository` → SQLite (`snapshots` /
+  `snapshot_holdings`). Reads IBKR only *through* `portfolioService`.
 
 > **Project name:** This project is **Stock Portfolio Viewer**, a **standalone,
 > single-user desktop application** for personal stock portfolio analytics. It is
@@ -25,19 +34,32 @@ The current source tree (mirror it when adding features):
 src/
   main/          Electron main: entry (index.ts) + ipc/handlers.ts (thin, Zod-validated)
   preload/       contextBridge bridge → window.api (types + channel names only, no Zod)
-  renderer/      React + Vite UI (src/renderer/src/*)
-  services/      pure business logic — primary unit-test target (e.g. system/, meta/)
-  repositories/  the ONLY layer that touches the DB (e.g. meta/metaRepository.ts)
+  renderer/      React + Vite UI (src/renderer/src/*; components/ + lib/format.ts)
+  services/      pure business logic — primary unit-test target (system/, meta/,
+                 portfolio/, snapshots/)
+  repositories/  the ONLY layer that touches a data source: SQLite (meta/, snapshots/)
+                 or the IBKR gateway (portfolio/portfolioRepository.ts + ibkrGateway.ts)
   db/            client.ts (better-sqlite3 + Drizzle singleton), migrate.ts, schema.ts
-  shared/        ipc/contract.ts (Zod schemas + inferred types), ipc/channels.ts
+  shared/        ipc/contract.ts (Zod schemas + inferred types), ipc/channels.ts,
+                 domain/ (portfolio.ts, snapshot.ts), errors.ts (IbkrNotConnectedError)
 drizzle/         generated SQL migrations + meta journal
 e2e/             Playwright specs that launch the built Electron app
 ```
 
-The `app:ping` flow (`contract.ts` → `preload` → `handlers.ts` → `systemService`) and
-`metaService.getInstallId()` (service → `metaRepository` → `app_meta` table) are the
-canonical examples of the layering and the repository-mocking test pattern
-(`services/meta/metaService.test.ts`).
+Canonical flows to copy when adding a feature:
+
+- **Minimal slice / test pattern:** `app:ping` (`contract.ts` → `preload` → `handlers.ts`
+  → `systemService`) and `metaService.getInstallId()` (service → `metaRepository` →
+  `app_meta`) show the layering and the repository-mocking test style
+  (`services/meta/metaService.test.ts`).
+- **External data source:** `portfolio:getOverview` shows a repository fronting IBKR
+  (`ibkrGateway` validates every response with Zod at ingress) and **connection state
+  modelled as data** — the handler maps `IbkrNotConnectedError` to a `not_connected`
+  result variant instead of throwing, so the renderer renders it as a first-class state
+  (ADR-0004, DDR-0002).
+- **Local persistence + policy:** the `snapshot:*` channels show a service owning a
+  capture policy over an append-only, immutable table, plus a main→renderer event
+  (`snapshot:captured`) pushed after an on-open capture (DDR-0003).
 
 ### Enforced boundaries & gotchas
 
