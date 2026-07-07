@@ -71,7 +71,9 @@ export type LedgerEntry = z.infer<typeof ledgerEntrySchema>
 function rawGet(url: URL): Promise<string> {
   return new Promise((resolve, reject) => {
     const isHttps = url.protocol === 'https:'
-    const headers = { Accept: 'application/json' }
+    // The Client Portal Gateway returns 403 "Access Denied" to requests without a
+    // User-Agent header (node:https sends none by default), so set one explicitly.
+    const headers = { Accept: 'application/json', 'User-Agent': 'stock-portfolio-viewer' }
 
     const onResponse = (res: IncomingMessage): void => {
       const chunks: Buffer[] = []
