@@ -23,10 +23,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Node 24 matches the developer's local runtime and the toolchain's
+      # engine requirement (@electron/rebuild / node-abi need >=22.12.0). It
+      # also ships the npm major (11) that authored package-lock.json, so
+      # `npm ci` reconciles the lockfile without a version-drift error.
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
 
       # `npm ci` runs the postinstall hook, which rebuilds the native
