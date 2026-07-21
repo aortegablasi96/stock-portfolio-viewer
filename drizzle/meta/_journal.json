@@ -15,6 +15,13 @@
       "when": 1783328582226,
       "tag": "0001_secret_wild_child",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1784653299368,
+      "tag": "0002_chemical_mikhail_rasputin",
+      "breakpoints": true
     }
   ]
 }

@@ -1,0 +1,135 @@
+import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { describe, it, expect } from 'vitest'
+import { parseFlexStatements } from './flexStatementParser'
+import { ValidationError } from '@shared/errors'
+import type { FlexStatement } from '@shared/domain/flex'
+
+// The real Portfolio Analyst exports contain personal account data, so they are
+// git-ignored (see .gitignore). This test runs against them locally when present and
+// is skipped in a clean checkout — the inline FIXTURE above provides deterministic
+// coverage everywhere.
+const FLEX_DIR = join(process.cwd(), 'docs', 'flex-queries')
+const REAL_FILES = ['portfolio-analyst-2026.xml', 'portfolio-analyst-2025.xml']
+const hasRealExports = REAL_FILES.every((f) => existsSync(join(FLEX_DIR, f)))
+
+/** Parse and return the first statement, asserting one exists (narrows away `undefined`). */
+function parseOne(xml: string): FlexStatement {
+  const [stmt] = parseFlexStatements(xml)
+  if (!stmt) throw new Error('expected at least one statement')
+  return stmt
+}
+
+/**
+ * The parser is the pure ingress boundary for the Flex file source (ADR-0005). These
+ * tests pin the coercion rules (numbers, epoch-ms dates, nullable empties, de-dupe
+ * keys) against a compact inline fixture, then sanity-check the two real Portfolio
+ * Analyst exports under `docs/flex-queries/`.
+ */
+
+const FIXTURE = `<?xml version="1.0" encoding="UTF-8"?>
+<FlexQueryResponse queryName="portfolio-analyst" type="AF">
+<FlexStatements count="1">
+<FlexStatement accountId="U1234567" fromDate="20260101" toDate="20260720" period="YearToDate" whenGenerated="20260721;103057">
+<ChangeInNAV currency="EUR" fromDate="20260101" toDate="20260720" startingValue="1000" mtm="50" depositsWithdrawals="200" dividends="12.5" withholdingTax="-1.25" interest="0" commissions="-3.5" twr="5.5" endingValue="1250" />
+<FIFOPerformanceSummaryInBase>
+<FIFOPerformanceSummaryUnderlying assetCategory="STK" symbol="GSY" description="GOEASY LTD" conid="206663850" cusip="" isin="CA3803551074" multiplier="1" realizedSTProfit="0" realizedSTLoss="-10" realizedLTProfit="0" realizedLTLoss="0" totalRealizedPnl="-10" unrealizedProfit="0" unrealizedLoss="0" totalUnrealizedPnl="0" totalFifoPnl="-10" transferredPnl="0" />
+</FIFOPerformanceSummaryInBase>
+<OpenPositions>
+<OpenPosition currency="CAD" fxRateToBase="0.62268" assetCategory="STK" symbol="MMY" description="MONUMENT MINING LTD" conid="45090384" isin="CA61531Y1051" multiplier="1" reportDate="20260720" position="7790" markPrice="0.73" costBasisPrice="0.894580745" costBasisMoney="6968.784" percentOfNAV="5.60" fifoPnlUnrealized="-1282.084" side="Long" />
+</OpenPositions>
+<Trades>
+<Trade currency="CAD" fxRateToBase="0.62255" assetCategory="STK" symbol="GSY" description="GOEASY LTD" conid="206663850" isin="CA3803551074" multiplier="1" dateTime="20260402;100454" tradeDate="20260402" settleDateTarget="20260406" transactionType="ExchTrade" exchange="TSE" quantity="-65" tradePrice="35.17" tradeMoney="-2286.05" proceeds="2286.05" taxes="0" ibCommission="-1" ibCommissionCurrency="CAD" netCash="2285.05" closePrice="34.87" openCloseIndicator="C" cost="-8346.1" fifoPnlRealized="-6061.05" mtmPnl="19.5" />
+<Lot currency="CAD" fxRateToBase="0.62255" assetCategory="STK" symbol="GSY" description="GOEASY LTD" conid="206663850" isin="CA3803551074" multiplier="1" dateTime="20260402;100454" tradeDate="20260402" settleDateTarget="" transactionType="" exchange="ALPHA" quantity="15" tradePrice="148.406666667" tradeMoney="" proceeds="" taxes="" ibCommission="" ibCommissionCurrency="" netCash="" closePrice="" openCloseIndicator="C" cost="2226.1" fifoPnlRealized="-1698.780769" mtmPnl="" notes="ST" />
+</Trades>
+<CashTransactions>
+<CashTransaction currency="CAD" fxRateToBase="0.61757" assetCategory="STK" symbol="GSY" description="GSY CASH DIVIDEND" conid="206663850" isin="CA3803551074" dateTime="20260109;202000" settleDate="20260109" amount="20.44" type="Dividends" dividendType="Ordinary" tradeID="" code="" transactionID="37261202925" exDate="20260102" />
+<CashTransaction currency="CAD" fxRateToBase="0.61757" assetCategory="STK" symbol="GSY" description="GSY WITHHOLDING" conid="206663850" isin="CA3803551074" dateTime="20260109;202000" settleDate="20260109" amount="-14.24" type="Withholding Tax" dividendType="" tradeID="" code="" transactionID="" exDate="" />
+</CashTransactions>
+<SecuritiesInfo>
+<SecurityInfo currency="CAD" assetCategory="STK" subCategory="COMMON" symbol="MMY" description="MONUMENT MINING LTD" conid="45090384" cusip="61531Y105" isin="CA61531Y1051" listingExchange="VENTURE" issuerCountryCode="CA" multiplier="1" />
+</SecuritiesInfo>
+</FlexStatement>
+</FlexStatements>
+</FlexQueryResponse>`
+
+describe('parseFlexStatements', () => {
+  it('parses statement metadata and derives the base currency from ChangeInNAV', () => {
+    const stmt = parseOne(FIXTURE)
+    expect(stmt.accountId).toBe('U1234567')
+    expect(stmt.period).toBe('YearToDate')
+    expect(stmt.baseCurrency).toBe('EUR')
+    expect(stmt.fromDate).toBe(Date.UTC(2026, 0, 1))
+    expect(stmt.toDate).toBe(Date.UTC(2026, 6, 20))
+    expect(stmt.whenGenerated).toBe(Date.UTC(2026, 6, 21, 10, 30, 57))
+  })
+
+  it('coerces the NAV change numbers', () => {
+    const { navChange } = parseOne(FIXTURE)
+    expect(navChange).not.toBeNull()
+    expect(navChange?.startingValue).toBe(1000)
+    expect(navChange?.endingValue).toBe(1250)
+    expect(navChange?.withholdingTax).toBe(-1.25)
+    expect(navChange?.twr).toBe(5.5)
+  })
+
+  it('parses trades and computes a deterministic trade_key from stable fields', () => {
+    const { trades } = parseOne(FIXTURE)
+    expect(trades).toHaveLength(1)
+    const t = trades[0]
+    expect(t?.quantity).toBe(-65)
+    expect(t?.tradePrice).toBe(35.17)
+    expect(t?.dateTime).toBe(Date.UTC(2026, 3, 2, 10, 4, 54))
+    expect(t?.settleDate).toBe(Date.UTC(2026, 3, 6))
+    expect(t?.tradeKey).toBe('206663850|20260402;100454|-65|35.17|C|-1')
+  })
+
+  it('separates Lot rows from Trade rows and maps ST/LT notes', () => {
+    const { lots } = parseOne(FIXTURE)
+    expect(lots).toHaveLength(1)
+    expect(lots[0]?.quantity).toBe(15)
+    expect(lots[0]?.tradePrice).toBe(148.406666667)
+    expect(lots[0]?.notes).toBe('ST')
+  })
+
+  it('keys cash transactions by transactionID, falling back to a content hash', () => {
+    const { cashTransactions } = parseOne(FIXTURE)
+    expect(cashTransactions).toHaveLength(2)
+    const dividend = cashTransactions.find((c) => c.type === 'Dividends')
+    const withholding = cashTransactions.find((c) => c.type === 'Withholding Tax')
+    expect(dividend?.dedupeKey).toBe('tx:37261202925')
+    expect(dividend?.amount).toBe(20.44)
+    // No transactionID → deterministic content hash, not an empty "tx:".
+    expect(withholding?.dedupeKey).toBe('h:206663850|20260109;202000|-14.24|Withholding Tax')
+  })
+
+  it('turns empty numeric attributes into null and parses conid as an int', () => {
+    const { openPositions, securities, trades } = parseOne(FIXTURE)
+    expect(openPositions[0]?.conid).toBe(45090384)
+    expect(openPositions[0]?.percentOfNav).toBe(5.6)
+    expect(securities[0]?.issuerCountryCode).toBe('CA')
+    expect(trades[0]?.taxes).toBe(0)
+  })
+
+  it('rejects a file that is not a Flex Query statement', () => {
+    expect(() => parseFlexStatements('<html><body>nope</body></html>')).toThrow(ValidationError)
+    expect(() => parseFlexStatements('not xml at all <<<')).toThrow(ValidationError)
+  })
+
+  it.skipIf(!hasRealExports)('parses the real Portfolio Analyst exports under docs/flex-queries', () => {
+    const dir = FLEX_DIR
+    const stmt = parseOne(readFileSync(join(dir, 'portfolio-analyst-2026.xml'), 'utf8'))
+    expect(stmt.accountId).toBe('U18846869')
+    expect(stmt.baseCurrency).toBe('EUR')
+    expect(stmt.trades).toHaveLength(66)
+    expect(stmt.lots).toHaveLength(15)
+    expect(stmt.cashTransactions).toHaveLength(21)
+    expect(stmt.openPositions).toHaveLength(8)
+    expect(stmt.securities).toHaveLength(11)
+    expect(stmt.performanceSummaries).toHaveLength(16)
+
+    const stmt2025 = parseOne(readFileSync(join(dir, 'portfolio-analyst-2025.xml'), 'utf8'))
+    expect(stmt2025.trades).toHaveLength(186)
+    expect(stmt2025.cashTransactions).toHaveLength(41)
+  })
+})

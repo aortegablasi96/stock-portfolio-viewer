@@ -43,3 +43,8 @@ export function formatDateTime(epochMs: number): string {
     timeStyle: 'short',
   }).format(new Date(epochMs))
 }
+
+/** Format a plain date (epoch milliseconds, UTC) — no time — for Flex statement ranges. */
+export function formatDate(epochMs: number): string {
+  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(epochMs))
+}

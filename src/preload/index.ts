@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { IpcChannels } from '@shared/ipc/channels'
 import type {
   CaptureSnapshotResult,
+  FlexImportResult,
   PingRequest,
   PingResponse,
   PortfolioOverviewResult,
@@ -31,6 +32,8 @@ const api: RendererApi = {
     ipcRenderer.on(IpcChannels.snapshotCaptured, listener)
     return () => ipcRenderer.removeListener(IpcChannels.snapshotCaptured, listener)
   },
+  importFlexStatements: (): Promise<FlexImportResult> =>
+    ipcRenderer.invoke(IpcChannels.flexImport),
 }
 
 contextBridge.exposeInMainWorld('api', api)

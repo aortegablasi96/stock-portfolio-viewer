@@ -401,3 +401,66 @@ body {
     text-align: right;
   }
 }
+
+/* ---- Flex Query import (M3, Story #20) ----------------------------------- */
+
+.flex-import {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.flex-import-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.flex-import-intro {
+  margin: 0.35rem 0 0;
+  max-width: 42rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.flex-import-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.flex-import-file {
+  display: block;
+  margin-top: 0.15rem;
+  font-weight: 400;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.flex-import-dup {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.flex-import-dim {
+  color: var(--muted);
+}
+
+.flex-import-badge {
+  display: inline-block;
+  padding: 0.15rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.78rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.flex-import-badge-new {
+  border-color: var(--accent);
+  color: var(--accent);
+}

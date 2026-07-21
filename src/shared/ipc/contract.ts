@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { portfolioOverviewSchema } from '@shared/domain/portfolio'
 import { snapshotSummarySchema } from '@shared/domain/snapshot'
+import { flexImportSummarySchema } from '@shared/domain/flex'
 
 /**
  * The typed contract for every IPC channel: the Zod schema used by the main
@@ -64,6 +65,23 @@ export type CaptureSnapshotResult = z.infer<typeof captureSnapshotResultSchema>
 export const snapshotListSchema = z.array(snapshotSummarySchema)
 export type SnapshotList = z.infer<typeof snapshotListSchema>
 
+// ---- flex:import ------------------------------------------------------------
+
+/**
+ * Result of a "Import Flex statements" request (M3, Story #20). The file dialog and
+ * the outcome are modelled as *data*, not thrown errors, consistent with the other
+ * channels (ADR-0005): `canceled` when the owner closes the dialog, `invalid` when a
+ * selected file is not a valid Flex Query statement (nothing imported), `error` for
+ * anything unexpected. Takes no payload — the main process owns the native dialog.
+ */
+export const flexImportResultSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('imported'), summary: flexImportSummarySchema }),
+  z.object({ status: z.literal('canceled') }),
+  z.object({ status: z.literal('invalid'), message: z.string() }),
+  z.object({ status: z.literal('error'), message: z.string() }),
+])
+export type FlexImportResult = z.infer<typeof flexImportResultSchema>
+
 // ---- window.api bridge shape ------------------------------------------------
 
 /**
@@ -78,4 +96,6 @@ export interface RendererApi {
   listSnapshots: () => Promise<SnapshotList>
   /** Subscribe to "snapshot captured" events (e.g. capture-on-open). Returns an unsubscribe fn. */
   onSnapshotCaptured: (callback: () => void) => () => void
+  /** Open a file dialog to import IBKR Flex Query statement files into the local history. */
+  importFlexStatements: () => Promise<FlexImportResult>
 }
