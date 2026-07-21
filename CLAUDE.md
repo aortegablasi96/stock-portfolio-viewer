@@ -191,14 +191,14 @@ npm run typecheck      # tsc --noEmit (no emit; electron-vite/esbuild does the t
 
 npm test               # vitest run — unit tests (services), Node env, *.test.ts under src/
 npm run test:watch     # vitest (watch mode)
-npm run test:e2e       # build, then Playwright launches the packaged app (e2e/*.spec.ts)
+npm run test:e2e       # build (electron-vite → out/), then Playwright launches the built app (e2e/*.spec.ts)
 
 # Run a single unit test:
 npx vitest run src/services/meta/metaService.test.ts
 npx vitest run -t "generates and persists"   # by test-name substring
 
 npm run db:generate    # drizzle-kit generate — emit SQL migration from schema.ts changes
-npm run db:migrate      # drizzle-kit migrate — apply to ./local.dev.db (dev tooling only)
+npm run db:migrate      # drizzle-kit migrate — apply to ./local.dev.db (dev tooling only; override with DATABASE_URL)
 npm run db:studio      # drizzle-kit studio — inspect the dev DB
 ```
 
@@ -470,6 +470,8 @@ Core documents:
 * architecture.md
 * database.md
 * product.md
+* mcp.md (MCP server setup and usage notes)
+* github-issues.md (backlog conventions — Epics / User Stories / Bugs)
 
 Project history and milestones are **not** kept in local files. Milestones and work items
 live in GitHub Issues (Epics / User Stories, grouped under GitHub Milestones); the record of
@@ -553,6 +555,10 @@ Before implementing any non-trivial feature:
 Services are the primary unit-test target.
 
 Mock repositories and external providers.
+
+Pure renderer helpers (e.g. `renderer/src/lib/format.ts`) are also unit-tested. Vitest
+picks up every `src/**/*.test.ts` and runs it in a **Node** environment (no jsdom), so keep
+such tests free of DOM/React-rendering dependencies.
 
 Every completed feature should include:
 
