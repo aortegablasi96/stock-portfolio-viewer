@@ -1,0 +1,47 @@
+name: CI
+
+# Lightweight verification for every push to main and every pull request:
+# lint, typecheck, unit tests, and a full build. The heavier Playwright e2e
+# suite (which launches the packaged Electron app) is intentionally left out —
+# it needs a display server and is better run locally / on demand.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Cancel superseded runs on the same ref (e.g. rapid pushes to a PR branch).
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Lint · Typecheck · Test · Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # `npm ci` runs the postinstall hook, which rebuilds the native
+      # better-sqlite3 module against Electron's ABI (electron-rebuild).
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
