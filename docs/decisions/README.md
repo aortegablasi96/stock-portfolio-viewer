@@ -40,3 +40,4 @@ Trade-offs, follow-ups, and what becomes easier or harder.
 - `0002` — Typed IPC contract (preload contextBridge + shared contract + Zod)
 - `0003` — Local persistence: SQLite (better-sqlite3) + Drizzle, migrate-on-launch
 - `0004` — Interactive Brokers integration: local Client Portal Gateway REST behind a repository
+- `0005` — Flex Query file import as an offline authoritative data source

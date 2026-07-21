@@ -19,6 +19,10 @@ release/
 .env.*
 !.env.example
 
+# Personal IBKR Flex Query exports (real account data — kept local, never committed).
+# The parser is tested against a compact inline fixture; the real-file test skips when absent.
+docs/flex-queries/
+
 # Local SQLite database files
 *.sqlite
 *.sqlite3

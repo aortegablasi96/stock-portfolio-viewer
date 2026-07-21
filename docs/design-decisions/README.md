@@ -39,3 +39,4 @@ Other options and why they were not chosen.
 - `0001` — Read-only dashboard layout and data-loading state pattern
 - `0002` — Model connection/load outcome as a discriminated-union IPC result
 - `0003` — Snapshot persistence model, money representation, and capture policy
+- `0004` — Flex import persistence: real-valued multi-currency amounts, append-only, two-tier de-dupe

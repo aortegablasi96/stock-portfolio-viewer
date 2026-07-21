@@ -1,15 +1,17 @@
-import { ipcMain } from 'electron'
+import { BrowserWindow, dialog, ipcMain } from 'electron'
 import { IpcChannels } from '@shared/ipc/channels'
 import {
   pingRequestSchema,
   type CaptureSnapshotResult,
+  type FlexImportResult,
   type PortfolioOverviewResult,
   type SnapshotList,
 } from '@shared/ipc/contract'
 import { systemService } from '@services/system/systemService'
 import { portfolioService } from '@services/portfolio/portfolioService'
 import { snapshotService } from '@services/snapshots/snapshotService'
-import { IbkrNotConnectedError } from '@shared/errors'
+import { flexImportService } from '@services/flex/flexImportService'
+import { IbkrNotConnectedError, ValidationError } from '@shared/errors'
 
 /**
  * Register all IPC handlers. Handlers are intentionally *thin*: they validate
@@ -54,4 +56,35 @@ export function registerIpcHandlers(): void {
 
   // Snapshot history (local read; independent of the gateway). No payload.
   ipcMain.handle(IpcChannels.snapshotList, (): SnapshotList => snapshotService.getHistory())
+
+  // Import IBKR Flex Query statement files (M3, Story #20). The native file dialog is a
+  // main-process concern (the sandboxed renderer cannot open it); the handler stays thin
+  // otherwise — parse/persist/de-dupe all live in the service and repository. Outcomes are
+  // returned as data (canceled/invalid/error), never thrown across IPC (ADR-0005).
+  ipcMain.handle(IpcChannels.flexImport, async (): Promise<FlexImportResult> => {
+    const parentWindow = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
+    const dialogOptions: Electron.OpenDialogOptions = {
+      title: 'Import IBKR Flex Query statements',
+      properties: ['openFile', 'multiSelections'],
+      filters: [{ name: 'Flex Query XML', extensions: ['xml'] }],
+    }
+    const selection = parentWindow
+      ? await dialog.showOpenDialog(parentWindow, dialogOptions)
+      : await dialog.showOpenDialog(dialogOptions)
+
+    if (selection.canceled || selection.filePaths.length === 0) {
+      return { status: 'canceled' }
+    }
+
+    try {
+      const summary = flexImportService.import(selection.filePaths)
+      return { status: 'imported', summary }
+    } catch (err) {
+      if (err instanceof ValidationError) {
+        return { status: 'invalid', message: err.message }
+      }
+      const message = err instanceof Error ? err.message : 'Unexpected error importing the statements.'
+      return { status: 'error', message }
+    }
+  })
 }

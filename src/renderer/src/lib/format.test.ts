@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { formatCurrency, formatDateTime, formatPercent, formatQuantity } from './format'
+import { formatCurrency, formatDate, formatDateTime, formatPercent, formatQuantity } from './format'
 
 describe('formatCurrency', () => {
   it('formats a valid ISO currency with its symbol', () => {
@@ -38,5 +38,13 @@ describe('formatDateTime', () => {
     const out = formatDateTime(Date.UTC(2026, 6, 4, 15, 30))
     expect(out).toMatch(/2026/)
     expect(out.length).toBeGreaterThan(0)
+  })
+})
+
+describe('formatDate', () => {
+  it('renders an epoch-ms date without a time component', () => {
+    const out = formatDate(Date.UTC(2026, 0, 1))
+    expect(out).toMatch(/2026/)
+    expect(out).not.toMatch(/:\d\d/)
   })
 })
