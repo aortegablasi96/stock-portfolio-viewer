@@ -2,6 +2,7 @@ import { BrowserWindow, dialog, ipcMain } from 'electron'
 import { IpcChannels } from '@shared/ipc/channels'
 import {
   pingRequestSchema,
+  portfolioOverviewRequestSchema,
   type CaptureSnapshotResult,
   type FlexImportResult,
   type PortfolioOverviewResult,
@@ -28,20 +29,25 @@ export function registerIpcHandlers(): void {
     return systemService.ping(request)
   })
 
-  // No payload to validate. Connection failures are mapped to a serializable
-  // result variant so the renderer can render them as first-class states (ADR-0004).
-  ipcMain.handle(IpcChannels.portfolioGetOverview, async (): Promise<PortfolioOverviewResult> => {
-    try {
-      const overview = await portfolioService.getOverview()
-      return { status: 'ok', overview }
-    } catch (err) {
-      if (err instanceof IbkrNotConnectedError) {
-        return { status: 'not_connected', message: err.message }
+  // Validates the optional display currency (Story #28); connection failures are mapped to
+  // a serializable result variant so the renderer renders them as first-class states (ADR-0004).
+  ipcMain.handle(
+    IpcChannels.portfolioGetOverview,
+    async (_event, rawInput: unknown): Promise<PortfolioOverviewResult> => {
+      try {
+        const { displayCurrency } = portfolioOverviewRequestSchema.parse(rawInput ?? {})
+        const overview = await portfolioService.getOverview(displayCurrency)
+        return { status: 'ok', overview }
+      } catch (err) {
+        if (err instanceof IbkrNotConnectedError) {
+          return { status: 'not_connected', message: err.message }
+        }
+        const message =
+          err instanceof Error ? err.message : 'Unexpected error reading the portfolio.'
+        return { status: 'error', message }
       }
-      const message = err instanceof Error ? err.message : 'Unexpected error reading the portfolio.'
-      return { status: 'error', message }
-    }
-  })
+    },
+  )
 
   // Manual "Capture now". No payload. A disconnected gateway is returned as data
   // (not thrown) so the renderer can prompt recovery (DDR-0003).

@@ -8,6 +8,7 @@ import type {
   PerformanceResult,
   PingRequest,
   PingResponse,
+  PortfolioOverviewRequest,
   PortfolioOverviewResult,
   RealizedGainsResult,
   RendererApi,
@@ -25,8 +26,8 @@ import type {
 const api: RendererApi = {
   ping: (request: PingRequest): Promise<PingResponse> =>
     ipcRenderer.invoke(IpcChannels.ping, request),
-  getPortfolioOverview: (): Promise<PortfolioOverviewResult> =>
-    ipcRenderer.invoke(IpcChannels.portfolioGetOverview),
+  getPortfolioOverview: (request?: PortfolioOverviewRequest): Promise<PortfolioOverviewResult> =>
+    ipcRenderer.invoke(IpcChannels.portfolioGetOverview, request),
   captureSnapshot: (): Promise<CaptureSnapshotResult> =>
     ipcRenderer.invoke(IpcChannels.snapshotCapture),
   listSnapshots: (): Promise<SnapshotList> => ipcRenderer.invoke(IpcChannels.snapshotList),
