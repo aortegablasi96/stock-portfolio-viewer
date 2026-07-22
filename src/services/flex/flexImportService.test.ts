@@ -24,6 +24,7 @@ function statement(accountId: string, fromDate: number): FlexStatement {
     baseCurrency: 'EUR',
     navChange: null,
     openPositions: [],
+    priorPeriodPositions: [],
     trades: [],
     lots: [],
     cashTransactions: [],
@@ -44,6 +45,7 @@ function importResult(overrides: Partial<FlexStatementImport>): FlexStatementImp
     records: {
       navChanges: nil,
       openPositions: nil,
+      priorPeriodPositions: nil,
       trades: nil,
       lots: nil,
       cashTransactions: nil,

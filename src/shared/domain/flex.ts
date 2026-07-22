@@ -52,6 +52,26 @@ export const flexOpenPositionSchema = z.object({
 })
 export type FlexOpenPosition = z.infer<typeof flexOpenPositionSchema>
 
+/**
+ * One held instrument's mark-to-market on one trading day (`PriorPeriodPosition`) — the
+ * daily price/MTM series that drives day-by-day performance (Story #29; DDR-0008). `date`
+ * is the trading day (epoch ms, UTC midnight); `priorMtmPnl` is that day's MTM P&L versus
+ * the prior day in the instrument's native `currency`, so base = `priorMtmPnl × fxRateToBase`.
+ * Statement-scoped (DDR-0004), like open positions.
+ */
+export const flexPriorPeriodPositionSchema = z.object({
+  conid: z.number().int().nullable(),
+  symbol: z.string(),
+  description: z.string(),
+  assetCategory: z.string(),
+  currency: z.string(),
+  fxRateToBase: z.number(),
+  date: z.number().int(),
+  price: z.number().nullable(),
+  priorMtmPnl: z.number(),
+})
+export type FlexPriorPeriodPosition = z.infer<typeof flexPriorPeriodPositionSchema>
+
 /** An executed trade (`Trade`). `tradeKey` is the global de-dupe identity (DDR-0004). */
 export const flexTradeSchema = z.object({
   tradeKey: z.string(),
@@ -172,6 +192,7 @@ export const flexStatementSchema = z.object({
   baseCurrency: z.string(),
   navChange: flexNavChangeSchema.nullable(),
   openPositions: z.array(flexOpenPositionSchema),
+  priorPeriodPositions: z.array(flexPriorPeriodPositionSchema),
   trades: z.array(flexTradeSchema),
   lots: z.array(flexLotSchema),
   cashTransactions: z.array(flexCashTransactionSchema),
@@ -201,6 +222,7 @@ export const flexStatementImportSchema = z.object({
   records: z.object({
     navChanges: flexRecordCountSchema,
     openPositions: flexRecordCountSchema,
+    priorPeriodPositions: flexRecordCountSchema,
     trades: flexRecordCountSchema,
     lots: flexRecordCountSchema,
     cashTransactions: flexRecordCountSchema,

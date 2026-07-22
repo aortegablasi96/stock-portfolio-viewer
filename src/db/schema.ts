@@ -180,6 +180,39 @@ export const flexOpenPositions = sqliteTable(
 export type FlexOpenPositionRow = typeof flexOpenPositions.$inferSelect
 export type NewFlexOpenPositionRow = typeof flexOpenPositions.$inferInsert
 
+/**
+ * Per-instrument, per-trading-day mark-to-market (`PriorPeriodPosition`) — the daily
+ * price/MTM series behind day-by-day performance (Story #29; DDR-0008). Statement-scoped
+ * like open positions: fresh insert per statement, cascade-deleted, no global de-dupe.
+ */
+export const flexPriorPeriodPositions = sqliteTable(
+  'flex_prior_period_positions',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    statementId: integer('statement_id')
+      .notNull()
+      .references(() => flexStatements.id, { onDelete: 'cascade' }),
+    conid: integer('conid'),
+    symbol: text('symbol').notNull(),
+    description: text('description').notNull(),
+    assetCategory: text('asset_category').notNull(),
+    currency: text('currency').notNull(),
+    fxRateToBase: real('fx_rate_to_base').notNull(),
+    /** Trading day — epoch ms, UTC midnight. */
+    date: integer('date').notNull(),
+    price: real('price'),
+    /** MTM P&L vs. prior day, native currency (base = priorMtmPnl × fxRateToBase). */
+    priorMtmPnl: real('prior_mtm_pnl').notNull(),
+  },
+  (t) => ({
+    byStatement: index('idx_flex_prior_period_positions_statement_id').on(t.statementId),
+    byDate: index('idx_flex_prior_period_positions_date').on(t.date),
+  }),
+)
+
+export type FlexPriorPeriodPositionRow = typeof flexPriorPeriodPositions.$inferSelect
+export type NewFlexPriorPeriodPositionRow = typeof flexPriorPeriodPositions.$inferInsert
+
 /** Executed trades (`Trade`). De-duped globally by `trade_key` (DDR-0004). */
 export const flexTrades = sqliteTable(
   'flex_trades',

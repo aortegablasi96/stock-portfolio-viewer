@@ -1,15 +1,20 @@
 import type { ValuePoint } from '@shared/domain/performance'
 
 /**
- * A dependency-free line chart for a value-over-time series (Milestone M3, Story #21).
- * Rendered as inline SVG so the app pulls in no charting library and stays
+ * A dependency-free line chart for a value-over-time series (Milestone M3, Stories #21,
+ * #29). Rendered as inline SVG so the app pulls in no charting library and stays
  * CSP-friendly. A single series needs no legend — the caller's heading names it.
- * Each vertex carries a native `<title>` tooltip (the hover layer); a data table
- * accompanies the chart in the view for the non-visual path.
+ *
+ * A sparse series (period endpoints) marks each vertex with a native `<title>` tooltip;
+ * a dense daily series (DDR-0008) would clutter with 140+ markers, so above a threshold
+ * the chart renders the line + area only, keeping the axis endpoints legible.
  */
 const W = 720
 const H = 240
 const PAD = { top: 16, right: 16, bottom: 28, left: 64 }
+
+/** Above this many points the per-vertex markers are dropped (dense daily series). */
+const MAX_MARKERS = 30
 
 export function LineChart({
   points,
@@ -62,11 +67,12 @@ export function LineChart({
       <polygon className="chart-area" points={area} />
       <polyline className="chart-line" points={line} vectorEffect="non-scaling-stroke" />
 
-      {points.map((p) => (
-        <circle key={`${p.date}-${p.value}`} className="chart-dot" cx={x(p.date)} cy={y(p.value)} r={4}>
-          <title>{`${formatDate(p.date)}: ${formatValue(p.value)}`}</title>
-        </circle>
-      ))}
+      {points.length <= MAX_MARKERS &&
+        points.map((p) => (
+          <circle key={`${p.date}-${p.value}`} className="chart-dot" cx={x(p.date)} cy={y(p.value)} r={4}>
+            <title>{`${formatDate(p.date)}: ${formatValue(p.value)}`}</title>
+          </circle>
+        ))}
 
       <text className="chart-axis-label" x={PAD.left} y={H - 8} textAnchor="start">
         {formatDate(minD)}
