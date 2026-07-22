@@ -9,6 +9,10 @@ export const IpcChannels = {
   snapshotCapture: 'snapshot:capture',
   snapshotList: 'snapshot:list',
   flexImport: 'flex:import',
+  analyticsPerformance: 'analytics:getPerformance',
+  analyticsAllocation: 'analytics:getAllocation',
+  analyticsDividends: 'analytics:getDividends',
+  analyticsRealizedGains: 'analytics:getRealizedGains',
   // Main → renderer event: a snapshot was captured (e.g. on-open capture completed),
   // so the renderer should refresh its history. Carries no payload.
   snapshotCaptured: 'snapshot:captured',

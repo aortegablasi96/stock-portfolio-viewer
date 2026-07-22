@@ -1,5 +1,15 @@
 import { describe, it, expect } from 'vitest'
-import { formatCurrency, formatDate, formatDateTime, formatPercent, formatQuantity } from './format'
+import {
+  formatCurrency,
+  formatDate,
+  formatDateTime,
+  formatMonth,
+  formatPercent,
+  formatPercentValue,
+  formatQuantity,
+  formatSignedCurrency,
+  formatSignedPercent,
+} from './format'
 
 describe('formatCurrency', () => {
   it('formats a valid ISO currency with its symbol', () => {
@@ -46,5 +56,37 @@ describe('formatDate', () => {
     const out = formatDate(Date.UTC(2026, 0, 1))
     expect(out).toMatch(/2026/)
     expect(out).not.toMatch(/:\d\d/)
+  })
+})
+
+describe('formatSignedCurrency', () => {
+  it('prefixes a leading + for positive, - for negative, nothing for zero', () => {
+    expect(formatSignedCurrency(10, 'USD')).toMatch(/^\+/)
+    expect(formatSignedCurrency(-10, 'USD')).toMatch(/^-/)
+    expect(formatSignedCurrency(0, 'USD')).not.toMatch(/^[+-]/)
+  })
+})
+
+describe('formatPercentValue / formatSignedPercent', () => {
+  it('formats an already-percent value with two decimals and a % sign', () => {
+    expect(formatPercentValue(7.125)).toMatch(/7\.1[23]\s?%/)
+  })
+
+  it('adds an explicit sign only for non-zero values', () => {
+    expect(formatSignedPercent(7.12)).toMatch(/^\+7\.12\s?%/)
+    expect(formatSignedPercent(-3.5)).toMatch(/^-3\.50\s?%/)
+    expect(formatSignedPercent(0)).not.toMatch(/^[+-]/)
+  })
+})
+
+describe('formatMonth', () => {
+  it('renders a YYYY-MM key as a short month + year', () => {
+    const out = formatMonth('2026-01')
+    expect(out).toMatch(/2026/)
+    expect(out).toMatch(/jan/i)
+  })
+
+  it('passes through a non-month key such as "Unknown"', () => {
+    expect(formatMonth('Unknown')).toBe('Unknown')
   })
 })
