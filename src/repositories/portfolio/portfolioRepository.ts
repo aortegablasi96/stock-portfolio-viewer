@@ -1,4 +1,5 @@
 import type { AccountBalances, Holding } from '@shared/domain/portfolio'
+import { IbkrGatewayError } from '@shared/errors'
 import { ibkrGateway, type LedgerEntry, type RawPosition } from './ibkrGateway'
 
 /**
@@ -50,5 +51,32 @@ export const portfolioRepository = {
       totalCashValue: base?.cashbalance ?? 0,
       netLiquidation: base?.netliquidationvalue ?? 0,
     }
+  },
+
+  /**
+   * FX rates converting each of `currencies` into `target`, as a `source → rate` map
+   * (Story #28, DDR-0007). `target` maps to `1`. A currency whose rate cannot be fetched
+   * (an `IbkrGatewayError` — e.g. an unsupported pair) is **omitted**, so the service can
+   * flag those positions as unconverted rather than corrupt a total. A disconnected
+   * gateway (`IbkrNotConnectedError`) still propagates, degrading the whole view to
+   * `not_connected`. Conversion itself is the service's job — this only fetches rates.
+   */
+  async getExchangeRates(
+    currencies: readonly string[],
+    target: string,
+  ): Promise<Record<string, number>> {
+    const rates: Record<string, number> = { [target]: 1 }
+    const distinct = [...new Set(currencies)].filter((c) => c && c !== target)
+    for (const source of distinct) {
+      try {
+        rates[source] = await ibkrGateway.getExchangeRate(source, target)
+      } catch (err) {
+        // Rate unavailable for this pair → omit it (position shown unconverted). A
+        // not-connected error is not an IbkrGatewayError, so it propagates.
+        if (err instanceof IbkrGatewayError) continue
+        throw err
+      }
+    }
+    return rates
   },
 }

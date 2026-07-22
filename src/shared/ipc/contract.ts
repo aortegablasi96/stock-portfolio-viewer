@@ -40,8 +40,15 @@ export type PingResponse = z.infer<typeof pingResponseSchema>
  * states as first-class UI (see the M1 Architecture Review and ADR-0004). The IPC
  * handler maps `IbkrNotConnectedError` / other failures onto these variants.
  *
- * `getPortfolioOverview` takes no payload, so there is no request schema to validate.
+ * `getPortfolioOverview` accepts an optional display currency (Story #28): when given, the
+ * overview is converted into it; when omitted, it is returned in native currencies. The
+ * input is validated at the IPC boundary like any other untrusted renderer payload.
  */
+export const portfolioOverviewRequestSchema = z.object({
+  displayCurrency: z.string().min(1).optional(),
+})
+export type PortfolioOverviewRequest = z.infer<typeof portfolioOverviewRequestSchema>
+
 export const portfolioOverviewResultSchema = z.discriminatedUnion('status', [
   z.object({ status: z.literal('ok'), overview: portfolioOverviewSchema }),
   z.object({ status: z.literal('not_connected'), message: z.string() }),
@@ -112,7 +119,7 @@ export type { PerformanceResult, AllocationResult, DividendResult, RealizedGains
  */
 export interface RendererApi {
   ping: (request: PingRequest) => Promise<PingResponse>
-  getPortfolioOverview: () => Promise<PortfolioOverviewResult>
+  getPortfolioOverview: (request?: PortfolioOverviewRequest) => Promise<PortfolioOverviewResult>
   captureSnapshot: () => Promise<CaptureSnapshotResult>
   listSnapshots: () => Promise<SnapshotList>
   /** Subscribe to "snapshot captured" events (e.g. capture-on-open). Returns an unsubscribe fn. */

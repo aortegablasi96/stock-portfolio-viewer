@@ -1,10 +1,14 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { PortfolioOverview } from '@shared/domain/portfolio'
 import type { SnapshotSummary } from '@shared/domain/snapshot'
 import { HoldingsTable } from './HoldingsTable'
 import { BalancesSummary } from './BalancesSummary'
 import { AllocationPanel } from './AllocationPanel'
 import { SnapshotHistory } from './SnapshotHistory'
+import { CurrencySelector } from './CurrencySelector'
+
+/** Default display currency on first load: the account base currency (Story #28). */
+const DEFAULT_DISPLAY_CURRENCY = 'EUR'
 
 /**
  * The portfolio dashboard. Fetches the live overview from the main process on
@@ -35,11 +39,16 @@ export function PortfolioDashboard(): React.JSX.Element {
   const [state, setState] = useState<LoadState>({ phase: 'loading' })
   const [snapshots, setSnapshots] = useState<SnapshotSummary[]>([])
   const [capture, setCapture] = useState<CaptureState>({ phase: 'idle' })
+  const [displayCurrency, setDisplayCurrency] = useState(DEFAULT_DISPLAY_CURRENCY)
+  const [busy, setBusy] = useState(false)
 
-  const load = useCallback(async () => {
-    setState({ phase: 'loading' })
+  // `keepPrevious` keeps the current figures visible while re-converting on a currency
+  // change, so switching currency shows a subtle busy hint rather than blanking the view.
+  const load = useCallback(async (currency: string, keepPrevious = false) => {
+    if (!keepPrevious) setState({ phase: 'loading' })
+    setBusy(true)
     try {
-      const result = await window.api.getPortfolioOverview()
+      const result = await window.api.getPortfolioOverview({ displayCurrency: currency })
       switch (result.status) {
         case 'ok':
           setState({ phase: 'ok', overview: result.overview })
@@ -56,8 +65,27 @@ export function PortfolioDashboard(): React.JSX.Element {
         phase: 'error',
         message: err instanceof Error ? err.message : 'Unexpected error loading the portfolio.',
       })
+    } finally {
+      setBusy(false)
     }
   }, [])
+
+  const onCurrencyChange = useCallback(
+    (currency: string) => {
+      setDisplayCurrency(currency)
+      void load(currency, true)
+    },
+    [load],
+  )
+
+  // The currencies the selector offers: the default base plus every currency actually held.
+  const currencyOptions = useMemo(() => {
+    const codes = new Set<string>([DEFAULT_DISPLAY_CURRENCY, displayCurrency])
+    if (state.phase === 'ok') {
+      for (const h of state.overview.holdings) if (h.currency) codes.add(h.currency)
+    }
+    return [...codes].sort()
+  }, [state, displayCurrency])
 
   const loadHistory = useCallback(async () => {
     try {
@@ -93,7 +121,7 @@ export function PortfolioDashboard(): React.JSX.Element {
   }, [loadHistory])
 
   useEffect(() => {
-    void load()
+    void load(DEFAULT_DISPLAY_CURRENCY)
     void loadHistory()
     // Refresh history when the main process captures a snapshot on open.
     return window.api.onSnapshotCaptured(() => void loadHistory())
@@ -108,6 +136,12 @@ export function PortfolioDashboard(): React.JSX.Element {
         </div>
         <div className="dashboard-actions">
           <p className="source-note">Live from Interactive Brokers</p>
+          <CurrencySelector
+            value={displayCurrency}
+            options={currencyOptions}
+            disabled={busy}
+            onChange={onCurrencyChange}
+          />
           <button
             type="button"
             className="capture-button"
@@ -138,7 +172,7 @@ export function PortfolioDashboard(): React.JSX.Element {
         <section className="state-panel state-notice" role="status">
           <h2>Not connected to Interactive Brokers</h2>
           <p>{state.message}</p>
-          <button type="button" className="retry-button" onClick={() => void load()}>
+          <button type="button" className="retry-button" onClick={() => void load(displayCurrency)}>
             Retry
           </button>
         </section>
@@ -148,7 +182,7 @@ export function PortfolioDashboard(): React.JSX.Element {
         <section className="state-panel state-error" role="alert">
           <h2>Couldn’t load your portfolio</h2>
           <p>{state.message}</p>
-          <button type="button" className="retry-button" onClick={() => void load()}>
+          <button type="button" className="retry-button" onClick={() => void load(displayCurrency)}>
             Retry
           </button>
         </section>
@@ -156,6 +190,11 @@ export function PortfolioDashboard(): React.JSX.Element {
 
       {state.phase === 'ok' && (
         <>
+          {busy && (
+            <p className="state-panel converting-note" role="status">
+              Converting to {displayCurrency}…
+            </p>
+          )}
           <BalancesSummary
             balances={state.overview.balances}
             totalMarketValue={state.overview.totalMarketValue}
@@ -170,6 +209,7 @@ export function PortfolioDashboard(): React.JSX.Element {
                 <HoldingsTable
                   holdings={state.overview.holdings}
                   allocation={state.overview.allocation}
+                  displayCurrency={state.overview.displayCurrency}
                 />
               </div>
               <aside className="col-side">

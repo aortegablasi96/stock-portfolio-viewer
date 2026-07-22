@@ -89,6 +89,63 @@ body {
   gap: 0.5rem;
 }
 
+/* ---- Display-currency selector (Story #28) ------------------------------- */
+
+.field-inline {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.field-inline label {
+  color: var(--muted);
+}
+
+.select-control {
+  padding: 0.35rem 0.6rem;
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.select-control:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.select-control:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Muted chip showing a holding's native currency/amount next to its converted value. */
+.native-chip {
+  margin-left: 0.4rem;
+  padding: 0.05rem 0.35rem;
+  font-size: 0.72rem;
+  color: var(--muted);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+.table-notice {
+  margin: 0 0 0.75rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.converting-note {
+  padding: 0.6rem 0.9rem;
+  font-size: 0.85rem;
+}
+
 /* ---- Capture now (Story #18) --------------------------------------------- */
 
 .capture-button {

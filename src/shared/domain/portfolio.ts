@@ -22,6 +22,16 @@ export const holdingSchema = z.object({
   marketPrice: z.number().nullable(),
   marketValue: z.number(),
   currency: z.string(),
+  /**
+   * Market value converted into the overview's `displayCurrency` (live Portfolio view
+   * only — Story #28, DDR-0007). Present *only* when a display currency was requested:
+   * a `number` is the converted value; `null` means no FX rate was available, so the
+   * position is shown in its native currency and excluded from converted totals. The
+   * field is **absent** on the native overview and on snapshot-sourced holdings, so the
+   * historical/snapshot path keeps persisting native values unchanged. `marketPrice`
+   * and `averageCost` are deliberately *not* converted — a quote is a native-currency fact.
+   */
+  displayValue: z.number().nullable().optional(),
 })
 export type Holding = z.infer<typeof holdingSchema>
 
@@ -49,5 +59,12 @@ export const portfolioOverviewSchema = z.object({
   balances: accountBalancesSchema,
   allocation: z.array(allocationSliceSchema),
   totalMarketValue: z.number(),
+  /**
+   * The currency that `totalMarketValue`, each holding's `displayValue`, the allocation
+   * slices, and `balances` are expressed in when a display currency was requested
+   * (Story #28). **Absent** on the native overview — in which case every figure is in
+   * its own native currency and totals are the raw (native) sums, as before.
+   */
+  displayCurrency: z.string().optional(),
 })
 export type PortfolioOverview = z.infer<typeof portfolioOverviewSchema>

@@ -65,6 +65,13 @@ const ledgerEntrySchema = z
 const ledgerSchema = z.record(z.string(), ledgerEntrySchema)
 export type LedgerEntry = z.infer<typeof ledgerEntrySchema>
 
+// The Client Portal Gateway `/iserver/exchangerate` endpoint returns `{ "rate": <number> }`
+// (Story #28), where the rate is units of `target` per unit of `source`. Verified live against
+// a running gateway (2026-07-22): e.g. USD→EUR → {"rate":0.87654326}, EUR→EUR → {"rate":1.0}.
+// Still validated at ingress so a future drift surfaces as `IbkrGatewayError` rather than a bad
+// number silently entering a total.
+const exchangeRateSchema = z.object({ rate: z.number() }).passthrough()
+
 // ---- transport --------------------------------------------------------------
 
 /** GET a raw response body, mapping connection/HTTP failures to typed errors. */
@@ -178,10 +185,24 @@ async function getLedger(accountId: string): Promise<Record<string, LedgerEntry>
   return getJson(`/portfolio/${encodeURIComponent(accountId)}/ledger`, ledgerSchema)
 }
 
+/**
+ * FX conversion rate from `source` into `target` currency (Story #28): one unit of
+ * `source` equals the returned number of units of `target`. Read from the gateway's
+ * `/iserver/exchangerate` endpoint. A `401/403` maps to `IbkrNotConnectedError` and an
+ * unexpected shape to `IbkrGatewayError` (both via the shared transport), so callers can
+ * distinguish "not connected" from "rate unavailable".
+ */
+async function getExchangeRate(source: string, target: string): Promise<number> {
+  const query = new URLSearchParams({ source, target }).toString()
+  const { rate } = await getJson(`/iserver/exchangerate?${query}`, exchangeRateSchema)
+  return rate
+}
+
 export const ibkrGateway = {
   getAuthStatus,
   ensureAuthenticated,
   getAccountId,
   getPositions,
   getLedger,
+  getExchangeRate,
 }
