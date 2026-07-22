@@ -11,6 +11,10 @@ import { systemService } from '@services/system/systemService'
 import { portfolioService } from '@services/portfolio/portfolioService'
 import { snapshotService } from '@services/snapshots/snapshotService'
 import { flexImportService } from '@services/flex/flexImportService'
+import { performanceService } from '@services/analytics/performanceService'
+import { allocationService } from '@services/analytics/allocationService'
+import { realizedGainsService } from '@services/analytics/realizedGainsService'
+import { dividendService } from '@services/dividends/dividendService'
 import { IbkrNotConnectedError, ValidationError } from '@shared/errors'
 
 /**
@@ -87,4 +91,12 @@ export function registerIpcHandlers(): void {
       return { status: 'error', message }
     }
   })
+
+  // Analytics views (M3, Stories #21–#24). Each is a pure local read over the imported
+  // Flex store; the service returns an `ok` / `needs_import` result, so there is no
+  // payload to validate and no connection state to map. No business logic here.
+  ipcMain.handle(IpcChannels.analyticsPerformance, () => performanceService.getPerformance())
+  ipcMain.handle(IpcChannels.analyticsAllocation, () => allocationService.getAllocation())
+  ipcMain.handle(IpcChannels.analyticsDividends, () => dividendService.getDividends())
+  ipcMain.handle(IpcChannels.analyticsRealizedGains, () => realizedGainsService.getRealizedGains())
 }

@@ -48,3 +48,42 @@ export function formatDateTime(epochMs: number): string {
 export function formatDate(epochMs: number): string {
   return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(epochMs))
 }
+
+/**
+ * Format a monetary value with an explicit leading sign (+/−) — for P&L, income, and
+ * other figures where the direction matters. Zero carries no sign.
+ */
+export function formatSignedCurrency(value: number, currency: string): string {
+  const base = formatCurrency(Math.abs(value), currency)
+  if (value < 0) return `-${base}`
+  if (value > 0) return `+${base}`
+  return base
+}
+
+/** Format an already-percent value (e.g. a TWR of 7.12 → "7.12%"). */
+export function formatPercentValue(value: number): string {
+  return `${new Intl.NumberFormat(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value)}%`
+}
+
+/** Format an already-percent value with an explicit leading sign (+/−). Zero carries no sign. */
+export function formatSignedPercent(value: number): string {
+  const base = formatPercentValue(Math.abs(value))
+  if (value < 0) return `-${base}`
+  if (value > 0) return `+${base}`
+  return base
+}
+
+/** Format a `YYYY-MM` month key as e.g. "Jan 2026"; passes through anything else (e.g. "Unknown"). */
+export function formatMonth(key: string): string {
+  const match = /^(\d{4})-(\d{2})$/.exec(key)
+  if (!match) return key
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, 1))
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(date)
+}

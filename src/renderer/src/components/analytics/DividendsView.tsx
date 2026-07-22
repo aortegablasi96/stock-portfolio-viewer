@@ -1,0 +1,132 @@
+import type { DividendResult } from '@shared/domain/dividends'
+import { formatCurrency, formatDate, formatMonth } from '../../lib/format'
+import { ColumnChart, type StackedColumn } from '../charts/ColumnChart'
+import { useAnalytics } from './useAnalytics'
+import { NeedsImport } from './NeedsImport'
+import { StatTile } from './StatTile'
+
+/**
+ * Dividend & income tracking (Milestone M3, Story #23). Shows gross income,
+ * withholding tax, and net income per symbol and per month, in the base currency,
+ * read from imported Flex cash transactions. The monthly chart stacks net + withholding
+ * so the column height reads as gross.
+ */
+export function DividendsView(): React.JSX.Element {
+  const { state, reload } = useAnalytics<DividendResult>(window.api.getDividends)
+
+  if (state.phase === 'loading') {
+    return (
+      <p className="state-panel" role="status">
+        Loading dividends…
+      </p>
+    )
+  }
+  if (state.phase === 'error') {
+    return (
+      <section className="state-panel state-error" role="alert">
+        <h2>Couldn’t load dividends</h2>
+        <p>{state.message}</p>
+        <button type="button" className="retry-button" onClick={() => void reload()}>
+          Retry
+        </button>
+      </section>
+    )
+  }
+  if (state.result.status === 'needs_import') {
+    return <NeedsImport onImported={() => void reload()} />
+  }
+
+  const r = state.result.report
+  const c = (v: number): string => formatCurrency(v, r.baseCurrency)
+
+  if (r.events.length === 0) {
+    return (
+      <section className="state-panel" role="status">
+        <h2>No dividend income recorded</h2>
+        <p>The imported statements contain no dividend or payment-in-lieu transactions.</p>
+      </section>
+    )
+  }
+
+  const columns: StackedColumn[] = r.byMonth.map((m) => ({
+    key: m.key,
+    label: formatMonth(m.key),
+    lower: m.netBase,
+    upper: m.withholdingBase,
+  }))
+
+  return (
+    <div className="analytics-view">
+      <div className="stat-row">
+        <StatTile label="Gross income" value={c(r.totalGrossBase)} />
+        <StatTile label="Withholding tax" value={c(r.totalWithholdingBase)} hint="Withheld at source" />
+        <StatTile label="Net income" value={c(r.totalNetBase)} tone="positive" />
+      </div>
+
+      <section className="panel">
+        <h2 className="panel-title">Income over time</h2>
+        <ColumnChart
+          columns={columns}
+          formatValue={c}
+          lowerLabel="Net income"
+          upperLabel="Withholding tax"
+          ariaLabel="Dividend income by month"
+        />
+      </section>
+
+      <section className="panel">
+        <h2 className="panel-title">By symbol</h2>
+        <div className="table-scroll">
+          <table className="holdings-table">
+            <thead>
+              <tr>
+                <th scope="col">Symbol</th>
+                <th scope="col" className="num">Gross</th>
+                <th scope="col" className="num">Withholding</th>
+                <th scope="col" className="num">Net</th>
+              </tr>
+            </thead>
+            <tbody>
+              {r.bySymbol.map((s) => (
+                <tr key={s.key}>
+                  <th scope="row" className="symbol">{s.label}</th>
+                  <td className="num">{c(s.grossBase)}</td>
+                  <td className="num">{c(s.withholdingBase)}</td>
+                  <td className="num">{c(s.netBase)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="panel">
+        <h2 className="panel-title">Transactions</h2>
+        <div className="table-scroll">
+          <table className="holdings-table">
+            <thead>
+              <tr>
+                <th scope="col">Date</th>
+                <th scope="col">Symbol</th>
+                <th scope="col">Type</th>
+                <th scope="col" className="num">Amount</th>
+                <th scope="col" className="num">In {r.baseCurrency}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {r.events.map((e, i) => (
+                <tr key={`${e.symbol}-${e.date ?? 'na'}-${e.type}-${i}`}>
+                  <td>{e.date != null ? formatDate(e.date) : '—'}</td>
+                  <th scope="row" className="symbol">{e.symbol || '—'}</th>
+                  <td>{e.type}</td>
+                  <td className="num">{formatCurrency(e.amountNative, e.currency)}</td>
+                  <td className="num">{c(e.amountBase)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  )
+}

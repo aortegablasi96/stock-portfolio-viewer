@@ -2,6 +2,10 @@ import { z } from 'zod'
 import { portfolioOverviewSchema } from '@shared/domain/portfolio'
 import { snapshotSummarySchema } from '@shared/domain/snapshot'
 import { flexImportSummarySchema } from '@shared/domain/flex'
+import { performanceResultSchema, type PerformanceResult } from '@shared/domain/performance'
+import { allocationResultSchema, type AllocationResult } from '@shared/domain/allocation'
+import { dividendResultSchema, type DividendResult } from '@shared/domain/dividends'
+import { realizedGainsResultSchema, type RealizedGainsResult } from '@shared/domain/realizedGains'
 
 /**
  * The typed contract for every IPC channel: the Zod schema used by the main
@@ -82,6 +86,23 @@ export const flexImportResultSchema = z.discriminatedUnion('status', [
 ])
 export type FlexImportResult = z.infer<typeof flexImportResultSchema>
 
+// ---- analytics:* (M3, Stories #21–#24) --------------------------------------
+
+/**
+ * The four analytics views (performance, allocation, dividends, realized gains) each
+ * read from the imported Flex data and degrade to a `needs_import` state when none is
+ * present — modelled as data, consistent with the other channels (DDR-0005). The
+ * result schemas live with their domain models; re-exported here as the IPC responses.
+ * None takes a payload — each reads the local Flex store.
+ */
+export {
+  performanceResultSchema,
+  allocationResultSchema,
+  dividendResultSchema,
+  realizedGainsResultSchema,
+}
+export type { PerformanceResult, AllocationResult, DividendResult, RealizedGainsResult }
+
 // ---- window.api bridge shape ------------------------------------------------
 
 /**
@@ -98,4 +119,12 @@ export interface RendererApi {
   onSnapshotCaptured: (callback: () => void) => () => void
   /** Open a file dialog to import IBKR Flex Query statement files into the local history. */
   importFlexStatements: () => Promise<FlexImportResult>
+  /** Performance over time from imported Flex data (M3, Story #21). */
+  getPerformance: () => Promise<PerformanceResult>
+  /** Allocation breakdown from imported Flex data (M3, Story #22). */
+  getAllocation: () => Promise<AllocationResult>
+  /** Dividend & income tracking from imported Flex data (M3, Story #23). */
+  getDividends: () => Promise<DividendResult>
+  /** Realized gains & trade history from imported Flex data (M3, Story #24). */
+  getRealizedGains: () => Promise<RealizedGainsResult>
 }

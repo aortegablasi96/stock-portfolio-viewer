@@ -1,11 +1,15 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IpcChannels } from '@shared/ipc/channels'
 import type {
+  AllocationResult,
   CaptureSnapshotResult,
+  DividendResult,
   FlexImportResult,
+  PerformanceResult,
   PingRequest,
   PingResponse,
   PortfolioOverviewResult,
+  RealizedGainsResult,
   RendererApi,
   SnapshotList,
 } from '@shared/ipc/contract'
@@ -34,6 +38,13 @@ const api: RendererApi = {
   },
   importFlexStatements: (): Promise<FlexImportResult> =>
     ipcRenderer.invoke(IpcChannels.flexImport),
+  getPerformance: (): Promise<PerformanceResult> =>
+    ipcRenderer.invoke(IpcChannels.analyticsPerformance),
+  getAllocation: (): Promise<AllocationResult> =>
+    ipcRenderer.invoke(IpcChannels.analyticsAllocation),
+  getDividends: (): Promise<DividendResult> => ipcRenderer.invoke(IpcChannels.analyticsDividends),
+  getRealizedGains: (): Promise<RealizedGainsResult> =>
+    ipcRenderer.invoke(IpcChannels.analyticsRealizedGains),
 }
 
 contextBridge.exposeInMainWorld('api', api)
