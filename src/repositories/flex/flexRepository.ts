@@ -7,6 +7,7 @@ import {
   flexLots,
   flexNavChanges,
   flexOpenPositions,
+  flexPriorPeriodPositions,
   flexSecurities,
   flexStatements,
   flexTrades,
@@ -43,6 +44,7 @@ function alreadyImported(statement: FlexStatement, filename: string): FlexStatem
     records: {
       navChanges: nil,
       openPositions: nil,
+      priorPeriodPositions: nil,
       trades: nil,
       lots: nil,
       cashTransactions: nil,
@@ -111,6 +113,11 @@ export const flexRepository = {
           .values(statement.openPositions.map((p) => ({ statementId: sid, ...p })))
           .run()
       }
+      if (statement.priorPeriodPositions.length > 0) {
+        tx.insert(flexPriorPeriodPositions)
+          .values(statement.priorPeriodPositions.map((p) => ({ statementId: sid, ...p })))
+          .run()
+      }
       if (statement.lots.length > 0) {
         tx.insert(flexLots)
           .values(statement.lots.map((l) => ({ statementId: sid, ...l })))
@@ -162,6 +169,10 @@ export const flexRepository = {
         records: {
           navChanges: count(navInserted, statement.navChange ? 1 : 0),
           openPositions: count(statement.openPositions.length, statement.openPositions.length),
+          priorPeriodPositions: count(
+            statement.priorPeriodPositions.length,
+            statement.priorPeriodPositions.length,
+          ),
           trades: count(tradesInserted, statement.trades.length),
           lots: count(statement.lots.length, statement.lots.length),
           cashTransactions: count(cashInserted, statement.cashTransactions.length),

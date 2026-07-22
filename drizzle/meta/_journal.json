@@ -22,6 +22,13 @@
       "when": 1784653299368,
       "tag": "0002_chemical_mikhail_rasputin",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1784745731152,
+      "tag": "0003_melodic_hex",
+      "breakpoints": true
     }
   ]
 }

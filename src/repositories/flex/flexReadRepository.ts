@@ -5,6 +5,7 @@ import {
   flexFifoSummaries,
   flexNavChanges,
   flexOpenPositions,
+  flexPriorPeriodPositions,
   flexSecurities,
   flexStatements,
   flexTrades,
@@ -32,6 +33,9 @@ export const DIVIDEND_CASH_TYPES = [
   'Withholding Tax',
 ] as const
 
+/** External contributions/withdrawals — the dated NAV steps in the daily curve (Story #29). */
+export const CONTRIBUTION_CASH_TYPE = 'Deposits/Withdrawals'
+
 export interface NavPeriodRow {
   fromDate: number
   toDate: number
@@ -44,6 +48,20 @@ export interface NavPeriodRow {
   interest: number
   commissions: number
   twr: number
+}
+
+/** One instrument's MTM on one trading day — native `priorMtmPnl` + its rate (Story #29). */
+export interface DailyMtmRow {
+  date: number
+  fxRateToBase: number
+  priorMtmPnl: number
+}
+
+/** A dated external contribution/withdrawal — native `amount` + its rate (Story #29). */
+export interface ContributionRow {
+  dateTime: number | null
+  fxRateToBase: number
+  amount: number
 }
 
 export interface FifoSummaryRow {
@@ -149,6 +167,38 @@ export const flexReadRepository = {
       })
       .from(flexNavChanges)
       .orderBy(flexNavChanges.fromDate)
+      .all()
+  },
+
+  /**
+   * Daily per-instrument MTM rows across the whole history, oldest → newest (Story #29).
+   * Native `priorMtmPnl` + `fxRateToBase`; the service converts and groups by date.
+   */
+  getDailyMtm(): DailyMtmRow[] {
+    return getDb()
+      .select({
+        date: flexPriorPeriodPositions.date,
+        fxRateToBase: flexPriorPeriodPositions.fxRateToBase,
+        priorMtmPnl: flexPriorPeriodPositions.priorMtmPnl,
+      })
+      .from(flexPriorPeriodPositions)
+      .orderBy(flexPriorPeriodPositions.date)
+      .all()
+  },
+
+  /**
+   * External deposit/withdrawal cash flows across the whole history (Story #29) — the dated
+   * NAV steps in the daily value curve. Native `amount` + `fxRateToBase`; service converts.
+   */
+  getContributionCashFlows(): ContributionRow[] {
+    return getDb()
+      .select({
+        dateTime: flexCashTransactions.dateTime,
+        fxRateToBase: flexCashTransactions.fxRateToBase,
+        amount: flexCashTransactions.amount,
+      })
+      .from(flexCashTransactions)
+      .where(eq(flexCashTransactions.type, CONTRIBUTION_CASH_TYPE))
       .all()
   },
 

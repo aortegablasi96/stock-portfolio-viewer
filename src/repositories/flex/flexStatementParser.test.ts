@@ -38,6 +38,10 @@ const FIXTURE = `<?xml version="1.0" encoding="UTF-8"?>
 <OpenPositions>
 <OpenPosition currency="CAD" fxRateToBase="0.62268" assetCategory="STK" symbol="MMY" description="MONUMENT MINING LTD" conid="45090384" isin="CA61531Y1051" multiplier="1" reportDate="20260720" position="7790" markPrice="0.73" costBasisPrice="0.894580745" costBasisMoney="6968.784" percentOfNAV="5.60" fifoPnlUnrealized="-1282.084" side="Long" />
 </OpenPositions>
+<PriorPeriodPositions>
+<PriorPeriodPosition currency="CAD" fxRateToBase="0.62142" assetCategory="STK" symbol="GSY" description="GOEASY LTD" conid="206663850" cusip="" isin="CA3803551074" multiplier="1" date="20260102" price="131.46" priorMtmPnl="11.05" />
+<PriorPeriodPosition currency="CAD" fxRateToBase="0.61941" assetCategory="STK" symbol="GSY" description="GOEASY LTD" conid="206663850" cusip="" isin="CA3803551074" multiplier="1" date="20260105" price="" priorMtmPnl="67.6" />
+</PriorPeriodPositions>
 <Trades>
 <Trade currency="CAD" fxRateToBase="0.62255" assetCategory="STK" symbol="GSY" description="GOEASY LTD" conid="206663850" isin="CA3803551074" multiplier="1" dateTime="20260402;100454" tradeDate="20260402" settleDateTarget="20260406" transactionType="ExchTrade" exchange="TSE" quantity="-65" tradePrice="35.17" tradeMoney="-2286.05" proceeds="2286.05" taxes="0" ibCommission="-1" ibCommissionCurrency="CAD" netCash="2285.05" closePrice="34.87" openCloseIndicator="C" cost="-8346.1" fifoPnlRealized="-6061.05" mtmPnl="19.5" />
 <Lot currency="CAD" fxRateToBase="0.62255" assetCategory="STK" symbol="GSY" description="GOEASY LTD" conid="206663850" isin="CA3803551074" multiplier="1" dateTime="20260402;100454" tradeDate="20260402" settleDateTarget="" transactionType="" exchange="ALPHA" quantity="15" tradePrice="148.406666667" tradeMoney="" proceeds="" taxes="" ibCommission="" ibCommissionCurrency="" netCash="" closePrice="" openCloseIndicator="C" cost="2226.1" fifoPnlRealized="-1698.780769" mtmPnl="" notes="ST" />
@@ -84,6 +88,18 @@ describe('parseFlexStatements', () => {
     expect(t?.tradeKey).toBe('206663850|20260402;100454|-65|35.17|C|-1')
   })
 
+  it('parses the daily PriorPeriodPosition MTM series with UTC dates and nullable price', () => {
+    const { priorPeriodPositions } = parseOne(FIXTURE)
+    expect(priorPeriodPositions).toHaveLength(2)
+    const first = priorPeriodPositions[0]
+    expect(first?.date).toBe(Date.UTC(2026, 0, 2))
+    expect(first?.priorMtmPnl).toBe(11.05)
+    expect(first?.fxRateToBase).toBe(0.62142)
+    expect(first?.price).toBe(131.46)
+    // Empty price coerces to null (not 0), matching the other nullable-numeric rules.
+    expect(priorPeriodPositions[1]?.price).toBeNull()
+  })
+
   it('separates Lot rows from Trade rows and maps ST/LT notes', () => {
     const { lots } = parseOne(FIXTURE)
     expect(lots).toHaveLength(1)
@@ -127,9 +143,11 @@ describe('parseFlexStatements', () => {
     expect(stmt.openPositions).toHaveLength(8)
     expect(stmt.securities).toHaveLength(11)
     expect(stmt.performanceSummaries).toHaveLength(16)
+    expect(stmt.priorPeriodPositions).toHaveLength(849)
 
     const stmt2025 = parseOne(readFileSync(join(dir, 'portfolio-analyst-2025.xml'), 'utf8'))
     expect(stmt2025.trades).toHaveLength(186)
     expect(stmt2025.cashTransactions).toHaveLength(41)
+    expect(stmt2025.priorPeriodPositions).toHaveLength(1124)
   })
 })

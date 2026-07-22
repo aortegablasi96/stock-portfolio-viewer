@@ -6,6 +6,7 @@ import type {
   FlexNavChange,
   FlexOpenPosition,
   FlexPerformanceSummary,
+  FlexPriorPeriodPosition,
   FlexSecurity,
   FlexStatement,
   FlexTrade,
@@ -28,6 +29,7 @@ import type {
 const ARRAY_TAGS = new Set([
   'FlexStatement',
   'OpenPosition',
+  'PriorPeriodPosition',
   'Trade',
   'Lot',
   'CashTransaction',
@@ -134,6 +136,21 @@ function toOpenPosition(raw: Raw): FlexOpenPosition {
     percentOfNav: optNum(raw, 'percentOfNAV'),
     fifoPnlUnrealized: optNum(raw, 'fifoPnlUnrealized'),
     side: str(raw.side),
+  }
+}
+
+function toPriorPeriodPosition(raw: Raw): FlexPriorPeriodPosition {
+  const ctx = 'PriorPeriodPosition'
+  return {
+    conid: optInt(raw, 'conid'),
+    symbol: str(raw.symbol),
+    description: str(raw.description),
+    assetCategory: str(raw.assetCategory),
+    currency: str(raw.currency),
+    fxRateToBase: reqNum(raw, 'fxRateToBase', ctx),
+    date: parseDate(raw, 'date') ?? 0,
+    price: optNum(raw, 'price'),
+    priorMtmPnl: reqNum(raw, 'priorMtmPnl', ctx),
   }
 }
 
@@ -278,6 +295,9 @@ function toStatement(raw: Raw): FlexStatement {
     baseCurrency: navChange?.currency ?? 'BASE',
     navChange,
     openPositions: rows(raw.OpenPositions, 'OpenPosition').map(toOpenPosition),
+    priorPeriodPositions: rows(raw.PriorPeriodPositions, 'PriorPeriodPosition').map(
+      toPriorPeriodPosition,
+    ),
     trades: rows(raw.Trades, 'Trade').map(toTrade),
     lots: rows(raw.Trades, 'Lot').map(toLot),
     cashTransactions: rows(raw.CashTransactions, 'CashTransaction').map(toCashTransaction),
