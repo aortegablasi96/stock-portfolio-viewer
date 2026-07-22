@@ -221,8 +221,11 @@ npm run db:studio      # drizzle-kit studio — inspect the dev DB
 ```
 
 > The app also applies migrations automatically on every launch; `db:migrate` is for the
-> standalone dev DB. There is no lint/format-fix or CI-wide `check` script — run `lint`,
-> `typecheck`, and `test` individually.
+> standalone dev DB. There is no local lint/format-fix or aggregate `check` script — run
+> `lint`, `typecheck`, and `test` individually. **CI** (`.github/workflows/ci.yml`) runs
+> exactly those three plus `npm run build` on every push to `main` and every PR (on Node 24,
+> Ubuntu); the Playwright e2e suite is intentionally excluded from CI (needs a display server —
+> run `npm run test:e2e` locally). Run the four locally before opening a PR to match CI.
 
 ---
 
