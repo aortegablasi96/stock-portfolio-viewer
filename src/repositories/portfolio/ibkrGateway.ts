@@ -60,6 +60,8 @@ const ledgerEntrySchema = z
     cashbalance: z.number().optional(),
     netliquidationvalue: z.number().optional(),
     currency: z.string().optional(),
+    /** Rate from this entry's currency to the account base; the base currency's is `1`. */
+    exchangerate: z.number().optional(),
   })
   .passthrough()
 const ledgerSchema = z.record(z.string(), ledgerEntrySchema)

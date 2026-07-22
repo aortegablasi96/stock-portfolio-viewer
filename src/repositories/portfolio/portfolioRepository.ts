@@ -31,6 +31,20 @@ function baseLedgerEntry(ledger: Record<string, LedgerEntry>): LedgerEntry | und
   return ledger['BASE'] ?? Object.values(ledger)[0]
 }
 
+/**
+ * Resolve the account's base **ISO** currency from the ledger. The aggregate entry is keyed
+ * `BASE` and carries `currency: 'BASE'` — a placeholder, not an ISO code — so it must not be
+ * used as a currency label or passed to FX conversion (it has no `BASE→X` rate). The real
+ * base currency is the per-currency entry whose rate to base is `1`. Falls back to the
+ * aggregate entry's own currency, then `BASE`, when it cannot be identified.
+ */
+function resolveBaseCurrency(ledger: Record<string, LedgerEntry>): string {
+  for (const [code, entry] of Object.entries(ledger)) {
+    if (code !== 'BASE' && entry.currency !== 'BASE' && entry.exchangerate === 1) return code
+  }
+  return baseLedgerEntry(ledger)?.currency ?? 'BASE'
+}
+
 export const portfolioRepository = {
   /** Current open positions (zero-quantity/closed positions are excluded). */
   async getHoldings(): Promise<Holding[]> {
@@ -47,7 +61,10 @@ export const portfolioRepository = {
     const ledger = await ibkrGateway.getLedger(accountId)
     const base = baseLedgerEntry(ledger)
     return {
-      currency: base?.currency ?? 'BASE',
+      // Use the resolved ISO base currency, never the ledger's `BASE` placeholder — the
+      // display-currency conversion (DDR-0007) looks this up in the FX-rate map, and there
+      // is no `BASE→X` rate (it comes back as 0 and would zero the cash / net-liquidation).
+      currency: resolveBaseCurrency(ledger),
       totalCashValue: base?.cashbalance ?? 0,
       netLiquidation: base?.netliquidationvalue ?? 0,
     }
@@ -69,7 +86,11 @@ export const portfolioRepository = {
     const distinct = [...new Set(currencies)].filter((c) => c && c !== target)
     for (const source of distinct) {
       try {
-        rates[source] = await ibkrGateway.getExchangeRate(source, target)
+        const rate = await ibkrGateway.getExchangeRate(source, target)
+        // A non-positive / non-finite rate is a bogus quote (e.g. the gateway returns 0 for
+        // an unsupported pair). Treat it as unavailable rather than letting `value × 0` zero
+        // a figure — the same "rate-unavailable as data" rule as a thrown error (DDR-0007).
+        if (Number.isFinite(rate) && rate > 0) rates[source] = rate
       } catch (err) {
         // Rate unavailable for this pair → omit it (position shown unconverted). A
         // not-connected error is not an IbkrGatewayError, so it propagates.
