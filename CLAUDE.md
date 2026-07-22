@@ -4,21 +4,32 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current Repository State
 
-**Milestones M0–M2 are merged.** Scaffolding (M0), the read-only portfolio dashboard
-(M1), and historical snapshots (M2) are all built and on `main`. The app boots, connects
-to the Interactive Brokers Client Portal Gateway, renders live holdings/balances/allocation,
-captures immutable snapshots (on open + on demand), and shows snapshot history. The Stack
-and Commands sections below are **live**. Still **not built**: dividends, performance
-analytics over the snapshot series, and any AI features — those are later milestones (read
-the GitHub backlog for the active one).
+**Milestones M0–M3 are merged.** Scaffolding (M0), the read-only portfolio dashboard
+(M1), historical snapshots (M2), and the performance & allocation analytics (M3) are all
+built and on `main`. The app boots, connects to the Interactive Brokers Client Portal
+Gateway, renders live holdings/balances/allocation, captures immutable snapshots (on open +
+on demand), imports IBKR Flex Query statements into local history, and renders four analytics
+views over that imported data (performance, allocation, dividends, realized gains & trade
+history). A tab shell switches between the live Portfolio dashboard and the analytics views.
+The Stack and Commands sections below are **live**. Still **not built**: AI features,
+multi-broker support, benchmark comparison, and tax reporting — those are later milestones
+(read the GitHub backlog for the active one).
 
-Two live domains exist end-to-end as reference patterns:
+Live domains exist end-to-end as reference patterns:
 
 - **portfolio** — read-only overview from IBKR. `portfolioService` → `portfolioRepository`
   → `ibkrGateway` (HTTP + Zod against the local Client Portal Gateway). No SQLite; live only.
 - **snapshots** — immutable local history. `snapshotService` (capture policy: 12h de-dupe
   on open, always-write on demand) → `snapshotRepository` → SQLite (`snapshots` /
   `snapshot_holdings`). Reads IBKR only *through* `portfolioService`.
+- **flex** — imported IBKR Flex Query history (M3, Story #20). A **write-only**
+  `flexRepository` (parse XML + persist, two-tier de-dupe) and a **read-only**
+  `flexReadRepository` (the only new `flex_*` read layer) fronting the immutable `flex_*`
+  tables. See ADR-0005, DDR-0004.
+- **analytics / dividends** — read-only analytics over the imported Flex data (M3, Stories
+  #21–#24). `performanceService` / `allocationService` / `realizedGainsService` (analytics)
+  and `dividendService` (dividends) read *only* through `flexReadRepository`, convert to base
+  currency (EUR) in the service, and each return an `ok | needs_import` result. See DDR-0005.
 
 > **Project name:** This project is **Stock Portfolio Viewer**, a **standalone,
 > single-user desktop application** for personal stock portfolio analytics. It is
@@ -34,14 +45,16 @@ The current source tree (mirror it when adding features):
 src/
   main/          Electron main: entry (index.ts) + ipc/handlers.ts (thin, Zod-validated)
   preload/       contextBridge bridge → window.api (types + channel names only, no Zod)
-  renderer/      React + Vite UI (src/renderer/src/*; components/ + lib/format.ts)
+  renderer/      React + Vite UI (src/renderer/src/*; App tab shell, components/ +
+                 components/analytics/ + components/charts/ + lib/format.ts)
   services/      pure business logic — primary unit-test target (system/, meta/,
-                 portfolio/, snapshots/)
-  repositories/  the ONLY layer that touches a data source: SQLite (meta/, snapshots/)
-                 or the IBKR gateway (portfolio/portfolioRepository.ts + ibkrGateway.ts)
+                 portfolio/, snapshots/, analytics/, dividends/)
+  repositories/  the ONLY layer that touches a data source: SQLite (meta/, snapshots/,
+                 flex/) or the IBKR gateway (portfolio/portfolioRepository.ts + ibkrGateway.ts)
   db/            client.ts (better-sqlite3 + Drizzle singleton), migrate.ts, schema.ts
   shared/        ipc/contract.ts (Zod schemas + inferred types), ipc/channels.ts,
-                 domain/ (portfolio.ts, snapshot.ts), errors.ts (IbkrNotConnectedError)
+                 domain/ (portfolio.ts, snapshot.ts, flex.ts, performance.ts,
+                 allocation.ts, dividends.ts, realizedGains.ts), errors.ts
 drizzle/         generated SQL migrations + meta journal
 e2e/             Playwright specs that launch the built Electron app
 ```
@@ -60,6 +73,11 @@ Canonical flows to copy when adding a feature:
 - **Local persistence + policy:** the `snapshot:*` channels show a service owning a
   capture policy over an append-only, immutable table, plus a main→renderer event
   (`snapshot:captured`) pushed after an on-open capture (DDR-0003).
+- **Read-only analytics over local data:** the `analytics:*` channels show services
+  reading imported history through a dedicated read-only repository (`flexReadRepository`),
+  doing base-currency conversion and calculation in the service, and returning an
+  `ok | needs_import` result the renderer renders as a first-class empty state. Charts are
+  dependency-free inline SVG (`components/charts/`). See DDR-0005, DDR-0006.
 
 ### Enforced boundaries & gotchas
 
