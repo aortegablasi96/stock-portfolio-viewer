@@ -6,8 +6,21 @@
   --text: #e6e9ef;
   --muted: #9aa4b2;
   --accent: #4c8dff;
-  /* Chart palette — dark-mode steps from the validated data-viz reference palette. */
+  /* Chart palette — dark-mode steps from the validated data-viz reference palette.
+     Slots 1–8 are the categorical set, in the order that clears the CVD, normal-vision
+     and contrast gates against the panel surface (validated 2026-07-23, all checks pass).
+     Assign them in order and never cycle: a ninth category folds into "Other". */
   --series-1: #3987e5; /* blue — magnitude / primary series */
+  --series-2: #d95926; /* orange */
+  --series-3: #199e70; /* aqua */
+  --series-4: #c98500; /* yellow */
+  --series-5: #d55181; /* magenta */
+  --series-6: #008300; /* green */
+  --series-7: #9085e9; /* violet */
+  --series-8: #e66767; /* red */
+  /* Residual slices ("Other", unknown/unclassified) — neutral, so hue always means a
+     real category. 4.8:1 against the panel surface. */
+  --series-neutral: #898781;
   --pos: #0ca30c; /* good — realized/unrealized gain */
   --neg: #d03b3b; /* critical — realized/unrealized loss */
   --chart-grid: #2c2c2a;
@@ -648,6 +661,8 @@ body {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
   gap: 1.5rem;
+  /* Panels size to their own legend rather than stretching to the tallest in the row. */
+  align-items: start;
 }
 
 /* ---- Charts (inline SVG + bar lists) ------------------------------------- */
@@ -730,6 +745,117 @@ body {
 
 .legend-swatch-upper {
   background: var(--neg);
+}
+
+/* ---- Donut charts (Story #30) -------------------------------------------- */
+
+.pie-figure {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.pie {
+  width: 100%;
+  max-width: 13rem;
+  height: auto;
+}
+
+/* A 2px surface ring separates adjacent slices so identity never relies on hue alone. */
+.pie-slice {
+  stroke: var(--card);
+  stroke-width: 2;
+}
+
+.pie-legend {
+  display: block;
+  width: 100%;
+  margin-top: 0.5rem;
+}
+
+.pie-legend-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.pie-legend-item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+}
+
+.pie-legend-item .legend-swatch {
+  flex: 0 0 auto;
+  align-self: center;
+}
+
+.pie-legend-label {
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pie-legend-value {
+  margin-left: auto;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.pie-series-1 {
+  fill: var(--series-1);
+  background: var(--series-1);
+}
+.pie-series-2 {
+  fill: var(--series-2);
+  background: var(--series-2);
+}
+.pie-series-3 {
+  fill: var(--series-3);
+  background: var(--series-3);
+}
+.pie-series-4 {
+  fill: var(--series-4);
+  background: var(--series-4);
+}
+.pie-series-5 {
+  fill: var(--series-5);
+  background: var(--series-5);
+}
+.pie-series-6 {
+  fill: var(--series-6);
+  background: var(--series-6);
+}
+.pie-series-7 {
+  fill: var(--series-7);
+  background: var(--series-7);
+}
+.pie-series-8 {
+  fill: var(--series-8);
+  background: var(--series-8);
+}
+.pie-series-neutral {
+  fill: var(--series-neutral);
+  background: var(--series-neutral);
+}
+
+.classify-prompt {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.classify-note {
+  margin: 0 0 0.75rem;
+  font-size: 0.82rem;
+  color: var(--muted);
 }
 
 .bar-list {

@@ -5,6 +5,7 @@ import {
   type LatestPositions,
   type OpenPositionRow,
 } from '@repositories/flex/flexReadRepository'
+import { classificationRepository } from '@repositories/classification/classificationRepository'
 
 vi.mock('@repositories/flex/flexReadRepository', () => ({
   flexReadRepository: {
@@ -12,7 +13,12 @@ vi.mock('@repositories/flex/flexReadRepository', () => ({
   },
 }))
 
+vi.mock('@repositories/classification/classificationRepository', () => ({
+  classificationRepository: { getAll: vi.fn() },
+}))
+
 const repo = vi.mocked(flexReadRepository)
+const classifications = vi.mocked(classificationRepository)
 
 function position(overrides: Partial<OpenPositionRow>): OpenPositionRow {
   return {
@@ -31,7 +37,10 @@ function position(overrides: Partial<OpenPositionRow>): OpenPositionRow {
   }
 }
 
-beforeEach(() => vi.clearAllMocks())
+beforeEach(() => {
+  vi.clearAllMocks()
+  classifications.getAll.mockReturnValue([])
+})
 
 describe('allocationService.getAllocation', () => {
   it('returns needs_import when nothing has been imported', () => {
@@ -98,6 +107,62 @@ describe('allocationService.getAllocation', () => {
     expect(result.report.byCurrency[0]!).toMatchObject({ key: 'USD', marketValueBase: 130, percentOfNav: 50 })
     // Country US: 130; DE: 50
     expect(result.report.byCountry.map((s) => s.key)).toEqual(['US', 'DE'])
+  })
+
+  it('joins sector from the classification cache, by conid then symbol (Story #30)', () => {
+    repo.getLatestOpenPositions.mockReturnValue({
+      reportDate: 100,
+      baseCurrency: 'EUR',
+      positions: [
+        position({ conid: 1, symbol: 'AAA', position: 10, markPrice: 10, percentOfNav: 20 }),
+        // No conid on the position — must fall back to the symbol.
+        position({ conid: null, symbol: 'BBB', position: 10, markPrice: 5, percentOfNav: 10 }),
+      ],
+      securities: [],
+    })
+    classifications.getAll.mockReturnValue([
+      { conid: 1, symbol: 'AAA', sector: 'Financial', industry: 'Banks', fetchedAt: 1 },
+      { conid: 2, symbol: 'BBB', sector: 'Financial', industry: 'Insurance', fetchedAt: 1 },
+    ])
+
+    const result = allocationService.getAllocation()
+    if (result.status !== 'ok') throw new Error('expected ok')
+
+    expect(result.report.positions.map((p) => [p.symbol, p.sector, p.industry])).toEqual([
+      ['AAA', 'Financial', 'Banks'],
+      ['BBB', 'Financial', 'Insurance'],
+    ])
+    // Both positions share a sector, so they collapse into one slice: 100 + 50, weight 30.
+    expect(result.report.bySector).toEqual([
+      { key: 'Financial', label: 'Financial', marketValueBase: 150, percentOfNav: 30 },
+    ])
+    expect(result.report.unclassifiedCount).toBe(0)
+  })
+
+  it('collects positions with no cached sector into an Unclassified slice', () => {
+    repo.getLatestOpenPositions.mockReturnValue({
+      reportDate: 100,
+      baseCurrency: 'EUR',
+      positions: [
+        position({ conid: 1, symbol: 'AAA', position: 10, markPrice: 10, percentOfNav: 20 }),
+        position({ conid: 2, symbol: 'BBB', position: 10, markPrice: 5, percentOfNav: 10 }),
+      ],
+      securities: [],
+    })
+    // Only AAA is classified; BBB was looked up but the source had no sector.
+    classifications.getAll.mockReturnValue([
+      { conid: 1, symbol: 'AAA', sector: 'Technology', industry: 'Software', fetchedAt: 1 },
+      { conid: 2, symbol: 'BBB', sector: '', industry: '', fetchedAt: 1 },
+    ])
+
+    const result = allocationService.getAllocation()
+    if (result.status !== 'ok') throw new Error('expected ok')
+
+    expect(result.report.bySector.map((s) => [s.label, s.marketValueBase])).toEqual([
+      ['Technology', 100],
+      ['Unclassified', 50],
+    ])
+    expect(result.report.unclassifiedCount).toBe(1)
   })
 
   it('labels a missing issuer country as Unknown', () => {

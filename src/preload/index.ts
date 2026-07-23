@@ -3,6 +3,7 @@ import { IpcChannels } from '@shared/ipc/channels'
 import type {
   AllocationResult,
   CaptureSnapshotResult,
+  ClassifyInstrumentsResult,
   DividendResult,
   FlexImportResult,
   PerformanceResult,
@@ -46,6 +47,8 @@ const api: RendererApi = {
   getDividends: (): Promise<DividendResult> => ipcRenderer.invoke(IpcChannels.analyticsDividends),
   getRealizedGains: (): Promise<RealizedGainsResult> =>
     ipcRenderer.invoke(IpcChannels.analyticsRealizedGains),
+  classifyInstruments: (): Promise<ClassifyInstrumentsResult> =>
+    ipcRenderer.invoke(IpcChannels.analyticsClassifyInstruments),
 }
 
 contextBridge.exposeInMainWorld('api', api)

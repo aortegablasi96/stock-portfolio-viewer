@@ -6,6 +6,10 @@ import { performanceResultSchema, type PerformanceResult } from '@shared/domain/
 import { allocationResultSchema, type AllocationResult } from '@shared/domain/allocation'
 import { dividendResultSchema, type DividendResult } from '@shared/domain/dividends'
 import { realizedGainsResultSchema, type RealizedGainsResult } from '@shared/domain/realizedGains'
+import {
+  classifyInstrumentsResultSchema,
+  type ClassifyInstrumentsResult,
+} from '@shared/domain/classification'
 
 /**
  * The typed contract for every IPC channel: the Zod schema used by the main
@@ -110,6 +114,15 @@ export {
 }
 export type { PerformanceResult, AllocationResult, DividendResult, RealizedGainsResult }
 
+/**
+ * Sector classification refresh (M3, Story #30). The only analytics channel that reaches
+ * Interactive Brokers: Flex carries no sector, so classifications are fetched from the
+ * gateway and cached locally. It therefore adds `not_connected` to the usual variants —
+ * again as data, not an exception (DDR-0009). Takes no payload.
+ */
+export { classifyInstrumentsResultSchema }
+export type { ClassifyInstrumentsResult }
+
 // ---- window.api bridge shape ------------------------------------------------
 
 /**
@@ -134,4 +147,6 @@ export interface RendererApi {
   getDividends: () => Promise<DividendResult>
   /** Realized gains & trade history from imported Flex data (M3, Story #24). */
   getRealizedGains: () => Promise<RealizedGainsResult>
+  /** Fetch & cache sector classification for the latest statement's positions (M3, Story #30). */
+  classifyInstruments: () => Promise<ClassifyInstrumentsResult>
 }
