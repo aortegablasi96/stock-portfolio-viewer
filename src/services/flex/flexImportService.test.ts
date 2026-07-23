@@ -30,6 +30,7 @@ function statement(accountId: string, fromDate: number): FlexStatement {
     cashTransactions: [],
     performanceSummaries: [],
     securities: [],
+    openDividendAccruals: [],
   }
 }
 
@@ -51,6 +52,7 @@ function importResult(overrides: Partial<FlexStatementImport>): FlexStatementImp
       cashTransactions: nil,
       performanceSummaries: nil,
       securities: nil,
+      openDividendAccruals: nil,
     },
     ...overrides,
   }

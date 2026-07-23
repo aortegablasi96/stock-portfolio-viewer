@@ -4,6 +4,7 @@ import {
   flexCashTransactions,
   flexFifoSummaries,
   flexNavChanges,
+  flexOpenDividendAccruals,
   flexOpenPositions,
   flexPriorPeriodPositions,
   flexSecurities,
@@ -21,9 +22,9 @@ import {
  *
  * De-dupe shape (DDR-0004) drives which tables are read continuously vs. as-of:
  * `flex_trades` / `flex_cash_transactions` are globally de-duped, so they are read
- * across the whole history; statement-scoped tables (open positions, securities) are
- * read from the *latest* statement; per-period rows (NAV change, FIFO summaries) are
- * read across statements and summed by the caller.
+ * across the whole history; statement-scoped tables (open positions, securities, open
+ * dividend accruals) are read from the *latest* statement; per-period rows (NAV change,
+ * FIFO summaries) are read across statements and summed by the caller.
  */
 
 /** The dividend/income cash-transaction types this app tracks (Story #23). */
@@ -113,6 +114,26 @@ export interface CashTransactionRow {
   dateTime: number | null
   exDate: number | null
   amount: number
+}
+
+/** A declared-but-unpaid dividend from the latest statement, in native currency (Story #31). */
+export interface DividendAccrualRow {
+  symbol: string
+  description: string
+  currency: string
+  fxRateToBase: number
+  exDate: number | null
+  payDate: number | null
+  quantity: number
+  grossRate: number | null
+  grossAmount: number
+  netAmount: number
+}
+
+/** The latest statement's open dividend accruals, plus the date they were reported as of. */
+export interface LatestDividendAccruals {
+  asOf: number
+  accruals: DividendAccrualRow[]
 }
 
 export interface TradeRowRaw {
@@ -307,6 +328,43 @@ export const flexReadRepository = {
       .from(flexCashTransactions)
       .where(inArray(flexCashTransactions.type, [...DIVIDEND_CASH_TYPES]))
       .all()
+  },
+
+  /**
+   * Open (declared but unpaid) dividend accruals from the **latest** imported statement
+   * (Story #31). An as-of balance, not an event history: an older statement's accruals
+   * have since been paid and would double-count against the cash transactions, so only
+   * the newest statement is read. `asOf` is that statement's end date, which the view
+   * shows so a stale import is visible. Returns `undefined` when nothing is imported;
+   * an empty `accruals` list means the statement carried no accruals section.
+   */
+  getLatestOpenDividendAccruals(): LatestDividendAccruals | undefined {
+    const statement = getDb()
+      .select({ id: flexStatements.id, toDate: flexStatements.toDate })
+      .from(flexStatements)
+      .orderBy(desc(flexStatements.toDate))
+      .limit(1)
+      .get()
+    if (!statement) return undefined
+
+    const accruals = getDb()
+      .select({
+        symbol: flexOpenDividendAccruals.symbol,
+        description: flexOpenDividendAccruals.description,
+        currency: flexOpenDividendAccruals.currency,
+        fxRateToBase: flexOpenDividendAccruals.fxRateToBase,
+        exDate: flexOpenDividendAccruals.exDate,
+        payDate: flexOpenDividendAccruals.payDate,
+        quantity: flexOpenDividendAccruals.quantity,
+        grossRate: flexOpenDividendAccruals.grossRate,
+        grossAmount: flexOpenDividendAccruals.grossAmount,
+        netAmount: flexOpenDividendAccruals.netAmount,
+      })
+      .from(flexOpenDividendAccruals)
+      .where(eq(flexOpenDividendAccruals.statementId, statement.id))
+      .all()
+
+    return { asOf: statement.toDate, accruals }
   },
 
   /** All trades across the whole history, newest first (Story #24). */

@@ -383,6 +383,52 @@ export type FlexSecurityRow = typeof flexSecurities.$inferSelect
 export type NewFlexSecurityRow = typeof flexSecurities.$inferInsert
 
 /**
+ * Dividends declared but not yet paid as of the statement's generation
+ * (`OpenDividendAccrual`) — the "upcoming dividends" source (Story #31; DDR-0010).
+ *
+ * Statement-scoped like open positions: it is an *as-of* balance, not an event, so
+ * there is no global de-dupe key and each import inserts a fresh set that the read
+ * layer queries for the latest statement only. `netAmount` is IBKR's own net after tax
+ * and fees; `tax` / `fee` are retained raw because IBKR's sign convention for them is
+ * not guaranteed — the service derives the withheld magnitude as `grossAmount −
+ * netAmount` rather than trusting the sign.
+ */
+export const flexOpenDividendAccruals = sqliteTable(
+  'flex_open_dividend_accruals',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    statementId: integer('statement_id')
+      .notNull()
+      .references(() => flexStatements.id, { onDelete: 'cascade' }),
+    conid: integer('conid'),
+    symbol: text('symbol').notNull(),
+    description: text('description').notNull(),
+    assetCategory: text('asset_category').notNull(),
+    currency: text('currency').notNull(),
+    fxRateToBase: real('fx_rate_to_base').notNull(),
+    /** Ex-dividend and pay dates — epoch ms, UTC. */
+    exDate: integer('ex_date'),
+    payDate: integer('pay_date'),
+    /** Shares held prior to the ex-date. */
+    quantity: real('quantity').notNull(),
+    /** Dividend per share, in `currency`. */
+    grossRate: real('gross_rate'),
+    grossAmount: real('gross_amount').notNull(),
+    tax: real('tax').notNull(),
+    fee: real('fee').notNull(),
+    netAmount: real('net_amount').notNull(),
+    code: text('code').notNull(),
+  },
+  (t) => ({
+    byStatement: index('idx_flex_open_dividend_accruals_statement_id').on(t.statementId),
+    byPayDate: index('idx_flex_open_dividend_accruals_pay_date').on(t.payDate),
+  }),
+)
+
+export type FlexOpenDividendAccrualRow = typeof flexOpenDividendAccruals.$inferSelect
+export type NewFlexOpenDividendAccrualRow = typeof flexOpenDividendAccruals.$inferInsert
+
+/**
  * Sector / industry classification for an instrument (Milestone M3, Story #30).
  *
  * Unlike every other table here this one is a **cache, not history**: IBKR Flex

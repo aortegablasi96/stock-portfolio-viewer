@@ -4,6 +4,7 @@ import type {
   FlexCashTransaction,
   FlexLot,
   FlexNavChange,
+  FlexOpenDividendAccrual,
   FlexOpenPosition,
   FlexPerformanceSummary,
   FlexPriorPeriodPosition,
@@ -35,6 +36,7 @@ const ARRAY_TAGS = new Set([
   'CashTransaction',
   'FIFOPerformanceSummaryUnderlying',
   'SecurityInfo',
+  'OpenDividendAccrual',
 ])
 
 const parser = new XMLParser({
@@ -278,6 +280,33 @@ function toSecurity(raw: Raw): FlexSecurity {
   }
 }
 
+/**
+ * A declared-but-unpaid dividend (`OpenDividendAccrual`). `tax` and `fee` default to 0
+ * when the Flex export omits them — IBKR leaves them blank for instruments with no
+ * withholding — while `grossAmount` / `netAmount` are required, since an accrual with
+ * no amounts carries no information.
+ */
+function toOpenDividendAccrual(raw: Raw): FlexOpenDividendAccrual {
+  const ctx = 'OpenDividendAccrual'
+  return {
+    conid: optInt(raw, 'conid'),
+    symbol: str(raw.symbol),
+    description: str(raw.description),
+    assetCategory: str(raw.assetCategory),
+    currency: str(raw.currency),
+    fxRateToBase: reqNum(raw, 'fxRateToBase', ctx),
+    exDate: parseDate(raw, 'exDate'),
+    payDate: parseDate(raw, 'payDate'),
+    quantity: reqNum(raw, 'quantity', ctx),
+    grossRate: optNum(raw, 'grossRate'),
+    grossAmount: reqNum(raw, 'grossAmount', ctx),
+    tax: optNum(raw, 'tax') ?? 0,
+    fee: optNum(raw, 'fee') ?? 0,
+    netAmount: reqNum(raw, 'netAmount', ctx),
+    code: str(raw.code),
+  }
+}
+
 function toStatement(raw: Raw): FlexStatement {
   const accountId = str(raw.accountId).trim()
   if (accountId === '') {
@@ -305,6 +334,11 @@ function toStatement(raw: Raw): FlexStatement {
       toPerformanceSummary,
     ),
     securities: rows(raw.SecuritiesInfo, 'SecurityInfo').map(toSecurity),
+    // Optional Flex section: absent unless "Open Dividend Accruals" is enabled on the
+    // query, in which case this stays an empty list and the view says so (DDR-0010).
+    openDividendAccruals: rows(raw.OpenDividendAccruals, 'OpenDividendAccrual').map(
+      toOpenDividendAccrual,
+    ),
   }
 }
 

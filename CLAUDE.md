@@ -14,9 +14,9 @@ imported data (performance, allocation, dividends, realized gains & trade histor
 shell switches between the live Portfolio dashboard and the analytics views.
 
 **Epic #4 (M3) is open again** to refine those views: #28 (display currency), #29
-(day-by-day performance) and #30 (allocation donut charts + sector breakdown) are merged;
-**#31–#33 are still open** (dividend bar chart + upcoming dividends, scrollable dividend and
-trade tables). Check the backlog before assuming a view is final. The Stack and Commands sections below are
+(day-by-day performance), #30 (allocation donut charts + sector breakdown) and #31 (net
+dividend chart + upcoming dividends) are merged; **#32–#33 are still open** (scrollable
+dividend and trade tables). Check the backlog before assuming a view is final. The Stack and Commands sections below are
 **live**. Still **not built**: AI features, multi-broker support, benchmark comparison, and
 tax reporting — those are later milestones.
 
@@ -34,11 +34,16 @@ Live domains exist end-to-end as reference patterns:
   `flexRepository` (parse XML + persist, two-tier de-dupe) and a **read-only**
   `flexReadRepository` (the only new `flex_*` read layer) fronting the immutable `flex_*`
   tables. `flex_prior_period_positions` holds the per-instrument daily MTM series that backs
-  day-by-day performance. See ADR-0005, DDR-0004, DDR-0008.
+  day-by-day performance; `flex_open_dividend_accruals` holds declared-but-unpaid dividends
+  (Story #31) — an **optional** Flex section, so an export without it degrades to an empty
+  list rather than failing. See ADR-0005, DDR-0004, DDR-0008, DDR-0010.
 - **analytics / dividends** — read-only analytics over the imported Flex data (M3, Stories
   #21–#24). `performanceService` / `allocationService` / `realizedGainsService` (analytics)
   and `dividendService` (dividends) read *only* through `flexReadRepository`, convert to base
-  currency (EUR) in the service, and each return an `ok | needs_import` result. See DDR-0005.
+  currency (EUR) in the service, and each return an `ok | needs_import` result. Statement-scoped
+  reads (`getLatestOpenPositions`, `getLatestOpenDividendAccruals`) deliberately use the
+  **latest statement only** — older as-of rows describe state that has since changed and would
+  double-count. See DDR-0005, DDR-0010.
 - **classification** — instrument sector/industry (M3, Story #30). Flex carries **no sector
   field**, so `classificationRepository` fronts *two* sources — the mutable SQLite cache
   `instrument_classifications` and `ibkrGateway` — and `classificationService` decides which

@@ -9,6 +9,10 @@ import { z } from 'zod'
  * from the payment's native currency to the base currency (EUR). Net = gross +
  * withholding (withholding amounts are negative). Amounts are plain decimal numbers;
  * dates are epoch-millisecond integers (UTC).
+ *
+ * Story #31 adds the forward-looking half: declared-but-unpaid dividends, sourced from
+ * the latest statement's `OpenDividendAccrual` rows rather than the cash history (they
+ * have not generated cash yet). See DDR-0010.
  */
 
 /** A single dividend/PIL or withholding cash event, for the detail table. */
@@ -38,6 +42,49 @@ export const dividendGroupSchema = z.object({
 })
 export type DividendGroup = z.infer<typeof dividendGroupSchema>
 
+/**
+ * A dividend that has been declared but not yet paid (Story #31), built from the latest
+ * statement's Flex `OpenDividendAccrual` rows. Withholding is derived as
+ * `grossBase − netBase` rather than read from the Flex `tax` field, whose sign
+ * convention IBKR does not guarantee. See DDR-0010.
+ */
+export const upcomingDividendSchema = z.object({
+  symbol: z.string(),
+  description: z.string(),
+  currency: z.string(),
+  exDate: z.number().int().nullable(),
+  payDate: z.number().int().nullable(),
+  /** Shares held prior to the ex-date. */
+  quantity: z.number(),
+  /** Dividend per share in the payment's native currency, when reported. */
+  grossRate: z.number().nullable(),
+  /** Net payable in the payment's native currency. */
+  netNative: z.number(),
+  grossBase: z.number(),
+  /** Expected withholding as a positive magnitude. */
+  withholdingBase: z.number(),
+  netBase: z.number(),
+})
+export type UpcomingDividend = z.infer<typeof upcomingDividendSchema>
+
+/**
+ * The upcoming-dividends panel's payload. `asOf` is the end date of the statement the
+ * accruals came from, so a stale import is visible; it is `null` when nothing has been
+ * imported. `sectionPresent` is false when the latest statement carried no accrual rows
+ * at all — the view then explains that the Flex query's "Open Dividend Accruals" section
+ * needs enabling, instead of implying there is simply no income coming.
+ */
+export const upcomingDividendsSchema = z.object({
+  asOf: z.number().int().nullable(),
+  sectionPresent: z.boolean(),
+  totalGrossBase: z.number(),
+  totalWithholdingBase: z.number(),
+  totalNetBase: z.number(),
+  /** Announced, not yet paid, soonest pay date first. */
+  items: z.array(upcomingDividendSchema),
+})
+export type UpcomingDividends = z.infer<typeof upcomingDividendsSchema>
+
 /** The assembled dividends report the Dividends view renders. */
 export const dividendReportSchema = z.object({
   baseCurrency: z.string(),
@@ -50,6 +97,8 @@ export const dividendReportSchema = z.object({
   byMonth: z.array(dividendGroupSchema),
   /** Individual cash events, newest first. */
   events: z.array(dividendEventSchema),
+  /** Announced-but-unpaid dividends as of the latest statement (Story #31). */
+  upcoming: upcomingDividendsSchema,
 })
 export type DividendReport = z.infer<typeof dividendReportSchema>
 
