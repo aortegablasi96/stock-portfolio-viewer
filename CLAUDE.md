@@ -4,28 +4,37 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current Repository State
 
-**Milestones M0–M3 are merged.** Scaffolding (M0), the read-only portfolio dashboard
-(M1), historical snapshots (M2), and the performance & allocation analytics (M3) are all
-built and on `main`. The app boots, connects to the Interactive Brokers Client Portal
-Gateway, renders live holdings/balances/allocation, captures immutable snapshots (on open +
-on demand), imports IBKR Flex Query statements into local history, and renders four analytics
-views over that imported data (performance, allocation, dividends, realized gains & trade
-history). A tab shell switches between the live Portfolio dashboard and the analytics views.
-The Stack and Commands sections below are **live**. Still **not built**: AI features,
-multi-broker support, benchmark comparison, and tax reporting — those are later milestones
-(read the GitHub backlog for the active one).
+**M0–M2 are merged; M3 is built and reopened for refinement.** Scaffolding (M0), the
+read-only portfolio dashboard (M1), historical snapshots (M2), and the performance &
+allocation analytics (M3, Stories #20–#24) are all on `main`. The app boots, connects to the
+Interactive Brokers Client Portal Gateway, renders live holdings/balances/allocation in a
+user-selected display currency, captures immutable snapshots (on open + on demand), imports
+IBKR Flex Query statements into local history, and renders four analytics views over that
+imported data (performance, allocation, dividends, realized gains & trade history). A tab
+shell switches between the live Portfolio dashboard and the analytics views.
+
+**Epic #4 (M3) is open again** to refine those views: #28 (display currency) and #29
+(day-by-day performance) are merged; **#30–#33 are still open** (allocation country/currency
+pies, dividend bar chart + upcoming dividends, scrollable dividend and trade tables). Check
+the backlog before assuming a view is final. The Stack and Commands sections below are
+**live**. Still **not built**: AI features, multi-broker support, benchmark comparison, and
+tax reporting — those are later milestones.
 
 Live domains exist end-to-end as reference patterns:
 
 - **portfolio** — read-only overview from IBKR. `portfolioService` → `portfolioRepository`
   → `ibkrGateway` (HTTP + Zod against the local Client Portal Gateway). No SQLite; live only.
+  `getOverview(displayCurrency?)` converts holdings/balances with **live** gateway FX rates —
+  the Flex `fxRateToBase` path does *not* apply here; unconvertible rows carry
+  `displayValue === null` and are excluded from totals/allocation (DDR-0007).
 - **snapshots** — immutable local history. `snapshotService` (capture policy: 12h de-dupe
   on open, always-write on demand) → `snapshotRepository` → SQLite (`snapshots` /
   `snapshot_holdings`). Reads IBKR only *through* `portfolioService`.
 - **flex** — imported IBKR Flex Query history (M3, Story #20). A **write-only**
   `flexRepository` (parse XML + persist, two-tier de-dupe) and a **read-only**
   `flexReadRepository` (the only new `flex_*` read layer) fronting the immutable `flex_*`
-  tables. See ADR-0005, DDR-0004.
+  tables. `flex_prior_period_positions` holds the per-instrument daily MTM series that backs
+  day-by-day performance. See ADR-0005, DDR-0004, DDR-0008.
 - **analytics / dividends** — read-only analytics over the imported Flex data (M3, Stories
   #21–#24). `performanceService` / `allocationService` / `realizedGainsService` (analytics)
   and `dividendService` (dividends) read *only* through `flexReadRepository`, convert to base
@@ -48,7 +57,7 @@ src/
   renderer/      React + Vite UI (src/renderer/src/*; App tab shell, components/ +
                  components/analytics/ + components/charts/ + lib/format.ts)
   services/      pure business logic — primary unit-test target (system/, meta/,
-                 portfolio/, snapshots/, analytics/, dividends/)
+                 portfolio/, snapshots/, flex/, analytics/, dividends/)
   repositories/  the ONLY layer that touches a data source: SQLite (meta/, snapshots/,
                  flex/) or the IBKR gateway (portfolio/portfolioRepository.ts + ibkrGateway.ts)
   db/            client.ts (better-sqlite3 + Drizzle singleton), migrate.ts, schema.ts
@@ -98,6 +107,21 @@ Canonical flows to copy when adding a feature:
   `extraResources` when packaged.
 - **Electron security is locked down**: `sandbox: true`, `contextIsolation: true`,
   `nodeIntegration: false`. Keep it that way; reach the main process only over IPC.
+- **Adding an IPC channel touches four files, in this order**: `shared/ipc/channels.ts`
+  (name) → `shared/ipc/contract.ts` (Zod request/response schema + the `RendererApi` method)
+  → `preload/index.ts` (bridge impl) → `main/ipc/handlers.ts` (parse input, delegate to a
+  service). `contract.ts` is the single source of truth; the renderer and preload import only
+  *types* from it so Zod never lands in those bundles. Failures cross IPC **as result
+  variants, not exceptions** (`not_connected`, `needs_import`, `canceled`, `invalid`,
+  `error`) so the renderer can render each as a first-class state.
+- **Two money-storage conventions coexist** — don't mix them. `snapshots` /
+  `snapshot_holdings` store **integer minor units** (cents) plus a currency (DDR-0003);
+  the `flex_*` tables store **`real`** for money, prices, FX rates and P&L, because Flex is
+  multi-currency and high-precision (DDR-0004). All timestamps everywhere are epoch-ms UTC
+  integers.
+- **Base-currency conversion happens in the service, never the repository or the renderer.**
+  Analytics converts per record with the Flex row's own `fxRateToBase`; the live Portfolio
+  view uses gateway FX (DDR-0005, DDR-0007).
 
 ## Skills System (`.claude/skills/`)
 
@@ -577,7 +601,8 @@ Services are the primary unit-test target.
 
 Mock repositories and external providers.
 
-Pure renderer helpers (e.g. `renderer/src/lib/format.ts`) are also unit-tested. Vitest
+Pure renderer helpers (e.g. `renderer/src/lib/format.ts`) and pure repository helpers that
+touch no data source (`flexStatementParser`, `snapshotMapping`) are also unit-tested. Vitest
 picks up every `src/**/*.test.ts` and runs it in a **Node** environment (no jsdom), so keep
 such tests free of DOM/React-rendering dependencies.
 
