@@ -5,6 +5,9 @@ import { z } from 'zod'
  * latest imported statement's Flex `OpenPosition` rows joined to `SecurityInfo`
  * (for issuer country / asset class). See DDR-0005.
  *
+ * Sector / industry is *not* in the Flex data — it comes from the locally cached IBKR
+ * classification (Story #30, DDR-0009), so a position may legitimately be unclassified.
+ *
  * Market value, cost basis, and unrealized P&L are converted from each position's
  * native currency to the base currency (EUR) using its `fxRateToBase`. Position
  * weight uses the Flex-provided `percentOfNav` (share of NAV, which includes cash),
@@ -21,6 +24,10 @@ export const allocationPositionSchema = z.object({
   currency: z.string(),
   /** Two-letter issuer country code from SecurityInfo, or '' when unknown. */
   issuerCountry: z.string(),
+  /** Broad sector from the local classification cache, or '' when unclassified (Story #30). */
+  sector: z.string(),
+  /** Narrower industry from the local classification cache, or '' when unclassified. */
+  industry: z.string(),
   marketValueBase: z.number(),
   costBasisBase: z.number(),
   unrealizedPnlBase: z.number(),
@@ -51,6 +58,10 @@ export const allocationReportSchema = z.object({
   byAssetClass: z.array(allocationSliceSchema),
   byCurrency: z.array(allocationSliceSchema),
   byCountry: z.array(allocationSliceSchema),
+  /** Sector breakdown (Story #30); unclassified positions collect in an 'Unclassified' slice. */
+  bySector: z.array(allocationSliceSchema),
+  /** How many positions have no sector yet — drives the "classify" prompt in the view. */
+  unclassifiedCount: z.number().int(),
 })
 export type AllocationReport = z.infer<typeof allocationReportSchema>
 

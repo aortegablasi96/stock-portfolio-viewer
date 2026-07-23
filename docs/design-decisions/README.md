@@ -43,3 +43,5 @@ Other options and why they were not chosen.
 - `0005` — M3 analytics read model, base-currency conversion, and per-period aggregation
 - `0006` — App shell: client-side tab navigation for analytics views
 - `0007` — Portfolio display currency: live IBKR FX source + selector/display conventions
+- `0008` — Performance view: daily portfolio-value reconstruction from Flex MTM history
+- `0009` — Sector classification: gateway-sourced, locally cached; allocation as donut charts

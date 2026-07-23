@@ -1,3 +1,4 @@
+import { classificationRepository } from '@repositories/classification/classificationRepository'
 import {
   flexReadRepository,
   type OpenPositionRow,
@@ -6,14 +7,18 @@ import {
 import type { AllocationPosition, AllocationResult, AllocationSlice } from '@shared/domain/allocation'
 
 /**
- * Allocation analytics (Milestone M3, Story #22). Values the latest imported
+ * Allocation analytics (Milestone M3, Stories #22 and #30). Values the latest imported
  * statement's open positions in the base currency and breaks the portfolio down by
- * asset class, currency, issuer country, and individual position. See DDR-0005.
+ * asset class, currency, issuer country, sector, and individual position. See DDR-0005.
  *
  * Base-currency conversion uses each position's Flex `fxRateToBase`; the weight of a
  * position uses the Flex-provided `percentOfNav` (share of NAV, which includes cash),
- * so grouped weights sum those percentages. Reaches data only through
- * `flexReadRepository`.
+ * so grouped weights sum those percentages.
+ *
+ * Everything except sector comes from `flexReadRepository`. Flex carries no sector field,
+ * so sector is joined in from the locally cached IBKR classification — a plain cache read,
+ * never a network call, so this stays synchronous and works with the gateway closed
+ * (DDR-0009). Positions with no cached sector fall into an 'Unclassified' slice.
  */
 
 const ASSET_CLASS_LABELS: Record<string, string> = {
@@ -73,6 +78,15 @@ export const allocationService = {
       return code ?? ''
     }
 
+    // Sector lookup: same conid-then-symbol fallback as country, over the local cache.
+    const classifications = classificationRepository.getAll()
+    const classByConid = new Map(classifications.map((c) => [c.conid, c]))
+    const classBySymbol = new Map(classifications.filter((c) => c.symbol).map((c) => [c.symbol, c]))
+    const classOf = (p: OpenPositionRow): { sector: string; industry: string } => {
+      const match = (p.conid != null ? classByConid.get(p.conid) : undefined) ?? classBySymbol.get(p.symbol)
+      return { sector: match?.sector ?? '', industry: match?.industry ?? '' }
+    }
+
     const positions: AllocationPosition[] = latest.positions
       .map((p) => ({
         conid: p.conid,
@@ -81,6 +95,7 @@ export const allocationService = {
         assetCategory: p.assetCategory,
         currency: p.currency,
         issuerCountry: countryOf(p),
+        ...classOf(p),
         marketValueBase: nativeMarketValue(p) * p.fxRateToBase,
         costBasisBase: (p.costBasisMoney ?? 0) * p.fxRateToBase,
         unrealizedPnlBase: (p.fifoPnlUnrealized ?? 0) * p.fxRateToBase,
@@ -100,6 +115,8 @@ export const allocationService = {
         byAssetClass: groupBy(positions, (p) => p.assetCategory, assetClassLabel),
         byCurrency: groupBy(positions, (p) => p.currency, (c) => c || 'Unknown'),
         byCountry: groupBy(positions, (p) => p.issuerCountry, (c) => c || 'Unknown'),
+        bySector: groupBy(positions, (p) => p.sector, (s) => s || 'Unclassified'),
+        unclassifiedCount: positions.filter((p) => !p.sector).length,
       },
     }
   },

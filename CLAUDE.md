@@ -13,10 +13,10 @@ IBKR Flex Query statements into local history, and renders four analytics views 
 imported data (performance, allocation, dividends, realized gains & trade history). A tab
 shell switches between the live Portfolio dashboard and the analytics views.
 
-**Epic #4 (M3) is open again** to refine those views: #28 (display currency) and #29
-(day-by-day performance) are merged; **#30–#33 are still open** (allocation country/currency
-pies, dividend bar chart + upcoming dividends, scrollable dividend and trade tables). Check
-the backlog before assuming a view is final. The Stack and Commands sections below are
+**Epic #4 (M3) is open again** to refine those views: #28 (display currency), #29
+(day-by-day performance) and #30 (allocation donut charts + sector breakdown) are merged;
+**#31–#33 are still open** (dividend bar chart + upcoming dividends, scrollable dividend and
+trade tables). Check the backlog before assuming a view is final. The Stack and Commands sections below are
 **live**. Still **not built**: AI features, multi-broker support, benchmark comparison, and
 tax reporting — those are later milestones.
 
@@ -39,6 +39,13 @@ Live domains exist end-to-end as reference patterns:
   #21–#24). `performanceService` / `allocationService` / `realizedGainsService` (analytics)
   and `dividendService` (dividends) read *only* through `flexReadRepository`, convert to base
   currency (EUR) in the service, and each return an `ok | needs_import` result. See DDR-0005.
+- **classification** — instrument sector/industry (M3, Story #30). Flex carries **no sector
+  field**, so `classificationRepository` fronts *two* sources — the mutable SQLite cache
+  `instrument_classifications` and `ibkrGateway` — and `classificationService` decides which
+  conids to fetch (latest statement's positions, uncached only, sequential). `allocationService`
+  joins the cache with a plain sync read, so Allocation still renders with the gateway closed;
+  unclassified positions form their own slice. The `analytics:classifyInstruments` channel is the
+  only analytics channel that reaches IBKR. See DDR-0009.
 
 > **Project name:** This project is **Stock Portfolio Viewer**, a **standalone,
 > single-user desktop application** for personal stock portfolio analytics. It is
@@ -59,7 +66,8 @@ src/
   services/      pure business logic — primary unit-test target (system/, meta/,
                  portfolio/, snapshots/, flex/, analytics/, dividends/)
   repositories/  the ONLY layer that touches a data source: SQLite (meta/, snapshots/,
-                 flex/) or the IBKR gateway (portfolio/portfolioRepository.ts + ibkrGateway.ts)
+                 flex/), the IBKR gateway (portfolio/portfolioRepository.ts + ibkrGateway.ts),
+                 or both (classification/)
   db/            client.ts (better-sqlite3 + Drizzle singleton), migrate.ts, schema.ts
   shared/        ipc/contract.ts (Zod schemas + inferred types), ipc/channels.ts,
                  domain/ (portfolio.ts, snapshot.ts, flex.ts, performance.ts,
@@ -114,6 +122,9 @@ Canonical flows to copy when adding a feature:
   *types* from it so Zod never lands in those bundles. Failures cross IPC **as result
   variants, not exceptions** (`not_connected`, `needs_import`, `canceled`, `invalid`,
   `error`) so the renderer can render each as a first-class state.
+- **`instrument_classifications` is the one mutable table** — it's a *cache* of derived
+  reference data (upserted by conid), not history. Every other table is append-only and must
+  stay that way (DDR-0009).
 - **Two money-storage conventions coexist** — don't mix them. `snapshots` /
   `snapshot_holdings` store **integer minor units** (cents) plus a currency (DDR-0003);
   the `flex_*` tables store **`real`** for money, prices, FX rates and P&L, because Flex is

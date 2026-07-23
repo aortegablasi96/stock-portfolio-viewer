@@ -381,3 +381,38 @@ export const flexSecurities = sqliteTable(
 
 export type FlexSecurityRow = typeof flexSecurities.$inferSelect
 export type NewFlexSecurityRow = typeof flexSecurities.$inferInsert
+
+/**
+ * Sector / industry classification for an instrument (Milestone M3, Story #30).
+ *
+ * Unlike every other table here this one is a **cache, not history**: IBKR Flex
+ * statements carry no sector field, so the classification is fetched from the Client
+ * Portal Gateway and stored locally so the Allocation view keeps working offline.
+ * Rows are therefore upserted (refreshed) rather than append-only — the immutable
+ * `snapshots` / `flex_*` tables are unaffected. A row whose `sector` is `''` records a
+ * *resolved-but-unknown* answer, so the gateway is not re-queried for it every refresh.
+ * See DDR-0009.
+ */
+export const instrumentClassifications = sqliteTable(
+  'instrument_classifications',
+  {
+    /** IBKR contract id — the join key back to positions. */
+    conid: integer('conid').primaryKey(),
+    symbol: text('symbol').notNull(),
+    /** Broad sector, e.g. 'Financial' (IBKR `industry`); '' when the source has none. */
+    sector: text('sector').notNull(),
+    /** Narrower industry, e.g. 'Banks' (IBKR `category`); '' when the source has none. */
+    industry: text('industry').notNull(),
+    /** Where the classification came from; room for future providers. */
+    source: text('source').notNull().default('ibkr'),
+    /** When it was fetched — epoch milliseconds, UTC. */
+    fetchedAt: integer('fetched_at').notNull(),
+  },
+  (t) => ({
+    // Fallback lookup for position rows that carry no conid.
+    bySymbol: index('idx_instrument_classifications_symbol').on(t.symbol),
+  }),
+)
+
+export type InstrumentClassificationRow = typeof instrumentClassifications.$inferSelect
+export type NewInstrumentClassificationRow = typeof instrumentClassifications.$inferInsert

@@ -13,6 +13,7 @@ export const IpcChannels = {
   analyticsAllocation: 'analytics:getAllocation',
   analyticsDividends: 'analytics:getDividends',
   analyticsRealizedGains: 'analytics:getRealizedGains',
+  analyticsClassifyInstruments: 'analytics:classifyInstruments',
   // Main → renderer event: a snapshot was captured (e.g. on-open capture completed),
   // so the renderer should refresh its history. Carries no payload.
   snapshotCaptured: 'snapshot:captured',

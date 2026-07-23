@@ -16,6 +16,7 @@ import { performanceService } from '@services/analytics/performanceService'
 import { allocationService } from '@services/analytics/allocationService'
 import { realizedGainsService } from '@services/analytics/realizedGainsService'
 import { dividendService } from '@services/dividends/dividendService'
+import { classificationService } from '@services/classification/classificationService'
 import { IbkrNotConnectedError, ValidationError } from '@shared/errors'
 
 /**
@@ -105,4 +106,10 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IpcChannels.analyticsAllocation, () => allocationService.getAllocation())
   ipcMain.handle(IpcChannels.analyticsDividends, () => dividendService.getDividends())
   ipcMain.handle(IpcChannels.analyticsRealizedGains, () => realizedGainsService.getRealizedGains())
+
+  // Story #30: the one analytics channel that talks to IBKR. The service already returns
+  // not_connected / error as data, so there is nothing to map here.
+  ipcMain.handle(IpcChannels.analyticsClassifyInstruments, () =>
+    classificationService.refreshClassifications(),
+  )
 }

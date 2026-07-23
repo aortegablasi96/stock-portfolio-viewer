@@ -74,6 +74,19 @@ export type LedgerEntry = z.infer<typeof ledgerEntrySchema>
 // number silently entering a total.
 const exchangeRateSchema = z.object({ rate: z.number() }).passthrough()
 
+// Contract information for a single conid (Story #30). The gateway's
+// `/iserver/contract/{conid}/info` response carries IBKR's own classification: `industry`
+// is the broad sector ("Financial") and `category` the narrower industry ("Banks"). Both
+// are optional here on purpose — instruments such as ETFs and cash have no classification,
+// and a gateway build that omits the fields must degrade to "unclassified" rather than
+// failing the whole refresh (see DDR-0009).
+const contractInfoSchema = z
+  .object({
+    industry: z.string().optional(),
+    category: z.string().optional(),
+  })
+  .passthrough()
+
 // ---- transport --------------------------------------------------------------
 
 /** GET a raw response body, mapping connection/HTTP failures to typed errors. */
@@ -200,6 +213,18 @@ async function getExchangeRate(source: string, target: string): Promise<number> 
   return rate
 }
 
+/**
+ * IBKR's own sector/industry classification for one contract (Story #30). Returns empty
+ * strings when the gateway reports no classification for the instrument (ETFs, cash, some
+ * non-US listings), which callers record as a resolved-but-unknown answer.
+ */
+async function getContractClassification(
+  conid: number,
+): Promise<{ sector: string; industry: string }> {
+  const info = await getJson(`/iserver/contract/${encodeURIComponent(conid)}/info`, contractInfoSchema)
+  return { sector: info.industry ?? '', industry: info.category ?? '' }
+}
+
 export const ibkrGateway = {
   getAuthStatus,
   ensureAuthenticated,
@@ -207,4 +232,5 @@ export const ibkrGateway = {
   getPositions,
   getLedger,
   getExchangeRate,
+  getContractClassification,
 }

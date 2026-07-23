@@ -1,16 +1,23 @@
 import type { AllocationResult, AllocationSlice } from '@shared/domain/allocation'
 import { formatCurrency, formatDate, formatSignedCurrency } from '../../lib/format'
-import { BarList, type BarListItem } from '../charts/BarList'
+import { PieChart } from '../charts/PieChart'
+import type { PieDatum } from '../../lib/pie'
 import { useAnalytics } from './useAnalytics'
+import { ClassifySectors } from './ClassifySectors'
 import { NeedsImport } from './NeedsImport'
 import { StatTile, toneOf } from './StatTile'
 
 /**
- * Allocation analysis (Milestone M3, Story #22). Breaks the latest imported positions
- * down by asset class, issuer country, and currency, and lists each position with its
- * base-currency market value, cost basis, and unrealized P&L.
+ * Allocation analysis (Milestone M3, Stories #22 and #30). Breaks the latest imported
+ * positions down by asset class, issuer country, currency and sector — each as a donut
+ * chart — and lists each position with its base-currency market value, cost basis, and
+ * unrealized P&L.
+ *
+ * Sector is the one dimension not present in Flex statements; it comes from the locally
+ * cached IBKR classification, so positions can legitimately be unclassified until the
+ * owner runs the (opt-in, gateway-backed) classification action.
  */
-function toItems(slices: AllocationSlice[]): BarListItem[] {
+function toItems(slices: AllocationSlice[]): PieDatum[] {
   return slices.map((s) => ({ key: s.key, label: s.label, value: s.marketValueBase, percent: s.percentOfNav }))
 }
 
@@ -54,15 +61,30 @@ export function AllocationView(): React.JSX.Element {
       <div className="breakdown-grid">
         <section className="panel">
           <h2 className="panel-title">By asset class</h2>
-          <BarList items={toItems(r.byAssetClass)} formatValue={c} ariaLabel="Allocation by asset class" />
+          <PieChart data={toItems(r.byAssetClass)} formatValue={c} ariaLabel="Allocation by asset class" />
         </section>
         <section className="panel">
           <h2 className="panel-title">By geography (issuer country)</h2>
-          <BarList items={toItems(r.byCountry)} formatValue={c} ariaLabel="Allocation by issuer country" />
+          <PieChart data={toItems(r.byCountry)} formatValue={c} ariaLabel="Allocation by issuer country" />
         </section>
         <section className="panel">
           <h2 className="panel-title">By currency</h2>
-          <BarList items={toItems(r.byCurrency)} formatValue={c} ariaLabel="Allocation by currency" />
+          <PieChart data={toItems(r.byCurrency)} formatValue={c} ariaLabel="Allocation by currency" />
+        </section>
+        <section className="panel">
+          <h2 className="panel-title">By sector</h2>
+          <PieChart
+            data={toItems(r.bySector)}
+            formatValue={c}
+            ariaLabel="Allocation by sector"
+            emptyMessage="No sector data yet."
+          />
+          {r.unclassifiedCount > 0 && (
+            <ClassifySectors
+              unclassifiedCount={r.unclassifiedCount}
+              onClassified={() => void reload()}
+            />
+          )}
         </section>
       </div>
 
@@ -75,6 +97,7 @@ export function AllocationView(): React.JSX.Element {
                 <th scope="col">Symbol</th>
                 <th scope="col">Class</th>
                 <th scope="col">Country</th>
+                <th scope="col">Sector</th>
                 <th scope="col" className="num">Market value</th>
                 <th scope="col" className="num">Cost basis</th>
                 <th scope="col" className="num">Unrealized P&L</th>
@@ -90,6 +113,7 @@ export function AllocationView(): React.JSX.Element {
                   </th>
                   <td>{p.assetCategory}</td>
                   <td>{p.issuerCountry || '—'}</td>
+                  <td>{p.sector || '—'}</td>
                   <td className="num">{c(p.marketValueBase)}</td>
                   <td className="num">{c(p.costBasisBase)}</td>
                   <td className={`num stat-${toneOf(p.unrealizedPnlBase)}`}>
