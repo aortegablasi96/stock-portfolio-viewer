@@ -76,7 +76,17 @@ export type CaptureSnapshotResult = z.infer<typeof captureSnapshotResultSchema>
 
 // ---- snapshot:list ----------------------------------------------------------
 
-/** The snapshot history (headers only), newest first. Reads local storage; takes no payload. */
+/**
+ * Optional request for the snapshot history. When `displayCurrency` is given, each summary's
+ * total is converted into it with live gateway FX (Bug #44, DDR-0007); omitted, the stored
+ * native summaries are returned. Validated at the IPC boundary like any renderer payload.
+ */
+export const snapshotListRequestSchema = z.object({
+  displayCurrency: z.string().min(1).optional(),
+})
+export type SnapshotListRequest = z.infer<typeof snapshotListRequestSchema>
+
+/** The snapshot history (headers only), newest first. Reads local storage. */
 export const snapshotListSchema = z.array(snapshotSummarySchema)
 export type SnapshotList = z.infer<typeof snapshotListSchema>
 
@@ -162,7 +172,8 @@ export interface RendererApi {
   ping: (request: PingRequest) => Promise<PingResponse>
   getPortfolioOverview: (request?: PortfolioOverviewRequest) => Promise<PortfolioOverviewResult>
   captureSnapshot: () => Promise<CaptureSnapshotResult>
-  listSnapshots: () => Promise<SnapshotList>
+  /** Snapshot history, newest first; optionally converted into a display currency (Bug #44). */
+  listSnapshots: (request?: SnapshotListRequest) => Promise<SnapshotList>
   /** Subscribe to "snapshot captured" events (e.g. capture-on-open). Returns an unsubscribe fn. */
   onSnapshotCaptured: (callback: () => void) => () => void
   /** Open a file dialog to import IBKR Flex Query statement files into the local history. */

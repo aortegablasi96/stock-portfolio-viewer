@@ -3,6 +3,7 @@ import { IpcChannels } from '@shared/ipc/channels'
 import {
   pingRequestSchema,
   portfolioOverviewRequestSchema,
+  snapshotListRequestSchema,
   type CaptureSnapshotResult,
   type ClearHistoryResult,
   type ClearStatementsResult,
@@ -67,8 +68,16 @@ export function registerIpcHandlers(): void {
     }
   })
 
-  // Snapshot history (local read; independent of the gateway). No payload.
-  ipcMain.handle(IpcChannels.snapshotList, (): SnapshotList => snapshotService.getHistory())
+  // Snapshot history (local read). The optional display currency is validated like any
+  // renderer payload; conversion uses live gateway FX in the service (Bug #44, DDR-0007),
+  // degrading gracefully so history stays visible when the gateway is disconnected.
+  ipcMain.handle(
+    IpcChannels.snapshotList,
+    (_event, rawInput: unknown): Promise<SnapshotList> => {
+      const { displayCurrency } = snapshotListRequestSchema.parse(rawInput ?? {})
+      return snapshotService.getHistory(displayCurrency)
+    },
+  )
 
   // Owner-confirmed full reset of the snapshot history (Story #43). No payload; a destructive
   // but local operation, so failures surface as an `error` result variant, never thrown.

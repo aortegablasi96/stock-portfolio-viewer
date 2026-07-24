@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { PortfolioOverview } from '@shared/domain/portfolio'
 import type { SnapshotSummary } from '@shared/domain/snapshot'
 import { HoldingsTable } from './HoldingsTable'
@@ -44,6 +44,14 @@ export function PortfolioDashboard(): React.JSX.Element {
   const [busy, setBusy] = useState(false)
   const [historyStatus, setHistoryStatus] = useState<string | null>(null)
 
+  // Latest selected currency for callbacks that fire outside React's render flow (the
+  // main→renderer "snapshot captured" event), so an on-open capture reloads history in the
+  // currency currently on screen rather than a stale closure's value.
+  const displayCurrencyRef = useRef(displayCurrency)
+  useEffect(() => {
+    displayCurrencyRef.current = displayCurrency
+  }, [displayCurrency])
+
   // `keepPrevious` keeps the current figures visible while re-converting on a currency
   // change, so switching currency shows a subtle busy hint rather than blanking the view.
   const load = useCallback(async (currency: string, keepPrevious = false) => {
@@ -72,12 +80,24 @@ export function PortfolioDashboard(): React.JSX.Element {
     }
   }, [])
 
+  // History is read from local storage but converted to the display currency with live
+  // gateway FX (Bug #44); it degrades gracefully in the service when disconnected, so it
+  // stays visible either way. A failure here shouldn't blank the dashboard.
+  const loadHistory = useCallback(async (currency: string) => {
+    try {
+      setSnapshots(await window.api.listSnapshots({ displayCurrency: currency }))
+    } catch {
+      setSnapshots([])
+    }
+  }, [])
+
   const onCurrencyChange = useCallback(
     (currency: string) => {
       setDisplayCurrency(currency)
       void load(currency, true)
+      void loadHistory(currency)
     },
-    [load],
+    [load, loadHistory],
   )
 
   // The currencies the selector offers: the default base plus every currency actually held.
@@ -89,15 +109,6 @@ export function PortfolioDashboard(): React.JSX.Element {
     return [...codes].sort()
   }, [state, displayCurrency])
 
-  const loadHistory = useCallback(async () => {
-    try {
-      setSnapshots(await window.api.listSnapshots())
-    } catch {
-      // History is a secondary panel; a failure here shouldn't blank the dashboard.
-      setSnapshots([])
-    }
-  }, [])
-
   const captureNow = useCallback(async () => {
     setCapture({ phase: 'capturing' })
     try {
@@ -105,7 +116,7 @@ export function PortfolioDashboard(): React.JSX.Element {
       switch (result.status) {
         case 'captured':
           setCapture({ phase: 'done', message: 'Snapshot captured.' })
-          await loadHistory()
+          await loadHistory(displayCurrencyRef.current)
           break
         case 'not_connected':
           setCapture({ phase: 'error', message: 'Not connected — connect to capture a snapshot.' })
@@ -143,9 +154,10 @@ export function PortfolioDashboard(): React.JSX.Element {
 
   useEffect(() => {
     void load(DEFAULT_DISPLAY_CURRENCY)
-    void loadHistory()
-    // Refresh history when the main process captures a snapshot on open.
-    return window.api.onSnapshotCaptured(() => void loadHistory())
+    void loadHistory(DEFAULT_DISPLAY_CURRENCY)
+    // Refresh history when the main process captures a snapshot on open, in the currency
+    // currently on screen (the ref avoids re-subscribing on every currency change).
+    return window.api.onSnapshotCaptured(() => void loadHistory(displayCurrencyRef.current))
   }, [load, loadHistory])
 
   return (

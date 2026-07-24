@@ -16,6 +16,7 @@ import type {
   RealizedGainsResult,
   RendererApi,
   SnapshotList,
+  SnapshotListRequest,
 } from '@shared/ipc/contract'
 
 /**
@@ -33,7 +34,8 @@ const api: RendererApi = {
     ipcRenderer.invoke(IpcChannels.portfolioGetOverview, request),
   captureSnapshot: (): Promise<CaptureSnapshotResult> =>
     ipcRenderer.invoke(IpcChannels.snapshotCapture),
-  listSnapshots: (): Promise<SnapshotList> => ipcRenderer.invoke(IpcChannels.snapshotList),
+  listSnapshots: (request?: SnapshotListRequest): Promise<SnapshotList> =>
+    ipcRenderer.invoke(IpcChannels.snapshotList, request),
   onSnapshotCaptured: (callback: () => void): (() => void) => {
     // Wrap so the raw IpcRendererEvent is never handed to the renderer callback.
     const listener = (): void => callback()

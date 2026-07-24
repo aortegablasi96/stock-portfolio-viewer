@@ -15,7 +15,7 @@ vi.mock('@repositories/snapshots/snapshotRepository', () => ({
   },
 }))
 vi.mock('@services/portfolio/portfolioService', () => ({
-  portfolioService: { getOverview: vi.fn() },
+  portfolioService: { getOverview: vi.fn(), getExchangeRates: vi.fn() },
 }))
 
 const mockRepo = vi.mocked(snapshotRepository)
@@ -114,9 +114,67 @@ describe('snapshotService.captureNow', () => {
 })
 
 describe('snapshotService.getHistory', () => {
-  it('returns the repository summaries', () => {
+  it('returns the stored native summaries when no display currency is requested', async () => {
     mockRepo.listSummaries.mockReturnValue([summary])
-    expect(snapshotService.getHistory()).toEqual([summary])
+
+    await expect(snapshotService.getHistory()).resolves.toEqual([summary])
+    // No display currency → no FX round-trip.
+    expect(mockPortfolio.getExchangeRates).not.toHaveBeenCalled()
+  })
+
+  it('returns early (no FX round-trip) when there is no history to convert', async () => {
+    mockRepo.listSummaries.mockReturnValue([])
+
+    await expect(snapshotService.getHistory('USD')).resolves.toEqual([])
+    expect(mockPortfolio.getExchangeRates).not.toHaveBeenCalled()
+  })
+
+  it('converts each total into the display currency with live gateway FX', async () => {
+    const usd = { ...summary, id: 1, baseCurrency: 'USD', totalMarketValue: 100 }
+    const eur = { ...summary, id: 2, baseCurrency: 'EUR', totalMarketValue: 50 }
+    mockRepo.listSummaries.mockReturnValue([usd, eur])
+    mockPortfolio.getExchangeRates.mockResolvedValue({ EUR: 1, USD: 0.9 })
+
+    const history = await snapshotService.getHistory('EUR')
+
+    expect(mockPortfolio.getExchangeRates).toHaveBeenCalledWith(['USD', 'EUR'], 'EUR')
+    expect(history).toEqual([
+      { ...usd, displayCurrency: 'EUR', displayValue: 90 },
+      { ...eur, displayCurrency: 'EUR', displayValue: 50 },
+    ])
+  })
+
+  it('flags rows with no available rate as unconverted (displayValue null) rather than mis-converting', async () => {
+    const usd = { ...summary, id: 1, baseCurrency: 'USD', totalMarketValue: 100 }
+    mockRepo.listSummaries.mockReturnValue([usd])
+    // The USD→EUR pair is unavailable, so the repository omits it from the map.
+    mockPortfolio.getExchangeRates.mockResolvedValue({ EUR: 1 })
+
+    const history = await snapshotService.getHistory('EUR')
+
+    expect(history).toEqual([{ ...usd, displayCurrency: 'EUR', displayValue: null }])
+  })
+
+  it('degrades when the gateway is disconnected: history stays visible, unconvertible rows flagged', async () => {
+    const usd = { ...summary, id: 1, baseCurrency: 'USD', totalMarketValue: 100 }
+    const eur = { ...summary, id: 2, baseCurrency: 'EUR', totalMarketValue: 50 }
+    mockRepo.listSummaries.mockReturnValue([usd, eur])
+    mockPortfolio.getExchangeRates.mockRejectedValue(new IbkrNotConnectedError('gateway down'))
+
+    const history = await snapshotService.getHistory('EUR')
+
+    // Rows already in the display currency still convert (rate 1); the rest are flagged.
+    expect(history).toEqual([
+      { ...usd, displayCurrency: 'EUR', displayValue: null },
+      { ...eur, displayCurrency: 'EUR', displayValue: 50 },
+    ])
+  })
+
+  it('propagates unexpected errors from the rate lookup', async () => {
+    mockRepo.listSummaries.mockReturnValue([summary])
+    mockPortfolio.getExchangeRates.mockRejectedValue(new Error('boom'))
+
+    await expect(snapshotService.getHistory('EUR')).rejects.toThrow('boom')
   })
 })
 

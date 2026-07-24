@@ -14,6 +14,11 @@ import type { SnapshotSummary } from '@shared/domain/snapshot'
 /** Skip an automatic on-open capture if a snapshot already exists within this window. */
 export const DEDUPE_WINDOW_MS = 12 * 60 * 60 * 1000 // 12 hours
 
+/** Round a money amount to cents, matching the live overview's conversion precision. */
+function round2(value: number): number {
+  return Math.round(value * 100) / 100
+}
+
 export type CaptureOnOpenResult =
   | { status: 'captured'; summary: SnapshotSummary }
   | { status: 'skipped_recent'; latestCapturedAt: number }
@@ -52,9 +57,31 @@ export const snapshotService = {
     return snapshotRepository.append({ capturedAt: now, source: 'ibkr', overview })
   },
 
-  /** All captured snapshots, newest first (header-level summaries). */
-  getHistory(): SnapshotSummary[] {
-    return snapshotRepository.listSummaries()
+  /**
+   * All captured snapshots, newest first (header-level summaries).
+   *
+   * When `displayCurrency` is given, each summary's `totalMarketValue` is converted into it
+   * using live gateway FX rates — the same convention as the Portfolio view (Bug #44,
+   * DDR-0007) — and returned as `displayValue` (with `displayCurrency` set). Rows whose base
+   * currency has no available rate carry `displayValue === null` and are flagged by the UI,
+   * never silently mis-converted. History is a local read that must stay visible even when
+   * the gateway is disconnected, so a `not_connected` gateway is not an error here: it
+   * degrades to converting only rows already in the display currency (rate `1`) and flagging
+   * the rest. Omitting `displayCurrency` returns the stored native summaries unchanged.
+   */
+  async getHistory(displayCurrency?: string): Promise<SnapshotSummary[]> {
+    const summaries = snapshotRepository.listSummaries()
+    if (!displayCurrency || summaries.length === 0) return summaries
+
+    const rates = await ratesFor(summaries, displayCurrency)
+    return summaries.map((summary) => {
+      const rate = rates[summary.baseCurrency]
+      return {
+        ...summary,
+        displayCurrency,
+        displayValue: rate === undefined ? null : round2(summary.totalMarketValue * rate),
+      }
+    })
   },
 
   /**
@@ -65,4 +92,25 @@ export const snapshotService = {
   clearHistory(): { removedSnapshots: number } {
     return { removedSnapshots: snapshotRepository.clearAll() }
   },
+}
+
+/**
+ * Live FX rates converting every snapshot's base currency into `target`. A disconnected
+ * gateway must not blank the history (it is a local read), so `IbkrNotConnectedError`
+ * degrades to a rates map with `target` only — rows already in the display currency still
+ * convert (rate `1`) and the rest are flagged unconverted. Other errors propagate.
+ */
+async function ratesFor(
+  summaries: SnapshotSummary[],
+  target: string,
+): Promise<Record<string, number>> {
+  try {
+    return await portfolioService.getExchangeRates(
+      summaries.map((s) => s.baseCurrency),
+      target,
+    )
+  } catch (err) {
+    if (err instanceof IbkrNotConnectedError) return { [target]: 1 }
+    throw err
+  }
 }
