@@ -8,7 +8,11 @@ export const IpcChannels = {
   portfolioGetOverview: 'portfolio:getOverview',
   snapshotCapture: 'snapshot:capture',
   snapshotList: 'snapshot:list',
+  // Owner-confirmed full reset of the captured snapshot history (Story #43).
+  snapshotClear: 'snapshot:clear',
   flexImport: 'flex:import',
+  // Owner-confirmed full reset of the imported Flex statement store (Story #43).
+  flexClear: 'flex:clear',
   analyticsPerformance: 'analytics:getPerformance',
   analyticsAllocation: 'analytics:getAllocation',
   analyticsDividends: 'analytics:getDividends',

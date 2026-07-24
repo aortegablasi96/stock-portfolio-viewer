@@ -80,6 +80,20 @@ export type CaptureSnapshotResult = z.infer<typeof captureSnapshotResultSchema>
 export const snapshotListSchema = z.array(snapshotSummarySchema)
 export type SnapshotList = z.infer<typeof snapshotListSchema>
 
+// ---- snapshot:clear ---------------------------------------------------------
+
+/**
+ * Result of an owner-confirmed "Clear history" request (Story #43, ADR-0006). A full,
+ * deliberate reset of the captured snapshot history — the only sanctioned deletion path.
+ * The outcome is modelled as data like the other channels: `cleared` with the number of
+ * snapshots removed, or `error`. Takes no payload.
+ */
+export const clearHistoryResultSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('cleared'), removedSnapshots: z.number().int().nonnegative() }),
+  z.object({ status: z.literal('error'), message: z.string() }),
+])
+export type ClearHistoryResult = z.infer<typeof clearHistoryResultSchema>
+
 // ---- flex:import ------------------------------------------------------------
 
 /**
@@ -96,6 +110,20 @@ export const flexImportResultSchema = z.discriminatedUnion('status', [
   z.object({ status: z.literal('error'), message: z.string() }),
 ])
 export type FlexImportResult = z.infer<typeof flexImportResultSchema>
+
+// ---- flex:clear -------------------------------------------------------------
+
+/**
+ * Result of an owner-confirmed "Clear statements" request (Story #43, ADR-0006). A full,
+ * deliberate reset of the imported Flex store — the only sanctioned deletion path —
+ * independent of the snapshot history. `cleared` with the number of statements removed, or
+ * `error`. Takes no payload.
+ */
+export const clearStatementsResultSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('cleared'), removedStatements: z.number().int().nonnegative() }),
+  z.object({ status: z.literal('error'), message: z.string() }),
+])
+export type ClearStatementsResult = z.infer<typeof clearStatementsResultSchema>
 
 // ---- analytics:* (M3, Stories #21–#24) --------------------------------------
 
@@ -139,6 +167,10 @@ export interface RendererApi {
   onSnapshotCaptured: (callback: () => void) => () => void
   /** Open a file dialog to import IBKR Flex Query statement files into the local history. */
   importFlexStatements: () => Promise<FlexImportResult>
+  /** Owner-confirmed full reset of the imported Flex statement store (Story #43). */
+  clearStatements: () => Promise<ClearStatementsResult>
+  /** Owner-confirmed full reset of the captured snapshot history (Story #43). */
+  clearHistory: () => Promise<ClearHistoryResult>
   /** Performance over time from imported Flex data (M3, Story #21). */
   getPerformance: () => Promise<PerformanceResult>
   /** Allocation breakdown from imported Flex data (M3, Story #22). */

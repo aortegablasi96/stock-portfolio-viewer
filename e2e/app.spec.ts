@@ -103,3 +103,31 @@ test('maximize control toggles the window and updates the control label (Story #
   await page.getByRole('button', { name: 'Restore' }).click()
   await expect(page.getByRole('button', { name: 'Maximize' })).toBeVisible()
 })
+
+test('exposes the typed clear channels on window.api (Story #43)', async () => {
+  const channels = await page.evaluate(() => ({
+    clearStatements: typeof window.api?.clearStatements === 'function',
+    clearHistory: typeof window.api?.clearHistory === 'function',
+  }))
+  expect(channels).toEqual({ clearStatements: true, clearHistory: true })
+})
+
+test('Clear history control is hidden when there is no snapshot history (Story #43)', async () => {
+  // Fresh DB + no gateway, so nothing has been captured — there is nothing to clear.
+  await expect(page.getByRole('button', { name: 'Clear history' })).toHaveCount(0)
+})
+
+test('Clear statements confirms in place, then reports nothing to clear on an empty store (Story #43)', async () => {
+  // Arm the destructive action: the button expands into an explicit warning + confirm/cancel.
+  await page.getByRole('button', { name: 'Clear statements' }).click()
+  await expect(page.getByText('This permanently removes all imported Flex statement data', { exact: false })).toBeVisible()
+
+  // Cancel backs out without deleting anything and restores the resting trigger.
+  await page.getByRole('button', { name: 'Cancel' }).click()
+  await expect(page.getByRole('button', { name: 'Clear statements' })).toBeVisible()
+
+  // Re-arm and confirm. The store is empty (nothing imported), so the reset removes nothing.
+  await page.getByRole('button', { name: 'Clear statements' }).click()
+  await page.getByRole('button', { name: 'Yes, clear all statements' }).click()
+  await expect(page.getByText('No imported statements to clear.')).toBeVisible()
+})

@@ -197,6 +197,79 @@ body {
   border-radius: 8px;
 }
 
+/* ---- Destructive actions + inline confirm (Story #43) -------------------- */
+
+.danger-button {
+  padding: 0.5rem 1rem;
+  font: inherit;
+  font-weight: 600;
+  color: var(--neg);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.danger-button:hover:not(:disabled) {
+  color: #ffffff;
+  background: var(--neg);
+  border-color: var(--neg);
+}
+
+.danger-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.danger-button:focus-visible {
+  outline: 2px solid var(--neg);
+  outline-offset: 2px;
+}
+
+.ghost-button {
+  padding: 0.5rem 1rem;
+  font: inherit;
+  font-weight: 600;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.ghost-button:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--text);
+}
+
+.ghost-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.confirm-action {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.6rem;
+  max-width: 26rem;
+}
+
+.confirm-warning {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: var(--muted);
+  text-align: right;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.confirm-buttons {
+  display: flex;
+  gap: 0.5rem;
+}
+
 .capture-status-error {
   border-color: #5a2b2b;
   color: var(--text);
@@ -423,6 +496,21 @@ body {
   color: var(--muted);
 }
 
+/* When a header action (e.g. Clear history) is present, lay the heading and control
+   out on one row and drop the heading's bottom margin (the row owns the spacing). */
+.snapshot-history-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.snapshot-history-head h2 {
+  margin: 0;
+}
+
 .snapshot-empty {
   margin: 0;
   color: var(--muted);
@@ -492,6 +580,13 @@ body {
   justify-content: space-between;
   gap: 1rem;
   flex-wrap: wrap;
+}
+
+.flex-import-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.6rem;
 }
 
 .flex-import-intro {

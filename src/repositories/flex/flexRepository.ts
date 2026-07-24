@@ -24,11 +24,13 @@ import { parseFlexStatements } from './flexStatementParser'
  * Data access for imported Flex Query history (Milestone M3, Story #20; ADR-0005,
  * DDR-0004). The only layer that touches the `flex_*` tables and the XML files.
  *
- * Like `snapshotRepository`, it exposes **no update or delete** — imported history is
- * immutable, so the absence of a mutation surface is the guarantee. De-dupe is
- * two-tier: a statement is skipped whole if its identity already exists; event rows
- * (`flex_trades`, `flex_cash_transactions`) are inserted with `onConflictDoNothing`
- * against their unique key so overlapping re-exports merge without duplicates.
+ * Like `snapshotRepository`, imported history is immutable in normal operation: there is
+ * **no per-row update or delete**, so the absence of a mutation surface is the guarantee.
+ * The one sanctioned exception is `clearAll` — a deliberate, owner-confirmed full reset of
+ * the imported store (Story #43, ADR-0006) — never a partial edit. De-dupe is two-tier: a
+ * statement is skipped whole if its identity already exists; event rows (`flex_trades`,
+ * `flex_cash_transactions`) are inserted with `onConflictDoNothing` against their unique key
+ * so overlapping re-exports merge without duplicates.
  */
 
 const nil: FlexRecordCount = { inserted: 0, skipped: 0 }
@@ -194,6 +196,22 @@ export const flexRepository = {
           ),
         },
       }
+    })
+  },
+
+  /**
+   * Delete **all** imported Flex history in a single transaction — the sole sanctioned
+   * deletion path (owner-confirmed full reset; Story #43, ADR-0006). Every `flex_*` child
+   * table references `flex_statements` with `onDelete: 'cascade'` and FKs are enforced, so
+   * removing the statement headers clears the entire imported store. Returns the number of
+   * statements removed. Not a partial delete: there is no by-statement/date variant, so the
+   * append-only-in-normal-use guarantee (DDR-0004) is preserved.
+   */
+  clearAll(): number {
+    return getDb().transaction((tx) => {
+      const removed = tx.select({ id: flexStatements.id }).from(flexStatements).all().length
+      tx.delete(flexStatements).run()
+      return removed
     })
   },
 }

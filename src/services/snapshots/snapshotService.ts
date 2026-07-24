@@ -56,4 +56,13 @@ export const snapshotService = {
   getHistory(): SnapshotSummary[] {
     return snapshotRepository.listSummaries()
   },
+
+  /**
+   * Clear the entire captured snapshot history so it can be started fresh (Story #43,
+   * ADR-0006). A full, owner-confirmed reset — not a partial delete — independent of the
+   * imported Flex store. Returns how many snapshots were removed.
+   */
+  clearHistory(): { removedSnapshots: number } {
+    return { removedSnapshots: snapshotRepository.clearAll() }
+  },
 }

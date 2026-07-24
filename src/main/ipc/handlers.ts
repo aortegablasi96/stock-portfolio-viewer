@@ -4,6 +4,8 @@ import {
   pingRequestSchema,
   portfolioOverviewRequestSchema,
   type CaptureSnapshotResult,
+  type ClearHistoryResult,
+  type ClearStatementsResult,
   type FlexImportResult,
   type PortfolioOverviewResult,
   type SnapshotList,
@@ -68,6 +70,18 @@ export function registerIpcHandlers(): void {
   // Snapshot history (local read; independent of the gateway). No payload.
   ipcMain.handle(IpcChannels.snapshotList, (): SnapshotList => snapshotService.getHistory())
 
+  // Owner-confirmed full reset of the snapshot history (Story #43). No payload; a destructive
+  // but local operation, so failures surface as an `error` result variant, never thrown.
+  ipcMain.handle(IpcChannels.snapshotClear, (): ClearHistoryResult => {
+    try {
+      const { removedSnapshots } = snapshotService.clearHistory()
+      return { status: 'cleared', removedSnapshots }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unexpected error clearing the history.'
+      return { status: 'error', message }
+    }
+  })
+
   // Import IBKR Flex Query statement files (M3, Story #20). The native file dialog is a
   // main-process concern (the sandboxed renderer cannot open it); the handler stays thin
   // otherwise — parse/persist/de-dupe all live in the service and repository. Outcomes are
@@ -95,6 +109,18 @@ export function registerIpcHandlers(): void {
         return { status: 'invalid', message: err.message }
       }
       const message = err instanceof Error ? err.message : 'Unexpected error importing the statements.'
+      return { status: 'error', message }
+    }
+  })
+
+  // Owner-confirmed full reset of the imported Flex store (Story #43). No payload; local and
+  // destructive, so failures surface as an `error` result variant, never thrown.
+  ipcMain.handle(IpcChannels.flexClear, (): ClearStatementsResult => {
+    try {
+      const { removedStatements } = flexImportService.clearStatements()
+      return { status: 'cleared', removedStatements }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unexpected error clearing the statements.'
       return { status: 'error', message }
     }
   })

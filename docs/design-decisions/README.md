@@ -47,3 +47,4 @@ Other options and why they were not chosen.
 - `0009` — Sector classification: gateway-sourced, locally cached; allocation as donut charts
 - `0010` — Upcoming dividends from Flex open accruals; net-of-withholding chart reading
 - `0011` — Custom frameless window shell with in-app title bar and IPC-driven controls
+- `0012` — In-place confirmation pattern for destructive actions (ConfirmAction)
