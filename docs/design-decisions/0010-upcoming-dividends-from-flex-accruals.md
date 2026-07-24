@@ -105,15 +105,20 @@ Tradeoffs:
 - Accruals from superseded statements are unreadable by design (latest-statement-only), so
   the table is not a history of what *was* announced.
 
-Risks:
+Risks (resolved):
 
-- **The `OpenDividendAccrual` attribute names are unverified against a real export**, since
-  the owner's current exports omit the section. The mapping follows IBKR's published field
-  list; `tax`, `fee` and `grossRate` are parsed as optional (blank → `0` / `null`), so a
-  partially-different export degrades rather than failing the import. `fxRateToBase`,
-  `quantity`, `grossAmount` and `netAmount` are required — an accrual without them carries no
-  information — so a genuinely different shape surfaces as a `ValidationError` at import,
-  which is the intended ingress behaviour (ADR-0005). Confirm on the first real import.
+- **The `OpenDividendAccrual` attribute mapping is now verified against a real export.** It
+  was originally written from IBKR's published field list, since the owner's exports predated
+  the section. On 2026-07-24 the owner enabled *Open Dividend Accruals*, re-exported both
+  statements and imported them in the running app; the upcoming panel rendered the accrual
+  correctly (VBNK, pay date 2026-07-31, ≈€3.15 net). The real export confirmed the field
+  names verbatim (`currency`, `fxRateToBase`, `exDate`, `payDate`, `quantity`, `grossRate`,
+  `grossAmount`, `tax`, `fee`, `netAmount`) and that IBKR reports `tax` as a **positive
+  magnitude** — the derive-from-`gross − net` choice agrees with it (4.24 − 3.6 = 0.64)
+  rather than depending on that sign. The mapping is pinned to that export in
+  `flexStatementParser.test.ts`. The defensive parsing still stands: `tax`/`fee`/`grossRate`
+  optional, the four amount/rate fields required, so a future shape change degrades or
+  surfaces a `ValidationError` at import (ADR-0005) rather than corrupting a total.
 
 ## Alternatives Considered
 
