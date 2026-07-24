@@ -149,4 +149,17 @@ export interface RendererApi {
   getRealizedGains: () => Promise<RealizedGainsResult>
   /** Fetch & cache sector classification for the latest statement's positions (M3, Story #30). */
   classifyInstruments: () => Promise<ClassifyInstrumentsResult>
+  /** Minimize the application window (custom frameless title bar, Story #42). */
+  minimizeWindow: () => void
+  /** Toggle the application window between maximized and restored (Story #42). */
+  toggleMaximizeWindow: () => void
+  /** Close the application window (Story #42). */
+  closeWindow: () => void
+  /** Query whether the window is currently maximized, for the initial title-bar icon (Story #42). */
+  isWindowMaximized: () => Promise<boolean>
+  /**
+   * Subscribe to window maximize-state changes (control, OS double-click, or snapping) so the
+   * title bar can swap its maximize/restore icon (Story #42). Returns an unsubscribe fn.
+   */
+  onWindowMaximizeChanged: (callback: (isMaximized: boolean) => void) => () => void
 }
