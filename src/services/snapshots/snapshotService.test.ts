@@ -11,6 +11,7 @@ vi.mock('@repositories/snapshots/snapshotRepository', () => ({
     latestCapturedAt: vi.fn(),
     append: vi.fn(),
     listSummaries: vi.fn(),
+    clearAll: vi.fn(),
   },
 }))
 vi.mock('@services/portfolio/portfolioService', () => ({
@@ -116,5 +117,20 @@ describe('snapshotService.getHistory', () => {
   it('returns the repository summaries', () => {
     mockRepo.listSummaries.mockReturnValue([summary])
     expect(snapshotService.getHistory()).toEqual([summary])
+  })
+})
+
+describe('snapshotService.clearHistory', () => {
+  it('delegates the full reset to the repository and reports how many snapshots were removed', () => {
+    mockRepo.clearAll.mockReturnValue(5)
+
+    expect(snapshotService.clearHistory()).toEqual({ removedSnapshots: 5 })
+    expect(mockRepo.clearAll).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports zero when there was no history to clear', () => {
+    mockRepo.clearAll.mockReturnValue(0)
+
+    expect(snapshotService.clearHistory()).toEqual({ removedSnapshots: 0 })
   })
 })

@@ -8,9 +8,11 @@ import { rowToHolding, rowToSummary, toHeaderValues, toHoldingValues } from './s
  * Data access for the append-only snapshot history (Milestone M2, DDR-0003).
  *
  * This is the only layer that touches the `snapshots` / `snapshot_holdings`
- * tables (ADR-0003). It deliberately exposes **no update or delete** — history is
- * immutable, so the absence of a mutation surface is the guarantee, not a
- * convention. The decimal⇄minor-units conversion lives in `snapshotMapping`.
+ * tables (ADR-0003). History is immutable in normal operation: there is **no per-row
+ * update or delete**, so the absence of a mutation surface is the guarantee, not a
+ * convention. The one sanctioned exception is `clearAll` — a deliberate, owner-confirmed
+ * full reset of the history (Story #43, ADR-0006) — never a partial edit. The
+ * decimal⇄minor-units conversion lives in `snapshotMapping`.
  */
 export const snapshotRepository = {
   /**
@@ -59,5 +61,20 @@ export const snapshotRepository = {
       .all()
       .map(rowToHolding)
     return { ...rowToSummary(header), holdings }
+  },
+
+  /**
+   * Delete the **entire** snapshot history in a single transaction — the sole sanctioned
+   * deletion path (owner-confirmed full reset; Story #43, ADR-0006). Removing each
+   * `snapshots` header cascades to its `snapshot_holdings` rows (FKs are enforced). Returns
+   * the number of snapshot headers removed. Not a partial delete: there is no by-id/date
+   * variant, so the append-only-in-normal-use guarantee is preserved.
+   */
+  clearAll(): number {
+    return getDb().transaction((tx) => {
+      const removed = tx.select({ id: snapshots.id }).from(snapshots).all().length
+      tx.delete(snapshots).run()
+      return removed
+    })
   },
 }

@@ -8,6 +8,7 @@ vi.mock('@repositories/flex/flexRepository', () => ({
   flexRepository: {
     readAndParse: vi.fn(),
     persist: vi.fn(),
+    clearAll: vi.fn(),
   },
 }))
 
@@ -99,5 +100,20 @@ describe('flexImportService.import', () => {
     expect(() => flexImportService.import(['/tmp/good.xml', '/tmp/bad.xml'])).toThrow(ValidationError)
     // Parsing is the up-front gate — no statement is persisted once a file is invalid.
     expect(mockRepo.persist).not.toHaveBeenCalled()
+  })
+})
+
+describe('flexImportService.clearStatements', () => {
+  it('delegates the full reset to the repository and reports how many statements were removed', () => {
+    mockRepo.clearAll.mockReturnValue(3)
+
+    expect(flexImportService.clearStatements()).toEqual({ removedStatements: 3 })
+    expect(mockRepo.clearAll).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports zero when there was nothing imported to clear', () => {
+    mockRepo.clearAll.mockReturnValue(0)
+
+    expect(flexImportService.clearStatements()).toEqual({ removedStatements: 0 })
   })
 })

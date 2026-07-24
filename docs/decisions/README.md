@@ -41,3 +41,4 @@ Trade-offs, follow-ups, and what becomes easier or harder.
 - `0003` — Local persistence: SQLite (better-sqlite3) + Drizzle, migrate-on-launch
 - `0004` — Interactive Brokers integration: local Client Portal Gateway REST behind a repository
 - `0005` — Flex Query file import as an offline authoritative data source
+- `0006` — Sanctioned full reset of imported/captured local history (owner-confirmed clear)

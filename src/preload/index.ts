@@ -4,6 +4,8 @@ import type {
   AllocationResult,
   CaptureSnapshotResult,
   ClassifyInstrumentsResult,
+  ClearHistoryResult,
+  ClearStatementsResult,
   DividendResult,
   FlexImportResult,
   PerformanceResult,
@@ -40,6 +42,9 @@ const api: RendererApi = {
   },
   importFlexStatements: (): Promise<FlexImportResult> =>
     ipcRenderer.invoke(IpcChannels.flexImport),
+  clearStatements: (): Promise<ClearStatementsResult> =>
+    ipcRenderer.invoke(IpcChannels.flexClear),
+  clearHistory: (): Promise<ClearHistoryResult> => ipcRenderer.invoke(IpcChannels.snapshotClear),
   getPerformance: (): Promise<PerformanceResult> =>
     ipcRenderer.invoke(IpcChannels.analyticsPerformance),
   getAllocation: (): Promise<AllocationResult> =>

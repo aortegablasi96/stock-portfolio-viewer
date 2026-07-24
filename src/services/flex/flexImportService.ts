@@ -31,4 +31,14 @@ export const flexImportService = {
 
     return { statements }
   },
+
+  /**
+   * Clear the entire imported Flex store so corrected exports can be re-imported cleanly
+   * (Story #43, ADR-0006). This is a full, owner-confirmed reset — not a partial delete —
+   * so afterwards the analytics views degrade to their needs-import state until a fresh
+   * import. Returns how many statements were removed.
+   */
+  clearStatements(): { removedStatements: number } {
+    return { removedStatements: flexRepository.clearAll() }
+  },
 }

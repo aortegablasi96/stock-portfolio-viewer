@@ -6,6 +6,7 @@ import { BalancesSummary } from './BalancesSummary'
 import { AllocationPanel } from './AllocationPanel'
 import { SnapshotHistory } from './SnapshotHistory'
 import { CurrencySelector } from './CurrencySelector'
+import { ConfirmAction } from './ConfirmAction'
 
 /** Default display currency on first load: the account base currency (Story #28). */
 const DEFAULT_DISPLAY_CURRENCY = 'EUR'
@@ -41,6 +42,7 @@ export function PortfolioDashboard(): React.JSX.Element {
   const [capture, setCapture] = useState<CaptureState>({ phase: 'idle' })
   const [displayCurrency, setDisplayCurrency] = useState(DEFAULT_DISPLAY_CURRENCY)
   const [busy, setBusy] = useState(false)
+  const [historyStatus, setHistoryStatus] = useState<string | null>(null)
 
   // `keepPrevious` keeps the current figures visible while re-converting on a currency
   // change, so switching currency shows a subtle busy hint rather than blanking the view.
@@ -119,6 +121,25 @@ export function PortfolioDashboard(): React.JSX.Element {
       })
     }
   }, [loadHistory])
+
+  const clearHistory = useCallback(async () => {
+    setHistoryStatus(null)
+    try {
+      const result = await window.api.clearHistory()
+      if (result.status === 'cleared') {
+        setSnapshots([])
+        setHistoryStatus(
+          `Cleared ${result.removedSnapshots} snapshot${result.removedSnapshots === 1 ? '' : 's'}.`,
+        )
+      } else {
+        setHistoryStatus(result.message)
+      }
+    } catch (err) {
+      setHistoryStatus(
+        err instanceof Error ? err.message : 'Unexpected error clearing the history.',
+      )
+    }
+  }, [])
 
   useEffect(() => {
     void load(DEFAULT_DISPLAY_CURRENCY)
@@ -220,7 +241,26 @@ export function PortfolioDashboard(): React.JSX.Element {
         </>
       )}
 
-      <SnapshotHistory snapshots={snapshots} />
+      {historyStatus && (
+        <p className="capture-status" role="status">
+          {historyStatus}
+        </p>
+      )}
+
+      <SnapshotHistory
+        snapshots={snapshots}
+        action={
+          snapshots.length > 0 ? (
+            <ConfirmAction
+              label="Clear history"
+              confirmLabel="Yes, clear all history"
+              busyLabel="Clearing…"
+              warning="This permanently removes all captured portfolio snapshots. Imported Flex statements are not affected. New snapshots are captured when you next open the app or capture on demand."
+              onConfirm={clearHistory}
+            />
+          ) : undefined
+        }
+      />
     </main>
   )
 }

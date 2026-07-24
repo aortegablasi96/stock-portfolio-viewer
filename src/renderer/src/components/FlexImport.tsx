@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react'
 import type { FlexStatementImport } from '@shared/domain/flex'
 import { formatDate } from '../lib/format'
+import { ConfirmAction } from './ConfirmAction'
 
 /**
  * Flex Query import panel (Milestone M3, Story #20). Lets the owner import IBKR
@@ -17,6 +18,7 @@ type ImportState =
   | { phase: 'canceled' }
   | { phase: 'invalid'; message: string }
   | { phase: 'error'; message: string }
+  | { phase: 'cleared'; removedStatements: number }
 
 /** Total rows inserted across every record type in a statement import. */
 function totalInserted(statement: FlexStatementImport): number {
@@ -52,6 +54,22 @@ export function FlexImport(): React.JSX.Element {
     }
   }, [])
 
+  const runClear = useCallback(async () => {
+    try {
+      const result = await window.api.clearStatements()
+      if (result.status === 'cleared') {
+        setState({ phase: 'cleared', removedStatements: result.removedStatements })
+      } else {
+        setState({ phase: 'error', message: result.message })
+      }
+    } catch (err) {
+      setState({
+        phase: 'error',
+        message: err instanceof Error ? err.message : 'Unexpected error clearing the statements.',
+      })
+    }
+  }, [])
+
   return (
     <div className="dashboard">
       <section className="snapshot-history flex-import" aria-labelledby="flex-import-heading">
@@ -63,15 +81,32 @@ export function FlexImport(): React.JSX.Element {
               performance, allocation, dividend, and realized-gains analytics.
             </p>
           </div>
-          <button
-            type="button"
-            className="capture-button"
-            onClick={() => void runImport()}
-            disabled={state.phase === 'importing'}
-          >
-            {state.phase === 'importing' ? 'Importing…' : 'Import statements…'}
-          </button>
+          <div className="flex-import-actions">
+            <button
+              type="button"
+              className="capture-button"
+              onClick={() => void runImport()}
+              disabled={state.phase === 'importing'}
+            >
+              {state.phase === 'importing' ? 'Importing…' : 'Import statements…'}
+            </button>
+            <ConfirmAction
+              label="Clear statements"
+              confirmLabel="Yes, clear all statements"
+              busyLabel="Clearing…"
+              warning="This permanently removes all imported Flex statement data — trades, positions, dividends and realized gains. Snapshot history is not affected. You can re-import your Flex exports afterwards."
+              onConfirm={runClear}
+            />
+          </div>
         </div>
+
+        {state.phase === 'cleared' && (
+          <p className="capture-status" role="status">
+            {state.removedStatements === 0
+              ? 'No imported statements to clear.'
+              : `Cleared ${state.removedStatements} statement${state.removedStatements === 1 ? '' : 's'}. The analytics views will show their needs-import state until you import again.`}
+          </p>
+        )}
 
         {state.phase === 'canceled' && (
           <p className="snapshot-empty" role="status">
