@@ -96,6 +96,54 @@ function buildValueSeries(
   return series
 }
 
+/**
+ * Build the cumulative time-weighted-return curve, as a percentage (Story #45). Mirrors
+ * `buildValueSeries`' anchoring philosophy: within each `ChangeInNAV` period the interior
+ * shape comes from the daily MTM series, but the endpoints are anchored to IBKR's reported
+ * per-period TWR and chain-linked across periods — so the boundaries are exact and the final
+ * point equals `chainLinkTwr(periods)` (the headline). Contribution-adjusted by construction
+ * (TWR excludes deposits/withdrawals), so it degrades to a straight line per period when a
+ * period carries no daily MTM data. Oldest → newest; shared boundaries are not duplicated.
+ */
+function buildReturnSeries(periods: NavPeriod[], dailyMtm: DailyMtmRow[]): ValuePoint[] {
+  if (periods.length === 0) return []
+
+  const mtmByDay = sumByDay(
+    dailyMtm.map((r) => ({ day: utcDay(r.date), value: r.priorMtmPnl * r.fxRateToBase })),
+  )
+
+  const series: ValuePoint[] = []
+  let cumGrowth = 1 // chain-linked growth factor at the current period's start (1 = 0%)
+  for (const p of periods) {
+    // Emit the period's opening return (dedup a boundary shared with the previous period).
+    const last = series[series.length - 1]
+    if (!last || last.date !== p.fromDate) {
+      series.push({ date: p.fromDate, value: (cumGrowth - 1) * 100 })
+    }
+
+    const periodGrowth = 1 + p.twr / 100
+    const interiorDays = [...mtmByDay.keys()].filter((d) => d > p.fromDate && d < p.toDate).sort((a, b) => a - b)
+    // Denominator for the within-period shape: total MTM across the whole period.
+    const totalMtm =
+      interiorDays.reduce((s, d) => s + (mtmByDay.get(d) ?? 0), 0) + (mtmByDay.get(p.toDate) ?? 0)
+    const span = p.toDate - p.fromDate
+
+    let cum = 0
+    for (const d of interiorDays) {
+      cum += mtmByDay.get(d) ?? 0
+      // Fraction of the period's return achieved by day d — from the MTM shape, or (when the
+      // period's net MTM is ~0 and the fraction would be unstable) linearly in time.
+      const frac = Math.abs(totalMtm) > 1e-9 ? cum / totalMtm : span > 0 ? (d - p.fromDate) / span : 1
+      const growth = cumGrowth * (1 + (periodGrowth - 1) * frac)
+      series.push({ date: d, value: (growth - 1) * 100 })
+    }
+
+    cumGrowth *= periodGrowth
+    series.push({ date: p.toDate, value: (cumGrowth - 1) * 100 })
+  }
+  return series
+}
+
 export const performanceService = {
   /** Assemble the performance report, or signal that no Flex data has been imported. */
   getPerformance(): PerformanceResult {
@@ -116,6 +164,7 @@ export const performanceService = {
       report: {
         baseCurrency,
         valueSeries: buildValueSeries(periods, dailyMtm, contributions),
+        returnSeries: buildReturnSeries(periods, dailyMtm),
         periods,
         startingValue: periods[0]?.startingValue ?? 0,
         endingValue: periods[periods.length - 1]?.endingValue ?? 0,
