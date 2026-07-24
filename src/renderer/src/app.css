@@ -690,10 +690,11 @@ body {
   white-space: nowrap;
 }
 
-/* Cap a scrollable table to ~5 rows; the sticky header stays put as the body scrolls.
-   ~2.55rem/row + ~2.4rem header ≈ 5 rows, with the 6th peeking to signal scrollability. */
+/* Cap a scrollable table to 5 rows; the sticky header stays put as the body scrolls.
+   Measured against this stylesheet: header ≈ 39.6px, rows ≈ 42.4px — 17rem (272px) shows
+   the header + 5 full rows with ~48% of the 6th peeking, a clear "scroll for more" cue. */
 .table-scroll-rows {
-  max-height: 16rem;
+  max-height: 17rem;
   overflow-y: auto;
 }
 
