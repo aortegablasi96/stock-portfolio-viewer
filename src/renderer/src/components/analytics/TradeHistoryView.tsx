@@ -1,13 +1,16 @@
-import type { RealizedGainsResult } from '@shared/domain/realizedGains'
+import { useState } from 'react'
+import type { RealizedGainsResult, TradeRow } from '@shared/domain/realizedGains'
 import {
   formatCurrency,
   formatDateTime,
   formatQuantity,
   formatSignedCurrency,
 } from '../../lib/format'
+import { ALL_TYPES, distinctTypes, filterByType } from '../../lib/tableFilter'
 import { useAnalytics } from './useAnalytics'
 import { NeedsImport } from './NeedsImport'
 import { StatTile, toneOf } from './StatTile'
+import { TypeFilter } from './TypeFilter'
 
 /**
  * Realized gains & trade history (Milestone M3, Story #24). Lists trades from the
@@ -84,9 +87,47 @@ export function TradeHistoryView(): React.JSX.Element {
         )}
       </section>
 
-      <section className="panel">
+      <TradeHistory trades={r.trades} baseCurrency={r.baseCurrency} />
+    </div>
+  )
+}
+
+/**
+ * The trade-history table (Story #33): filterable by trade type (FX / Buy / Sell) and
+ * capped to ~5 rows, the rest reached by scrolling within the panel. Holds its own filter
+ * state, so it lives as a child rather than lifting hooks above the view's early returns.
+ */
+function TradeHistory({
+  trades,
+  baseCurrency,
+}: {
+  trades: TradeRow[]
+  baseCurrency: string
+}): React.JSX.Element {
+  const [type, setType] = useState<string>(ALL_TYPES)
+  const sc = (v: number): string => formatSignedCurrency(v, baseCurrency)
+
+  const types = distinctTypes(trades, (t) => t.tradeType)
+  const rows = filterByType(trades, (t) => t.tradeType, type)
+
+  return (
+    <section className="panel">
+      <div className="panel-header">
         <h2 className="panel-title">Trade history</h2>
-        <div className="table-scroll">
+        <TypeFilter
+          id="trade-type-filter"
+          label="type"
+          types={types}
+          value={type}
+          onChange={setType}
+          shown={rows.length}
+          total={trades.length}
+        />
+      </div>
+      {rows.length === 0 ? (
+        <p className="chart-empty">No trades match this filter.</p>
+      ) : (
+        <div className="table-scroll table-scroll-rows">
           <table className="holdings-table">
             <thead>
               <tr>
@@ -101,7 +142,7 @@ export function TradeHistoryView(): React.JSX.Element {
               </tr>
             </thead>
             <tbody>
-              {r.trades.map((t) => (
+              {rows.map((t) => (
                 <tr key={t.tradeKey}>
                   <td>{t.dateTime != null ? formatDateTime(t.dateTime) : '—'}</td>
                   <th scope="row" className="symbol">{t.symbol}</th>
@@ -118,7 +159,7 @@ export function TradeHistoryView(): React.JSX.Element {
             </tbody>
           </table>
         </div>
-      </section>
-    </div>
+      )}
+    </section>
   )
 }

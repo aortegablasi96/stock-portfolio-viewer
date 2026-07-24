@@ -58,13 +58,17 @@ export const realizedGainsService = {
 
     const trades: TradeRow[] = flexReadRepository.getTrades().map((t) => {
       const realizedNative = t.fifoPnlRealized ?? 0
+      const side: 'Buy' | 'Sell' = t.quantity < 0 ? 'Sell' : 'Buy'
       return {
         tradeKey: t.tradeKey,
         dateTime: t.dateTime,
         symbol: t.symbol,
         description: t.description,
         assetCategory: t.assetCategory,
-        side: t.quantity < 0 ? 'Sell' : 'Buy',
+        side,
+        // CASH-category trades are IBKR's forex conversions; group them under one 'FX'
+        // type so they can be filtered out to reveal the stock trades underneath.
+        tradeType: t.assetCategory === 'CASH' ? 'FX' : side,
         quantity: Math.abs(t.quantity),
         tradePrice: t.tradePrice,
         currency: t.currency,

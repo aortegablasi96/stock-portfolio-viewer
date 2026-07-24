@@ -81,6 +81,21 @@ describe('realizedGainsService.getRealizedGains', () => {
     expect(buy!.side).toBe('Buy')
   })
 
+  it('classifies trade type: CASH → FX, otherwise the side (Story #33)', () => {
+    repo.hasStatements.mockReturnValue(true)
+    repo.getFifoSummaries.mockReturnValue([])
+    repo.getTrades.mockReturnValue([
+      trade({ assetCategory: 'CASH', quantity: 1000 }), // an FX buy is still 'FX'
+      trade({ assetCategory: 'CASH', quantity: -1000 }), // and an FX sell too
+      trade({ assetCategory: 'STK', quantity: 10 }),
+      trade({ assetCategory: 'STK', quantity: -10 }),
+    ])
+
+    const result = realizedGainsService.getRealizedGains()
+    if (result.status !== 'ok') throw new Error('expected ok')
+    expect(result.report.trades.map((t) => t.tradeType)).toEqual(['FX', 'FX', 'Buy', 'Sell'])
+  })
+
   it('rolls realized P&L up per symbol with short/long-term split, largest total first', () => {
     repo.hasStatements.mockReturnValue(true)
     repo.getTrades.mockReturnValue([])

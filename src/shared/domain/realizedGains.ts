@@ -20,6 +20,12 @@ export const tradeRowSchema = z.object({
   assetCategory: z.string(),
   /** 'Buy' or 'Sell', derived from the signed quantity. */
   side: z.enum(['Buy', 'Sell']),
+  /**
+   * Flat trade-type used by the trade-history filter (Story #33): 'FX' for cash/forex
+   * conversions (which are the bulk of the rows and rarely of interest), otherwise the
+   * `side`. Derived in the service so the renderer only filters, never classifies.
+   */
+  tradeType: z.enum(['FX', 'Buy', 'Sell']),
   /** Absolute share/contract quantity. */
   quantity: z.number(),
   tradePrice: z.number(),
