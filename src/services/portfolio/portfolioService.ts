@@ -115,4 +115,18 @@ export const portfolioService = {
       displayCurrency,
     }
   },
+
+  /**
+   * Live gateway FX rates converting each of `currencies` into `target`, as a `source → rate`
+   * map (`target` maps to `1`; unavailable pairs are omitted). Exposed so other services can
+   * apply the *same* live-FX convention as the Portfolio view (Bug #44: converting stored
+   * snapshot totals for the history section). A thin pass-through to the repository — a
+   * disconnected gateway still propagates `IbkrNotConnectedError`. See DDR-0007.
+   */
+  async getExchangeRates(
+    currencies: readonly string[],
+    target: string,
+  ): Promise<Record<string, number>> {
+    return portfolioRepository.getExchangeRates(currencies, target)
+  },
 }

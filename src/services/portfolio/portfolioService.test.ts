@@ -194,3 +194,24 @@ describe('portfolioService.getOverview — display currency (Story #28)', () => 
     expect(overview.balances.netLiquidation).toBe(5000)
   })
 })
+
+describe('portfolioService.getExchangeRates (Bug #44)', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('passes the currencies and target straight through to the repository', async () => {
+    mockRepo.getExchangeRates.mockResolvedValue({ EUR: 1, USD: 0.9 })
+
+    const rates = await portfolioService.getExchangeRates(['USD', 'EUR'], 'EUR')
+
+    expect(rates).toEqual({ EUR: 1, USD: 0.9 })
+    expect(mockRepo.getExchangeRates).toHaveBeenCalledWith(['USD', 'EUR'], 'EUR')
+  })
+
+  it('propagates a not-connected error so callers can degrade', async () => {
+    mockRepo.getExchangeRates.mockRejectedValue(new IbkrNotConnectedError('gateway down'))
+
+    await expect(portfolioService.getExchangeRates(['USD'], 'EUR')).rejects.toBeInstanceOf(
+      IbkrNotConnectedError,
+    )
+  })
+})
