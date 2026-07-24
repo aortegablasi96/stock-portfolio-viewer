@@ -6,6 +6,7 @@ import {
   flexFifoSummaries,
   flexLots,
   flexNavChanges,
+  flexOpenDividendAccruals,
   flexOpenPositions,
   flexPriorPeriodPositions,
   flexSecurities,
@@ -50,6 +51,7 @@ function alreadyImported(statement: FlexStatement, filename: string): FlexStatem
       cashTransactions: nil,
       performanceSummaries: nil,
       securities: nil,
+      openDividendAccruals: nil,
     },
   }
 }
@@ -133,6 +135,11 @@ export const flexRepository = {
           .values(statement.securities.map((s) => ({ statementId: sid, ...s })))
           .run()
       }
+      if (statement.openDividendAccruals.length > 0) {
+        tx.insert(flexOpenDividendAccruals)
+          .values(statement.openDividendAccruals.map((a) => ({ statementId: sid, ...a })))
+          .run()
+      }
 
       // Event rows: de-duped globally by unique key so overlapping statements merge.
       let tradesInserted = 0
@@ -181,6 +188,10 @@ export const flexRepository = {
             statement.performanceSummaries.length,
           ),
           securities: count(statement.securities.length, statement.securities.length),
+          openDividendAccruals: count(
+            statement.openDividendAccruals.length,
+            statement.openDividendAccruals.length,
+          ),
         },
       }
     })

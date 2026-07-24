@@ -162,6 +162,35 @@ export const flexPerformanceSummarySchema = z.object({
 })
 export type FlexPerformanceSummary = z.infer<typeof flexPerformanceSummarySchema>
 
+/**
+ * A dividend declared but not yet paid (`OpenDividendAccrual`) — the source behind the
+ * Dividends view's "upcoming" panel (Story #31; DDR-0010). An *as-of* balance rather
+ * than an event, so it is statement-scoped like open positions. `netAmount` is IBKR's
+ * own net of `tax` and `fee`; those two are carried raw because IBKR's sign convention
+ * for them is not guaranteed, so consumers derive the withheld amount from
+ * `grossAmount − netAmount` instead.
+ */
+export const flexOpenDividendAccrualSchema = z.object({
+  conid: z.number().int().nullable(),
+  symbol: z.string(),
+  description: z.string(),
+  assetCategory: z.string(),
+  currency: z.string(),
+  fxRateToBase: z.number(),
+  exDate: z.number().int().nullable(),
+  payDate: z.number().int().nullable(),
+  /** Shares held prior to the ex-date. */
+  quantity: z.number(),
+  /** Dividend per share, in `currency`. */
+  grossRate: z.number().nullable(),
+  grossAmount: z.number(),
+  tax: z.number(),
+  fee: z.number(),
+  netAmount: z.number(),
+  code: z.string(),
+})
+export type FlexOpenDividendAccrual = z.infer<typeof flexOpenDividendAccrualSchema>
+
 /** Instrument reference data (`SecurityInfo`) — asset class, geography, identifiers. */
 export const flexSecuritySchema = z.object({
   conid: z.number().int().nullable(),
@@ -198,6 +227,7 @@ export const flexStatementSchema = z.object({
   cashTransactions: z.array(flexCashTransactionSchema),
   performanceSummaries: z.array(flexPerformanceSummarySchema),
   securities: z.array(flexSecuritySchema),
+  openDividendAccruals: z.array(flexOpenDividendAccrualSchema),
 })
 export type FlexStatement = z.infer<typeof flexStatementSchema>
 
@@ -228,6 +258,7 @@ export const flexStatementImportSchema = z.object({
     cashTransactions: flexRecordCountSchema,
     performanceSummaries: flexRecordCountSchema,
     securities: flexRecordCountSchema,
+    openDividendAccruals: flexRecordCountSchema,
   }),
 })
 export type FlexStatementImport = z.infer<typeof flexStatementImportSchema>

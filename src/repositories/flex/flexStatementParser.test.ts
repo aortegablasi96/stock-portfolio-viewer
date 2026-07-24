@@ -53,6 +53,10 @@ const FIXTURE = `<?xml version="1.0" encoding="UTF-8"?>
 <SecuritiesInfo>
 <SecurityInfo currency="CAD" assetCategory="STK" subCategory="COMMON" symbol="MMY" description="MONUMENT MINING LTD" conid="45090384" cusip="61531Y105" isin="CA61531Y1051" listingExchange="VENTURE" issuerCountryCode="CA" multiplier="1" />
 </SecuritiesInfo>
+<OpenDividendAccruals>
+<OpenDividendAccrual currency="CAD" fxRateToBase="0.61945" assetCategory="STK" symbol="GSY" description="GOEASY LTD" conid="206663850" isin="CA3803551074" exDate="20260810" payDate="20260901" quantity="50" tax="-2.25" fee="0" grossRate="0.30" grossAmount="15" netAmount="12.75" code="" />
+<OpenDividendAccrual currency="CAD" fxRateToBase="0.61945" assetCategory="STK" symbol="MMY" description="MONUMENT MINING LTD" conid="45090384" isin="CA61531Y1051" exDate="20260815" payDate="" quantity="100" tax="" fee="" grossRate="" grossAmount="8" netAmount="8" code="" />
+</OpenDividendAccruals>
 </FlexStatement>
 </FlexStatements>
 </FlexQueryResponse>`
@@ -127,6 +131,32 @@ describe('parseFlexStatements', () => {
     expect(trades[0]?.taxes).toBe(0)
   })
 
+  it('parses open dividend accruals, defaulting an omitted tax/fee to zero', () => {
+    const { openDividendAccruals } = parseOne(FIXTURE)
+    expect(openDividendAccruals).toHaveLength(2)
+    const [gsy, mmy] = openDividendAccruals
+    expect(gsy?.symbol).toBe('GSY')
+    expect(gsy?.exDate).toBe(Date.UTC(2026, 7, 10))
+    expect(gsy?.payDate).toBe(Date.UTC(2026, 8, 1))
+    expect(gsy?.quantity).toBe(50)
+    expect(gsy?.grossRate).toBe(0.3)
+    expect(gsy?.grossAmount).toBe(15)
+    expect(gsy?.netAmount).toBe(12.75)
+    // Blank pay date / gross rate stay null; blank tax and fee coerce to 0, not null.
+    expect(mmy?.payDate).toBeNull()
+    expect(mmy?.grossRate).toBeNull()
+    expect(mmy?.tax).toBe(0)
+    expect(mmy?.fee).toBe(0)
+  })
+
+  it('treats a statement without the optional accruals section as having none', () => {
+    const withoutAccruals = FIXTURE.replace(
+      /<OpenDividendAccruals>[\s\S]*<\/OpenDividendAccruals>/,
+      '',
+    )
+    expect(parseOne(withoutAccruals).openDividendAccruals).toEqual([])
+  })
+
   it('rejects a file that is not a Flex Query statement', () => {
     expect(() => parseFlexStatements('<html><body>nope</body></html>')).toThrow(ValidationError)
     expect(() => parseFlexStatements('not xml at all <<<')).toThrow(ValidationError)
@@ -143,7 +173,22 @@ describe('parseFlexStatements', () => {
     expect(stmt.openPositions).toHaveLength(8)
     expect(stmt.securities).toHaveLength(11)
     expect(stmt.performanceSummaries).toHaveLength(16)
-    expect(stmt.priorPeriodPositions).toHaveLength(849)
+    expect(stmt.priorPeriodPositions).toHaveLength(865)
+
+    // Pins the OpenDividendAccrual attribute mapping against a real IBKR export rather
+    // than the published field list (the open risk recorded in DDR-0010). Note IBKR
+    // reports `tax` as a positive magnitude here — the service still derives withholding
+    // as gross − net, which agrees: 4.24 − 3.6 = 0.64.
+    expect(stmt.openDividendAccruals).toHaveLength(1)
+    const accrual = stmt.openDividendAccruals[0]
+    expect(accrual?.symbol).toBe('VBNK')
+    expect(accrual?.conid).toBe(514478839)
+    expect(accrual?.exDate).toBe(Date.UTC(2026, 6, 10))
+    expect(accrual?.payDate).toBe(Date.UTC(2026, 6, 31))
+    expect(accrual?.quantity).toBe(240)
+    expect(accrual?.grossAmount).toBe(4.24)
+    expect(accrual?.netAmount).toBe(3.6)
+    expect(accrual?.fxRateToBase).toBe(0.87628)
 
     const stmt2025 = parseOne(readFileSync(join(dir, 'portfolio-analyst-2025.xml'), 'utf8'))
     expect(stmt2025.trades).toHaveLength(186)

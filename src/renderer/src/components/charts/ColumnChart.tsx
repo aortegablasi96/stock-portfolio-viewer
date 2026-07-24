@@ -2,8 +2,9 @@
  * A stacked column chart over a time axis (Milestone M3, Story #23). Each column
  * stacks a `lower` segment on a `upper` segment (e.g. net income + withholding tax =
  * gross), so the full column height reads as the gross total. Two series, so a legend
- * is always present; each segment carries a native `<title>` tooltip. Inline SVG, no
- * charting dependency. Values are assumed non-negative.
+ * is always present; each segment carries a native `<title>` tooltip that also reports
+ * the stacked total when `totalLabel` is given (Story #31). Inline SVG, no charting
+ * dependency. Values are assumed non-negative.
  */
 export interface StackedColumn {
   key: string
@@ -20,12 +21,15 @@ export function ColumnChart({
   formatValue,
   lowerLabel,
   upperLabel,
+  totalLabel,
   ariaLabel,
 }: {
   columns: StackedColumn[]
   formatValue: (v: number) => string
   lowerLabel: string
   upperLabel: string
+  /** When set, each segment's tooltip also reports the full column height under this name. */
+  totalLabel?: string
   ariaLabel: string
 }): React.JSX.Element {
   if (columns.length === 0) {
@@ -68,10 +72,19 @@ export function ColumnChart({
           const lowerH = h(Math.max(0, c.lower))
           const upperH = h(Math.max(0, c.upper))
           const baseY = PAD.top + plotH
+          // Reading the net segment alone loses the total, so each tooltip repeats the
+          // whole column: value, counterpart, and (optionally) the stacked total.
+          const tip = (label: string, value: number): string =>
+            [
+              `${c.label} — ${label}: ${formatValue(value)}`,
+              totalLabel ? `${totalLabel}: ${formatValue(c.lower + c.upper)}` : null,
+            ]
+              .filter((line) => line !== null)
+              .join('\n')
           return (
             <g key={c.key}>
               <rect className="chart-bar-lower" x={cx} y={baseY - lowerH} width={barW} height={lowerH} rx={2}>
-                <title>{`${c.label} — ${lowerLabel}: ${formatValue(c.lower)}`}</title>
+                <title>{tip(lowerLabel, c.lower)}</title>
               </rect>
               <rect
                 className="chart-bar-upper"
@@ -81,7 +94,7 @@ export function ColumnChart({
                 height={upperH}
                 rx={2}
               >
-                <title>{`${c.label} — ${upperLabel}: ${formatValue(c.upper)}`}</title>
+                <title>{tip(upperLabel, c.upper)}</title>
               </rect>
               <text className="chart-axis-label" x={cx + barW / 2} y={H - 10} textAnchor="middle">
                 {c.label}

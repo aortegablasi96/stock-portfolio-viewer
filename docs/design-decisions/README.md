@@ -45,3 +45,4 @@ Other options and why they were not chosen.
 - `0007` — Portfolio display currency: live IBKR FX source + selector/display conventions
 - `0008` — Performance view: daily portfolio-value reconstruction from Flex MTM history
 - `0009` — Sector classification: gateway-sourced, locally cached; allocation as donut charts
+- `0010` — Upcoming dividends from Flex open accruals; net-of-withholding chart reading

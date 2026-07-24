@@ -657,6 +657,12 @@ body {
   background: transparent;
 }
 
+/* Explanatory line between a panel title and its chart/table (e.g. gross-vs-net). */
+.panel .source-note {
+  margin: -0.5rem 0 1rem;
+  line-height: 1.45;
+}
+
 .breakdown-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
