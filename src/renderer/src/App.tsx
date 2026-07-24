@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { TitleBar } from './components/TitleBar'
 import { PortfolioDashboard } from './components/PortfolioDashboard'
 import { FlexImport } from './components/FlexImport'
 import { PerformanceView } from './components/analytics/PerformanceView'
@@ -50,8 +51,8 @@ export function App(): React.JSX.Element {
 
   return (
     <div className="app">
+      <TitleBar />
       <nav className="app-nav" aria-label="Primary">
-        <span className="app-brand">Portfolio Viewer</span>
         <div className="app-tabs" role="tablist">
           {TABS.map((t) => (
             <button

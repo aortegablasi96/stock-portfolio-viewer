@@ -49,6 +49,18 @@ const api: RendererApi = {
     ipcRenderer.invoke(IpcChannels.analyticsRealizedGains),
   classifyInstruments: (): Promise<ClassifyInstrumentsResult> =>
     ipcRenderer.invoke(IpcChannels.analyticsClassifyInstruments),
+  // Window controls for the custom frameless title bar (Story #42). The commands are
+  // fire-and-forget (send, not invoke); the query and event report maximize state.
+  minimizeWindow: (): void => ipcRenderer.send(IpcChannels.windowMinimize),
+  toggleMaximizeWindow: (): void => ipcRenderer.send(IpcChannels.windowToggleMaximize),
+  closeWindow: (): void => ipcRenderer.send(IpcChannels.windowClose),
+  isWindowMaximized: (): Promise<boolean> => ipcRenderer.invoke(IpcChannels.windowIsMaximized),
+  onWindowMaximizeChanged: (callback: (isMaximized: boolean) => void): (() => void) => {
+    // Wrap so the raw IpcRendererEvent is never handed to the renderer callback.
+    const listener = (_event: unknown, isMaximized: boolean): void => callback(isMaximized)
+    ipcRenderer.on(IpcChannels.windowMaximizeChanged, listener)
+    return () => ipcRenderer.removeListener(IpcChannels.windowMaximizeChanged, listener)
+  },
 }
 
 contextBridge.exposeInMainWorld('api', api)

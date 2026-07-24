@@ -65,3 +65,41 @@ test('exposes the typed portfolio and snapshot channels on window.api', async ()
   }))
   expect(channels).toEqual({ overview: true, capture: true, list: true })
 })
+
+test('renders the custom frameless title bar with window controls (Story #42)', async () => {
+  // The window runs frameless (main sets `frame: false`); the in-app title bar replaces
+  // the OS chrome with the app title and the three window controls.
+  await expect(page.locator('.titlebar-title')).toHaveText('Stock Portfolio Viewer')
+  await expect(page.getByRole('button', { name: 'Minimize' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Maximize' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Close' })).toBeVisible()
+})
+
+test('exposes the typed window-control channels on window.api (Story #42)', async () => {
+  const channels = await page.evaluate(() => ({
+    minimize: typeof window.api?.minimizeWindow === 'function',
+    toggleMaximize: typeof window.api?.toggleMaximizeWindow === 'function',
+    close: typeof window.api?.closeWindow === 'function',
+    isMaximized: typeof window.api?.isWindowMaximized === 'function',
+    onMaximizeChanged: typeof window.api?.onWindowMaximizeChanged === 'function',
+  }))
+  expect(channels).toEqual({
+    minimize: true,
+    toggleMaximize: true,
+    close: true,
+    isMaximized: true,
+    onMaximizeChanged: true,
+  })
+})
+
+test('maximize control toggles the window and updates the control label (Story #42)', async () => {
+  // Start restored; the button offers "Maximize".
+  const maximize = page.getByRole('button', { name: 'Maximize' })
+  await expect(maximize).toBeVisible()
+  await maximize.click()
+  // The main process reports the change back over IPC, so the control now offers "Restore".
+  await expect(page.getByRole('button', { name: 'Restore' })).toBeVisible()
+  // Restore returns to the maximizable state, leaving the app in its original chrome.
+  await page.getByRole('button', { name: 'Restore' }).click()
+  await expect(page.getByRole('button', { name: 'Maximize' })).toBeVisible()
+})

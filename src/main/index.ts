@@ -23,8 +23,12 @@ function createWindow(): void {
     minWidth: 940,
     minHeight: 600,
     show: false,
-    title: 'Stock Portfolio Viewer',
+    // Frameless: the OS title bar is removed and replaced by the in-app custom title bar
+    // (Story #42). Window controls are driven over IPC — the security posture below is
+    // unchanged. The renderer marks its own drag/no-drag regions via `-webkit-app-region`.
+    frame: false,
     backgroundColor: '#0f1115',
+    title: 'Stock Portfolio Viewer',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: true,
@@ -36,6 +40,16 @@ function createWindow(): void {
   mainWindow.once('ready-to-show', () => {
     mainWindow.show()
   })
+
+  // Keep the title bar's maximize/restore icon in sync with the real window state, including
+  // OS-driven changes (double-clicking the drag region, window snapping). See Story #42.
+  const emitMaximizeState = (isMaximized: boolean): void => {
+    if (!mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(IpcChannels.windowMaximizeChanged, isMaximized)
+    }
+  }
+  mainWindow.on('maximize', () => emitMaximizeState(true))
+  mainWindow.on('unmaximize', () => emitMaximizeState(false))
 
   // Open target="_blank" / external links in the OS browser, never in-app.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {

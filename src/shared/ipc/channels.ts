@@ -17,6 +17,17 @@ export const IpcChannels = {
   // Main → renderer event: a snapshot was captured (e.g. on-open capture completed),
   // so the renderer should refresh its history. Carries no payload.
   snapshotCaptured: 'snapshot:captured',
+  // Custom window-frame controls (Story #42). The app runs frameless, so the in-app
+  // title bar drives min/maximize/close over IPC. These are fire-and-forget commands
+  // (renderer → main, no payload) plus one query and one event for maximize state.
+  windowMinimize: 'window:minimize',
+  windowToggleMaximize: 'window:toggleMaximize',
+  windowClose: 'window:close',
+  windowIsMaximized: 'window:isMaximized',
+  // Main → renderer event: the window's maximized state changed (from a control, an OS
+  // double-click, or window snapping), so the title bar can swap its maximize/restore
+  // icon. Carries a single boolean payload.
+  windowMaximizeChanged: 'window:maximizeChanged',
 } as const
 
 export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels]

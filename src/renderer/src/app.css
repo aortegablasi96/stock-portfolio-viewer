@@ -543,9 +543,76 @@ body {
 
 /* ---- App shell + tab navigation (M3) ------------------------------------- */
 
-.app-nav {
+/* ---- Custom frameless title bar (Story #42) ------------------------------ */
+
+.titlebar {
   position: sticky;
   top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: stretch;
+  height: 40px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+
+/* The draggable region: everything but the window controls. Marked with the Electron
+   `-webkit-app-region` so pointer drags move the frameless window. */
+.titlebar-drag {
+  -webkit-app-region: drag;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  padding-left: 1rem;
+}
+
+.titlebar-title {
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Controls must stay clickable, so they opt out of the drag region. */
+.titlebar-controls {
+  -webkit-app-region: no-drag;
+  display: flex;
+  align-items: stretch;
+}
+
+.titlebar-button {
+  width: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.titlebar-button:hover {
+  color: var(--text);
+  background: var(--card);
+}
+
+.titlebar-button-close:hover {
+  color: #ffffff;
+  background: #e81123;
+}
+
+.titlebar-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.app-nav {
+  position: sticky;
+  top: 40px;
   z-index: 10;
   display: flex;
   align-items: center;
@@ -554,12 +621,6 @@ body {
   background: rgba(15, 17, 21, 0.85);
   backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--border);
-}
-
-.app-brand {
-  font-weight: 700;
-  font-size: 0.95rem;
-  letter-spacing: 0.02em;
 }
 
 .app-tabs {
