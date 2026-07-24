@@ -13,12 +13,14 @@ IBKR Flex Query statements into local history, and renders four analytics views 
 imported data (performance, allocation, dividends, realized gains & trade history). A tab
 shell switches between the live Portfolio dashboard and the analytics views.
 
-**Epic #4 (M3) is open again** to refine those views: #28 (display currency), #29
-(day-by-day performance), #30 (allocation donut charts + sector breakdown) and #31 (net
-dividend chart + upcoming dividends) are merged; **#32–#33 are still open** (scrollable
-dividend and trade tables). Check the backlog before assuming a view is final. The Stack and Commands sections below are
-**live**. Still **not built**: AI features, multi-broker support, benchmark comparison, and
-tax reporting — those are later milestones.
+**Epic #4 (M3) reopened to refine the views; all its refinement stories are merged** —
+#28 (display currency), #29 (day-by-day performance), #30 (allocation donut charts + sector
+breakdown), #31 (net dividend chart + upcoming dividends), #32 (scrollable/filterable
+dividend transactions) and #33 (scrollable/filterable trade history). **The epic is
+deliberately left open for further refinement stories the owner plans to add** — read the
+backlog before assuming a view is final. The Stack and Commands sections below are **live**.
+Still **not built**: AI features, multi-broker support, benchmark comparison, and tax
+reporting — those are later milestones.
 
 Live domains exist end-to-end as reference patterns:
 
