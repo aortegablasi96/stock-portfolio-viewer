@@ -173,10 +173,22 @@ describe('parseFlexStatements', () => {
     expect(stmt.openPositions).toHaveLength(8)
     expect(stmt.securities).toHaveLength(11)
     expect(stmt.performanceSummaries).toHaveLength(16)
-    expect(stmt.priorPeriodPositions).toHaveLength(849)
-    // These exports predate enabling "Open Dividend Accruals" on the Flex query, so the
-    // section is absent — the parser must degrade to an empty list, not fail (DDR-0010).
-    expect(stmt.openDividendAccruals).toEqual([])
+    expect(stmt.priorPeriodPositions).toHaveLength(865)
+
+    // Pins the OpenDividendAccrual attribute mapping against a real IBKR export rather
+    // than the published field list (the open risk recorded in DDR-0010). Note IBKR
+    // reports `tax` as a positive magnitude here — the service still derives withholding
+    // as gross − net, which agrees: 4.24 − 3.6 = 0.64.
+    expect(stmt.openDividendAccruals).toHaveLength(1)
+    const accrual = stmt.openDividendAccruals[0]
+    expect(accrual?.symbol).toBe('VBNK')
+    expect(accrual?.conid).toBe(514478839)
+    expect(accrual?.exDate).toBe(Date.UTC(2026, 6, 10))
+    expect(accrual?.payDate).toBe(Date.UTC(2026, 6, 31))
+    expect(accrual?.quantity).toBe(240)
+    expect(accrual?.grossAmount).toBe(4.24)
+    expect(accrual?.netAmount).toBe(3.6)
+    expect(accrual?.fxRateToBase).toBe(0.87628)
 
     const stmt2025 = parseOne(readFileSync(join(dir, 'portfolio-analyst-2025.xml'), 'utf8'))
     expect(stmt2025.trades).toHaveLength(186)
