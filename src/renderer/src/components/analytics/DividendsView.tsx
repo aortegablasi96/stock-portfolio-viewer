@@ -1,9 +1,12 @@
-import type { UpcomingDividends, DividendResult } from '@shared/domain/dividends'
+import { useState } from 'react'
+import type { DividendEvent, UpcomingDividends, DividendResult } from '@shared/domain/dividends'
 import { formatCurrency, formatDate, formatMonth, formatQuantity } from '../../lib/format'
+import { ALL_TYPES, distinctTypes, filterByType } from '../../lib/tableFilter'
 import { ColumnChart, type StackedColumn } from '../charts/ColumnChart'
 import { useAnalytics } from './useAnalytics'
 import { NeedsImport } from './NeedsImport'
 import { StatTile } from './StatTile'
+import { TypeFilter } from './TypeFilter'
 
 /**
  * Dividend & income tracking (Milestone M3, Stories #23 and #31). Shows gross income,
@@ -192,9 +195,47 @@ export function DividendsView(): React.JSX.Element {
         </div>
       </section>
 
-      <section className="panel">
+      <Transactions events={r.events} baseCurrency={r.baseCurrency} />
+    </div>
+  )
+}
+
+/**
+ * The dividend cash-transactions table (Story #32): filterable by transaction type and
+ * capped to ~5 rows, the rest reached by scrolling within the panel. Holds its own filter
+ * state, so it lives as a child rather than lifting hooks above the view's early returns.
+ */
+function Transactions({
+  events,
+  baseCurrency,
+}: {
+  events: DividendEvent[]
+  baseCurrency: string
+}): React.JSX.Element {
+  const [type, setType] = useState<string>(ALL_TYPES)
+  const c = (v: number): string => formatCurrency(v, baseCurrency)
+
+  const types = distinctTypes(events, (e) => e.type)
+  const rows = filterByType(events, (e) => e.type, type)
+
+  return (
+    <section className="panel">
+      <div className="panel-header">
         <h2 className="panel-title">Transactions</h2>
-        <div className="table-scroll">
+        <TypeFilter
+          id="dividend-tx-filter"
+          label="type"
+          types={types}
+          value={type}
+          onChange={setType}
+          shown={rows.length}
+          total={events.length}
+        />
+      </div>
+      {rows.length === 0 ? (
+        <p className="chart-empty">No transactions match this filter.</p>
+      ) : (
+        <div className="table-scroll table-scroll-rows">
           <table className="holdings-table">
             <thead>
               <tr>
@@ -202,11 +243,11 @@ export function DividendsView(): React.JSX.Element {
                 <th scope="col">Symbol</th>
                 <th scope="col">Type</th>
                 <th scope="col" className="num">Amount</th>
-                <th scope="col" className="num">In {r.baseCurrency}</th>
+                <th scope="col" className="num">In {baseCurrency}</th>
               </tr>
             </thead>
             <tbody>
-              {r.events.map((e, i) => (
+              {rows.map((e, i) => (
                 <tr key={`${e.symbol}-${e.date ?? 'na'}-${e.type}-${i}`}>
                   <td>{e.date != null ? formatDate(e.date) : '—'}</td>
                   <th scope="row" className="symbol">{e.symbol || '—'}</th>
@@ -218,7 +259,7 @@ export function DividendsView(): React.JSX.Element {
             </tbody>
           </table>
         </div>
-      </section>
-    </div>
+      )}
+    </section>
   )
 }
