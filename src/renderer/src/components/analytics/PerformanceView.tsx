@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { PerformanceResult } from '@shared/domain/performance'
 import {
   formatCurrency,
@@ -10,6 +11,13 @@ import { useAnalytics } from './useAnalytics'
 import { NeedsImport } from './NeedsImport'
 import { StatTile, toneOf } from './StatTile'
 
+/** The two switchable Performance charts (Story #45). */
+const CHART_TABS = [
+  { id: 'value', label: 'Portfolio value over time' },
+  { id: 'return', label: 'Performance change over time' },
+] as const
+type ChartTab = (typeof CHART_TABS)[number]['id']
+
 /**
  * Performance over time (Milestone M3, Story #21). Shows the portfolio-value trend,
  * headline time-weighted return, the realized/unrealized P&L split, and net
@@ -17,6 +25,7 @@ import { StatTile, toneOf } from './StatTile'
  */
 export function PerformanceView(): React.JSX.Element {
   const { state, reload } = useAnalytics<PerformanceResult>(window.api.getPerformance)
+  const [chartTab, setChartTab] = useState<ChartTab>('value')
 
   if (state.phase === 'loading') {
     return (
@@ -71,13 +80,42 @@ export function PerformanceView(): React.JSX.Element {
       </div>
 
       <section className="panel">
-        <h2 className="panel-title">Portfolio value over time</h2>
-        <LineChart
-          points={r.valueSeries}
-          formatValue={c}
-          formatDate={formatDate}
-          ariaLabel="Portfolio value over time"
-        />
+        <div className="panel-header">
+          <h2 className="panel-title" id="perf-chart-title">
+            {chartTab === 'value' ? 'Portfolio value over time' : 'Performance change over time'}
+          </h2>
+          <div className="chart-tabs" role="tablist" aria-label="Performance chart">
+            {CHART_TABS.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                role="tab"
+                aria-selected={chartTab === t.id}
+                className={`chart-tab ${chartTab === t.id ? 'chart-tab-active' : ''}`}
+                onClick={() => setChartTab(t.id)}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        {chartTab === 'value' ? (
+          <LineChart
+            key="value"
+            points={r.valueSeries}
+            formatValue={c}
+            formatDate={formatDate}
+            ariaLabel="Portfolio value over time"
+          />
+        ) : (
+          <LineChart
+            key="return"
+            points={r.returnSeries}
+            formatValue={formatSignedPercent}
+            formatDate={formatDate}
+            ariaLabel="Cumulative time-weighted return over time"
+          />
+        )}
       </section>
 
       <section className="panel">

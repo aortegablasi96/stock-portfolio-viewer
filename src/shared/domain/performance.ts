@@ -41,6 +41,13 @@ export const performanceReportSchema = z.object({
   baseCurrency: z.string(),
   /** Portfolio value over time, oldest → newest (period endpoints). */
   valueSeries: z.array(valuePointSchema),
+  /**
+   * Cumulative time-weighted return over time, as a percentage (Story #45). Each point's
+   * `value` is the chain-linked TWR since the start of the imported history — contribution-
+   * adjusted, so deposits/withdrawals don't move it. Anchored to each period's IBKR-reported
+   * TWR at the boundaries, so its final point equals `cumulativeTwr` exactly.
+   */
+  returnSeries: z.array(valuePointSchema),
   /** Per-period rows for the returns table, oldest → newest. */
   periods: z.array(navPeriodSchema),
   startingValue: z.number(),

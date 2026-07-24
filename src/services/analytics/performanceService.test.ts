@@ -222,6 +222,72 @@ describe('performanceService.getPerformance', () => {
     expect(valAt(s, s.length - 1)).toBe(200)
   })
 
+  it('builds a cumulative TWR curve whose final point equals the headline TWR (#45)', () => {
+    repo.hasStatements.mockReturnValue(true)
+    repo.getNavPeriods.mockReturnValue([
+      navPeriod({ fromDate: 1, toDate: 2, startingValue: 100, endingValue: 110, twr: 10 }),
+      navPeriod({ fromDate: 2, toDate: 3, startingValue: 110, endingValue: 121, twr: 10 }),
+    ])
+    repo.getFifoSummaries.mockReturnValue([])
+
+    const result = performanceService.getPerformance()
+    if (result.status !== 'ok') throw new Error('expected ok')
+    const s = result.report.returnSeries
+    // Start at 0%, chain-link each period's TWR; shared boundary (date 2) is not duplicated.
+    expect(s.map((p) => p.date)).toEqual([1, 2, 3])
+    expect(valAt(s, 0)).toBeCloseTo(0, 10)
+    expect(valAt(s, 1)).toBeCloseTo(10, 10)
+    expect(valAt(s, 2)).toBeCloseTo(21, 10)
+    // The final point reconciles with the headline exactly.
+    expect(valAt(s, s.length - 1)).toBeCloseTo(result.report.cumulativeTwr, 10)
+  })
+
+  it('densifies the TWR curve with interior points anchored to the period TWR (#45)', () => {
+    repo.hasStatements.mockReturnValue(true)
+    repo.getNavPeriods.mockReturnValue([
+      navPeriod({ fromDate: day(2026, 1, 1), toDate: day(2026, 1, 4), twr: 30 }),
+    ])
+    repo.getFifoSummaries.mockReturnValue([])
+    // MTM shape 10 / 10 / 20 over the three days (the end-date MTM folds into the anchor
+    // but still counts toward the shape denominator, total 40).
+    repo.getDailyMtm.mockReturnValue([
+      { date: day(2026, 1, 2), fxRateToBase: 1, priorMtmPnl: 10 },
+      { date: day(2026, 1, 3), fxRateToBase: 1, priorMtmPnl: 10 },
+      { date: day(2026, 1, 4), fxRateToBase: 1, priorMtmPnl: 20 },
+    ])
+
+    const result = performanceService.getPerformance()
+    if (result.status !== 'ok') throw new Error('expected ok')
+    const s = result.report.returnSeries
+    expect(s.map((p) => p.date)).toEqual([
+      day(2026, 1, 1),
+      day(2026, 1, 2),
+      day(2026, 1, 3),
+      day(2026, 1, 4),
+    ])
+    // Endpoints: 0% at the start, the reported +30% at the end (exact).
+    expect(valAt(s, 0)).toBe(0)
+    expect(valAt(s, s.length - 1)).toBeCloseTo(30, 10)
+    // Interior follows the MTM shape: 10/40 of the way (+7.5%), then 20/40 (+15%).
+    expect(valAt(s, 1)).toBeCloseTo(7.5, 10)
+    expect(valAt(s, 2)).toBeCloseTo(15, 10)
+  })
+
+  it('degrades the TWR curve to a per-period straight line without daily MTM (#45)', () => {
+    repo.hasStatements.mockReturnValue(true)
+    repo.getNavPeriods.mockReturnValue([
+      navPeriod({ fromDate: 1, toDate: 2, twr: 5 }),
+    ])
+    repo.getFifoSummaries.mockReturnValue([])
+
+    const result = performanceService.getPerformance()
+    if (result.status !== 'ok') throw new Error('expected ok')
+    const s = result.report.returnSeries
+    expect(s.map((p) => p.date)).toEqual([1, 2])
+    expect(valAt(s, 0)).toBeCloseTo(0, 10)
+    expect(valAt(s, 1)).toBeCloseTo(5, 10)
+  })
+
   it('handles an imported account with no NAV periods (empty series, zero returns)', () => {
     repo.hasStatements.mockReturnValue(true)
     repo.getNavPeriods.mockReturnValue([])
@@ -230,6 +296,7 @@ describe('performanceService.getPerformance', () => {
     const result = performanceService.getPerformance()
     if (result.status !== 'ok') throw new Error('expected ok')
     expect(result.report.valueSeries).toEqual([])
+    expect(result.report.returnSeries).toEqual([])
     expect(result.report.startingValue).toBe(0)
     expect(result.report.cumulativeTwr).toBe(0)
   })
@@ -282,6 +349,17 @@ describe('performanceService.getPerformance', () => {
     // Endpoints match the authoritative ChangeInNAV figures exactly.
     expect(valAt(s, 0)).toBeCloseTo(result.report.startingValue, 6)
     expect(valAt(s, s.length - 1)).toBeCloseTo(result.report.endingValue, 6)
+
+    // The TWR curve (#45) is equally dense, starts at 0%, stays finite, and its final
+    // point reconciles with the headline cumulative TWR.
+    const rs = result.report.returnSeries
+    expect(rs.length).toBeGreaterThan(100)
+    for (let i = 1; i < rs.length; i++) {
+      expect(valAt2(rs, i - 1, 'date')).toBeLessThan(valAt2(rs, i, 'date'))
+      expect(Number.isFinite(valAt(rs, i))).toBe(true)
+    }
+    expect(valAt(rs, 0)).toBeCloseTo(0, 6)
+    expect(valAt(rs, rs.length - 1)).toBeCloseTo(result.report.cumulativeTwr, 6)
   })
 })
 
