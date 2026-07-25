@@ -45,6 +45,35 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* App-wide slim, theme-aware scrollbars (Story #67). The main view scrolls on the
+   document (the titlebar/nav are sticky), so styling scrollbars globally gives the
+   whole app the same modern pill scrollbar as the capped analytics tables — thumb
+   in the theme's border colour on a transparent track, brightening on hover. */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 11px;
+  height: 11px;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--border);
+  background-clip: padding-box;
+  border: 3px solid transparent;
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--muted);
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
 .eyebrow {
   margin: 0 0 0.35rem;
   font-size: 0.8rem;
@@ -849,9 +878,42 @@ body {
 /* Cap a scrollable table to 5 rows; the sticky header stays put as the body scrolls.
    Measured against this stylesheet: header ≈ 39.6px, rows ≈ 42.4px — 17rem (272px) shows
    the header + 5 full rows with ~48% of the 6th peeking, a clear "scroll for more" cue. */
+
+/* Length driving the bottom fade below; a registered property so it can be
+   interpolated by the scroll-driven animation (Story #67). */
+@property --rows-fade {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+
 .table-scroll-rows {
   max-height: 17rem;
   overflow-y: auto;
+  /* Modern, JS-free scroll affordance (Story #67). A soft fade at the bottom edge
+     signals "more rows below" and eases away as the last row scrolls into view —
+     driven by scroll position via a scroll-timeline, not script. It only shows
+     while the table actually overflows: with no scrollable range the timeline is
+     inactive, the animation drops out, and the base 0px keeps a short (≤5-row)
+     table crisp. The mask is alpha-only so it reads identically in any theme; the
+     slim scrollbar tracks the theme's border/muted colours (see :root). */
+  --rows-fade: 0px;
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - var(--rows-fade)), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - var(--rows-fade)), transparent);
+  animation: table-rows-fade linear both;
+  animation-timeline: scroll(self block);
+}
+
+/* Hold the fade in from the top of the scroll range, then retract it over the last
+   stretch so the final row lands crisp against the panel edge. */
+@keyframes table-rows-fade {
+  0%,
+  86% {
+    --rows-fade: 2.25rem;
+  }
+  100% {
+    --rows-fade: 0px;
+  }
 }
 
 /* Realized-by-symbol table (left) beside the best/worst highlights (right) — Story #50. */
