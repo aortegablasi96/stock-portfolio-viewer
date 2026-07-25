@@ -15,9 +15,10 @@ import type { AllocationPosition, AllocationResult, AllocationSlice } from '@sha
  * position uses the Flex-provided `percentOfNav` (share of NAV, which includes cash),
  * so grouped weights sum those percentages.
  *
- * Uninvested cash is added to the asset-class breakdown only (Story #47): the positions'
- * NAV weights sum to less than 100% exactly when cash is held, and that shortfall becomes a
- * 'Cash' slice — so the asset-class breakdown reflects the full portfolio. See `withCash`.
+ * Uninvested cash is added to the asset-class breakdown only (Story #47): it is the residual
+ * of the statement's ending NAV over the invested market value, and the invested slices are
+ * rebased against the full NAV so the asset classes (positions + cash) sum to 100%. See
+ * `withCash`.
  *
  * Everything except sector comes from `flexReadRepository`. Flex carries no sector field,
  * so sector is joined in from the locally cached IBKR classification — a plain cache read,
@@ -48,37 +49,46 @@ function assetClassLabel(code: string): string {
 const CASH_ASSET_KEY = '__cash__'
 
 /**
- * A gap under this many NAV percentage points is treated as rounding noise, not cash, so a
- * fully-invested portfolio shows no cash slice. Flex reports `percentOfNAV` to two decimals,
- * so summing N positions can drift by ~N × 0.005; 0.1 comfortably absorbs that.
+ * A cash residual below this share of NAV (percentage points) is treated as rounding noise,
+ * not real cash, so a fully-invested portfolio shows no cash slice. Our per-position valuation
+ * and IBKR's reported NAV can disagree by small amounts; 0.1% comfortably absorbs that.
  */
 const CASH_MIN_PERCENT = 0.1
 
 /**
- * Uninvested cash as its own asset-class slice, derived from the NAV weights the positions
- * already carry (Story #47). IBKR's `percentOfNAV` is share of NAV — which *includes* cash —
- * so any shortfall of the positions' summed weights below 100% is cash. Its base value scales
- * the invested total by that shortfall, keeping cash consistent with the percentages shown
- * without reading a separate NAV figure. Returns the list unchanged when the portfolio is
- * fully invested (or over-weighted by rounding), so a zero/negative cash slice never appears.
+ * Uninvested cash as its own asset-class slice (Story #47). Flex's per-position `percentOfNAV`
+ * is normalised to the invested positions — it sums to 100% over holdings and excludes cash —
+ * so cash cannot be read from a weight shortfall. Instead it is the residual of the statement's
+ * ending NAV over the summed position market value, which agrees with IBKR's own cash figure.
+ * When cash is present the invested slices are rebased against the full NAV so every class
+ * shares one denominator and the breakdown sums to 100%. Returns the list unchanged when there
+ * is no NAV, or the residual is below the noise threshold (fully invested, or a negative margin
+ * balance), so a zero/negative cash slice never appears.
  */
 function withCash(
   byAssetClass: AllocationSlice[],
-  positions: AllocationPosition[],
+  navEndingValue: number | null,
   totalMarketValueBase: number,
 ): AllocationSlice[] {
-  const investedPercent = positions.reduce((sum, p) => sum + p.percentOfNav, 0)
-  const cashPercent = 100 - investedPercent
-  if (investedPercent <= 0 || cashPercent < CASH_MIN_PERCENT) return byAssetClass
+  if (navEndingValue == null || navEndingValue <= 0) return byAssetClass
 
-  const cashValueBase = (totalMarketValueBase * cashPercent) / investedPercent
+  const cashValueBase = navEndingValue - totalMarketValueBase
+  const cashPercent = (cashValueBase / navEndingValue) * 100
+  if (cashPercent < CASH_MIN_PERCENT) return byAssetClass
+
+  // Rebase the invested slices against the full NAV so every class (incl. cash) shares one
+  // denominator and the asset-class breakdown sums to 100%.
+  const rebased = byAssetClass.map((s) => ({
+    ...s,
+    percentOfNav: (s.marketValueBase / navEndingValue) * 100,
+  }))
   const cash: AllocationSlice = {
     key: CASH_ASSET_KEY,
     label: 'Cash',
     marketValueBase: cashValueBase,
     percentOfNav: cashPercent,
   }
-  return [...byAssetClass, cash].sort((a, b) => b.marketValueBase - a.marketValueBase)
+  return [...rebased, cash].sort((a, b) => b.marketValueBase - a.marketValueBase)
 }
 
 /** Market value of a position in its native currency: mark price when present, else cost + unrealized. */
@@ -158,7 +168,7 @@ export const allocationService = {
         positions,
         byAssetClass: withCash(
           groupBy(positions, (p) => p.assetCategory, assetClassLabel),
-          positions,
+          latest.navEndingValue,
           totalMarketValueBase,
         ),
         byCurrency: groupBy(positions, (p) => p.currency, (c) => c || 'Unknown'),

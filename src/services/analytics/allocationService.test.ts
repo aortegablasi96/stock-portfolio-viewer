@@ -52,6 +52,7 @@ describe('allocationService.getAllocation', () => {
     const latest: LatestPositions = {
       reportDate: 100,
       baseCurrency: 'EUR',
+      navEndingValue: null,
       positions: [position({ position: 10, markPrice: 5, costBasisMoney: 40, fifoPnlUnrealized: 10, fxRateToBase: 0.5 })],
       securities: [{ conid: 1, symbol: 'AAA', issuerCountryCode: 'US' }],
     }
@@ -71,6 +72,7 @@ describe('allocationService.getAllocation', () => {
     repo.getLatestOpenPositions.mockReturnValue({
       reportDate: 100,
       baseCurrency: 'EUR',
+      navEndingValue: null,
       positions: [position({ markPrice: null, costBasisMoney: 100, fifoPnlUnrealized: 20, fxRateToBase: 1 })],
       securities: [],
     })
@@ -83,6 +85,7 @@ describe('allocationService.getAllocation', () => {
     repo.getLatestOpenPositions.mockReturnValue({
       reportDate: 100,
       baseCurrency: 'EUR',
+      navEndingValue: null,
       positions: [
         position({ conid: 1, symbol: 'AAA', assetCategory: 'STK', currency: 'USD', position: 10, markPrice: 10, percentOfNav: 20, fxRateToBase: 1 }),
         position({ conid: 2, symbol: 'BBB', assetCategory: 'STK', currency: 'EUR', position: 10, markPrice: 5, percentOfNav: 10, fxRateToBase: 1 }),
@@ -98,11 +101,9 @@ describe('allocationService.getAllocation', () => {
     const result = allocationService.getAllocation()
     if (result.status !== 'ok') throw new Error('expected ok')
 
-    // STK: 100 + 50 = 150; ETF: 30. Positions weigh 20+10+30 = 60% of NAV, so the remaining
-    // 40% is cash: 180 invested × 40/60 = 120. Sorted by value: STK, Cash, ETF.
+    // STK: 100 + 50 = 150; ETF: 30. No NAV figure, so no cash slice; sorted by value.
     expect(result.report.byAssetClass.map((s) => [s.label, s.marketValueBase])).toEqual([
       ['Stocks', 150],
-      ['Cash', 120],
       ['ETFs', 30],
     ])
     // Currency USD: 100 + 30 = 130 (weight 20+30=50); EUR: 50
@@ -115,6 +116,7 @@ describe('allocationService.getAllocation', () => {
     repo.getLatestOpenPositions.mockReturnValue({
       reportDate: 100,
       baseCurrency: 'EUR',
+      navEndingValue: null,
       positions: [
         position({ conid: 1, symbol: 'AAA', position: 10, markPrice: 10, percentOfNav: 20 }),
         // No conid on the position — must fall back to the symbol.
@@ -145,6 +147,7 @@ describe('allocationService.getAllocation', () => {
     repo.getLatestOpenPositions.mockReturnValue({
       reportDate: 100,
       baseCurrency: 'EUR',
+      navEndingValue: null,
       positions: [
         position({ conid: 1, symbol: 'AAA', position: 10, markPrice: 10, percentOfNav: 20 }),
         position({ conid: 2, symbol: 'BBB', position: 10, markPrice: 5, percentOfNav: 10 }),
@@ -171,6 +174,7 @@ describe('allocationService.getAllocation', () => {
     repo.getLatestOpenPositions.mockReturnValue({
       reportDate: 100,
       baseCurrency: 'EUR',
+      navEndingValue: null,
       positions: [position({ conid: 9, symbol: 'ZZZ' })],
       securities: [],
     })
@@ -179,12 +183,12 @@ describe('allocationService.getAllocation', () => {
     expect(result.report.byCountry[0]!.label).toBe('Unknown')
   })
 
-  it('adds a Cash asset class from the NAV weight the positions leave uncovered (Story #47)', () => {
-    // Positions weigh 60% of NAV → 40% cash. Invested value 150 (100 + 50) scales to a
-    // cash value of 150 × 40/60 = 100.
+  it('adds a Cash asset class from the residual of NAV over invested value (Story #47)', () => {
+    // Invested value 150 (100 + 50); ending NAV 250 → cash residual of 100 (40% of NAV).
     repo.getLatestOpenPositions.mockReturnValue({
       reportDate: 100,
       baseCurrency: 'EUR',
+      navEndingValue: 250,
       positions: [
         position({ conid: 1, symbol: 'AAA', assetCategory: 'STK', position: 10, markPrice: 10, percentOfNav: 40, fxRateToBase: 1 }),
         position({ conid: 2, symbol: 'BBB', assetCategory: 'STK', position: 10, markPrice: 5, percentOfNav: 20, fxRateToBase: 1 }),
@@ -196,7 +200,11 @@ describe('allocationService.getAllocation', () => {
     if (result.status !== 'ok') throw new Error('expected ok')
 
     const cash = result.report.byAssetClass.find((s) => s.label === 'Cash')
-    expect(cash).toMatchObject({ label: 'Cash', marketValueBase: 100, percentOfNav: 40 })
+    expect(cash).toMatchObject({ key: '__cash__', label: 'Cash', marketValueBase: 100, percentOfNav: 40 })
+    // Invested slices are rebased against the full NAV, so the classes sum to 100%.
+    const stocks = result.report.byAssetClass.find((s) => s.label === 'Stocks')
+    expect(stocks).toMatchObject({ marketValueBase: 150, percentOfNav: 60 })
+    expect(result.report.byAssetClass.reduce((sum, s) => sum + s.percentOfNav, 0)).toBeCloseTo(100)
     // Cash lives only in the asset-class breakdown, not the others or the positions table.
     expect(result.report.byCurrency.some((s) => s.label === 'Cash')).toBe(false)
     expect(result.report.positions).toHaveLength(2)
@@ -205,9 +213,11 @@ describe('allocationService.getAllocation', () => {
   })
 
   it('shows no cash slice when the portfolio is fully invested (Story #47)', () => {
+    // Ending NAV equals the invested market value — no residual, so no cash.
     repo.getLatestOpenPositions.mockReturnValue({
       reportDate: 100,
       baseCurrency: 'EUR',
+      navEndingValue: 150,
       positions: [
         position({ conid: 1, symbol: 'AAA', assetCategory: 'STK', position: 10, markPrice: 10, percentOfNav: 70, fxRateToBase: 1 }),
         position({ conid: 2, symbol: 'BBB', assetCategory: 'ETF', position: 10, markPrice: 5, percentOfNav: 30, fxRateToBase: 1 }),
@@ -220,12 +230,27 @@ describe('allocationService.getAllocation', () => {
     expect(result.report.byAssetClass.some((s) => s.label === 'Cash')).toBe(false)
   })
 
-  it('treats a sub-0.1% weight gap as rounding noise, not cash (Story #47)', () => {
-    // 99.95% invested — a two-decimal rounding artefact, not a real cash balance.
+  it('treats a sub-0.1% NAV residual as rounding noise, not cash (Story #47)', () => {
+    // Invested 100, ending NAV 100.05 → a 0.05% residual: valuation noise, not a real balance.
     repo.getLatestOpenPositions.mockReturnValue({
       reportDate: 100,
       baseCurrency: 'EUR',
-      positions: [position({ conid: 1, symbol: 'AAA', assetCategory: 'STK', percentOfNav: 99.95 })],
+      navEndingValue: 100.05,
+      positions: [position({ conid: 1, symbol: 'AAA', assetCategory: 'STK', position: 10, markPrice: 10, percentOfNav: 100, fxRateToBase: 1 })],
+      securities: [],
+    })
+    const result = allocationService.getAllocation()
+    if (result.status !== 'ok') throw new Error('expected ok')
+    expect(result.report.byAssetClass.some((s) => s.label === 'Cash')).toBe(false)
+  })
+
+  it('ignores a negative NAV residual (margin balance), never a negative cash slice (Story #47)', () => {
+    // Invested 150 but ending NAV only 140 (leverage) → negative residual, no slice.
+    repo.getLatestOpenPositions.mockReturnValue({
+      reportDate: 100,
+      baseCurrency: 'EUR',
+      navEndingValue: 140,
+      positions: [position({ conid: 1, symbol: 'AAA', assetCategory: 'STK', position: 10, markPrice: 15, percentOfNav: 100, fxRateToBase: 1 })],
       securities: [],
     })
     const result = allocationService.getAllocation()

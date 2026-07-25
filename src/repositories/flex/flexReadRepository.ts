@@ -101,6 +101,11 @@ export interface SecurityRow {
 export interface LatestPositions {
   reportDate: number | null
   baseCurrency: string
+  /**
+   * The statement's ending NAV in base currency (from ChangeInNAV), or null when the section
+   * is absent. The residual of this over the invested market value is uninvested cash (Story #47).
+   */
+  navEndingValue: number | null
   positions: OpenPositionRow[]
   securities: SecurityRow[]
 }
@@ -244,8 +249,8 @@ export const flexReadRepository = {
 
   /**
    * Open positions from the latest imported statement, plus that statement's security
-   * reference rows (for issuer country) and base currency (Story #22). Empty when
-   * nothing has been imported.
+   * reference rows (for issuer country), base currency, and ending NAV (Story #22, #47).
+   * Empty when nothing has been imported.
    */
   getLatestOpenPositions(): LatestPositions | undefined {
     const statement = getDb()
@@ -289,12 +294,20 @@ export const flexReadRepository = {
       .where(eq(flexSecurities.statementId, statement.id))
       .all()
 
+    // Ending NAV for this statement (in base currency) — one ChangeInNAV per statement.
+    const nav = getDb()
+      .select({ endingValue: flexNavChanges.endingValue })
+      .from(flexNavChanges)
+      .where(eq(flexNavChanges.statementId, statement.id))
+      .get()
+
     // Report date comes from the positions themselves (all share the statement's report date).
     const reportDate = positions[0]?.reportDate ?? statement.toDate
 
     return {
       reportDate,
       baseCurrency: statement.baseCurrency,
+      navEndingValue: nav?.endingValue ?? null,
       positions: positions.map((p) => ({
         conid: p.conid,
         symbol: p.symbol,
