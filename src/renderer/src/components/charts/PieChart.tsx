@@ -1,4 +1,4 @@
-import { groupTail, isResidual, toArcs, type PieDatum } from '../../lib/pie'
+import { groupTail, sliceColorClasses, toArcs, type PieDatum } from '../../lib/pie'
 
 /**
  * A categorical donut chart (Milestone M3, Story #30). Slice angles come from the
@@ -21,11 +21,15 @@ export function PieChart({
   formatValue,
   ariaLabel,
   emptyMessage = 'Nothing to plot yet.',
+  showLegend = true,
 }: {
   data: PieDatum[]
   formatValue: (v: number) => string
   ariaLabel: string
   emptyMessage?: string
+  /** When false, the donut renders without its legend — used where a composing-assets
+   *  table already carries the labels/values (Story #48). */
+  showLegend?: boolean
 }): React.JSX.Element {
   const arcs = toArcs(groupTail(data), SIZE / 2, SIZE / 2, R_OUTER, R_INNER)
 
@@ -33,12 +37,7 @@ export function PieChart({
     return <p className="chart-empty">{emptyMessage}</p>
   }
 
-  // Categorical hues are assigned in fixed order to the *named* categories only; residual
-  // slices take the neutral gray, so a hue always means a real category.
-  let slot = 0
-  const seriesClass = arcs.map((arc) =>
-    isResidual(arc.key) ? 'pie-series-neutral' : `pie-series-${(slot += 1)}`,
-  )
+  const seriesClass = sliceColorClasses(arcs)
 
   return (
     <figure className="chart-figure pie-figure">
@@ -55,20 +54,22 @@ export function PieChart({
           </path>
         ))}
       </svg>
-      <figcaption className="chart-legend pie-legend">
-        <ul className="pie-legend-list">
-          {arcs.map((arc, i) => (
-            <li key={arc.key} className="pie-legend-item">
-              <span className={`legend-swatch ${seriesClass[i]}`} aria-hidden="true" />
-              <span className="pie-legend-label">{arc.label}</span>
-              <span className="pie-legend-value">
-                {formatValue(arc.value)}
-                <span className="bar-list-pct">{arc.percent.toFixed(1)}%</span>
-              </span>
-            </li>
-          ))}
-        </ul>
-      </figcaption>
+      {showLegend && (
+        <figcaption className="chart-legend pie-legend">
+          <ul className="pie-legend-list">
+            {arcs.map((arc, i) => (
+              <li key={arc.key} className="pie-legend-item">
+                <span className={`legend-swatch ${seriesClass[i]}`} aria-hidden="true" />
+                <span className="pie-legend-label">{arc.label}</span>
+                <span className="pie-legend-value">
+                  {formatValue(arc.value)}
+                  <span className="bar-list-pct">{arc.percent.toFixed(1)}%</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </figcaption>
+      )}
     </figure>
   )
 }

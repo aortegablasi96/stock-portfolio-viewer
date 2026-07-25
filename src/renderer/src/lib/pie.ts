@@ -87,6 +87,20 @@ export function arcPath(
 }
 
 /**
+ * Assign each slice its colour class, in the same fixed order the donut uses: categorical
+ * hues (`pie-series-1…8`) go to the *named* categories only, while residual slices — the
+ * aggregated tail and the empty "no value" key — take the neutral gray, so a hue always
+ * means a real category. Shared by the donut and its composing-assets table (Story #48) so
+ * a slice wears the same colour in both.
+ */
+export function sliceColorClasses(slices: Array<Pick<PieDatum, 'key'>>): string[] {
+  let slot = 0
+  return slices.map((s) =>
+    isResidual(s.key) ? 'pie-series-neutral' : `pie-series-${(slot += 1)}`,
+  )
+}
+
+/**
  * Lay the data out as donut segments. A single 100% datum is drawn as a full ring (two
  * half-arcs), because an arc whose start and end coincide renders as nothing.
  */

@@ -1,29 +1,48 @@
-import type { AllocationResult, AllocationSlice } from '@shared/domain/allocation'
+import { useState } from 'react'
+import type { AllocationReport, AllocationResult, AllocationSlice } from '@shared/domain/allocation'
 import { formatCurrency, formatDate, formatSignedCurrency } from '../../lib/format'
-import { PieChart } from '../charts/PieChart'
 import { BubbleMap } from '../charts/BubbleMap'
-import type { PieDatum } from '../../lib/pie'
+import { AllocationBreakdown } from './AllocationBreakdown'
 import { useAnalytics } from './useAnalytics'
 import { ClassifySectors } from './ClassifySectors'
 import { NeedsImport } from './NeedsImport'
 import { StatTile, toneOf } from './StatTile'
 
 /**
- * Allocation analysis (Milestone M3, Stories #22 and #30). Breaks the latest imported
- * positions down by asset class, issuer country, currency and sector — each as a donut
- * chart — and lists each position with its base-currency market value, cost basis, and
- * unrealized P&L.
+ * Allocation analysis (Milestone M3, Stories #22, #30 and #48). Breaks the latest imported
+ * positions down by asset class, sector, issuer country and currency. A tab selector
+ * switches between the breakdowns; each renders as a composing-slices table beside its
+ * donut (`AllocationBreakdown`). Below, a world map locates the holdings and a positions
+ * table lists each holding's base-currency market value, cost basis, and unrealized P&L.
  *
  * Sector is the one dimension not present in Flex statements; it comes from the locally
  * cached IBKR classification, so positions can legitimately be unclassified until the
  * owner runs the (opt-in, gateway-backed) classification action.
  */
-function toItems(slices: AllocationSlice[]): PieDatum[] {
-  return slices.map((s) => ({ key: s.key, label: s.label, value: s.marketValueBase, percent: s.percentOfNav }))
+const BREAKDOWN_TABS = [
+  { id: 'assetClass', label: 'Asset class', title: 'By asset class' },
+  { id: 'sector', label: 'Sector', title: 'By sector' },
+  { id: 'country', label: 'Country', title: 'By geography (issuer country)' },
+  { id: 'currency', label: 'Currency', title: 'By currency' },
+] as const
+type BreakdownTab = (typeof BREAKDOWN_TABS)[number]['id']
+
+function slicesFor(report: AllocationReport, tab: BreakdownTab): AllocationSlice[] {
+  switch (tab) {
+    case 'assetClass':
+      return report.byAssetClass
+    case 'sector':
+      return report.bySector
+    case 'country':
+      return report.byCountry
+    case 'currency':
+      return report.byCurrency
+  }
 }
 
 export function AllocationView(): React.JSX.Element {
   const { state, reload } = useAnalytics<AllocationResult>(window.api.getAllocation)
+  const [tab, setTab] = useState<BreakdownTab>('assetClass')
 
   if (state.phase === 'loading') {
     return (
@@ -50,6 +69,7 @@ export function AllocationView(): React.JSX.Element {
   const r = state.result.report
   const c = (v: number): string => formatCurrency(v, r.baseCurrency)
   const top = r.positions[0]
+  const activeTab = BREAKDOWN_TABS.find((t) => t.id === tab)!
 
   return (
     <div className="analytics-view">
@@ -64,35 +84,35 @@ export function AllocationView(): React.JSX.Element {
         <BubbleMap data={r.byCountry} formatValue={c} ariaLabel="Holdings by country, world map" />
       </section>
 
-      <div className="breakdown-grid">
-        <section className="panel">
-          <h2 className="panel-title">By asset class</h2>
-          <PieChart data={toItems(r.byAssetClass)} formatValue={c} ariaLabel="Allocation by asset class" />
-        </section>
-        <section className="panel">
-          <h2 className="panel-title">By geography (issuer country)</h2>
-          <PieChart data={toItems(r.byCountry)} formatValue={c} ariaLabel="Allocation by issuer country" />
-        </section>
-        <section className="panel">
-          <h2 className="panel-title">By currency</h2>
-          <PieChart data={toItems(r.byCurrency)} formatValue={c} ariaLabel="Allocation by currency" />
-        </section>
-        <section className="panel">
-          <h2 className="panel-title">By sector</h2>
-          <PieChart
-            data={toItems(r.bySector)}
-            formatValue={c}
-            ariaLabel="Allocation by sector"
-            emptyMessage="No sector data yet."
-          />
-          {r.unclassifiedCount > 0 && (
-            <ClassifySectors
-              unclassifiedCount={r.unclassifiedCount}
-              onClassified={() => void reload()}
-            />
-          )}
-        </section>
-      </div>
+      <section className="panel">
+        <div className="panel-header">
+          <h2 className="panel-title" id="allocation-breakdown-title">{activeTab.title}</h2>
+          <div className="chart-tabs" role="tablist" aria-label="Allocation breakdown">
+            {BREAKDOWN_TABS.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                role="tab"
+                aria-selected={tab === t.id}
+                className={`chart-tab ${tab === t.id ? 'chart-tab-active' : ''}`}
+                onClick={() => setTab(t.id)}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <AllocationBreakdown
+          key={tab}
+          slices={slicesFor(r, tab)}
+          formatValue={c}
+          ariaLabel={`Allocation ${activeTab.title.toLowerCase()}`}
+          emptyMessage={tab === 'sector' ? 'No sector data yet.' : 'Nothing to plot yet.'}
+        />
+        {tab === 'sector' && r.unclassifiedCount > 0 && (
+          <ClassifySectors unclassifiedCount={r.unclassifiedCount} onClassified={() => void reload()} />
+        )}
+      </section>
 
       <section className="panel">
         <h2 className="panel-title">Positions</h2>

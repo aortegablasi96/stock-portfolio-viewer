@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest'
-import { groupTail, isResidual, toArcs, MAX_SLICES, OTHER_KEY, type PieDatum } from './pie'
+import {
+  groupTail,
+  isResidual,
+  sliceColorClasses,
+  toArcs,
+  MAX_SLICES,
+  OTHER_KEY,
+  type PieDatum,
+} from './pie'
 
 function datum(key: string, value: number, percent = value): PieDatum {
   return { key, label: key, value, percent }
@@ -35,6 +43,40 @@ describe('isResidual', () => {
     // Unknown country / unclassified sector — the services group those under an empty key.
     expect(isResidual('')).toBe(true)
     expect(isResidual('US')).toBe(false)
+  })
+})
+
+describe('sliceColorClasses', () => {
+  it('assigns categorical hues in order to named slices', () => {
+    expect(sliceColorClasses([datum('a', 1), datum('b', 1), datum('c', 1)])).toEqual([
+      'pie-series-1',
+      'pie-series-2',
+      'pie-series-3',
+    ])
+  })
+
+  it('paints residual slices neutral without consuming a hue slot', () => {
+    // The empty "no value" key and the aggregated tail are residual; the named slice
+    // around them still takes the next categorical slot, not a skipped one.
+    expect(
+      sliceColorClasses([datum('', 1), datum('US', 1), { key: OTHER_KEY, label: 'Other', value: 1, percent: 1 }]),
+    ).toEqual(['pie-series-neutral', 'pie-series-1', 'pie-series-neutral'])
+  })
+
+  it('matches the colours the donut assigns to the same grouped slices', () => {
+    const data = Array.from({ length: 12 }, (_, i) => datum(`s${i}`, 12 - i))
+    const grouped = groupTail(data)
+    // Seven named hues then the neutral "Other" tail — the table reuses this exact mapping.
+    expect(sliceColorClasses(grouped)).toEqual([
+      'pie-series-1',
+      'pie-series-2',
+      'pie-series-3',
+      'pie-series-4',
+      'pie-series-5',
+      'pie-series-6',
+      'pie-series-7',
+      'pie-series-neutral',
+    ])
   })
 })
 

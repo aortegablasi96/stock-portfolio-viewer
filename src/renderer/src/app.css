@@ -862,6 +862,38 @@ body {
   align-items: start;
 }
 
+/* One tabbed breakdown: composing-slices table on the left, donut on the right (Story #48). */
+.breakdown-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 1.5rem;
+  align-items: center;
+}
+
+.breakdown-table {
+  min-width: 0;
+}
+
+/* The swatch sits inline with the slice label, tying the row to its donut segment. */
+.breakdown-table .symbol {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.breakdown-chart {
+  min-width: 0;
+  display: flex;
+  justify-content: center;
+}
+
+/* Stack the table above the donut on narrow widths. */
+@media (max-width: 640px) {
+  .breakdown-split {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ---- Charts (inline SVG + bar lists) ------------------------------------- */
 
 .chart {
