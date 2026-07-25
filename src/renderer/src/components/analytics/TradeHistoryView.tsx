@@ -59,7 +59,7 @@ export function TradeHistoryView(): React.JSX.Element {
       </div>
 
       <section className="panel">
-        <h2 className="panel-title">Realized gains by symbol</h2>
+        <h2 className="panel-title">Realized gains by Ticker</h2>
         {r.bySymbol.length === 0 ? (
           <p className="snapshot-empty">No closed positions with realized P&L yet.</p>
         ) : (
@@ -68,7 +68,7 @@ export function TradeHistoryView(): React.JSX.Element {
               <table className="holdings-table">
                 <thead>
                   <tr>
-                    <th scope="col">Symbol</th>
+                    <th scope="col">Ticker</th>
                     <th scope="col" className="num">Short-term</th>
                     <th scope="col" className="num">Long-term</th>
                     <th scope="col" className="num">Total realized</th>

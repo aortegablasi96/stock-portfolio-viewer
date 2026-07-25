@@ -70,8 +70,8 @@ describe('dividendService.getDividends', () => {
   it('converts to base currency and nets withholding against gross per symbol', () => {
     repo.hasStatements.mockReturnValue(true)
     repo.getDividendCashTransactions.mockReturnValue([
-      cash({ symbol: 'AAA', type: 'Dividends', amount: 100, fxRateToBase: 0.5 }),
-      cash({ symbol: 'AAA', type: 'Withholding Tax', amount: -15, fxRateToBase: 0.5 }),
+      cash({ symbol: 'AAA', description: 'Alpha Corp', type: 'Dividends', amount: 100, fxRateToBase: 0.5 }),
+      cash({ symbol: 'AAA', description: 'Alpha Corp', type: 'Withholding Tax', amount: -15, fxRateToBase: 0.5 }),
     ])
 
     const result = dividendService.getDividends()
@@ -79,7 +79,13 @@ describe('dividendService.getDividends', () => {
     expect(result.report.totalGrossBase).toBeCloseTo(50) // 100*0.5
     expect(result.report.totalWithholdingBase).toBeCloseTo(7.5) // magnitude of 15*0.5
     expect(result.report.totalNetBase).toBeCloseTo(42.5)
-    expect(result.report.bySymbol[0]).toMatchObject({ key: 'AAA', grossBase: 50, withholdingBase: 7.5, netBase: 42.5 })
+    expect(result.report.bySymbol[0]).toMatchObject({
+      key: 'AAA',
+      description: 'Alpha Corp', // carried through so the "By Ticker" table can show it beneath the ticker
+      grossBase: 50,
+      withholdingBase: 7.5,
+      netBase: 42.5,
+    })
   })
 
   it('counts payment-in-lieu as gross income', () => {

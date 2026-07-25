@@ -42,8 +42,10 @@ function accumulate(
   label: string,
   row: CashTransactionRow,
   amountBase: number,
+  description?: string,
 ): void {
-  const group = groups.get(key) ?? { key, label, grossBase: 0, withholdingBase: 0, netBase: 0 }
+  const group =
+    groups.get(key) ?? { key, label, description, grossBase: 0, withholdingBase: 0, netBase: 0 }
   if (row.type === WITHHOLDING_TYPE) {
     group.withholdingBase += -amountBase // amount is negative; store the magnitude withheld
   } else {
@@ -144,7 +146,7 @@ export const dividendService = {
       else totalGrossBase += amountBase
 
       const symbolKey = row.symbol || '—'
-      accumulate(bySymbol, symbolKey, symbolKey, row, amountBase)
+      accumulate(bySymbol, symbolKey, symbolKey, row, amountBase, row.description)
       const mKey = monthKey(date)
       accumulate(byMonth, mKey, mKey, row, amountBase)
     }
