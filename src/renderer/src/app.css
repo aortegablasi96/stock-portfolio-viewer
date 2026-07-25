@@ -1296,12 +1296,64 @@ html {
   gap: 0.5rem;
 }
 
-.bubble-map {
+/* Positioning context for the zoom controls overlaid on the map (Story #70). */
+.bubble-map-frame {
+  position: relative;
   width: 100%;
   max-width: 46rem;
-  height: auto;
   margin: 0 auto;
+}
+
+.bubble-map {
+  width: 100%;
+  height: auto;
   display: block;
+  touch-action: none; /* pointer-drag pans instead of scrolling the page */
+  cursor: grab;
+}
+
+.bubble-map.is-pannable:active {
+  cursor: grabbing;
+}
+
+/* Stacked +/− /reset buttons, top-right of the map. */
+.bubble-map-controls {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.map-zoom-btn {
+  width: 1.9rem;
+  height: 1.9rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  font-size: 1.1rem;
+  line-height: 1;
+  color: var(--text);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.12);
+}
+
+.map-zoom-btn:hover:not(:disabled) {
+  background: var(--surface-hover, var(--border));
+}
+
+.map-zoom-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.map-zoom-reset {
+  font-size: 0.95rem;
 }
 
 /* Faint land backdrop — the circles, not the map, carry the data. */
@@ -1342,6 +1394,11 @@ html {
   border-radius: 50%;
   background: var(--series-1);
   opacity: 0.72;
+}
+
+.bubble-map-pan-hint {
+  color: var(--muted);
+  font-size: 0.82rem;
 }
 
 .bubble-map-unknown {
