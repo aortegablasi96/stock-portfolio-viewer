@@ -60,9 +60,10 @@ export const snapshotService = {
   /**
    * All captured snapshots, newest first (header-level summaries).
    *
-   * When `displayCurrency` is given, each summary's `totalMarketValue` is converted into it
-   * using live gateway FX rates — the same convention as the Portfolio view (Bug #44,
-   * DDR-0007) — and returned as `displayValue` (with `displayCurrency` set). Rows whose base
+   * When `displayCurrency` is given, each summary's `netLiquidation` — the **total** portfolio
+   * value (holdings + cash), the headline figure the history list shows (Bug #68) — is
+   * converted into it using live gateway FX rates, the same convention as the Portfolio view
+   * (Bug #44, DDR-0007), and returned as `displayValue` (with `displayCurrency` set). Rows whose base
    * currency has no available rate carry `displayValue === null` and are flagged by the UI,
    * never silently mis-converted. History is a local read that must stay visible even when
    * the gateway is disconnected, so a `not_connected` gateway is not an error here: it
@@ -79,7 +80,9 @@ export const snapshotService = {
       return {
         ...summary,
         displayCurrency,
-        displayValue: rate === undefined ? null : round2(summary.totalMarketValue * rate),
+        // Convert the total portfolio value (holdings + cash), the figure the list shows
+        // (Bug #68) — not the holdings-only `totalMarketValue`.
+        displayValue: rate === undefined ? null : round2(summary.netLiquidation * rate),
       }
     })
   },

@@ -130,8 +130,8 @@ describe('snapshotService.getHistory', () => {
   })
 
   it('converts each total into the display currency with live gateway FX', async () => {
-    const usd = { ...summary, id: 1, baseCurrency: 'USD', totalMarketValue: 100 }
-    const eur = { ...summary, id: 2, baseCurrency: 'EUR', totalMarketValue: 50 }
+    const usd = { ...summary, id: 1, baseCurrency: 'USD', netLiquidation: 100 }
+    const eur = { ...summary, id: 2, baseCurrency: 'EUR', netLiquidation: 50 }
     mockRepo.listSummaries.mockReturnValue([usd, eur])
     mockPortfolio.getExchangeRates.mockResolvedValue({ EUR: 1, USD: 0.9 })
 
@@ -144,8 +144,19 @@ describe('snapshotService.getHistory', () => {
     ])
   })
 
+  it('converts the total portfolio value (netLiquidation = holdings + cash), not the holdings-only total (Bug #68)', async () => {
+    // holdings 100, cash 20 → net 120. History must convert the net (total incl. cash).
+    const row = { ...summary, id: 1, baseCurrency: 'USD', totalMarketValue: 100, netLiquidation: 120 }
+    mockRepo.listSummaries.mockReturnValue([row])
+    mockPortfolio.getExchangeRates.mockResolvedValue({ EUR: 1, USD: 0.5 })
+
+    const history = await snapshotService.getHistory('EUR')
+
+    expect(history[0]?.displayValue).toBe(60) // 120 × 0.5, not 100 × 0.5
+  })
+
   it('flags rows with no available rate as unconverted (displayValue null) rather than mis-converting', async () => {
-    const usd = { ...summary, id: 1, baseCurrency: 'USD', totalMarketValue: 100 }
+    const usd = { ...summary, id: 1, baseCurrency: 'USD', netLiquidation: 100 }
     mockRepo.listSummaries.mockReturnValue([usd])
     // The USD→EUR pair is unavailable, so the repository omits it from the map.
     mockPortfolio.getExchangeRates.mockResolvedValue({ EUR: 1 })
@@ -156,8 +167,8 @@ describe('snapshotService.getHistory', () => {
   })
 
   it('degrades when the gateway is disconnected: history stays visible, unconvertible rows flagged', async () => {
-    const usd = { ...summary, id: 1, baseCurrency: 'USD', totalMarketValue: 100 }
-    const eur = { ...summary, id: 2, baseCurrency: 'EUR', totalMarketValue: 50 }
+    const usd = { ...summary, id: 1, baseCurrency: 'USD', netLiquidation: 100 }
+    const eur = { ...summary, id: 2, baseCurrency: 'EUR', netLiquidation: 50 }
     mockRepo.listSummaries.mockReturnValue([usd, eur])
     mockPortfolio.getExchangeRates.mockRejectedValue(new IbkrNotConnectedError('gateway down'))
 

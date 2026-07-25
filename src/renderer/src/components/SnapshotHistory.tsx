@@ -70,9 +70,13 @@ export function SnapshotHistory({
   )
 }
 
-/** The total value: native when no display currency, else converted + a native chip. */
+/**
+ * The total portfolio value (holdings + cash, i.e. `netLiquidation`) — the headline figure a
+ * history row shows so it reconciles with the Portfolio view's net value (Bug #68). Native
+ * when no display currency, else converted + a native chip.
+ */
 function SnapshotValue({ snapshot }: { snapshot: SnapshotSummary }): React.JSX.Element {
-  const native = formatCurrency(snapshot.totalMarketValue, snapshot.baseCurrency)
+  const native = formatCurrency(snapshot.netLiquidation, snapshot.baseCurrency)
 
   // No conversion requested → plain stored value (original behaviour).
   if (!snapshot.displayCurrency) return <>{native}</>

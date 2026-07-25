@@ -60,16 +60,23 @@ export const portfolioRepository = {
     const accountId = await ibkrGateway.getAccountId()
     const ledger = await ibkrGateway.getLedger(accountId)
     const base = baseLedgerEntry(ledger)
+    // Holdings value already in base currency (BASE ledger entry) — the figure snapshots
+    // persist, so history never sums positions across mixed native currencies (Bug #68).
+    const stockMarketValue = base?.stockmarketvalue ?? 0
+    const totalCashValue = base?.cashbalance ?? 0
     return {
       // Use the resolved ISO base currency, never the ledger's `BASE` placeholder — the
       // display-currency conversion (DDR-0007) looks this up in the FX-rate map, and there
       // is no `BASE→X` rate (it comes back as 0 and would zero the cash / net-liquidation).
       currency: resolveBaseCurrency(ledger),
-      totalCashValue: base?.cashbalance ?? 0,
-      netLiquidation: base?.netliquidationvalue ?? 0,
-      // Holdings value already in base currency (BASE ledger entry) — the figure snapshots
-      // persist, so history never sums positions across mixed native currencies (Bug #68).
-      stockMarketValue: base?.stockmarketvalue ?? 0,
+      totalCashValue,
+      // Net value = holdings market value + cash, computed rather than taken from IBKR's
+      // `netliquidationvalue`. IBKR's figure also folds in dividend/interest accruals, so it
+      // sits a few units above holdings + cash and never reconciles with the two tiles beside
+      // it; a single-user viewer wants net = holdings + cash exactly (Bug #68 refinement).
+      // Rounded to cents so the float sum doesn't carry sub-cent noise into storage/display.
+      netLiquidation: Math.round((stockMarketValue + totalCashValue) * 100) / 100,
+      stockMarketValue,
     }
   },
 

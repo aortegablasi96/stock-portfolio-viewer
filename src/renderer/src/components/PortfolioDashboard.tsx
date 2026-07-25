@@ -228,10 +228,7 @@ export function PortfolioDashboard(): React.JSX.Element {
               Converting to {displayCurrency}…
             </p>
           )}
-          <BalancesSummary
-            balances={state.overview.balances}
-            totalMarketValue={state.overview.totalMarketValue}
-          />
+          <BalancesSummary balances={state.overview.balances} />
           {state.overview.holdings.length === 0 ? (
             <p className="state-panel" role="status">
               No open positions in this account.
