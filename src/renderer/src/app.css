@@ -1125,6 +1125,30 @@ html {
   outline-offset: 2px;
 }
 
+/* Performance time-range filter: preset strip + optional custom date inputs (Story #69). */
+.range-bar {
+  display: flex;
+  align-items: center;
+  gap: 1rem 1.5rem;
+  flex-wrap: wrap;
+}
+
+.range-custom {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  flex-wrap: wrap;
+}
+
+.range-custom .field-inline span {
+  color: var(--muted);
+}
+
+.range-custom input[type='date'] {
+  cursor: text;
+  color-scheme: light dark;
+}
+
 .chart-bar-lower {
   fill: var(--series-1);
 }
