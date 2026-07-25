@@ -854,6 +854,55 @@ body {
   overflow-y: auto;
 }
 
+/* Realized-by-symbol table (left) beside the best/worst highlights (right) — Story #50. */
+.realized-split {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(13rem, 1fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.highlights {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.highlight-card {
+  padding: 1rem 1.1rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.highlight-label {
+  margin: 0 0 0.4rem;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.highlight-symbol {
+  margin: 0;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.highlight-value {
+  margin: 0.5rem 0 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Stack the highlights below the table on narrow widths. */
+@media (max-width: 640px) {
+  .realized-split {
+    grid-template-columns: 1fr;
+  }
+}
+
 .breakdown-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
