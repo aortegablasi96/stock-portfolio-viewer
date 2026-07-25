@@ -916,6 +916,12 @@ body {
   stroke-width: 1;
 }
 
+/* Emphasised zero baseline so positive and negative columns read either side of it (Story #49). */
+.chart-zero {
+  stroke: var(--chart-axis);
+  stroke-width: 1.5;
+}
+
 .chart-axis-label {
   fill: var(--chart-axis);
   font-size: 11px;
@@ -1010,6 +1016,11 @@ body {
 
 .chart-bar-lower {
   fill: var(--series-1);
+}
+
+/* A below-zero net month is a loss, so its bar takes the loss colour (Story #49 refinement). */
+.chart-bar-loss {
+  fill: var(--neg);
 }
 
 .chart-bar-upper {

@@ -1,15 +1,24 @@
+import { columnDomain } from '../../lib/column'
+
 /**
- * A stacked column chart over a time axis (Milestone M3, Story #23). Each column
- * stacks a `lower` segment on a `upper` segment (e.g. net income + withholding tax =
- * gross), so the full column height reads as the gross total. Two series, so a legend
- * is always present; each segment carries a native `<title>` tooltip that also reports
- * the stacked total when `totalLabel` is given (Story #31). Inline SVG, no charting
- * dependency. Values are assumed non-negative.
+ * A stacked column chart over a time axis (Milestone M3, Story #23). Each column stacks a
+ * `lower` segment and a non-negative `upper` segment (e.g. net income + withholding tax =
+ * gross), so the full column height reads as the gross total. Two series, so a legend is
+ * always present; each segment carries a native `<title>` tooltip reporting the whole
+ * breakdown, including the stacked total when `totalLabel` is given (Story #31).
+ *
+ * The `lower` value may be negative: when a month's withholding exceeds the dividends
+ * received, its net bar extends below a labelled zero baseline instead of clamping at zero,
+ * drawn in the loss colour (red) rather than the positive "received" blue so a net-loss month
+ * is unmistakable (Story #49). `upper` is still assumed non-negative. Inline SVG, no charting
+ * dependency.
  */
 export interface StackedColumn {
   key: string
   label: string
+  /** Signed lower segment (net); drawn below the zero line when negative. */
   lower: number
+  /** Non-negative upper segment (withholding), stacked above a positive lower. */
   upper: number
 }
 
@@ -40,11 +49,13 @@ export function ColumnChart({
   const W = Math.max(720, PAD.left + PAD.right + columns.length * 56)
   const plotH = H - PAD.top - PAD.bottom
   const plotW = W - PAD.left - PAD.right
-  const max = Math.max(...columns.map((c) => c.lower + c.upper), 0) || 1
+  const { top, bottom, ticks } = columnDomain(columns)
+  const span = top - bottom || 1
   const band = plotW / columns.length
   const barW = Math.min(40, band * 0.62)
-  const h = (v: number): number => (v / max) * plotH
-  const ticks = [0, max / 2, max]
+  // Map a value to its y pixel; the domain spans zero so bars can sit either side of it.
+  const y = (v: number): number => PAD.top + plotH - ((v - bottom) / span) * plotH
+  const zeroY = y(0)
 
   return (
     <figure className="chart-figure">
@@ -55,11 +66,19 @@ export function ColumnChart({
         aria-label={ariaLabel}
         preserveAspectRatio="xMidYMid meet"
       >
-        {ticks.map((t) => {
-          const yy = PAD.top + plotH - h(t)
+        {ticks.map((t, i) => {
+          const yy = y(t)
+          // The zero line is emphasised so positive and negative months read as either side of it.
+          const isZero = t === 0
           return (
-            <g key={t}>
-              <line className="chart-grid" x1={PAD.left} x2={W - PAD.right} y1={yy} y2={yy} />
+            <g key={`${t}-${i}`}>
+              <line
+                className={isZero ? 'chart-zero' : 'chart-grid'}
+                x1={PAD.left}
+                x2={W - PAD.right}
+                y1={yy}
+                y2={yy}
+              />
               <text className="chart-axis-label" x={PAD.left - 8} y={yy} dy="0.32em" textAnchor="end">
                 {formatValue(t)}
               </text>
@@ -69,33 +88,46 @@ export function ColumnChart({
 
         {columns.map((c, i) => {
           const cx = PAD.left + i * band + (band - barW) / 2
-          const lowerH = h(Math.max(0, c.lower))
-          const upperH = h(Math.max(0, c.upper))
-          const baseY = PAD.top + plotH
-          // Reading the net segment alone loses the total, so each tooltip repeats the
-          // whole column: value, counterpart, and (optionally) the stacked total.
-          const tip = (label: string, value: number): string =>
+          const gross = c.lower + c.upper
+          // The net (lower) segment runs from the zero line to `lower` — upward when positive,
+          // downward past the baseline when negative. Its rect is anchored by the higher edge.
+          const lowerTop = Math.min(zeroY, y(c.lower))
+          const lowerH = Math.abs(y(c.lower) - zeroY)
+          // Withholding stacks on top of a positive net (`lower` → `gross`). A negative-net
+          // month can't stack across zero without overlapping the downward bar, so it's shown
+          // through the tooltip alone rather than a second rect.
+          const stackUpper = c.lower >= 0 && c.upper > 0
+          const upperH = stackUpper ? y(c.lower) - y(gross) : 0
+          // Each tooltip repeats the whole column so reading one segment never loses the rest.
+          const tip = (): string =>
             [
-              `${c.label} — ${label}: ${formatValue(value)}`,
-              totalLabel ? `${totalLabel}: ${formatValue(c.lower + c.upper)}` : null,
+              c.label,
+              `${lowerLabel}: ${formatValue(c.lower)}`,
+              `${upperLabel}: ${formatValue(c.upper)}`,
+              totalLabel ? `${totalLabel}: ${formatValue(gross)}` : null,
             ]
               .filter((line) => line !== null)
               .join('\n')
+          // A below-zero net (withholding outweighed the dividends) is a loss, so its bar
+          // switches from the positive "received" blue to the loss red (Story #49 refinement).
+          const lowerClass = c.lower < 0 ? 'chart-bar-lower chart-bar-loss' : 'chart-bar-lower'
           return (
             <g key={c.key}>
-              <rect className="chart-bar-lower" x={cx} y={baseY - lowerH} width={barW} height={lowerH} rx={2}>
-                <title>{tip(lowerLabel, c.lower)}</title>
+              <rect className={lowerClass} x={cx} y={lowerTop} width={barW} height={lowerH} rx={2}>
+                <title>{tip()}</title>
               </rect>
-              <rect
-                className="chart-bar-upper"
-                x={cx}
-                y={baseY - lowerH - upperH}
-                width={barW}
-                height={upperH}
-                rx={2}
-              >
-                <title>{tip(upperLabel, c.upper)}</title>
-              </rect>
+              {stackUpper && (
+                <rect
+                  className="chart-bar-upper"
+                  x={cx}
+                  y={y(gross)}
+                  width={barW}
+                  height={upperH}
+                  rx={2}
+                >
+                  <title>{tip()}</title>
+                </rect>
+              )}
               <text className="chart-axis-label" x={cx + barW / 2} y={H - 10} textAnchor="middle">
                 {c.label}
               </text>
