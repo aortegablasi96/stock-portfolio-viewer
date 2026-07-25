@@ -1,5 +1,9 @@
 import { useState } from 'react'
-import type { RealizedGainsResult, TradeRow } from '@shared/domain/realizedGains'
+import type {
+  RealizedBySymbol,
+  RealizedGainsResult,
+  TradeRow,
+} from '@shared/domain/realizedGains'
 import {
   formatCurrency,
   formatDateTime,
@@ -59,35 +63,85 @@ export function TradeHistoryView(): React.JSX.Element {
         {r.bySymbol.length === 0 ? (
           <p className="snapshot-empty">No closed positions with realized P&L yet.</p>
         ) : (
-          <div className="table-scroll">
-            <table className="holdings-table">
-              <thead>
-                <tr>
-                  <th scope="col">Symbol</th>
-                  <th scope="col" className="num">Short-term</th>
-                  <th scope="col" className="num">Long-term</th>
-                  <th scope="col" className="num">Total realized</th>
-                </tr>
-              </thead>
-              <tbody>
-                {r.bySymbol.map((s) => (
-                  <tr key={s.conid ?? s.symbol}>
-                    <th scope="row" className="symbol">
-                      {s.symbol}
-                      <span className="flex-import-file">{s.description}</span>
-                    </th>
-                    <td className={`num stat-${toneOf(s.realizedShortTerm)}`}>{sc(s.realizedShortTerm)}</td>
-                    <td className={`num stat-${toneOf(s.realizedLongTerm)}`}>{sc(s.realizedLongTerm)}</td>
-                    <td className={`num stat-${toneOf(s.totalRealized)}`}>{sc(s.totalRealized)}</td>
+          <div className="realized-split">
+            <div className="table-scroll table-scroll-rows">
+              <table className="holdings-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Symbol</th>
+                    <th scope="col" className="num">Short-term</th>
+                    <th scope="col" className="num">Long-term</th>
+                    <th scope="col" className="num">Total realized</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {r.bySymbol.map((s) => (
+                    <tr key={s.conid ?? s.symbol}>
+                      <th scope="row" className="symbol">
+                        {s.symbol}
+                        <span className="flex-import-file">{s.description}</span>
+                      </th>
+                      <td className={`num stat-${toneOf(s.realizedShortTerm)}`}>{sc(s.realizedShortTerm)}</td>
+                      <td className={`num stat-${toneOf(s.realizedLongTerm)}`}>{sc(s.realizedLongTerm)}</td>
+                      <td className={`num stat-${toneOf(s.totalRealized)}`}>{sc(s.totalRealized)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <RealizedHighlights bySymbol={r.bySymbol} sc={sc} />
           </div>
         )}
       </section>
 
       <TradeHistory trades={r.trades} baseCurrency={r.baseCurrency} />
+    </div>
+  )
+}
+
+/**
+ * Best/worst standout symbols by realized P&L (Story #50), shown beside the capped
+ * "Realized gains by symbol" table. `bySymbol` arrives sorted largest total first, so the
+ * head is the best and the tail the worst; with a single symbol the two coincide and only
+ * "Best" is shown to avoid a duplicate card.
+ */
+function RealizedHighlights({
+  bySymbol,
+  sc,
+}: {
+  bySymbol: RealizedBySymbol[]
+  sc: (v: number) => string
+}): React.JSX.Element {
+  const best = bySymbol[0]
+  if (best === undefined) return <></>
+  const worst = bySymbol.length > 1 ? bySymbol[bySymbol.length - 1] : undefined
+  return (
+    <aside className="highlights" aria-label="Standout realized P&L">
+      <HighlightCard label="Best" item={best} sc={sc} />
+      {worst && <HighlightCard label="Worst" item={worst} sc={sc} />}
+    </aside>
+  )
+}
+
+function HighlightCard({
+  label,
+  item,
+  sc,
+}: {
+  label: string
+  item: RealizedBySymbol
+  sc: (v: number) => string
+}): React.JSX.Element {
+  return (
+    <div className="highlight-card">
+      <p className="highlight-label">{label}</p>
+      <p className="highlight-symbol">
+        {item.symbol}
+        <span className="flex-import-file">{item.description}</span>
+      </p>
+      <p className={`highlight-value stat-${toneOf(item.totalRealized)}`}>
+        {sc(item.totalRealized)}
+      </p>
     </div>
   )
 }
