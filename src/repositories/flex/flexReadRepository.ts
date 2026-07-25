@@ -111,6 +111,7 @@ export interface LatestPositions {
 }
 
 export interface CashTransactionRow {
+  conid: number | null
   symbol: string
   description: string
   type: string
@@ -119,6 +120,13 @@ export interface CashTransactionRow {
   dateTime: number | null
   exDate: number | null
   amount: number
+}
+
+/** Clean instrument name from `SecurityInfo`, for resolving a display name by conid/symbol. */
+export interface InstrumentName {
+  conid: number | null
+  symbol: string
+  description: string
 }
 
 /** A declared-but-unpaid dividend from the latest statement, in native currency (Story #31). */
@@ -329,6 +337,7 @@ export const flexReadRepository = {
   getDividendCashTransactions(): CashTransactionRow[] {
     return getDb()
       .select({
+        conid: flexCashTransactions.conid,
         symbol: flexCashTransactions.symbol,
         description: flexCashTransactions.description,
         type: flexCashTransactions.type,
@@ -340,6 +349,25 @@ export const flexReadRepository = {
       })
       .from(flexCashTransactions)
       .where(inArray(flexCashTransactions.type, [...DIVIDEND_CASH_TYPES]))
+      .all()
+  },
+
+  /**
+   * Clean instrument names from `SecurityInfo` (e.g. "GOEASY LTD"), for resolving a
+   * display name by conid/symbol. Cash-transaction rows carry a verbose transaction
+   * description ("GSY (CA…) CASH DIVIDEND …"), not the instrument name, so the dividend
+   * tables look this up to match the ticker-with-description style of the other views.
+   * Distinct across statements — the name is stable per instrument, so cross-statement
+   * duplicates collapse and there is no fan-out.
+   */
+  getInstrumentNames(): InstrumentName[] {
+    return getDb()
+      .selectDistinct({
+        conid: flexSecurities.conid,
+        symbol: flexSecurities.symbol,
+        description: flexSecurities.description,
+      })
+      .from(flexSecurities)
       .all()
   },
 

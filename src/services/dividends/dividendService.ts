@@ -22,6 +22,28 @@ import type {
 
 const WITHHOLDING_TYPE = 'Withholding Tax'
 
+/**
+ * Resolve a clean instrument display name ("GOEASY LTD") by conid, falling back to
+ * symbol. Cash-transaction descriptions are verbose transaction strings, so the dividend
+ * tables use this to show the instrument name beneath the ticker like the other views.
+ */
+function makeNameResolver(): (conid: number | null, symbol: string) => string {
+  const byConid = new Map<number, string>()
+  const bySymbol = new Map<string, string>()
+  for (const n of flexReadRepository.getInstrumentNames()) {
+    if (n.description === '') continue
+    if (n.conid != null && !byConid.has(n.conid)) byConid.set(n.conid, n.description)
+    if (n.symbol !== '' && !bySymbol.has(n.symbol)) bySymbol.set(n.symbol, n.description)
+  }
+  return (conid, symbol) => {
+    if (conid != null) {
+      const byId = byConid.get(conid)
+      if (byId != null) return byId
+    }
+    return bySymbol.get(symbol) ?? ''
+  }
+}
+
 /** UTC midnight of the day containing `epochMs` — the cut-off for "still upcoming". */
 function startOfUtcDay(epochMs: number): number {
   const d = new Date(epochMs)
@@ -121,6 +143,7 @@ export const dividendService = {
 
     const baseCurrency = flexReadRepository.baseCurrency() ?? 'EUR'
     const rows = flexReadRepository.getDividendCashTransactions()
+    const nameOf = makeNameResolver()
 
     const bySymbol = new Map<string, DividendGroup>()
     const byMonth = new Map<string, DividendGroup>()
@@ -131,11 +154,12 @@ export const dividendService = {
     for (const row of rows) {
       const date = row.exDate ?? row.dateTime
       const amountBase = row.amount * row.fxRateToBase
+      const name = nameOf(row.conid, row.symbol)
 
       events.push({
         date,
         symbol: row.symbol,
-        description: row.description,
+        description: name,
         type: row.type,
         currency: row.currency,
         amountNative: row.amount,
@@ -146,7 +170,7 @@ export const dividendService = {
       else totalGrossBase += amountBase
 
       const symbolKey = row.symbol || '—'
-      accumulate(bySymbol, symbolKey, symbolKey, row, amountBase, row.description)
+      accumulate(bySymbol, symbolKey, symbolKey, row, amountBase, name)
       const mKey = monthKey(date)
       accumulate(byMonth, mKey, mKey, row, amountBase)
     }
