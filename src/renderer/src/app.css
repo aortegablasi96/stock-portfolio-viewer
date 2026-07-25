@@ -1111,6 +1111,66 @@ body {
   background: var(--series-neutral);
 }
 
+/* ---- Bubble map (world geography, Story #46, DDR-0014) ------------------- */
+.bubble-map-figure {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.bubble-map {
+  width: 100%;
+  max-width: 46rem;
+  height: auto;
+  margin: 0 auto;
+  display: block;
+}
+
+/* Faint land backdrop — the circles, not the map, carry the data. */
+.bubble-map-land {
+  fill: var(--border);
+  opacity: 0.55;
+}
+
+/* One primary-hue circle per country; a thin surface ring separates overlaps. */
+.bubble-map-dot {
+  fill: var(--series-1);
+  fill-opacity: 0.72;
+  stroke: var(--card);
+  stroke-width: 0.75;
+}
+
+.bubble-map-dot:hover {
+  fill-opacity: 0.95;
+}
+
+.bubble-map-legend {
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+  align-items: center;
+  justify-content: center;
+}
+
+.bubble-map-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.bubble-map-hint::before {
+  content: '';
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--series-1);
+  opacity: 0.72;
+}
+
+.bubble-map-unknown {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
 .classify-prompt {
   margin-top: 1rem;
   padding-top: 1rem;
