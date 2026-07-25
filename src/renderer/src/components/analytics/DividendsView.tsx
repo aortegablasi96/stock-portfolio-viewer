@@ -1,6 +1,12 @@
 import { useState } from 'react'
 import type { DividendEvent, UpcomingDividends, DividendResult } from '@shared/domain/dividends'
-import { formatCurrency, formatDate, formatMonth, formatQuantity } from '../../lib/format'
+import {
+  formatCompanyName,
+  formatCurrency,
+  formatDate,
+  formatMonth,
+  formatQuantity,
+} from '../../lib/format'
 import { ALL_TYPES, distinctTypes, filterByType } from '../../lib/tableFilter'
 import { ColumnChart, type StackedColumn } from '../charts/ColumnChart'
 import { useAnalytics } from './useAnalytics'
@@ -73,7 +79,9 @@ function Upcoming({
                     <td>{i.exDate != null ? formatDate(i.exDate) : '—'}</td>
                     <th scope="row" className="symbol">
                       {i.symbol || '—'}
-                      {i.description && <span className="flex-import-file">{i.description}</span>}
+                      {i.description && (
+                        <span className="flex-import-file">{formatCompanyName(i.description)}</span>
+                      )}
                     </th>
                     <td className="num">{formatQuantity(i.quantity)}</td>
                     <td className="num">
@@ -190,7 +198,9 @@ export function DividendsView(): React.JSX.Element {
                 <tr key={s.key}>
                   <th scope="row" className="symbol">
                     {s.label}
-                    {s.description && <span className="flex-import-file">{s.description}</span>}
+                    {s.description && (
+                      <span className="flex-import-file">{formatCompanyName(s.description)}</span>
+                    )}
                   </th>
                   <td className="num">{c(s.grossBase)}</td>
                   <td className="num">{c(s.withholdingBase)}</td>
@@ -259,7 +269,9 @@ function Transactions({
                   <td>{e.date != null ? formatDate(e.date) : '—'}</td>
                   <th scope="row" className="symbol">
                     {e.symbol || '—'}
-                    {e.description && <span className="flex-import-file">{e.description}</span>}
+                    {e.description && (
+                      <span className="flex-import-file">{formatCompanyName(e.description)}</span>
+                    )}
                   </th>
                   <td>{e.type}</td>
                   <td className="num">{formatCurrency(e.amountNative, e.currency)}</td>

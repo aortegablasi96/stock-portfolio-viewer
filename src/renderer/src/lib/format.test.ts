@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
+  formatCompanyName,
   formatCurrency,
   formatDate,
   formatDateTime,
@@ -88,5 +89,31 @@ describe('formatMonth', () => {
 
   it('passes through a non-month key such as "Unknown"', () => {
     expect(formatMonth('Unknown')).toBe('Unknown')
+  })
+})
+
+describe('formatCompanyName', () => {
+  it('strips share-class and legal-form suffixes and title-cases (real Flex names)', () => {
+    expect(formatCompanyName('INTERACTIVE BROKERS GRO-CL A')).toBe('Interactive Brokers')
+    expect(formatCompanyName('SERABI GOLD PLC')).toBe('Serabi Gold')
+    expect(formatCompanyName('GOEASY LTD')).toBe('Goeasy')
+    expect(formatCompanyName('FILA SPA')).toBe('Fila')
+    expect(formatCompanyName('NAGARRO SE')).toBe('Nagarro')
+    expect(formatCompanyName('CONCENTRIX CORP')).toBe('Concentrix')
+    expect(formatCompanyName('GLOBAL PAYMENTS INC')).toBe('Global Payments')
+  })
+
+  it('keeps an apostrophe intact rather than capitalising the letter after it', () => {
+    expect(formatCompanyName("LEON'S FURNITURE LTD")).toBe("Leon's Furniture")
+  })
+
+  it('handles an explicit share class and multiple trailing suffixes', () => {
+    expect(formatCompanyName('VISA INC-CLASS A')).toBe('Visa')
+    expect(formatCompanyName('SOME NAME HOLDINGS PLC')).toBe('Some Name')
+  })
+
+  it('returns the trimmed input unchanged when there is nothing to strip', () => {
+    expect(formatCompanyName('  apple  ')).toBe('Apple')
+    expect(formatCompanyName('')).toBe('')
   })
 })
