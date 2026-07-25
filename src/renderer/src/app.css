@@ -1018,6 +1018,11 @@ body {
   fill: var(--series-1);
 }
 
+/* A below-zero net month is a loss, so its bar takes the loss colour (Story #49 refinement). */
+.chart-bar-loss {
+  fill: var(--neg);
+}
+
 .chart-bar-upper {
   fill: var(--neg);
 }

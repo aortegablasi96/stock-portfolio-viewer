@@ -8,8 +8,10 @@ import { columnDomain } from '../../lib/column'
  * breakdown, including the stacked total when `totalLabel` is given (Story #31).
  *
  * The `lower` value may be negative: when a month's withholding exceeds the dividends
- * received, its net bar extends below a labelled zero baseline instead of clamping at zero
- * (Story #49). `upper` is still assumed non-negative. Inline SVG, no charting dependency.
+ * received, its net bar extends below a labelled zero baseline instead of clamping at zero,
+ * drawn in the loss colour (red) rather than the positive "received" blue so a net-loss month
+ * is unmistakable (Story #49). `upper` is still assumed non-negative. Inline SVG, no charting
+ * dependency.
  */
 export interface StackedColumn {
   key: string
@@ -106,9 +108,12 @@ export function ColumnChart({
             ]
               .filter((line) => line !== null)
               .join('\n')
+          // A below-zero net (withholding outweighed the dividends) is a loss, so its bar
+          // switches from the positive "received" blue to the loss red (Story #49 refinement).
+          const lowerClass = c.lower < 0 ? 'chart-bar-lower chart-bar-loss' : 'chart-bar-lower'
           return (
             <g key={c.key}>
-              <rect className="chart-bar-lower" x={cx} y={lowerTop} width={barW} height={lowerH} rx={2}>
+              <rect className={lowerClass} x={cx} y={lowerTop} width={barW} height={lowerH} rx={2}>
                 <title>{tip()}</title>
               </rect>
               {stackUpper && (
