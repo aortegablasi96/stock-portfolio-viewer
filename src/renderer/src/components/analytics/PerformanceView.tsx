@@ -6,6 +6,16 @@ import {
   formatSignedCurrency,
   formatSignedPercent,
 } from '../../lib/format'
+import type { Bounds, RangeId } from '../../lib/performanceRange'
+import {
+  boundsFor,
+  fromDateInput,
+  RANGE_OPTIONS,
+  seriesExtent,
+  sliceSeries,
+  toDateInput,
+  windowStats,
+} from '../../lib/performanceRange'
 import { LineChart } from '../charts/LineChart'
 import { useAnalytics } from './useAnalytics'
 import { NeedsImport } from './NeedsImport'
@@ -19,13 +29,22 @@ const CHART_TABS = [
 type ChartTab = (typeof CHART_TABS)[number]['id']
 
 /**
- * Performance over time (Milestone M3, Story #21). Shows the portfolio-value trend,
- * headline time-weighted return, the realized/unrealized P&L split, and net
- * contributions — all in the account base currency, read from imported Flex data.
+ * Performance over time (Milestone M3, Stories #21, #29, #45, #69). Shows the portfolio-value
+ * trend, the cumulative time-weighted return, and headline stats — all in the account base
+ * currency, read from imported Flex data.
+ *
+ * A time-range filter (Story #69) reframes both charts and recomputes the top stats to a
+ * chosen window: trailing 1M / 3M / 1Y, the full history, or a custom date range. Windowing is
+ * pure presentation over the already-loaded daily series (`lib/performanceRange`), so switching
+ * ranges is instant and never refetches. The per-period returns table stays whole-history
+ * (table filters are out of scope for this story).
  */
 export function PerformanceView(): React.JSX.Element {
   const { state, reload } = useAnalytics<PerformanceResult>(window.api.getPerformance)
   const [chartTab, setChartTab] = useState<ChartTab>('value')
+  const [range, setRange] = useState<RangeId>('all')
+  // Custom window; `null` until the user first edits it, when it defaults to the full extent.
+  const [custom, setCustom] = useState<Bounds | null>(null)
 
   if (state.phase === 'loading') {
     return (
@@ -52,30 +71,89 @@ export function PerformanceView(): React.JSX.Element {
   const r = state.result.report
   const c = (v: number): string => formatCurrency(v, r.baseCurrency)
 
+  const extent = seriesExtent(r.valueSeries)
+  const customBounds = custom ?? extent ?? { from: 0, to: 0 }
+  const bounds = extent ? boundsFor(range, extent, customBounds) : null
+
+  const valueSeries = bounds ? sliceSeries(r.valueSeries, bounds) : r.valueSeries
+  const returnSeries = bounds ? sliceSeries(r.returnSeries, bounds) : r.returnSeries
+  const stats = bounds
+    ? windowStats(r.valueSeries, r.returnSeries, bounds)
+    : { endValue: r.endingValue, changeAbs: 0, changePct: null, twr: r.cumulativeTwr }
+
+  const periodLabel = range === 'all' ? 'Full history' : 'Selected period'
+
+  /** Update one edge of the custom window, seeding from the full extent on first edit. */
+  function editCustom(edge: 'from' | 'to', value: string): void {
+    const ms = fromDateInput(value)
+    if (ms === null) return
+    setCustom((prev) => ({ ...(prev ?? customBounds), [edge]: ms }))
+  }
+
   return (
     <div className="analytics-view">
+      <div className="range-bar">
+        <div className="chart-tabs" role="group" aria-label="Performance time range">
+          {RANGE_OPTIONS.map((opt) => (
+            <button
+              key={opt.id}
+              type="button"
+              title={opt.title}
+              aria-pressed={range === opt.id}
+              className={`chart-tab ${range === opt.id ? 'chart-tab-active' : ''}`}
+              onClick={() => setRange(opt.id)}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+        {range === 'custom' && extent && (
+          <div className="range-custom">
+            <label className="field-inline">
+              <span>From</span>
+              <input
+                type="date"
+                className="select-control"
+                value={toDateInput(customBounds.from)}
+                min={toDateInput(extent.from)}
+                max={toDateInput(extent.to)}
+                onChange={(e) => editCustom('from', e.target.value)}
+              />
+            </label>
+            <label className="field-inline">
+              <span>To</span>
+              <input
+                type="date"
+                className="select-control"
+                value={toDateInput(customBounds.to)}
+                min={toDateInput(extent.from)}
+                max={toDateInput(extent.to)}
+                onChange={(e) => editCustom('to', e.target.value)}
+              />
+            </label>
+          </div>
+        )}
+      </div>
+
       <div className="stat-row">
-        <StatTile label="Portfolio value" value={c(r.endingValue)} hint="Latest imported period end" />
+        <StatTile label="Portfolio value" value={c(stats.endValue)} hint="At period end" />
+        <StatTile
+          label="Value change"
+          value={formatSignedCurrency(stats.changeAbs, r.baseCurrency)}
+          hint={periodLabel}
+          tone={toneOf(stats.changeAbs)}
+        />
+        <StatTile
+          label="Value change %"
+          value={stats.changePct === null ? '—' : formatSignedPercent(stats.changePct)}
+          hint={periodLabel}
+          tone={stats.changePct === null ? 'neutral' : toneOf(stats.changePct)}
+        />
         <StatTile
           label="Time-weighted return"
-          value={formatSignedPercent(r.cumulativeTwr)}
-          hint="Chain-linked across periods"
-          tone={toneOf(r.cumulativeTwr)}
-        />
-        <StatTile
-          label="Realized P&L"
-          value={formatSignedCurrency(r.totalRealizedPnl, r.baseCurrency)}
-          tone={toneOf(r.totalRealizedPnl)}
-        />
-        <StatTile
-          label="Unrealized P&L"
-          value={formatSignedCurrency(r.totalUnrealizedPnl, r.baseCurrency)}
-          tone={toneOf(r.totalUnrealizedPnl)}
-        />
-        <StatTile
-          label="Net deposits"
-          value={formatSignedCurrency(r.totalDepositsWithdrawals, r.baseCurrency)}
-          hint="Contributions, not gains"
+          value={formatSignedPercent(stats.twr)}
+          hint={range === 'all' ? 'Chain-linked across periods' : 'Over selected period'}
+          tone={toneOf(stats.twr)}
         />
       </div>
 
@@ -102,7 +180,7 @@ export function PerformanceView(): React.JSX.Element {
         {chartTab === 'value' ? (
           <LineChart
             key="value"
-            points={r.valueSeries}
+            points={valueSeries}
             formatValue={c}
             formatDate={formatDate}
             ariaLabel="Portfolio value over time"
@@ -110,7 +188,7 @@ export function PerformanceView(): React.JSX.Element {
         ) : (
           <LineChart
             key="return"
-            points={r.returnSeries}
+            points={returnSeries}
             formatValue={formatSignedPercent}
             formatDate={formatDate}
             ariaLabel="Cumulative time-weighted return over time"
