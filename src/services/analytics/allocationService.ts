@@ -15,6 +15,10 @@ import type { AllocationPosition, AllocationResult, AllocationSlice } from '@sha
  * position uses the Flex-provided `percentOfNav` (share of NAV, which includes cash),
  * so grouped weights sum those percentages.
  *
+ * Uninvested cash is added to the asset-class breakdown only (Story #47): the positions'
+ * NAV weights sum to less than 100% exactly when cash is held, and that shortfall becomes a
+ * 'Cash' slice — so the asset-class breakdown reflects the full portfolio. See `withCash`.
+ *
  * Everything except sector comes from `flexReadRepository`. Flex carries no sector field,
  * so sector is joined in from the locally cached IBKR classification — a plain cache read,
  * never a network call, so this stays synchronous and works with the gateway closed
@@ -35,6 +39,46 @@ const ASSET_CLASS_LABELS: Record<string, string> = {
 
 function assetClassLabel(code: string): string {
   return ASSET_CLASS_LABELS[code] ?? (code || 'Other')
+}
+
+/**
+ * Asset-class key for uninvested cash (Story #47). Deliberately distinct from the Flex
+ * `CASH` asset category (forex/FX *positions*, labelled 'Cash / FX') so the two never merge.
+ */
+const CASH_ASSET_KEY = '__cash__'
+
+/**
+ * A gap under this many NAV percentage points is treated as rounding noise, not cash, so a
+ * fully-invested portfolio shows no cash slice. Flex reports `percentOfNAV` to two decimals,
+ * so summing N positions can drift by ~N × 0.005; 0.1 comfortably absorbs that.
+ */
+const CASH_MIN_PERCENT = 0.1
+
+/**
+ * Uninvested cash as its own asset-class slice, derived from the NAV weights the positions
+ * already carry (Story #47). IBKR's `percentOfNAV` is share of NAV — which *includes* cash —
+ * so any shortfall of the positions' summed weights below 100% is cash. Its base value scales
+ * the invested total by that shortfall, keeping cash consistent with the percentages shown
+ * without reading a separate NAV figure. Returns the list unchanged when the portfolio is
+ * fully invested (or over-weighted by rounding), so a zero/negative cash slice never appears.
+ */
+function withCash(
+  byAssetClass: AllocationSlice[],
+  positions: AllocationPosition[],
+  totalMarketValueBase: number,
+): AllocationSlice[] {
+  const investedPercent = positions.reduce((sum, p) => sum + p.percentOfNav, 0)
+  const cashPercent = 100 - investedPercent
+  if (investedPercent <= 0 || cashPercent < CASH_MIN_PERCENT) return byAssetClass
+
+  const cashValueBase = (totalMarketValueBase * cashPercent) / investedPercent
+  const cash: AllocationSlice = {
+    key: CASH_ASSET_KEY,
+    label: 'Cash',
+    marketValueBase: cashValueBase,
+    percentOfNav: cashPercent,
+  }
+  return [...byAssetClass, cash].sort((a, b) => b.marketValueBase - a.marketValueBase)
 }
 
 /** Market value of a position in its native currency: mark price when present, else cost + unrealized. */
@@ -112,7 +156,11 @@ export const allocationService = {
         reportDate: latest.reportDate,
         totalMarketValueBase,
         positions,
-        byAssetClass: groupBy(positions, (p) => p.assetCategory, assetClassLabel),
+        byAssetClass: withCash(
+          groupBy(positions, (p) => p.assetCategory, assetClassLabel),
+          positions,
+          totalMarketValueBase,
+        ),
         byCurrency: groupBy(positions, (p) => p.currency, (c) => c || 'Unknown'),
         byCountry: groupBy(positions, (p) => p.issuerCountry, (c) => c || 'Unknown'),
         bySector: groupBy(positions, (p) => p.sector, (s) => s || 'Unclassified'),

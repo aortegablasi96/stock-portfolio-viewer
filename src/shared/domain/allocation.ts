@@ -55,6 +55,7 @@ export const allocationReportSchema = z.object({
   reportDate: z.number().int().nullable(),
   totalMarketValueBase: z.number(),
   positions: z.array(allocationPositionSchema),
+  /** Asset-class breakdown; includes a derived 'Cash' slice when the portfolio holds cash (Story #47). */
   byAssetClass: z.array(allocationSliceSchema),
   byCurrency: z.array(allocationSliceSchema),
   byCountry: z.array(allocationSliceSchema),

@@ -50,3 +50,4 @@ Other options and why they were not chosen.
 - `0012` — In-place confirmation pattern for destructive actions (ConfirmAction)
 - `0013` — Performance view: cumulative TWR curve, chart tabs, and shared interactive hover
 - `0014` — Allocation view: geographic exposure as an equirectangular bubble map
+- `0015` — Allocation view: cash as an asset class, derived from position NAV weights
