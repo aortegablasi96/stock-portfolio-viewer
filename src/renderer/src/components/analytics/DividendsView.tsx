@@ -158,6 +158,7 @@ export function DividendsView(): React.JSX.Element {
         <p className="source-note">
           Each column is the month’s net income received, with the tax withheld at source stacked
           on top — so the solid segment is what reached the account and the full height is gross.
+          A month where withholding outweighs the dividends dips below the zero line as a net loss.
         </p>
         <ColumnChart
           columns={columns}
