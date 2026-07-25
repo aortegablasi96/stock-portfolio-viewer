@@ -2,6 +2,7 @@ import {
   flexReadRepository,
   type FifoSummaryRow,
 } from '@repositories/flex/flexReadRepository'
+import { isInstrumentSummary } from '@repositories/flex/fifoSummary'
 import type {
   RealizedBySymbol,
   RealizedGainsResult,
@@ -54,7 +55,7 @@ export const realizedGainsService = {
     if (!flexReadRepository.hasStatements()) return { status: 'needs_import' }
 
     const baseCurrency = flexReadRepository.baseCurrency() ?? 'EUR'
-    const summaries = flexReadRepository.getFifoSummaries()
+    const summaries = flexReadRepository.getFifoSummaries().filter(isInstrumentSummary)
 
     const trades: TradeRow[] = flexReadRepository.getTrades().map((t) => {
       const realizedNative = t.fifoPnlRealized ?? 0

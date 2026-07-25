@@ -3,6 +3,7 @@ import type {
   DailyMtmRow,
 } from '@repositories/flex/flexReadRepository'
 import { flexReadRepository } from '@repositories/flex/flexReadRepository'
+import { isInstrumentSummary } from '@repositories/flex/fifoSummary'
 import type { NavPeriod, PerformanceResult, ValuePoint } from '@shared/domain/performance'
 
 /**
@@ -151,7 +152,7 @@ export const performanceService = {
 
     const baseCurrency = flexReadRepository.baseCurrency() ?? 'EUR'
     const periods: NavPeriod[] = flexReadRepository.getNavPeriods()
-    const summaries = flexReadRepository.getFifoSummaries()
+    const summaries = flexReadRepository.getFifoSummaries().filter(isInstrumentSummary)
     const dailyMtm = flexReadRepository.getDailyMtm()
     const contributions = flexReadRepository.getContributionCashFlows()
 

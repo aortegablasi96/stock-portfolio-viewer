@@ -133,6 +133,22 @@ describe('performanceService.getPerformance', () => {
     expect(result.report.totalUnrealizedPnl).toBe(25)
   })
 
+  it('excludes the IBKR "Total (All Assets)" aggregate row so P&L totals are not doubled', () => {
+    repo.hasStatements.mockReturnValue(true)
+    repo.getNavPeriods.mockReturnValue([navPeriod({})])
+    repo.getFifoSummaries.mockReturnValue([
+      fifo({ symbol: 'AAA', totalRealizedPnl: 300, totalUnrealizedPnl: -50 }),
+      fifo({ symbol: 'BBB', totalRealizedPnl: 200, totalUnrealizedPnl: 75 }),
+      // The aggregate line (blank symbol) mirrors the instrument sums; must be skipped.
+      fifo({ symbol: '', description: 'Total (All Assets)', totalRealizedPnl: 500, totalUnrealizedPnl: 25 }),
+    ])
+
+    const result = performanceService.getPerformance()
+    if (result.status !== 'ok') throw new Error('expected ok')
+    expect(result.report.totalRealizedPnl).toBe(500) // not 1000
+    expect(result.report.totalUnrealizedPnl).toBe(25) // not 50
+  })
+
   it('densifies the value series with daily MTM points anchored to the endpoints (#29)', () => {
     repo.hasStatements.mockReturnValue(true)
     repo.getNavPeriods.mockReturnValue([
