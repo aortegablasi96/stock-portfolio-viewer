@@ -30,6 +30,7 @@ const balances: AccountBalances = {
   currency: 'USD',
   totalCashValue: 1000,
   netLiquidation: 101000,
+  stockMarketValue: 100000,
 }
 
 describe('portfolioService.getOverview', () => {
@@ -101,6 +102,7 @@ describe('portfolioService.getOverview — display currency (Story #28)', () => 
       currency: 'EUR',
       totalCashValue: 1000,
       netLiquidation: 5000,
+      stockMarketValue: 4000,
     })
   })
 

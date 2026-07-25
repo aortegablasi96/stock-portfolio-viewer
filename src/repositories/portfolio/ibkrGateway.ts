@@ -59,6 +59,8 @@ const ledgerEntrySchema = z
   .object({
     cashbalance: z.number().optional(),
     netliquidationvalue: z.number().optional(),
+    /** Holdings (stock) market value; on the `BASE` entry this is already in base currency. */
+    stockmarketvalue: z.number().optional(),
     currency: z.string().optional(),
     /** Rate from this entry's currency to the account base; the base currency's is `1`. */
     exchangerate: z.number().optional(),

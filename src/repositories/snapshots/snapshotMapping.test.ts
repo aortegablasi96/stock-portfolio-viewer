@@ -42,7 +42,12 @@ function overview(overrides: Partial<PortfolioOverview> = {}): PortfolioOverview
         currency: 'USD',
       },
     ],
-    balances: { currency: 'USD', totalCashValue: 1234.56, netLiquidation: 25298.12 },
+    balances: {
+      currency: 'USD',
+      totalCashValue: 1234.56,
+      netLiquidation: 25298.12,
+      stockMarketValue: 24063.56,
+    },
     allocation: [],
     totalMarketValue: 24063.56,
     ...overrides,
@@ -80,12 +85,48 @@ describe('toHeaderValues', () => {
 
   it('records a valid empty (cash-only) portfolio', () => {
     const values = toHeaderValues(
-      { capturedAt: 1_000, source: 'ibkr', overview: overview({ holdings: [], totalMarketValue: 0 }) },
+      {
+        capturedAt: 1_000,
+        source: 'ibkr',
+        overview: overview({
+          holdings: [],
+          totalMarketValue: 0,
+          balances: {
+            currency: 'USD',
+            totalCashValue: 1234.56,
+            netLiquidation: 25298.12,
+            stockMarketValue: 0,
+          },
+        }),
+      },
       0,
     )
     expect(values.holdingsCount).toBe(0)
     expect(values.totalMarketValue).toBe(0)
     expect(values.totalCash).toBe(123_456)
+  })
+
+  it('takes the holdings total from the base-currency ledger value, not the native sum (Bug #68)', () => {
+    // The native overview total is a mixed-currency sum the capture path must ignore; the
+    // stored total must be the base-currency holdings value from `balances`.
+    const values = toHeaderValues(
+      {
+        capturedAt: 1_000,
+        source: 'ibkr',
+        overview: overview({
+          totalMarketValue: 581_226, // bogus mixed-currency sum
+          balances: {
+            currency: 'EUR',
+            totalCashValue: 360.29,
+            netLiquidation: 59_796.27,
+            stockMarketValue: 59_432.82,
+          },
+        }),
+      },
+      0,
+    )
+    expect(values.totalMarketValue).toBe(5_943_282) // base value, not toMinor(581_226)
+    expect(values.baseCurrency).toBe('EUR')
   })
 })
 
