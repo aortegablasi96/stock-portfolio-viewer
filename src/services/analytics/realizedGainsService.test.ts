@@ -120,4 +120,23 @@ describe('realizedGainsService.getRealizedGains', () => {
     expect(result.report.totalRealizedLongTerm).toBe(-150) // 50 - 200
     expect(result.report.totalUnrealized).toBe(40)
   })
+
+  it('excludes the IBKR "Total (All Assets)" aggregate row from totals and per-symbol rows', () => {
+    repo.hasStatements.mockReturnValue(true)
+    repo.getTrades.mockReturnValue([])
+    repo.getFifoSummaries.mockReturnValue([
+      fifo({ conid: 1, symbol: 'AAA', realizedStProfit: 100, totalRealizedPnl: 100 }),
+      fifo({ conid: 2, symbol: 'BBB', realizedLtLoss: -300, totalRealizedPnl: -300 }),
+      // The aggregate line: blank symbol/conid, P&L = sum of the instrument rows.
+      fifo({ conid: null, symbol: '', description: 'Total (All Assets)', totalRealizedPnl: -200 }),
+    ])
+
+    const result = realizedGainsService.getRealizedGains()
+    if (result.status !== 'ok') throw new Error('expected ok')
+
+    // Only the two real instruments appear — no phantom "Total" row to pick as best/worst.
+    expect(result.report.bySymbol.map((r) => r.symbol)).toEqual(['AAA', 'BBB'])
+    // Totals sum the instruments once, not the doubled aggregate.
+    expect(result.report.totalRealized).toBe(-200) // 100 - 300, not -400
+  })
 })
