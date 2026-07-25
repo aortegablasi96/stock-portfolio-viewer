@@ -39,6 +39,12 @@ export type Holding = z.infer<typeof holdingSchema>
 export const accountBalancesSchema = z.object({
   currency: z.string(),
   totalCashValue: z.number(),
+  /**
+   * Net (total) portfolio value = `stockMarketValue + totalCashValue`, in base currency.
+   * Computed from those two rather than IBKR's `netliquidationvalue` (which also folds in
+   * dividend/interest accruals and so never reconciles with the holdings + cash tiles beside
+   * it); a single-user viewer wants net = holdings + cash exactly (Bug #68 refinement).
+   */
   netLiquidation: z.number(),
   /**
    * Holdings (stock) market value, already expressed in the account's base currency by the

@@ -118,7 +118,7 @@ describe('toHeaderValues', () => {
           balances: {
             currency: 'EUR',
             totalCashValue: 360.29,
-            netLiquidation: 59_796.27,
+            netLiquidation: 59_793.11, // = stockMarketValue + totalCashValue (net = holdings + cash)
             stockMarketValue: 59_432.82,
           },
         }),

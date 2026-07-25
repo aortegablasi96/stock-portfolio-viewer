@@ -23,8 +23,9 @@ export const snapshotSummarySchema = z.object({
   totalCash: z.number(),
   holdingsCount: z.number().int(),
   /**
-   * `totalMarketValue` converted into the requested display currency, applying the same
-   * live gateway FX convention as the Portfolio view (Bug #44, DDR-0007). Present *only*
+   * The total portfolio value (`netLiquidation` = holdings + cash) converted into the requested
+   * display currency, applying the same live gateway FX convention as the Portfolio view (Bug
+   * #44/#68, DDR-0007) — this is the headline figure the history list shows. Present *only*
    * when a display currency was requested: a `number` is the converted value; `null` means
    * no FX rate was available (e.g. the gateway is disconnected), so the row is shown in its
    * stored base currency and flagged rather than silently mis-converted. The field is

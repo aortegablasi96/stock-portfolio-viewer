@@ -22,9 +22,16 @@ beforeEach(() => {
 describe('portfolioRepository.getBalances', () => {
   it('reports the aggregate BASE values under the resolved ISO base currency, not "BASE"', async () => {
     // The live gateway labels the aggregate entry `currency: "BASE"`; the real base ISO is
-    // the per-currency entry whose rate to base is 1 (regression from Story #28).
+    // the per-currency entry whose rate to base is 1 (regression from Story #28). `netliquidationvalue`
+    // here is deliberately stock+cash+3.17 of dividend accrual to prove net is computed, not read.
     const ledger: Record<string, LedgerEntry> = {
-      BASE: { currency: 'BASE', cashbalance: 359.3, netliquidationvalue: 63842.53, exchangerate: 1 },
+      BASE: {
+        currency: 'BASE',
+        cashbalance: 359.3,
+        stockmarketvalue: 63483.23,
+        netliquidationvalue: 63845.7,
+        exchangerate: 1,
+      },
       EUR: { currency: 'EUR', cashbalance: 0.59, netliquidationvalue: 17991.29, exchangerate: 1 },
       USD: { currency: 'USD', cashbalance: 146.56, netliquidationvalue: 33336.54, exchangerate: 0.8762 },
     }
@@ -35,6 +42,9 @@ describe('portfolioRepository.getBalances', () => {
     expect(balances.currency).toBe('EUR')
     // Values come from the BASE aggregate (total cash across currencies), not the EUR-only entry.
     expect(balances.totalCashValue).toBe(359.3)
+    expect(balances.stockMarketValue).toBe(63483.23)
+    // Net = holdings + cash (63483.23 + 359.3), NOT IBKR's netliquidationvalue (63845.7, which
+    // also folds in the 3.17 dividend accrual) — Bug #68 refinement.
     expect(balances.netLiquidation).toBe(63842.53)
   })
 
