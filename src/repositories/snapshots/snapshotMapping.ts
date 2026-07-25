@@ -30,7 +30,11 @@ export function toHeaderValues(
     capturedAt: input.capturedAt,
     source: input.source,
     baseCurrency: overview.balances.currency,
-    totalMarketValue: toMinor(overview.totalMarketValue),
+    // Base-currency holdings value from the ledger, not `overview.totalMarketValue` — the
+    // latter is a mixed-currency sum on the native (unconverted) overview the capture path
+    // uses, which would store a meaningless total (Bug #68). Sourced from `balances` like the
+    // other two totals, so all three reconcile to `baseCurrency`.
+    totalMarketValue: toMinor(overview.balances.stockMarketValue),
     netLiquidation: toMinor(overview.balances.netLiquidation),
     totalCash: toMinor(overview.balances.totalCashValue),
     holdingsCount: overview.holdings.length,

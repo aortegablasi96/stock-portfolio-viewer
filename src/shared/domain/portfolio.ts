@@ -40,6 +40,13 @@ export const accountBalancesSchema = z.object({
   currency: z.string(),
   totalCashValue: z.number(),
   netLiquidation: z.number(),
+  /**
+   * Holdings (stock) market value, already expressed in the account's base currency by the
+   * IBKR ledger — the authoritative base figure, unlike a raw sum of positions whose native
+   * values are in mixed currencies. Snapshots persist this as their holdings total so history
+   * reconciles to base (Bug #68); the live view converts per-position instead (DDR-0007).
+   */
+  stockMarketValue: z.number(),
 })
 export type AccountBalances = z.infer<typeof accountBalancesSchema>
 

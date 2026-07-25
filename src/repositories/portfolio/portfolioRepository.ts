@@ -67,6 +67,9 @@ export const portfolioRepository = {
       currency: resolveBaseCurrency(ledger),
       totalCashValue: base?.cashbalance ?? 0,
       netLiquidation: base?.netliquidationvalue ?? 0,
+      // Holdings value already in base currency (BASE ledger entry) — the figure snapshots
+      // persist, so history never sums positions across mixed native currencies (Bug #68).
+      stockMarketValue: base?.stockmarketvalue ?? 0,
     }
   },
 

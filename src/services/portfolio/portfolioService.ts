@@ -66,6 +66,7 @@ function convertBalances(
     currency: target,
     totalCashValue: round2(balances.totalCashValue * rate),
     netLiquidation: round2(balances.netLiquidation * rate),
+    stockMarketValue: round2(balances.stockMarketValue * rate),
   }
 }
 

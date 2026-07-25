@@ -23,7 +23,7 @@ const mockPortfolio = vi.mocked(portfolioService)
 
 const overview: PortfolioOverview = {
   holdings: [],
-  balances: { currency: 'USD', totalCashValue: 100, netLiquidation: 100 },
+  balances: { currency: 'USD', totalCashValue: 100, netLiquidation: 100, stockMarketValue: 0 },
   allocation: [],
   totalMarketValue: 0,
 }
