@@ -1,6 +1,12 @@
 import { useState } from 'react'
 import type { DividendEvent, UpcomingDividends, DividendResult } from '@shared/domain/dividends'
-import { formatCurrency, formatDate, formatMonth, formatQuantity } from '../../lib/format'
+import {
+  formatCompanyName,
+  formatCurrency,
+  formatDate,
+  formatMonth,
+  formatQuantity,
+} from '../../lib/format'
 import { ALL_TYPES, distinctTypes, filterByType } from '../../lib/tableFilter'
 import { ColumnChart, type StackedColumn } from '../charts/ColumnChart'
 import { useAnalytics } from './useAnalytics'
@@ -58,7 +64,7 @@ function Upcoming({
                 <tr>
                   <th scope="col">Pay date</th>
                   <th scope="col">Ex-date</th>
-                  <th scope="col">Symbol</th>
+                  <th scope="col">Ticker</th>
                   <th scope="col" className="num">Quantity</th>
                   <th scope="col" className="num">Per share</th>
                   <th scope="col" className="num">Gross</th>
@@ -71,7 +77,12 @@ function Upcoming({
                   <tr key={`${i.symbol}-${i.payDate ?? 'na'}-${i.exDate ?? 'na'}`}>
                     <td>{i.payDate != null ? formatDate(i.payDate) : '—'}</td>
                     <td>{i.exDate != null ? formatDate(i.exDate) : '—'}</td>
-                    <th scope="row" className="symbol">{i.symbol || '—'}</th>
+                    <th scope="row" className="symbol">
+                      {i.symbol || '—'}
+                      {i.description && (
+                        <span className="flex-import-file">{formatCompanyName(i.description)}</span>
+                      )}
+                    </th>
                     <td className="num">{formatQuantity(i.quantity)}</td>
                     <td className="num">
                       {i.grossRate != null ? formatCurrency(i.grossRate, i.currency) : '—'}
@@ -171,12 +182,12 @@ export function DividendsView(): React.JSX.Element {
       </section>
 
       <section className="panel">
-        <h2 className="panel-title">By symbol</h2>
+        <h2 className="panel-title">By Ticker</h2>
         <div className="table-scroll">
           <table className="holdings-table">
             <thead>
               <tr>
-                <th scope="col">Symbol</th>
+                <th scope="col">Ticker</th>
                 <th scope="col" className="num">Gross</th>
                 <th scope="col" className="num">Withholding</th>
                 <th scope="col" className="num">Net</th>
@@ -185,7 +196,12 @@ export function DividendsView(): React.JSX.Element {
             <tbody>
               {r.bySymbol.map((s) => (
                 <tr key={s.key}>
-                  <th scope="row" className="symbol">{s.label}</th>
+                  <th scope="row" className="symbol">
+                    {s.label}
+                    {s.description && (
+                      <span className="flex-import-file">{formatCompanyName(s.description)}</span>
+                    )}
+                  </th>
                   <td className="num">{c(s.grossBase)}</td>
                   <td className="num">{c(s.withholdingBase)}</td>
                   <td className="num">{c(s.netBase)}</td>
@@ -241,7 +257,7 @@ function Transactions({
             <thead>
               <tr>
                 <th scope="col">Date</th>
-                <th scope="col">Symbol</th>
+                <th scope="col">Ticker</th>
                 <th scope="col">Type</th>
                 <th scope="col" className="num">Amount</th>
                 <th scope="col" className="num">In {baseCurrency}</th>
@@ -251,7 +267,12 @@ function Transactions({
               {rows.map((e, i) => (
                 <tr key={`${e.symbol}-${e.date ?? 'na'}-${e.type}-${i}`}>
                   <td>{e.date != null ? formatDate(e.date) : '—'}</td>
-                  <th scope="row" className="symbol">{e.symbol || '—'}</th>
+                  <th scope="row" className="symbol">
+                    {e.symbol || '—'}
+                    {e.description && (
+                      <span className="flex-import-file">{formatCompanyName(e.description)}</span>
+                    )}
+                  </th>
                   <td>{e.type}</td>
                   <td className="num">{formatCurrency(e.amountNative, e.currency)}</td>
                   <td className="num">{c(e.amountBase)}</td>

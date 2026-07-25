@@ -76,6 +76,32 @@ export function formatSignedPercent(value: number): string {
   return base
 }
 
+/** Capitalise the first letter of each word, leaving intra-word letters (e.g. after an apostrophe) alone. */
+function titleCaseWords(s: string): string {
+  return s.toLowerCase().replace(/(^|[\s\-/])([a-z])/g, (_, sep: string, c: string) => sep + c.toUpperCase())
+}
+
+/**
+ * Shorten a raw IBKR instrument name into a readable company name for the dividend
+ * tables — e.g. "INTERACTIVE BROKERS GRO-CL A" → "Interactive Brokers",
+ * "SERABI GOLD PLC" → "Serabi Gold", "GLOBAL PAYMENTS INC" → "Global Payments".
+ * Strips a trailing share-class descriptor and any legal-form suffixes, then
+ * title-cases. Falls back to the trimmed input if stripping would empty it.
+ */
+export function formatCompanyName(raw: string): string {
+  const trimmed = raw.trim()
+  if (trimmed === '') return trimmed
+  // Drop a trailing share-class / group-class descriptor: "GRO-CL A", "-CL A",
+  // "CL A", "CLASS A", "SER A", … (with anything after it).
+  let s = trimmed.replace(/[\s-]+(?:[A-Z]{2,4}[\s-]*)?(?:CL|CLASS|SER|SERIES)\.?\s*[A-D]\b.*$/i, '')
+  // Drop trailing legal-form tokens, possibly several ("… HOLDINGS PLC").
+  const LEGAL =
+    /\s+(?:INC(?:ORPORATED)?|CORP(?:ORATION)?|COMPANY|CO|LIMITED|LTD|PLC|LLC|LLP|LP|GROUP|GRP|HOLDINGS?|HLDGS?|SE|SA|SPA|AG|NV|ASA|AB|OYJ)\.?$/i
+  while (LEGAL.test(s)) s = s.replace(LEGAL, '')
+  s = s.replace(/[.,\s]+$/, '').trim()
+  return titleCaseWords(s === '' ? trimmed : s)
+}
+
 /** Format a `YYYY-MM` month key as e.g. "Jan 2026"; passes through anything else (e.g. "Unknown"). */
 export function formatMonth(key: string): string {
   const match = /^(\d{4})-(\d{2})$/.exec(key)

@@ -12,6 +12,7 @@ vi.mock('@repositories/flex/flexReadRepository', () => ({
     hasStatements: vi.fn(),
     baseCurrency: vi.fn(),
     getDividendCashTransactions: vi.fn(),
+    getInstrumentNames: vi.fn(),
     getLatestOpenDividendAccruals: vi.fn(),
   },
 }))
@@ -27,6 +28,7 @@ const NOW = Date.UTC(2026, 1, 10, 13, 30)
 
 function cash(overrides: Partial<CashTransactionRow>): CashTransactionRow {
   return {
+    conid: null,
     symbol: 'AAA',
     description: '',
     type: 'Dividends',
@@ -58,6 +60,7 @@ function accrual(overrides: Partial<DividendAccrualRow>): DividendAccrualRow {
 beforeEach(() => {
   vi.clearAllMocks()
   repo.baseCurrency.mockReturnValue('EUR')
+  repo.getInstrumentNames.mockReturnValue([])
   repo.getLatestOpenDividendAccruals.mockReturnValue(undefined)
 })
 
@@ -69,9 +72,12 @@ describe('dividendService.getDividends', () => {
 
   it('converts to base currency and nets withholding against gross per symbol', () => {
     repo.hasStatements.mockReturnValue(true)
+    // The cash description is the verbose transaction string; the clean instrument name
+    // comes from SecurityInfo, resolved by conid.
+    repo.getInstrumentNames.mockReturnValue([{ conid: 11, symbol: 'AAA', description: 'Alpha Corp' }])
     repo.getDividendCashTransactions.mockReturnValue([
-      cash({ symbol: 'AAA', type: 'Dividends', amount: 100, fxRateToBase: 0.5 }),
-      cash({ symbol: 'AAA', type: 'Withholding Tax', amount: -15, fxRateToBase: 0.5 }),
+      cash({ conid: 11, symbol: 'AAA', description: 'AAA(...) CASH DIVIDEND', type: 'Dividends', amount: 100, fxRateToBase: 0.5 }),
+      cash({ conid: 11, symbol: 'AAA', description: 'AAA(...) - TAX', type: 'Withholding Tax', amount: -15, fxRateToBase: 0.5 }),
     ])
 
     const result = dividendService.getDividends()
@@ -79,7 +85,15 @@ describe('dividendService.getDividends', () => {
     expect(result.report.totalGrossBase).toBeCloseTo(50) // 100*0.5
     expect(result.report.totalWithholdingBase).toBeCloseTo(7.5) // magnitude of 15*0.5
     expect(result.report.totalNetBase).toBeCloseTo(42.5)
-    expect(result.report.bySymbol[0]).toMatchObject({ key: 'AAA', grossBase: 50, withholdingBase: 7.5, netBase: 42.5 })
+    expect(result.report.bySymbol[0]).toMatchObject({
+      key: 'AAA',
+      description: 'Alpha Corp', // clean SecurityInfo name, shown beneath the ticker in "By Ticker"
+      grossBase: 50,
+      withholdingBase: 7.5,
+      netBase: 42.5,
+    })
+    // The detail-table event carries the clean name too, not the verbose cash description.
+    expect(result.report.events[0]?.description).toBe('Alpha Corp')
   })
 
   it('counts payment-in-lieu as gross income', () => {

@@ -37,7 +37,7 @@ export function HoldingsTable({
         <caption className="sr-only">Current holdings</caption>
         <thead>
           <tr>
-            <th scope="col">Symbol</th>
+            <th scope="col">Ticker</th>
             <th scope="col">Description</th>
             <th scope="col" className="num">
               Quantity

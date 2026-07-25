@@ -35,6 +35,8 @@ export type DividendEvent = z.infer<typeof dividendEventSchema>
 export const dividendGroupSchema = z.object({
   key: z.string(),
   label: z.string(),
+  /** Instrument description for symbol groupings (shown beneath the ticker); absent for month groupings. */
+  description: z.string().optional(),
   grossBase: z.number(),
   /** Withholding tax as a positive magnitude (the amount withheld). */
   withholdingBase: z.number(),

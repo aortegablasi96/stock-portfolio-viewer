@@ -120,7 +120,7 @@ export function AllocationView(): React.JSX.Element {
           <table className="holdings-table">
             <thead>
               <tr>
-                <th scope="col">Symbol</th>
+                <th scope="col">Ticker</th>
                 <th scope="col">Class</th>
                 <th scope="col">Country</th>
                 <th scope="col">Sector</th>
