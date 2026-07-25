@@ -1,6 +1,7 @@
 import type { AllocationResult, AllocationSlice } from '@shared/domain/allocation'
 import { formatCurrency, formatDate, formatSignedCurrency } from '../../lib/format'
 import { PieChart } from '../charts/PieChart'
+import { BubbleMap } from '../charts/BubbleMap'
 import type { PieDatum } from '../../lib/pie'
 import { useAnalytics } from './useAnalytics'
 import { ClassifySectors } from './ClassifySectors'
@@ -57,6 +58,11 @@ export function AllocationView(): React.JSX.Element {
         <StatTile label="Positions" value={String(r.positions.length)} />
         {top && <StatTile label="Largest holding" value={top.symbol} hint={`${top.percentOfNav.toFixed(1)}% of NAV`} />}
       </div>
+
+      <section className="panel">
+        <h2 className="panel-title">By geography (world map)</h2>
+        <BubbleMap data={r.byCountry} formatValue={c} ariaLabel="Holdings by country, world map" />
+      </section>
 
       <div className="breakdown-grid">
         <section className="panel">
