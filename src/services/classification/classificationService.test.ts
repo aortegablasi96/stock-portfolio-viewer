@@ -38,7 +38,7 @@ function position(overrides: Partial<OpenPositionRow>): OpenPositionRow {
 }
 
 function latest(positions: OpenPositionRow[]): LatestPositions {
-  return { reportDate: 100, baseCurrency: 'EUR', positions, securities: [] }
+  return { reportDate: 100, baseCurrency: 'EUR', navEndingValue: null, positions, securities: [] }
 }
 
 beforeEach(() => {
