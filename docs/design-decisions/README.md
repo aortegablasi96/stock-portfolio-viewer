@@ -49,3 +49,4 @@ Other options and why they were not chosen.
 - `0011` — Custom frameless window shell with in-app title bar and IPC-driven controls
 - `0012` — In-place confirmation pattern for destructive actions (ConfirmAction)
 - `0013` — Performance view: cumulative TWR curve, chart tabs, and shared interactive hover
+- `0015` — Allocation view: cash as an asset class, derived from position NAV weights
