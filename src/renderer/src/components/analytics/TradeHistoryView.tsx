@@ -186,7 +186,7 @@ function TradeHistory({
             <thead>
               <tr>
                 <th scope="col">Date</th>
-                <th scope="col">Symbol</th>
+                <th scope="col">Ticker</th>
                 <th scope="col">Side</th>
                 <th scope="col" className="num">Quantity</th>
                 <th scope="col" className="num">Price</th>
@@ -199,7 +199,10 @@ function TradeHistory({
               {rows.map((t) => (
                 <tr key={t.tradeKey}>
                   <td>{t.dateTime != null ? formatDateTime(t.dateTime) : '—'}</td>
-                  <th scope="row" className="symbol">{t.symbol}</th>
+                  <th scope="row" className="symbol">
+                    {t.symbol}
+                    <span className="flex-import-file">{t.description}</span>
+                  </th>
                   <td>{t.side}</td>
                   <td className="num">{formatQuantity(t.quantity)}</td>
                   <td className="num">{formatCurrency(t.tradePrice, t.currency)}</td>
