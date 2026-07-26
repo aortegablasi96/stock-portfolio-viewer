@@ -29,6 +29,7 @@
  */
 import type { AllocationPosition } from '@shared/domain/allocation'
 import type { SectorPalette } from './sectorMap'
+import { divergingClass, returnPercent } from './gainLoss'
 import { centroidFor } from './worldGeo'
 
 /** Pixel radius of the smallest bubble. Also the hit-target floor — a 3px circle is a poor
@@ -77,8 +78,16 @@ export interface PositionBubble {
    * a popup about one company. Empty when unclassified; the view renders that as '—'.
    */
   sectorLabel: string
-  /** e.g. `pie-series-3`. The component resolves this to a value — see the module docblock. */
-  colorClass: string
+  /** Sector-mode colour, e.g. `pie-series-3`. The component resolves it — see the docblock. */
+  sectorClass: string
+  /** Gain/loss-mode colour, e.g. `map-diverge-6` (Story #95). Resolved the same way. */
+  gainLossClass: string
+  /**
+   * Unrealized return as a percent of cost basis, or `null` when there is no cost basis to
+   * measure against. Carried so the popup can state the figure the gain/loss colour encodes —
+   * the neutral step means "flat *or* unknown", and colour alone can't tell them apart.
+   */
+  returnPercent: number | null
   lon: number
   lat: number
   r: number
@@ -176,13 +185,16 @@ export function positionBubbles(
     const ordered = [...group].sort((a, b) => b.marketValueBase - a.marketValueBase)
     ordered.forEach((p, i) => {
       const { dLon, dLat } = spreadOffset(i, centroid.lat)
+      const pct = returnPercent(p.costBasisBase, p.unrealizedPnlBase)
       bubbles.push({
         id: String(p.conid ?? p.symbol),
         ticker: p.symbol,
         name: p.description,
         countryName: centroid.name,
         sectorLabel: p.sector,
-        colorClass: palette.colorClassOf(palette.displayKeyOf(p.sector)),
+        sectorClass: palette.colorClassOf(palette.displayKeyOf(p.sector)),
+        gainLossClass: divergingClass(pct),
+        returnPercent: pct,
         lon: centroid.lon + dLon,
         lat: centroid.lat + dLat,
         r: radiusFor(p.marketValueBase, maxValue),

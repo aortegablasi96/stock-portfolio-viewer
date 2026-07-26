@@ -214,14 +214,14 @@ describe('positionBubbles', () => {
       ],
       palette,
     )
-    expect(bubbles.find((b) => b.ticker === 'TECH')!.colorClass).toBe('pie-series-1')
-    expect(bubbles.find((b) => b.ticker === 'FIN')!.colorClass).toBe('pie-series-2')
+    expect(bubbles.find((b) => b.ticker === 'TECH')!.sectorClass).toBe('pie-series-1')
+    expect(bubbles.find((b) => b.ticker === 'FIN')!.sectorClass).toBe('pie-series-2')
   })
 
   it('paints an unclassified holding neutral rather than consuming a categorical hue', () => {
     const palette = sectorPalette([sectorSlice('Technology', 100), sectorSlice('', 20)])
     const { bubbles } = positionBubbles([position({ sector: '' })], palette)
-    expect(bubbles[0]!.colorClass).toBe('pie-series-neutral')
+    expect(bubbles[0]!.sectorClass).toBe('pie-series-neutral')
     // Empty label reaches the view, which renders it as '—' the way the Positions table does.
     expect(bubbles[0]!.sectorLabel).toBe('')
   })
@@ -233,8 +233,32 @@ describe('positionBubbles', () => {
       Array.from({ length: 9 }, (_, i) => sectorSlice(`S${i}`, 100 - i)),
     )
     const { bubbles } = positionBubbles([position({ sector: 'S8' })], palette)
-    expect(bubbles[0]!.colorClass).toBe('pie-series-neutral')
+    expect(bubbles[0]!.sectorClass).toBe('pie-series-neutral')
     expect(bubbles[0]!.sectorLabel).toBe('S8')
+  })
+
+  it('carries a gain/loss class and the return the popup states (#95)', () => {
+    const { bubbles } = positionBubbles(
+      [
+        position({ symbol: 'UP', costBasisBase: 1000, unrealizedPnlBase: 200 }),
+        position({ symbol: 'DOWN', costBasisBase: 1000, unrealizedPnlBase: -200 }),
+        position({ symbol: 'FLAT', costBasisBase: 1000, unrealizedPnlBase: 0 }),
+      ],
+      techPalette(),
+    )
+    const by = (t: string): (typeof bubbles)[number] => bubbles.find((b) => b.ticker === t)!
+    expect(by('UP')).toMatchObject({ returnPercent: 20, gainLossClass: 'map-diverge-7' })
+    expect(by('DOWN')).toMatchObject({ returnPercent: -20, gainLossClass: 'map-diverge-1' })
+    expect(by('FLAT')).toMatchObject({ returnPercent: 0, gainLossClass: 'map-diverge-4' })
+  })
+
+  it('reports an uncomputable return as null, on the neutral step', () => {
+    // No cost basis to measure against — neutral colour, but the popup must not claim 0.0%.
+    const { bubbles } = positionBubbles(
+      [position({ costBasisBase: 0, unrealizedPnlBase: 150 })],
+      techPalette(),
+    )
+    expect(bubbles[0]).toMatchObject({ returnPercent: null, gainLossClass: 'map-diverge-4' })
   })
 
   it('carries the popup payload through unmodified', () => {

@@ -3,9 +3,10 @@ import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import type { Feature, Point } from 'geojson'
 import type { AllocationPosition, AllocationSlice } from '@shared/domain/allocation'
-import { formatCompanyName } from '../../lib/format'
+import { formatCompanyName, formatSignedPercent } from '../../lib/format'
 import { sectorPalette } from '../../lib/sectorMap'
 import { positionBubbles, type PositionBubble } from '../../lib/mapBubbles'
+import { DIVERGING_CLASSES, RETURN_BOUND } from '../../lib/gainLoss'
 
 /**
  * Geographic map of holdings by company (Milestone M3, Stories #46, #70, #71, #89 & #92;
@@ -77,23 +78,32 @@ const POPUP_GAP_PX = 6
 
 type MapStatus = 'pending' | 'ready' | 'no-token' | 'unavailable'
 
+/** What the circles' colour encodes. Sector is the default; the owner switches (Story #95). */
+export type MapColorMode = 'sector' | 'gainLoss'
+
 /** The feature properties the layer paints from and the popup reads back. */
 interface BubbleProperties {
   ticker: string
   name: string
   countryName: string
   sectorLabel: string
-  colorClass: string
-  /** Resolved from the palette class — see `resolveColor`. */
-  color: string
+  sectorClass: string
+  /**
+   * Both modes' colours ride on every feature, so switching modes is a `setPaintProperty` call
+   * against the same source — nothing moves, resizes, reorders, or re-uploads.
+   */
+  sectorColor: string
+  gainLossColor: string
   r: number
   marketValue: number
   unrealizedPnl: number
   percentOfNav: number
+  /** `null` when there is no cost basis to measure against — rendered as unknown, not 0%. */
+  returnPercent: number | null
 }
 
 /**
- * Resolve a palette class (`pie-series-3`, `pie-series-neutral`) to the colour value behind it.
+ * Resolve a palette class (`pie-series-3`, `map-diverge-6`) to the colour value behind it.
  *
  * `:root` stays the single source of truth: duplicating the hexes into TypeScript would create a
  * second palette to keep in sync with the donut, which is the drift DDR-0019 exists to prevent.
@@ -101,10 +111,17 @@ interface BubbleProperties {
  * would need this re-run on theme change.
  */
 function resolveColor(styles: CSSStyleDeclaration, colorClass: string): string {
-  const suffix = colorClass.replace('pie-series-', '')
-  const value = styles.getPropertyValue(`--series-${suffix}`).trim()
+  const cssVar = colorClass.startsWith('map-diverge-')
+    ? `--diverge-${colorClass.replace('map-diverge-', '')}`
+    : `--series-${colorClass.replace('pie-series-', '')}`
+  const value = styles.getPropertyValue(cssVar).trim()
   // A missing variable would otherwise paint circles transparent and look like missing data.
   return value === '' ? styles.getPropertyValue('--series-neutral').trim() || '#898781' : value
+}
+
+/** The paint expression for a mode — data-driven, so switching never touches the source. */
+function colorExpressionFor(mode: MapColorMode): mapboxgl.ExpressionSpecification {
+  return ['get', mode === 'sector' ? 'sectorColor' : 'gainLossColor']
 }
 
 /** One holding as a GeoJSON point feature, carrying everything the layer and popup need. */
@@ -120,12 +137,14 @@ function toFeature(
       name: bubble.name,
       countryName: bubble.countryName,
       sectorLabel: bubble.sectorLabel,
-      colorClass: bubble.colorClass,
-      color: resolveColor(styles, bubble.colorClass),
+      sectorClass: bubble.sectorClass,
+      sectorColor: resolveColor(styles, bubble.sectorClass),
+      gainLossColor: resolveColor(styles, bubble.gainLossClass),
       r: bubble.r,
       marketValue: bubble.marketValueBase,
       unrealizedPnl: bubble.unrealizedPnlBase,
       percentOfNav: bubble.percentOfNav,
+      returnPercent: bubble.returnPercent,
     },
   }
 }
@@ -164,7 +183,7 @@ function createPopupContent(
   const meta = document.createElement('p')
   meta.className = 'map-popup-meta'
   const swatch = document.createElement('span')
-  swatch.className = `legend-swatch ${props.colorClass}`
+  swatch.className = `legend-swatch ${props.sectorClass}`
   swatch.setAttribute('aria-hidden', 'true')
   meta.appendChild(swatch)
   const metaText = document.createElement('span')
@@ -188,10 +207,16 @@ function createPopupContent(
   }
   addRow('Market value', formatValue(props.marketValue))
   addRow('% of NAV', `${props.percentOfNav.toFixed(1)}%`)
+  const tone =
+    props.unrealizedPnl === 0 ? '' : props.unrealizedPnl > 0 ? 'stat-positive' : 'stat-negative'
+  addRow('Unrealized P&L', formatSigned(props.unrealizedPnl), tone)
+  // The figure the gain/loss colour encodes, stated in text: the neutral step means "flat *or*
+  // unknown", and colour alone cannot tell those apart (Story #95). '—' rather than a fabricated
+  // 0.0% when there is no cost basis to measure against.
   addRow(
-    'Unrealized P&L',
-    formatSigned(props.unrealizedPnl),
-    props.unrealizedPnl === 0 ? '' : props.unrealizedPnl > 0 ? 'stat-positive' : 'stat-negative',
+    'Return',
+    props.returnPercent === null ? '—' : formatSignedPercent(props.returnPercent),
+    props.returnPercent === null ? '' : tone,
   )
   root.appendChild(rows)
 
@@ -203,6 +228,7 @@ export function BubbleMap({
   bySector,
   formatValue,
   formatSigned,
+  colorMode,
   ariaLabel,
   emptyMessage = 'No country data to map yet.',
 }: {
@@ -210,6 +236,7 @@ export function BubbleMap({
   bySector: AllocationSlice[]
   formatValue: (v: number) => string
   formatSigned: (v: number) => string
+  colorMode: MapColorMode
   ariaLabel: string
   emptyMessage?: string
 }): React.JSX.Element {
@@ -233,6 +260,9 @@ export function BubbleMap({
   const formatSignedRef = useRef(formatSigned)
   formatValueRef.current = formatValue
   formatSignedRef.current = formatSigned
+  /** Read once when the layer is first created; thereafter the effect below drives it. */
+  const colorModeRef = useRef(colorMode)
+  colorModeRef.current = colorMode
 
   const [status, setStatus] = useState<MapStatus>(MAPBOX_TOKEN ? 'pending' : 'no-token')
   const [zoomed, setZoomed] = useState(false)
@@ -290,7 +320,7 @@ export function BubbleMap({
           // Data-driven throughout, so a later story can re-express size or colour (gain/loss,
           // filtering) by changing an expression rather than how the map is drawn.
           'circle-radius': ['get', 'r'],
-          'circle-color': ['get', 'color'],
+          'circle-color': colorExpressionFor(colorModeRef.current),
           'circle-opacity': 0.85,
           // A dark ring against a light basemap guarantees figure/ground separation whatever the
           // categorical hue — the palette was validated against the dark panel surface, not tiles.
@@ -374,6 +404,15 @@ export function BubbleMap({
     popupRef.current?.remove()
   }, [bubbles, status])
 
+  // --- Colour mode ---------------------------------------------------------
+  // Only the paint expression changes. Both colours already ride on every feature, so the source
+  // is never touched: nothing moves, resizes, reorders, or re-uploads, and the camera is untouched.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || status !== 'ready' || !map.getLayer(LAYER_ID)) return
+    map.setPaintProperty(LAYER_ID, 'circle-color', colorExpressionFor(colorMode))
+  }, [colorMode, status])
+
   const zoomBy = useCallback((delta: number) => {
     const map = mapRef.current
     if (!map) return
@@ -447,16 +486,33 @@ export function BubbleMap({
         )}
       </div>
       <figcaption className="chart-legend bubble-map-legend">
-        <ul className="bubble-map-sectors" aria-label="Sector colours">
-          {legend.map((s) => (
-            <li key={s.key} className="bubble-map-sector">
-              <span className={`legend-swatch ${s.colorClass}`} aria-hidden="true" />
-              {s.label}
-            </li>
-          ))}
-        </ul>
+        {colorMode === 'sector' ? (
+          <ul className="bubble-map-sectors" aria-label="Sector colours">
+            {legend.map((s) => (
+              <li key={s.key} className="bubble-map-sector">
+                <span className={`legend-swatch ${s.colorClass}`} aria-hidden="true" />
+                {s.label}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div
+            className="map-scale"
+            aria-label={`Unrealized return scale, minus ${RETURN_BOUND} percent to plus ${RETURN_BOUND} percent`}
+          >
+            <span className="map-scale-end">−{RETURN_BOUND}%</span>
+            <span className="map-scale-swatches" aria-hidden="true">
+              {DIVERGING_CLASSES.map((c) => (
+                <span key={c} className={`legend-swatch ${c}`} />
+              ))}
+            </span>
+            <span className="map-scale-end">+{RETURN_BOUND}%</span>
+          </div>
+        )}
         <span className="bubble-map-pan-hint">
-          Circle size ∝ holding value · positioned by issuer country · scroll to zoom · drag to pan
+          {colorMode === 'sector'
+            ? 'Circle size ∝ holding value · positioned by issuer country · scroll to zoom · drag to pan'
+            : `Colour = unrealized return on cost · beyond ±${RETURN_BOUND}% saturates · gray means flat or unknown`}
         </span>
         {unknown.count > 0 && (
           <span
