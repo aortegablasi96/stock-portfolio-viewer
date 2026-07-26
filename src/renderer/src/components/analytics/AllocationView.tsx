@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { AllocationReport, AllocationResult, AllocationSlice } from '@shared/domain/allocation'
 import { formatCurrency, formatDate, formatSignedCurrency } from '../../lib/format'
-import { BubbleMap } from '../charts/BubbleMap'
+import { BubbleMap, type MapColorMode } from '../charts/BubbleMap'
 import { AllocationBreakdown } from './AllocationBreakdown'
 import { useAnalytics } from './useAnalytics'
 import { ClassifySectors } from './ClassifySectors'
@@ -27,6 +27,16 @@ const BREAKDOWN_TABS = [
 ] as const
 type BreakdownTab = (typeof BREAKDOWN_TABS)[number]['id']
 
+/**
+ * What the map's circles encode with colour (Story #95). Sector is the default — the map opens the
+ * way it always has, and gain/loss is something the owner asks for. Deliberately not persisted:
+ * the question "where am I losing money?" is one you ask, not a mode you live in.
+ */
+const COLOR_MODES = [
+  { id: 'sector', label: 'Sector' },
+  { id: 'gainLoss', label: 'Gain/loss' },
+] as const satisfies readonly { id: MapColorMode; label: string }[]
+
 function slicesFor(report: AllocationReport, tab: BreakdownTab): AllocationSlice[] {
   switch (tab) {
     case 'assetClass':
@@ -43,6 +53,7 @@ function slicesFor(report: AllocationReport, tab: BreakdownTab): AllocationSlice
 export function AllocationView(): React.JSX.Element {
   const { state, reload } = useAnalytics<AllocationResult>(window.api.getAllocation)
   const [tab, setTab] = useState<BreakdownTab>('assetClass')
+  const [colorMode, setColorMode] = useState<MapColorMode>('sector')
 
   if (state.phase === 'loading') {
     return (
@@ -80,18 +91,37 @@ export function AllocationView(): React.JSX.Element {
       </div>
 
       <section className="panel">
-        <h2 className="panel-title">By geography &amp; sector (world map)</h2>
+        <div className="panel-header">
+          <h2 className="panel-title">By geography &amp; sector (world map)</h2>
+          <div className="chart-tabs" role="tablist" aria-label="Map colour">
+            {COLOR_MODES.map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                role="tab"
+                aria-selected={colorMode === m.id}
+                className={`chart-tab ${colorMode === m.id ? 'chart-tab-active' : ''}`}
+                onClick={() => setColorMode(m.id)}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+        </div>
         <BubbleMap
           positions={r.positions}
           bySector={r.bySector}
           formatValue={c}
           formatSigned={(v) => formatSignedCurrency(v, r.baseCurrency)}
+          colorMode={colorMode}
           // The map's circles are canvas, so they carry no per-holding text a screen reader can
           // reach. This label states what the map totals and points at the Positions table below,
           // which lists every one of these holdings with the same figures (DDR-0020).
           ariaLabel={`World map of ${r.positions.length} holdings totalling ${c(
             r.totalMarketValueBase,
-          )}, positioned by issuer country and coloured by sector. Each holding is listed with the same figures in the Positions table below.`}
+          )}, positioned by issuer country and coloured by ${
+            colorMode === 'sector' ? 'sector' : 'unrealized return'
+          }. Each holding is listed with the same figures in the Positions table below.`}
         />
       </section>
 

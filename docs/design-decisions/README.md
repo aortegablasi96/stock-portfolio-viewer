@@ -56,3 +56,4 @@ Other options and why they were not chosen.
 - `0018` — One shared content measure for the shell; charts sized by aspect ratio
 - `0019` — Allocation map: Mapbox basemap with an SVG bubble overlay (supersedes `0014`) *(superseded by 0020 on the overlay; basemap decisions still apply)*
 - `0020` — Allocation map: one canvas circle per holding, with a hover popup (supersedes `0019`)
+- `0021` — Allocation map: the gain/loss colour scale (red↔gray↔blue, fixed ±25%; extends `0020`)
