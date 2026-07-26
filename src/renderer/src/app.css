@@ -1125,6 +1125,36 @@ html {
   outline-offset: 2px;
 }
 
+/* Multi-select type filter (Story #73): a group of toggle chips (reusing .chart-tab) plus
+   a "Clear" affordance shown only while something is selected. */
+.type-filter {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+}
+
+.type-filter-clear {
+  padding: 0.35rem 0.5rem;
+  font: inherit;
+  font-size: 0.82rem;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.type-filter-clear:hover {
+  color: var(--text);
+}
+
+.type-filter-clear:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 /* Performance time-range filter: preset strip + optional custom date inputs (Story #69). */
 .range-bar {
   display: flex;

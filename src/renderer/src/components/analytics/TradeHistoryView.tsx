@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import type {
   RealizedBySymbol,
   RealizedGainsResult,
@@ -10,7 +9,8 @@ import {
   formatQuantity,
   formatSignedCurrency,
 } from '../../lib/format'
-import { ALL_TYPES, distinctTypes, filterByType } from '../../lib/tableFilter'
+import { distinctTypes, filterByTypes } from '../../lib/tableFilter'
+import { useTypeSelection } from './useTypeSelection'
 import { useAnalytics } from './useAnalytics'
 import { NeedsImport } from './NeedsImport'
 import { StatTile, toneOf } from './StatTile'
@@ -158,22 +158,22 @@ function TradeHistory({
   trades: TradeRow[]
   baseCurrency: string
 }): React.JSX.Element {
-  const [type, setType] = useState<string>(ALL_TYPES)
+  const { selected, toggle, clear } = useTypeSelection()
   const sc = (v: number): string => formatSignedCurrency(v, baseCurrency)
 
   const types = distinctTypes(trades, (t) => t.tradeType)
-  const rows = filterByType(trades, (t) => t.tradeType, type)
+  const rows = filterByTypes(trades, (t) => t.tradeType, selected)
 
   return (
     <section className="panel">
       <div className="panel-header">
         <h2 className="panel-title">Trade history</h2>
         <TypeFilter
-          id="trade-type-filter"
           label="type"
           types={types}
-          value={type}
-          onChange={setType}
+          selected={selected}
+          onToggle={toggle}
+          onClear={clear}
           shown={rows.length}
           total={trades.length}
         />
