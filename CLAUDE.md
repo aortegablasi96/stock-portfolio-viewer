@@ -115,11 +115,14 @@ Canonical flows to copy when adding a feature:
   reading imported history through a dedicated read-only repository (`flexReadRepository`),
   doing base-currency conversion and calculation in the service, and returning an
   `ok | needs_import` result the renderer renders as a first-class empty state. Charts are
-  dependency-free inline SVG (`components/charts/`) — including the pannable/zoomable world
-  bubble map, which avoids a geo library and a bundled polygon dataset by projecting
-  equirectangularly onto ISO-3166 alpha-2 centroids (DDR-0014), and the performance view's
-  cumulative **TWR** curve, chosen over a value curve so deposits and withdrawals don't move
-  it (DDR-0013). See DDR-0005, DDR-0006.
+  dependency-free inline SVG (`components/charts/`) — including the allocation donuts and the
+  performance view's cumulative **TWR** curve, chosen over a value curve so deposits and
+  withdrawals don't move it (DDR-0013). The **Allocation map is the one scoped exception**: a
+  Mapbox GL JS basemap (ADR-0007) carrying one canvas circle per holding, area-proportional to
+  market value and coloured from the Sector donut's palette, anchored to ISO-3166 alpha-2
+  centroids and fanned on a spiral so holdings sharing a country stay separately hoverable —
+  which makes the map deliberately *approximate*, positioned by issuer country rather than by
+  company (DDR-0020, superseding DDR-0019 and DDR-0014). See DDR-0005, DDR-0006.
 - **Fire-and-forget command + state event:** the `window:*` channels show the *other* IPC
   shape — `ipcRenderer.send` / `ipcMain.on` with no payload and no Zod (there is nothing to
   validate), plus one `invoke` query (`window:isMaximized`) and one main→renderer event
@@ -662,9 +665,11 @@ Mock repositories and external providers.
 Vitest picks up every `src/**/*.test.ts` and runs it in a **Node** environment (**no jsdom**),
 so no test may render a React component. This shapes the renderer: chart maths, filtering,
 sorting and formatting are **extracted out of components into pure modules under
-`renderer/src/lib/`** (`format`, `pie`, `worldGeo`, `mapViewport`, `tableFilter`, `column`,
-`sectorMap`, `performanceRange`) precisely so they can be tested — follow that split when
-adding a component with real logic in it. Pure repository helpers that touch no data source
+`renderer/src/lib/`** (`format`, `pie`, `worldGeo`, `mapBubbles`, `tableFilter`, `column`,
+`dateRange`, `sectorMap`, `performanceRange`) precisely so they can be tested — follow that
+split when adding a component with real logic in it. The map is the sharpest case: colour
+resolution needs `getComputedStyle` and so stays in the component, while `mapBubbles` emits
+palette *classes* — that seam is what keeps the map's geometry testable under Node. Pure repository helpers that touch no data source
 (`flexStatementParser`, `snapshotMapping`, `fifoSummary`) are unit-tested the same way.
 
 Every completed feature should include:

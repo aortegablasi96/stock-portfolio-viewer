@@ -1,28 +1,37 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
+import type { Feature, Point } from 'geojson'
 import type { AllocationPosition, AllocationSlice } from '@shared/domain/allocation'
-import { sectorPalette, splitSectorBubbles, type SectorBubble } from '../../lib/sectorMap'
+import { formatCompanyName } from '../../lib/format'
+import { sectorPalette } from '../../lib/sectorMap'
+import { positionBubbles, type PositionBubble } from '../../lib/mapBubbles'
 
 /**
- * Geographic map of holdings by country, segmented by sector (Milestone M3, Stories #46, #70,
- * #71 & #89; DDR-0019, superseding DDR-0014 on the basemap).
+ * Geographic map of holdings by company (Milestone M3, Stories #46, #70, #71, #89 & #92;
+ * DDR-0020, superseding DDR-0019 on how the data is drawn).
  *
- * The basemap is Mapbox GL JS; the data is an **overlay of SVG markers on top of it**, never
- * drawn into the map canvas. That split is deliberate (DDR-0019): it keeps the native `<title>`
- * tooltips that make a bubble identifiable, and it keeps the bubbles independent of the basemap
- * provider. Each country the owner holds is one marker at its centroid, area proportional to
- * market value, split into sector wedges coloured from the same palette the Sector donut uses
- * (`lib/sectorMap` → `lib/pie`) — so a sector wears one hue on the map, in the donut, and in the
- * map's legend.
+ * Each holding is one circle, area proportional to its base-currency market value, coloured from
+ * the same palette the Sector donut uses — so a sector wears one hue on the map, in the donut, and
+ * in the map's legend. Hovering a circle opens a popup with the figures the Positions table would
+ * otherwise have to be consulted for.
  *
- * Positioning is Mapbox's job: markers are anchored by `lon`/`lat` and their wedge paths are laid
- * out around a local origin, so the library repositions them through pan and zoom — including
- * across the antimeridian, where the world repeats — without this component re-deriving geometry.
+ * **Drawn into the map canvas, not over it.** DDR-0019 kept bubbles as an SVG overlay precisely to
+ * preserve native `<title>` tooltips; #92 reverses that for data-driven sizing and colouring that a
+ * later story can re-express (gain/loss colouring, filtering, clustering) without restructuring how
+ * the map is drawn. The cost is real: a canvas circle carries no `<title>`, cannot take focus, and
+ * cannot be hovered by a keyboard. The Positions table below is the accessible equivalent — it
+ * carries every field this popup shows, for every holding, in semantic markup (DDR-0020).
  *
- * **No holding data leaves the machine.** Bubbles are computed in the renderer from imported Flex
- * data; only tile requests reach the network, and the CSP admits exactly one origin with Mapbox's
- * telemetry endpoint deliberately excluded (ADR-0007).
+ * Colour crosses from CSS into the canvas here, and only here. `lib/mapBubbles` emits palette
+ * *classes*; resolving one to a value needs `getComputedStyle`, which does not exist in Vitest's
+ * Node environment. Keeping the resolution in the component is what leaves every bit of the map's
+ * geometry unit-testable.
+ *
+ * **No holding data leaves the machine.** Features are built in the renderer from imported Flex
+ * data and handed to a client-side GeoJSON source — never a network request. Only tiles and styles
+ * are fetched, from the one origin the CSP admits, with Mapbox's telemetry endpoint deliberately
+ * excluded (ADR-0007).
  *
  * When the token is unset or tiles can't be reached, the panel degrades to a message in place of
  * the basemap rather than erroring — the rest of the Allocation view is unaffected, and the
@@ -34,7 +43,7 @@ const MAPBOX_TOKEN = import.meta.env.RENDERER_VITE_MAPBOX_TOKEN ?? ''
 
 /**
  * A muted monochrome basemap, chosen for legibility rather than taste (DDR-0019): the sector
- * palette is categorical, so the wedge hues must stay the only strongly saturated thing on screen.
+ * palette is categorical, so the circle hues must stay the only strongly saturated thing on screen.
  */
 const MAP_STYLE = 'mapbox://styles/mapbox/light-v11'
 
@@ -60,80 +69,171 @@ const WORLD_BOUNDS: [[number, number], [number, number]] = [
 /** Below this delta from the fitted zoom the view counts as "not zoomed" (controls disabled). */
 const ZOOM_EPSILON = 0.01
 
+const SOURCE_ID = 'holdings'
+const LAYER_ID = 'holding-bubbles'
+
+/** Gap between a circle's edge and its popup, so the popup never covers what it describes. */
+const POPUP_GAP_PX = 6
+
 type MapStatus = 'pending' | 'ready' | 'no-token' | 'unavailable'
 
-/**
- * Build one country bubble as a marker element for Mapbox.
- *
- * Imperative DOM rather than JSX because the element is handed to `mapboxgl.Marker`, which owns
- * its lifecycle and positioning. The wedge paths already come laid out around a 0,0 origin, so the
- * viewBox is simply centred on that origin and the marker needs no per-frame transform.
- *
- * The SVG is wrapped in a `div` because `Marker` types its element as an `HTMLElement`.
- */
-function createBubbleElement(
-  bubble: SectorBubble,
-  formatValue: (v: number) => string,
-): HTMLDivElement {
-  const ns = 'http://www.w3.org/2000/svg'
-  const size = bubble.r * 2
-  const wrapper = document.createElement('div')
-  wrapper.className = 'bubble-map-bubble'
-  const svg = document.createElementNS(ns, 'svg')
-  svg.setAttribute('width', String(size))
-  svg.setAttribute('height', String(size))
-  svg.setAttribute('viewBox', `${-bubble.r} ${-bubble.r} ${size} ${size}`)
-  svg.setAttribute('display', 'block')
-  svg.setAttribute('aria-hidden', 'true')
+/** The feature properties the layer paints from and the popup reads back. */
+interface BubbleProperties {
+  ticker: string
+  name: string
+  countryName: string
+  sectorLabel: string
+  colorClass: string
+  /** Resolved from the palette class — see `resolveColor`. */
+  color: string
+  r: number
+  marketValue: number
+  unrealizedPnl: number
+  percentOfNav: number
+}
 
-  for (const wedge of bubble.wedges) {
-    const path = document.createElementNS(ns, 'path')
-    path.setAttribute('class', `bubble-map-wedge ${wedge.colorClass}`)
-    path.setAttribute('d', wedge.path)
-    const title = document.createElementNS(ns, 'title')
-    // textContent, never innerHTML — country and sector strings originate from broker data.
-    title.textContent = `${bubble.name} · ${wedge.label} — ${formatValue(wedge.value)} (${wedge.percent.toFixed(1)}% of NAV)`
-    path.appendChild(title)
-    svg.appendChild(path)
+/**
+ * Resolve a palette class (`pie-series-3`, `pie-series-neutral`) to the colour value behind it.
+ *
+ * `:root` stays the single source of truth: duplicating the hexes into TypeScript would create a
+ * second palette to keep in sync with the donut, which is the drift DDR-0019 exists to prevent.
+ * The app is dark-only today, so resolving once when the layer is built is enough — a light theme
+ * would need this re-run on theme change.
+ */
+function resolveColor(styles: CSSStyleDeclaration, colorClass: string): string {
+  const suffix = colorClass.replace('pie-series-', '')
+  const value = styles.getPropertyValue(`--series-${suffix}`).trim()
+  // A missing variable would otherwise paint circles transparent and look like missing data.
+  return value === '' ? styles.getPropertyValue('--series-neutral').trim() || '#898781' : value
+}
+
+/** One holding as a GeoJSON point feature, carrying everything the layer and popup need. */
+function toFeature(
+  bubble: PositionBubble,
+  styles: CSSStyleDeclaration,
+): Feature<Point, BubbleProperties> {
+  return {
+    type: 'Feature',
+    geometry: { type: 'Point', coordinates: [bubble.lon, bubble.lat] },
+    properties: {
+      ticker: bubble.ticker,
+      name: bubble.name,
+      countryName: bubble.countryName,
+      sectorLabel: bubble.sectorLabel,
+      colorClass: bubble.colorClass,
+      color: resolveColor(styles, bubble.colorClass),
+      r: bubble.r,
+      marketValue: bubble.marketValueBase,
+      unrealizedPnl: bubble.unrealizedPnlBase,
+      percentOfNav: bubble.percentOfNav,
+    },
+  }
+}
+
+/**
+ * Build the popup body.
+ *
+ * Imperative DOM rather than JSX because `mapboxgl.Popup` owns its content element. Every string
+ * is set with `textContent`, never `innerHTML` — tickers, company names, sectors and countries all
+ * originate from broker data.
+ *
+ * The layout mirrors a Positions table row on purpose: same fields, same order, same formatters, so
+ * the owner learns one layout rather than two and the two surfaces can be read against each other.
+ */
+function createPopupContent(
+  props: BubbleProperties,
+  formatValue: (v: number) => string,
+  formatSigned: (v: number) => string,
+): HTMLDivElement {
+  const root = document.createElement('div')
+  root.className = 'map-popup'
+
+  const ticker = document.createElement('p')
+  ticker.className = 'map-popup-ticker'
+  ticker.textContent = props.ticker
+  root.appendChild(ticker)
+
+  if (props.name !== '') {
+    const name = document.createElement('p')
+    name.className = 'map-popup-name'
+    // The same readable treatment the dividend tables give raw broker names.
+    name.textContent = formatCompanyName(props.name)
+    root.appendChild(name)
   }
 
-  // A thin outline ring ties the wedges together as one country bubble.
-  const ring = document.createElementNS(ns, 'circle')
-  ring.setAttribute('class', 'bubble-map-outline')
-  ring.setAttribute('cx', '0')
-  ring.setAttribute('cy', '0')
-  ring.setAttribute('r', String(bubble.r))
-  svg.appendChild(ring)
+  const meta = document.createElement('p')
+  meta.className = 'map-popup-meta'
+  const swatch = document.createElement('span')
+  swatch.className = `legend-swatch ${props.colorClass}`
+  swatch.setAttribute('aria-hidden', 'true')
+  meta.appendChild(swatch)
+  const metaText = document.createElement('span')
+  // An unclassified holding reads '—', exactly as its row in the Positions table does.
+  metaText.textContent = `${props.sectorLabel || '—'} · ${props.countryName}`
+  meta.appendChild(metaText)
+  root.appendChild(meta)
 
-  wrapper.appendChild(svg)
-  return wrapper
+  const rows = document.createElement('dl')
+  rows.className = 'map-popup-rows'
+  const addRow = (label: string, value: string, toneClass = ''): void => {
+    const row = document.createElement('div')
+    row.className = 'map-popup-row'
+    const dt = document.createElement('dt')
+    dt.textContent = label
+    const dd = document.createElement('dd')
+    dd.className = toneClass
+    dd.textContent = value
+    row.append(dt, dd)
+    rows.appendChild(row)
+  }
+  addRow('Market value', formatValue(props.marketValue))
+  addRow('% of NAV', `${props.percentOfNav.toFixed(1)}%`)
+  addRow(
+    'Unrealized P&L',
+    formatSigned(props.unrealizedPnl),
+    props.unrealizedPnl === 0 ? '' : props.unrealizedPnl > 0 ? 'stat-positive' : 'stat-negative',
+  )
+  root.appendChild(rows)
+
+  return root
 }
 
 export function BubbleMap({
   positions,
   bySector,
   formatValue,
+  formatSigned,
   ariaLabel,
   emptyMessage = 'No country data to map yet.',
 }: {
   positions: AllocationPosition[]
   bySector: AllocationSlice[]
   formatValue: (v: number) => string
+  formatSigned: (v: number) => string
   ariaLabel: string
   emptyMessage?: string
 }): React.JSX.Element {
   const { bubbles, unknown, legend } = useMemo(() => {
     const palette = sectorPalette(bySector)
-    const split = splitSectorBubbles(positions, palette)
+    const split = positionBubbles(positions, palette)
     return { ...split, legend: palette.legend }
   }, [positions, bySector])
 
   const containerRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<mapboxgl.Map | null>(null)
-  const markersRef = useRef<mapboxgl.Marker[]>([])
+  const popupRef = useRef<mapboxgl.Popup | null>(null)
   /** The zoom `fitBounds` settled on for the current frame size — the "not zoomed" baseline. */
   const baseZoomRef = useRef<number | null>(null)
   const zoomedRef = useRef(false)
+  /**
+   * Formatters are read at hover time only. Holding them in refs keeps a new function identity
+   * from rebuilding the whole source on every render.
+   */
+  const formatValueRef = useRef(formatValue)
+  const formatSignedRef = useRef(formatSigned)
+  formatValueRef.current = formatValue
+  formatSignedRef.current = formatSigned
+
   const [status, setStatus] = useState<MapStatus>(MAPBOX_TOKEN ? 'pending' : 'no-token')
   const [zoomed, setZoomed] = useState(false)
 
@@ -154,6 +254,19 @@ export function BubbleMap({
     })
     mapRef.current = map
 
+    // One popup for the whole map, moved and re-filled as the cursor crosses circles. Creating one
+    // per hover flickers visibly when sliding between neighbours in a dense rosette — which is
+    // exactly where a concentrated portfolio is read.
+    const popup = new mapboxgl.Popup({
+      closeButton: false,
+      closeOnClick: false,
+      // `anchor` is deliberately unset: Mapbox then flips the popup to keep it inside the frame,
+      // which is the edge-visibility requirement handled for free.
+      maxWidth: '15rem',
+      className: 'map-popup-shell',
+    })
+    popupRef.current = popup
+
     /** Re-fit the world and re-baseline what "not zoomed" means at this frame size. */
     const fitWorld = (duration: number): void => {
       map.fitBounds(WORLD_BOUNDS, { padding: 0, duration, linear: true })
@@ -165,6 +278,54 @@ export function BubbleMap({
     }
 
     map.on('load', () => {
+      map.addSource(SOURCE_ID, {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      })
+      map.addLayer({
+        id: LAYER_ID,
+        type: 'circle',
+        source: SOURCE_ID,
+        paint: {
+          // Data-driven throughout, so a later story can re-express size or colour (gain/loss,
+          // filtering) by changing an expression rather than how the map is drawn.
+          'circle-radius': ['get', 'r'],
+          'circle-color': ['get', 'color'],
+          'circle-opacity': 0.85,
+          // A dark ring against a light basemap guarantees figure/ground separation whatever the
+          // categorical hue — the palette was validated against the dark panel surface, not tiles.
+          'circle-stroke-width': 1,
+          'circle-stroke-color': getComputedStyle(document.documentElement)
+            .getPropertyValue('--card')
+            .trim(),
+        },
+      })
+
+      map.on('mousemove', LAYER_ID, (e) => {
+        const feature = e.features?.[0]
+        if (!feature || feature.geometry.type !== 'Point' || !feature.properties) return
+        const props = feature.properties as BubbleProperties
+        const [lon, lat] = feature.geometry.coordinates as [number, number]
+        // The world repeats when panned past the antimeridian; without this the popup would open
+        // on the copy of the globe the cursor is not over.
+        let lng = lon
+        while (Math.abs(e.lngLat.lng - lng) > 180) lng += e.lngLat.lng > lng ? 360 : -360
+
+        map.getCanvas().style.cursor = 'pointer'
+        popup
+          .setLngLat([lng, lat])
+          .setOffset(props.r + POPUP_GAP_PX)
+          .setDOMContent(
+            createPopupContent(props, formatValueRef.current, formatSignedRef.current),
+          )
+          .addTo(map)
+      })
+
+      map.on('mouseleave', LAYER_ID, () => {
+        map.getCanvas().style.cursor = ''
+        popup.remove()
+      })
+
       setStatus('ready')
       fitWorld(0)
     })
@@ -189,28 +350,29 @@ export function BubbleMap({
 
     return () => {
       observer.disconnect()
+      popup.remove()
+      popupRef.current = null
       mapRef.current = null
       map.remove()
     }
   }, [])
 
-  // --- Bubble overlay ------------------------------------------------------
+  // --- Bubble data ---------------------------------------------------------
   useEffect(() => {
     const map = mapRef.current
     if (!map || status !== 'ready') return
 
-    for (const marker of markersRef.current) marker.remove()
-    markersRef.current = bubbles.map((bubble) =>
-      new mapboxgl.Marker({ element: createBubbleElement(bubble, formatValue) })
-        .setLngLat([bubble.lon, bubble.lat])
-        .addTo(map),
-    )
-
-    return () => {
-      for (const marker of markersRef.current) marker.remove()
-      markersRef.current = []
-    }
-  }, [bubbles, formatValue, status])
+    const source = map.getSource(SOURCE_ID)
+    if (!source) return
+    const styles = getComputedStyle(document.documentElement)
+    // `setData` rather than removing and re-adding the layer: the source is the thing that
+    // changes, and swapping it out would flash the circles off and on.
+    ;(source as mapboxgl.GeoJSONSource).setData({
+      type: 'FeatureCollection',
+      features: bubbles.map((b) => toFeature(b, styles)),
+    })
+    popupRef.current?.remove()
+  }, [bubbles, status])
 
   const zoomBy = useCallback((delta: number) => {
     const map = mapRef.current
@@ -293,7 +455,9 @@ export function BubbleMap({
             </li>
           ))}
         </ul>
-        <span className="bubble-map-pan-hint">Circle size ∝ holding value · scroll to zoom · drag to pan</span>
+        <span className="bubble-map-pan-hint">
+          Circle size ∝ holding value · positioned by issuer country · scroll to zoom · drag to pan
+        </span>
         {unknown.count > 0 && (
           <span
             className="bubble-map-unknown"

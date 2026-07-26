@@ -1,33 +1,25 @@
 /**
- * Pure transforms behind the Allocation world map's sector segmentation (Story #71).
+ * The shared sector → colour assignment (Milestone M3, Story #30).
  *
- * The map already places one bubble per issuer country (Story #46). This story splits each
- * bubble into sector wedges so the owner can read how their holdings' sectors are distributed
- * across geography. Sector comes from the local classification cache (Story #30, DDR-0009), so
- * a position may legitimately be unclassified.
+ * One palette, built once from the allocation report's `bySector` breakdown, so a sector wears the
+ * same hue everywhere it appears: in the Sector donut, on the Allocation map's holding circles, and
+ * in the map's own legend. That shared identity is the point — a colour must mean the same thing on
+ * both surfaces or neither can be read against the other.
  *
- * Everything here is derived in the renderer from `report.positions` (which already carry
- * `issuerCountry`, `sector` and the base-currency value) plus `report.bySector` (for a stable,
- * donut-matching colour assignment) — nothing below the renderer changes, and no holding data
- * leaves the machine to draw the map (ADR-0007). Kept out of the component so the country
- * grouping, wedge aggregation, colour matching and radius scaling are unit-tested directly, the
- * way the other `lib/` helpers are — Vitest runs Node-only, so this module is where the map's
- * testable logic lives.
+ * Built from the donut's own `groupTail` + `sliceColorClasses` pipeline (`lib/pie`), so sectors past
+ * the palette's eight slots fold into a neutral 'Other' exactly as the donut folds its tail, and
+ * unclassified positions share that neutral rather than consuming a categorical hue.
  *
- * Output is deliberately **projection-free** (Story #89, DDR-0019): a bubble carries the
- * `lon`/`lat` of its country's centroid and its wedges are laid out around a local 0,0 origin.
- * The map owns projection, panning and zooming, so the same geometry is valid at every zoom
- * level and this module never needs to know how the world is drawn.
+ * Kept out of the components so it can be unit-tested in Vitest's Node environment, the way the
+ * other `lib/` helpers are. It emits colour **classes**, never resolved colour values: resolving one
+ * needs `getComputedStyle`, which does not exist under Node, and keeping that step in the component
+ * is what leaves this module testable (see `lib/mapBubbles`).
  *
- * Colour identity is shared with the Sector donut: the wedge palette is built from the same
- * `groupTail` + `sliceColorClasses` pipeline (`lib/pie`), so a sector wears the same hue on the
- * map, in the donut, and in the map's own legend. Sectors past the palette's eight slots fold
- * into a neutral 'Other', exactly as the donut folds its tail; unclassified positions share that
- * neutral rather than consuming a categorical hue.
+ * Story #92 moved the map's bubble geometry to `lib/mapBubbles`, where per-holding circles replaced
+ * the per-country sector wedges this module used to lay out (DDR-0020).
  */
-import type { AllocationPosition, AllocationSlice } from '@shared/domain/allocation'
-import { groupTail, OTHER_KEY, sliceColorClasses, toArcs, type PieDatum } from './pie'
-import { centroidFor, type Centroid } from './worldGeo'
+import type { AllocationSlice } from '@shared/domain/allocation'
+import { groupTail, OTHER_KEY, sliceColorClasses, type PieDatum } from './pie'
 
 const NEUTRAL_CLASS = 'pie-series-neutral'
 
@@ -39,9 +31,9 @@ export interface SectorLegendEntry {
 }
 
 /**
- * A stable sector → colour assignment shared by the map wedges and the map legend. Built once
- * from `report.bySector` so it matches the Sector donut, then applied per country. Sectors
- * outside the palette's slots collapse to a neutral 'Other'; unclassified ('') is neutral too.
+ * A stable sector → colour assignment shared by the map circles and the map legend. Built once
+ * from `report.bySector` so it matches the Sector donut. Sectors outside the palette's slots
+ * collapse to a neutral 'Other'; unclassified ('') is neutral too.
  */
 export interface SectorPalette {
   /** Grouped, coloured sector list (the donut's slices) — rendered as the map legend. */
@@ -83,171 +75,4 @@ export function sectorPalette(bySector: AllocationSlice[]): SectorPalette {
     colorClassOf: (key) => colorByKey.get(key) ?? NEUTRAL_CLASS,
     labelOf: (key) => labelByKey.get(key) ?? (key === OTHER_KEY ? 'Other' : key || 'Unclassified'),
   }
-}
-
-/** One sector wedge of a country bubble, pre-laid-out as an SVG pie path. */
-export interface SectorWedge {
-  key: string
-  label: string
-  value: number
-  /** Share of NAV (percent) for this sector within the country. */
-  percent: number
-  colorClass: string
-  /**
-   * SVG path for the wedge, a full pie slice (inner radius 0) of the country bubble, laid out
-   * around a local 0,0 origin so the overlay can position it at the bubble's projected point.
-   */
-  path: string
-}
-
-/**
- * One country bubble, sized by total value and split into sector wedges.
- *
- * The bubble is anchored *geographically* (`lon`/`lat`, straight from the country's centroid);
- * the map owns the projection, so the same bubble is positioned correctly at any zoom. Wedge
- * paths are laid out around a local 0,0 origin (see `SectorWedge.path`) rather than an absolute
- * frame coordinate, which is what lets the overlay be re-positioned without re-deriving geometry.
- */
-export interface SectorBubble {
-  code: string
-  name: string
-  /** Longitude of the country's centroid, in degrees. */
-  lon: number
-  /** Latitude of the country's centroid, in degrees. */
-  lat: number
-  /** Total base-currency market value held in this country. */
-  value: number
-  /** Total share of NAV (percent) held in this country. */
-  percent: number
-  r: number
-  wedges: SectorWedge[]
-}
-
-/** Everything that couldn't be placed on the map, aggregated so nothing is dropped. */
-export interface UnknownBucket {
-  value: number
-  percent: number
-  /** How many country groups folded in here (missing country + unmappable codes). */
-  count: number
-}
-
-export interface SectorBubbles {
-  bubbles: SectorBubble[]
-  unknown: UnknownBucket
-}
-
-const R_MIN = 3
-const R_MAX = 22
-
-/** Area-proportional radius (r ∝ √value) between R_MIN and R_MAX. */
-function radiusFor(value: number, maxValue: number): number {
-  const ratio = maxValue > 0 ? Math.sqrt(Math.max(value, 0) / maxValue) : 0
-  return R_MIN + (R_MAX - R_MIN) * ratio
-}
-
-/**
- * Aggregate a country's positions into sector wedges laid out as pie slices of its bubble.
- * Positions are grouped by their palette display key (so at most one wedge per legend entry),
- * value-sorted with the neutral bucket last so hues lead, then turned into arc paths around a
- * local 0,0 origin. Only positive-valued wedges are drawn (a short/zero position can't own an
- * angular share).
- */
-function buildWedges(
-  positions: AllocationPosition[],
-  palette: SectorPalette,
-  r: number,
-): SectorWedge[] {
-  const byKey = new Map<string, { value: number; percent: number }>()
-  for (const p of positions) {
-    const key = palette.displayKeyOf(p.sector)
-    const agg = byKey.get(key) ?? { value: 0, percent: 0 }
-    agg.value += p.marketValueBase
-    agg.percent += p.percentOfNav
-    byKey.set(key, agg)
-  }
-
-  const data: (PieDatum & { colorClass: string })[] = [...byKey.entries()]
-    .map(([key, agg]) => ({
-      key,
-      label: palette.labelOf(key),
-      value: agg.value,
-      percent: agg.percent,
-      colorClass: palette.colorClassOf(key),
-    }))
-    .filter((d) => d.value > 0)
-    .sort((a, b) => {
-      const ra = a.colorClass === NEUTRAL_CLASS ? 1 : 0
-      const rb = b.colorClass === NEUTRAL_CLASS ? 1 : 0
-      return ra !== rb ? ra - rb : b.value - a.value
-    })
-
-  const arcs = toArcs(data, 0, 0, r, 0)
-  return arcs.map((arc, i) => ({
-    key: arc.key,
-    label: arc.label,
-    value: arc.value,
-    percent: arc.percent,
-    colorClass: data[i]!.colorClass,
-    path: arc.path,
-  }))
-}
-
-/**
- * Turn the report's positions into sector-segmented country bubbles plus an `unknown` bucket.
- *
- * Positions are grouped by issuer country; a country with a centroid becomes a bubble at its
- * projected centroid, its radius area-proportional to the country's total value, split into
- * sector wedges. Positions whose country is missing ('') or has no centroid are folded into
- * `unknown` (one count per country group) rather than dropped — the same policy the country-only
- * map used. Bubbles are returned largest-first so smaller circles stay on top and hoverable.
- */
-export function splitSectorBubbles(
-  positions: AllocationPosition[],
-  palette: SectorPalette,
-): SectorBubbles {
-  const byCountry = new Map<string, AllocationPosition[]>()
-  for (const p of positions) {
-    const arr = byCountry.get(p.issuerCountry) ?? []
-    arr.push(p)
-    byCountry.set(p.issuerCountry, arr)
-  }
-
-  const placeable: { code: string; centroid: Centroid; positions: AllocationPosition[] }[] = []
-  const unknown: UnknownBucket = { value: 0, percent: 0, count: 0 }
-
-  for (const [code, ps] of byCountry) {
-    const centroid = centroidFor(code)
-    if (centroid) {
-      placeable.push({ code, centroid, positions: ps })
-    } else {
-      for (const p of ps) {
-        unknown.value += p.marketValueBase
-        unknown.percent += p.percentOfNav
-      }
-      unknown.count += 1
-    }
-  }
-
-  const totalOf = (ps: AllocationPosition[]): number =>
-    ps.reduce((sum, p) => sum + p.marketValueBase, 0)
-  const maxValue = placeable.reduce((m, pl) => Math.max(m, totalOf(pl.positions)), 0)
-
-  const bubbles: SectorBubble[] = placeable.map(({ code, centroid, positions: ps }) => {
-    const value = totalOf(ps)
-    const percent = ps.reduce((sum, p) => sum + p.percentOfNav, 0)
-    const r = radiusFor(value, maxValue)
-    return {
-      code,
-      name: centroid.name,
-      lon: centroid.lon,
-      lat: centroid.lat,
-      value,
-      percent,
-      r,
-      wedges: buildWedges(ps, palette, r),
-    }
-  })
-  bubbles.sort((a, b) => b.value - a.value)
-
-  return { bubbles, unknown }
 }

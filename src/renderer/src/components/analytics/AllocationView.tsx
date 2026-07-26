@@ -85,7 +85,13 @@ export function AllocationView(): React.JSX.Element {
           positions={r.positions}
           bySector={r.bySector}
           formatValue={c}
-          ariaLabel="Holdings by country and sector, world map"
+          formatSigned={(v) => formatSignedCurrency(v, r.baseCurrency)}
+          // The map's circles are canvas, so they carry no per-holding text a screen reader can
+          // reach. This label states what the map totals and points at the Positions table below,
+          // which lists every one of these holdings with the same figures (DDR-0020).
+          ariaLabel={`World map of ${r.positions.length} holdings totalling ${c(
+            r.totalMarketValueBase,
+          )}, positioned by issuer country and coloured by sector. Each holding is listed with the same figures in the Positions table below.`}
         />
       </section>
 

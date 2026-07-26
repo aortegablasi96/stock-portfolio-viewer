@@ -1429,28 +1429,105 @@ html {
   font-size: 0.95rem;
 }
 
-/* Each country bubble is a pie of sector wedges (Story #71); a thin ring outlines the whole.
-   Opacity and stroke are heavier than the flat-silhouette era: over real terrain the old values
-   read as muddy, and the wedge hues must stay the most saturated thing on screen (DDR-0019). */
-.bubble-map-bubble {
-  cursor: pointer;
+/* Hover popup over a holding's circle (Story #92, DDR-0020). Circles are painted into the map
+   canvas, so their sizing and colour are Mapbox paint properties rather than CSS — the only
+   styling left here is the popup, and the vendor chrome it arrives wrapped in.
+
+   Mapbox ships the popup with a light default surface, so this is the first place the app
+   overrides a third-party stylesheet. It is a deliberate, scoped exception (DDR-0020): using
+   `Popup` buys viewport-edge flipping for free, which is worth more than a handful of overrides. */
+.mapboxgl-popup-content {
+  padding: 0.6rem 0.7rem;
+  color: var(--text);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.12);
+  font: inherit;
 }
 
-.bubble-map-wedge {
-  fill-opacity: 0.85;
-  stroke: var(--card);
-  stroke-width: 0.5;
+/* The tip is drawn as a bordered triangle; each anchor position colours a different edge. */
+.mapboxgl-popup-anchor-top .mapboxgl-popup-tip {
+  border-bottom-color: var(--card);
 }
 
-.bubble-map-bubble:hover .bubble-map-wedge {
-  fill-opacity: 1;
+.mapboxgl-popup-anchor-bottom .mapboxgl-popup-tip {
+  border-top-color: var(--card);
 }
 
-.bubble-map-outline {
-  fill: none;
-  stroke: var(--card);
-  stroke-width: 1;
+.mapboxgl-popup-anchor-left .mapboxgl-popup-tip {
+  border-right-color: var(--card);
+}
+
+.mapboxgl-popup-anchor-right .mapboxgl-popup-tip {
+  border-left-color: var(--card);
+}
+
+/* Hover-driven and pointer-transparent: the popup must never sit between the cursor and the
+   circle that opened it, or moving onto it would read as a mouseleave and close it. */
+.map-popup-shell {
   pointer-events: none;
+  animation: map-popup-in 120ms ease-out;
+}
+
+@keyframes map-popup-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Mirrors a Positions table row: ticker, company name, then the figures in the same order. */
+.map-popup-ticker {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.map-popup-name {
+  margin: 0.1rem 0 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+  /* Company names come from the broker and are not length-bounded. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.map-popup-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.35rem 0 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.map-popup-rows {
+  display: grid;
+  gap: 0.15rem;
+  margin: 0.5rem 0 0;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.82rem;
+}
+
+.map-popup-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.map-popup-row dt {
+  color: var(--muted);
+}
+
+.map-popup-row dd {
+  margin: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .bubble-map-legend {
