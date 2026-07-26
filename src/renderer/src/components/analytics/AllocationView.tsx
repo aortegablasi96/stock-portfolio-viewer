@@ -80,8 +80,13 @@ export function AllocationView(): React.JSX.Element {
       </div>
 
       <section className="panel">
-        <h2 className="panel-title">By geography (world map)</h2>
-        <BubbleMap data={r.byCountry} formatValue={c} ariaLabel="Holdings by country, world map" />
+        <h2 className="panel-title">By geography &amp; sector (world map)</h2>
+        <BubbleMap
+          positions={r.positions}
+          bySector={r.bySector}
+          formatValue={c}
+          ariaLabel="Holdings by country and sector, world map"
+        />
       </section>
 
       <section className="panel">
