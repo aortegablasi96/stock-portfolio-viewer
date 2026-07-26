@@ -49,8 +49,9 @@ Other options and why they were not chosen.
 - `0011` — Custom frameless window shell with in-app title bar and IPC-driven controls
 - `0012` — In-place confirmation pattern for destructive actions (ConfirmAction)
 - `0013` — Performance view: cumulative TWR curve, chart tabs, and shared interactive hover
-- `0014` — Allocation view: geographic exposure as an equirectangular bubble map
+- `0014` — Allocation view: geographic exposure as an equirectangular bubble map *(superseded by 0019 on the basemap; data semantics still apply)*
 - `0015` — Allocation view: cash as an asset class, derived from the NAV residual
 - `0016` — Dividend rows: shares held reconstructed from trades; per-share divided out of the amount
 - `0017` — Analytics tables: time-range filter anchored to the data, composed with the type filter
 - `0018` — One shared content measure for the shell; charts sized by aspect ratio
+- `0019` — Allocation map: Mapbox basemap with an SVG bubble overlay (supersedes `0014`)
