@@ -13,14 +13,16 @@ IBKR Flex Query statements into local history, and renders four analytics views 
 imported data (performance, allocation, dividends, realized gains & trade history). A tab
 shell switches between the live Portfolio dashboard and the analytics views.
 
-**Epic #4 (M3) reopened to refine the views; all its refinement stories are merged** —
-#28 (display currency), #29 (day-by-day performance), #30 (allocation donut charts + sector
-breakdown), #31 (net dividend chart + upcoming dividends), #32 (scrollable/filterable
-dividend transactions) and #33 (scrollable/filterable trade history). **The epic is
-deliberately left open for further refinement stories the owner plans to add** — read the
-backlog before assuming a view is final. The Stack and Commands sections below are **live**.
-Still **not built**: AI features, multi-broker support, benchmark comparison, and tax
-reporting — those are later milestones.
+**Epic #4 (M3) reopened to refine the views, and refinement is ongoing.** Two rounds have
+merged: #28–#33 (display currency, day-by-day performance, allocation donuts + sector
+breakdown, net dividend chart + upcoming dividends, filterable dividend and trade tables) and
+#42–#73 (frameless window shell, destructive-reset controls, TWR curve + chart tabs, world
+bubble map, cash as an asset class, tabbed breakdowns, time-range filters, multi-select type
+filter, `Symbol`→`Ticker` renames). **The epic is deliberately left open for further
+refinement stories the owner plans to add** — read the backlog before assuming a view is
+final; a view you are told is "done" has usually been reworked several times. The Stack and
+Commands sections below are **live**. Still **not built**: AI features, multi-broker support,
+benchmark comparison, and tax reporting — those are later milestones.
 
 Live domains exist end-to-end as reference patterns:
 
@@ -38,14 +40,24 @@ Live domains exist end-to-end as reference patterns:
   tables. `flex_prior_period_positions` holds the per-instrument daily MTM series that backs
   day-by-day performance; `flex_open_dividend_accruals` holds declared-but-unpaid dividends
   (Story #31) — an **optional** Flex section, so an export without it degrades to an empty
-  list rather than failing. See ADR-0005, DDR-0004, DDR-0008, DDR-0010.
+  list rather than failing; `flex_fifo_summaries` holds IBKR's own FIFO performance summary,
+  which backs realized/unrealized gains. Real sample exports and a field reference live in
+  `docs/flex-queries/` — check them before guessing at Flex XML shapes. See ADR-0005,
+  DDR-0004, DDR-0008, DDR-0010.
 - **analytics / dividends** — read-only analytics over the imported Flex data (M3, Stories
   #21–#24). `performanceService` / `allocationService` / `realizedGainsService` (analytics)
   and `dividendService` (dividends) read *only* through `flexReadRepository`, convert to base
   currency (EUR) in the service, and each return an `ok | needs_import` result. Statement-scoped
   reads (`getLatestOpenPositions`, `getLatestOpenDividendAccruals`) deliberately use the
   **latest statement only** — older as-of rows describe state that has since changed and would
-  double-count. See DDR-0005, DDR-0010.
+  double-count. Two traps worth knowing before touching these services: IBKR's FIFO summary
+  carries a **"Total (All Assets)" aggregate row** (blank symbol) that must be filtered out or
+  it doubles every total — use `isInstrumentSummary` (`repositories/flex/fifoSummary.ts`, kept
+  DB-free so services and their tests share the real predicate); and allocation's **cash slice
+  is the NAV residual** (`ChangeInNAV.endingValue − Σ invested market value`), *not* the
+  `percentOfNAV` shortfall, because Flex's `percentOfNAV` sums to 100% across positions and
+  excludes cash — the shortfall approach shipped broken once already. See DDR-0005, DDR-0010,
+  DDR-0015.
 - **classification** — instrument sector/industry (M3, Story #30). Flex carries **no sector
   field**, so `classificationRepository` fronts *two* sources — the mutable SQLite cache
   `instrument_classifications` and `ibkrGateway` — and `classificationService` decides which
@@ -68,8 +80,9 @@ The current source tree (mirror it when adding features):
 src/
   main/          Electron main: entry (index.ts) + ipc/handlers.ts (thin, Zod-validated)
   preload/       contextBridge bridge → window.api (types + channel names only, no Zod)
-  renderer/      React + Vite UI (src/renderer/src/*; App tab shell, components/ +
-                 components/analytics/ + components/charts/ + lib/format.ts)
+  renderer/      React + Vite UI (src/renderer/src/*; App tab shell under a custom
+                 TitleBar, components/ + components/analytics/ + components/charts/ +
+                 lib/ — pure, unit-tested helpers extracted out of components)
   services/      pure business logic — primary unit-test target (system/, meta/,
                  portfolio/, snapshots/, flex/, analytics/, dividends/)
   repositories/  the ONLY layer that touches a data source: SQLite (meta/, snapshots/,
@@ -81,6 +94,7 @@ src/
                  allocation.ts, dividends.ts, realizedGains.ts), errors.ts
 drizzle/         generated SQL migrations + meta journal
 e2e/             Playwright specs that launch the built Electron app
+docs/flex-queries/  real IBKR Flex exports + field reference (parser ground truth)
 ```
 
 Canonical flows to copy when adding a feature:
@@ -101,7 +115,18 @@ Canonical flows to copy when adding a feature:
   reading imported history through a dedicated read-only repository (`flexReadRepository`),
   doing base-currency conversion and calculation in the service, and returning an
   `ok | needs_import` result the renderer renders as a first-class empty state. Charts are
-  dependency-free inline SVG (`components/charts/`). See DDR-0005, DDR-0006.
+  dependency-free inline SVG (`components/charts/`) — including the pannable/zoomable world
+  bubble map, which avoids a geo library and a bundled polygon dataset by projecting
+  equirectangularly onto ISO-3166 alpha-2 centroids (DDR-0014), and the performance view's
+  cumulative **TWR** curve, chosen over a value curve so deposits and withdrawals don't move
+  it (DDR-0013). See DDR-0005, DDR-0006.
+- **Fire-and-forget command + state event:** the `window:*` channels show the *other* IPC
+  shape — `ipcRenderer.send` / `ipcMain.on` with no payload and no Zod (there is nothing to
+  validate), plus one `invoke` query (`window:isMaximized`) and one main→renderer event
+  (`window:maximizeChanged`) carrying a bare boolean. See DDR-0011.
+- **Destructive action:** `flex:clear` / `snapshot:clear` show the sanctioned full-reset
+  exception to immutability (ADR-0006) behind the reusable in-place `ConfirmAction` control —
+  expand-in-place warning, no modal, no `window.confirm`. See DDR-0012.
 
 ### Enforced boundaries & gotchas
 
@@ -121,7 +146,9 @@ Canonical flows to copy when adding a feature:
   automatically on launch (`runMigrations()` in `main/index.ts`) and shipped under
   `extraResources` when packaged.
 - **Electron security is locked down**: `sandbox: true`, `contextIsolation: true`,
-  `nodeIntegration: false`. Keep it that way; reach the main process only over IPC.
+  `nodeIntegration: false`. Keep it that way; reach the main process only over IPC. The window
+  also runs **frameless** (`frame: false`) with an in-app `TitleBar` supplying minimize /
+  maximize / close — window chrome is app code, not OS chrome (DDR-0011).
 - **Adding an IPC channel touches four files, in this order**: `shared/ipc/channels.ts`
   (name) → `shared/ipc/contract.ts` (Zod request/response schema + the `RendererApi` method)
   → `preload/index.ts` (bridge impl) → `main/ipc/handlers.ts` (parse input, delegate to a
@@ -129,9 +156,19 @@ Canonical flows to copy when adding a feature:
   *types* from it so Zod never lands in those bundles. Failures cross IPC **as result
   variants, not exceptions** (`not_connected`, `needs_import`, `canceled`, `invalid`,
   `error`) so the renderer can render each as a first-class state.
+- **That four-file recipe assumes a request/response channel** (`invoke`/`handle`), which is
+  almost all of them. The exception is the three payload-free `window:minimize |
+  toggleMaximize | close` commands: they use `ipcRenderer.send` / `ipcMain.on` and skip
+  `contract.ts` entirely, since with no payload there is nothing to Zod-validate. Main→renderer
+  events (`snapshot:captured`, `window:maximizeChanged`) are `ipcRenderer.on` subscriptions
+  that return an unsubscribe function (DDR-0011).
 - **`instrument_classifications` is the one mutable table** — it's a *cache* of derived
-  reference data (upserted by conid), not history. Every other table is append-only and must
-  stay that way (DDR-0009).
+  reference data (upserted by conid), not history (DDR-0009). Every other table is append-only
+  **during normal operation**: no record is ever edited, partially deleted, or silently
+  mutated by the app's data flow. There is exactly **one sanctioned exception** — a
+  whole-store, owner-confirmed reset per domain (`flexRepository.clearAll()` /
+  `snapshotRepository.clearAll()`), so bad imports can be discarded wholesale and rebuilt.
+  Deliberately no delete-by-id/date/statement variant; don't add one (ADR-0006).
 - **Two money-storage conventions coexist** — don't mix them. `snapshots` /
   `snapshot_holdings` store **integer minor units** (cents) plus a currency (DDR-0003);
   the `flex_*` tables store **`real`** for money, prices, FX rates and P&L, because Flex is
@@ -140,6 +177,9 @@ Canonical flows to copy when adding a feature:
 - **Base-currency conversion happens in the service, never the repository or the renderer.**
   Analytics converts per record with the Flex row's own `fxRateToBase`; the live Portfolio
   view uses gateway FX (DDR-0005, DDR-0007).
+- **The IBKR gateway is `https://localhost:5000`**, overridable via the `IBKR_GATEWAY_URL` env
+  var. It serves a **self-signed certificate** that `ibkrGateway` accepts deliberately — that
+  is not a TLS bug to fix.
 
 ## Skills System (`.claude/skills/`)
 
@@ -619,10 +659,13 @@ Services are the primary unit-test target.
 
 Mock repositories and external providers.
 
-Pure renderer helpers (e.g. `renderer/src/lib/format.ts`) and pure repository helpers that
-touch no data source (`flexStatementParser`, `snapshotMapping`) are also unit-tested. Vitest
-picks up every `src/**/*.test.ts` and runs it in a **Node** environment (no jsdom), so keep
-such tests free of DOM/React-rendering dependencies.
+Vitest picks up every `src/**/*.test.ts` and runs it in a **Node** environment (**no jsdom**),
+so no test may render a React component. This shapes the renderer: chart maths, filtering,
+sorting and formatting are **extracted out of components into pure modules under
+`renderer/src/lib/`** (`format`, `pie`, `worldGeo`, `mapViewport`, `tableFilter`, `column`,
+`sectorMap`, `performanceRange`) precisely so they can be tested — follow that split when
+adding a component with real logic in it. Pure repository helpers that touch no data source
+(`flexStatementParser`, `snapshotMapping`, `fifoSummary`) are unit-tested the same way.
 
 Every completed feature should include:
 
