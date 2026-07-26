@@ -51,3 +51,4 @@ Other options and why they were not chosen.
 - `0013` — Performance view: cumulative TWR curve, chart tabs, and shared interactive hover
 - `0014` — Allocation view: geographic exposure as an equirectangular bubble map
 - `0015` — Allocation view: cash as an asset class, derived from the NAV residual
+- `0016` — Dividend rows: shares held reconstructed from trades; per-share divided out of the amount

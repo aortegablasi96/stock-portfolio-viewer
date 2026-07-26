@@ -4,6 +4,7 @@ import {
   formatCurrency,
   formatDate,
   formatMonth,
+  formatPerShare,
   formatQuantity,
 } from '../../lib/format'
 import { distinctTypes, filterByTypes } from '../../lib/tableFilter'
@@ -85,7 +86,7 @@ function Upcoming({
                     </th>
                     <td className="num">{formatQuantity(i.quantity)}</td>
                     <td className="num">
-                      {i.grossRate != null ? formatCurrency(i.grossRate, i.currency) : '—'}
+                      {i.grossRate != null ? formatPerShare(i.grossRate, i.currency) : '—'}
                     </td>
                     <td className="num">{c(i.grossBase)}</td>
                     <td className="num">{c(i.withholdingBase)}</td>
@@ -221,6 +222,11 @@ export function DividendsView(): React.JSX.Element {
  * The dividend cash-transactions table (Story #32): filterable by transaction type and
  * capped to ~5 rows, the rest reached by scrolling within the panel. Holds its own filter
  * state, so it lives as a child rather than lifting hooks above the view's early returns.
+ *
+ * Story #74 adds the shares held behind each payment and the amount per share. Both are
+ * derived (Flex cash rows carry no quantity) and both are shown in the payment's own
+ * currency, matching the Amount column and the Upcoming table's rate — the base-currency
+ * conversion of the row stays in the final column. See DDR-0016.
  */
 function Transactions({
   events,
@@ -252,35 +258,53 @@ function Transactions({
       {rows.length === 0 ? (
         <p className="chart-empty">No transactions match this filter.</p>
       ) : (
-        <div className="table-scroll table-scroll-rows">
-          <table className="holdings-table">
-            <thead>
-              <tr>
-                <th scope="col">Date</th>
-                <th scope="col">Ticker</th>
-                <th scope="col">Type</th>
-                <th scope="col" className="num">Amount</th>
-                <th scope="col" className="num">In {baseCurrency}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((e, i) => (
-                <tr key={`${e.symbol}-${e.date ?? 'na'}-${e.type}-${i}`}>
-                  <td>{e.date != null ? formatDate(e.date) : '—'}</td>
-                  <th scope="row" className="symbol">
-                    {e.symbol || '—'}
-                    {e.description && (
-                      <span className="flex-import-file">{formatCompanyName(e.description)}</span>
-                    )}
-                  </th>
-                  <td>{e.type}</td>
-                  <td className="num">{formatCurrency(e.amountNative, e.currency)}</td>
-                  <td className="num">{c(e.amountBase)}</td>
+        <>
+          <p className="source-note">
+            Shares held are reconstructed from your imported trade history as of the day before
+            the ex-date, and the per-share figure is the row’s own amount divided by them — both
+            in the payment’s currency. A row shows “—” when the imported statements don’t reach
+            back far enough to account for the position.
+          </p>
+          <div className="table-scroll table-scroll-rows">
+            <table className="holdings-table">
+              <thead>
+                <tr>
+                  <th scope="col">Date</th>
+                  <th scope="col">Ticker</th>
+                  <th scope="col">Type</th>
+                  <th scope="col" className="num">Shares</th>
+                  <th scope="col" className="num">Per share</th>
+                  <th scope="col" className="num">Amount</th>
+                  <th scope="col" className="num">In {baseCurrency}</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {rows.map((e, i) => (
+                  <tr key={`${e.symbol}-${e.date ?? 'na'}-${e.type}-${i}`}>
+                    <td>{e.date != null ? formatDate(e.date) : '—'}</td>
+                    <th scope="row" className="symbol">
+                      {e.symbol || '—'}
+                      {e.description && (
+                        <span className="flex-import-file">{formatCompanyName(e.description)}</span>
+                      )}
+                    </th>
+                    <td>{e.type}</td>
+                    <td className="num">
+                      {e.sharesHeld != null ? formatQuantity(e.sharesHeld) : '—'}
+                    </td>
+                    <td className="num">
+                      {e.perShareNative != null
+                        ? formatPerShare(e.perShareNative, e.currency)
+                        : '—'}
+                    </td>
+                    <td className="num">{formatCurrency(e.amountNative, e.currency)}</td>
+                    <td className="num">{c(e.amountBase)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </section>
   )

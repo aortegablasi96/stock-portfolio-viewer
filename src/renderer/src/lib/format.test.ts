@@ -7,6 +7,7 @@ import {
   formatMonth,
   formatPercent,
   formatPercentValue,
+  formatPerShare,
   formatQuantity,
   formatSignedCurrency,
   formatSignedPercent,
@@ -34,6 +35,28 @@ describe('formatPercent', () => {
   it('renders a fraction as a one-decimal percentage', () => {
     expect(formatPercent(0.6)).toMatch(/60\.0\s?%/)
     expect(formatPercent(0)).toMatch(/0\.0\s?%/)
+  })
+})
+
+describe('formatPerShare', () => {
+  it('keeps the precision a real dividend rate needs, where 2 decimals would lose it', () => {
+    // A genuine rate: CAD 0.093999 per share. formatCurrency would round it to 0.09.
+    expect(formatPerShare(0.093999, 'CAD')).toMatch(/0\.094/)
+    expect(formatCurrency(0.093999, 'CAD')).toMatch(/0\.09(?!4)/)
+  })
+
+  it('still shows the usual two decimals for ordinary rates', () => {
+    expect(formatPerShare(1.46, 'CAD')).toMatch(/1\.46/)
+    expect(formatPerShare(2, 'USD')).toMatch(/2\.00/)
+  })
+
+  it('carries the sign of a per-share withholding amount', () => {
+    expect(formatPerShare(-0.075, 'USD')).toMatch(/-.*0\.075/)
+  })
+
+  it('falls back to plain formatting for an invalid or BASE currency code', () => {
+    expect(() => formatPerShare(0.5, 'not-a-code')).not.toThrow()
+    expect(formatPerShare(0.5, 'BASE')).toMatch(/0\.50/)
   })
 })
 
