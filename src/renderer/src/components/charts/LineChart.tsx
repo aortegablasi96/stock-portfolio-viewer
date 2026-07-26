@@ -11,7 +11,11 @@ import type { ValuePoint } from '@shared/domain/performance'
  * series (period endpoints) still marks each vertex; a dense daily series (DDR-0008) would
  * clutter with 140+ markers, so above a threshold only the line + area render.
  */
-const W = 720
+/* The plot's aspect ratio: the SVG scales to its panel, so this ratio — not a pixel size —
+   decides how tall a chart gets on a wide window. 4.5:1 keeps a full-width chart about the
+   height it had in the old 72rem column, and keeps the axis labels (sized in viewBox units)
+   rendering at the same on-screen size once scaled. Story #76. */
+const W = 1080
 const H = 240
 const PAD = { top: 16, right: 16, bottom: 28, left: 64 }
 

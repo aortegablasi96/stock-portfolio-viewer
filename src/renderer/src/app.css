@@ -25,6 +25,12 @@
   --neg: #d03b3b; /* critical — realized/unrealized loss */
   --chart-grid: #2c2c2a;
   --chart-axis: #898781;
+  /* The one measure the whole shell shares (Story #76): the content column's outer width,
+     padding included. Wide enough that a maximized window on a normal display is filled
+     edge to edge rather than framed by empty gutters, capped so an ultrawide monitor
+     doesn't stretch tables into a wall of text. The nav strip aligns to the same measure. */
+  --content-max: 110rem;
+  --content-pad: 2rem;
 }
 
 * {
@@ -97,9 +103,9 @@ html {
 /* ---- Dashboard layout ---------------------------------------------------- */
 
 .dashboard {
-  max-width: 72rem;
+  max-width: var(--content-max);
   margin: 0 auto;
-  padding: 2rem;
+  padding: var(--content-pad);
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
@@ -741,13 +747,19 @@ html {
   display: flex;
   align-items: center;
   gap: 1.5rem;
-  padding: 0.75rem 2rem;
+  padding: 0.75rem var(--content-pad);
   background: rgba(15, 17, 21, 0.85);
   backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--border);
 }
 
+/* The bar spans the window (its border and blur are full-bleed) but the tabs inside sit on
+   the same measure as the content below, so the first tab lines up with the page heading at
+   every width — including when the content column stops growing on a very wide monitor. */
 .app-tabs {
+  width: 100%;
+  max-width: calc(var(--content-max) - 2 * var(--content-pad));
+  margin: 0 auto;
   display: flex;
   gap: 0.25rem;
   flex-wrap: wrap;
@@ -1008,6 +1020,7 @@ html {
 /* ---- Charts (inline SVG + bar lists) ------------------------------------- */
 
 .chart {
+  display: block;
   width: 100%;
   height: auto;
 }
@@ -1327,10 +1340,13 @@ html {
 }
 
 /* Positioning context for the zoom controls overlaid on the map (Story #70). */
+/* The map keeps the world's 2:1 aspect, so its width is what sets its height — it takes a
+   measure of its own rather than the panel's full width, which on a wide window would make it
+   tall enough to push everything below it off-screen (Story #76). */
 .bubble-map-frame {
   position: relative;
   width: 100%;
-  max-width: 46rem;
+  max-width: 56rem;
   margin: 0 auto;
 }
 
