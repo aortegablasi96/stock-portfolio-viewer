@@ -59,13 +59,35 @@ exactly, including the reset affordance and its disabled-at-world-view state.
 Mapbox's attribution ("© Mapbox © OpenStreetMap") is required by their terms, stays enabled, and
 is the one genuinely new visual element in the panel. It is not chrome to be hidden.
 
-### Layout is unchanged; the canvas needs help sizing
+### The map spans the full content measure, at a flatter aspect
 
-The panel, the centred `max-width: 56rem` frame ([[0018-content-measure-and-chart-aspect]]), the
-sector legend, the pan hint and the `Unknown location` chip all carry over as-is, so nothing below
-the map shifts. Two mechanical differences from an SVG: the frame must declare `aspect-ratio: 2 / 1`
-because a canvas does not size itself from a `viewBox`, and the map must be told to resize when its
-container changes or it renders letterboxed after a window resize.
+The sector legend, the pan hint and the `Unknown location` chip carry over as-is, but the frame
+itself changes. [[0018-content-measure-and-chart-aspect]] capped the map at `56rem`, centred,
+because the SVG was locked to the world's 2:1 aspect: at full width the frame became tall enough
+to push the breakdown panels off-screen. That cap is **removed here**, and the reason it can be is
+that the constraint behind it no longer exists — Mapbox owns the camera, and `fitBounds` fits the
+world to whatever shape the frame is, so aspect ratio became a free choice rather than a property
+of the data.
+
+The frame therefore takes the full content measure at **`aspect-ratio: 3 / 1`**, which spends the
+extra width on map rather than on height: a maximised window gets a map roughly twice as wide as
+the old one and about as tall. DDR-0018's underlying principle is unchanged and in fact
+reasserted — *a chart's natural aspect decides whether it should fill the column* — it is only the
+map's natural aspect that changed, from fixed to free.
+
+4:1 was tried and rejected by the owner: it keeps more of the breakdown grid above the fold, but
+the map reads as a letterbox strip and the extra vertical room is what makes overlapping European
+bubbles separable.
+
+Two mechanical differences from an SVG: the frame must declare an explicit aspect ratio because a
+canvas does not size itself from a `viewBox`, and the map must be told to resize when its container
+changes or it renders letterboxed. An un-zoomed map also re-fits on resize, since a frame of a
+different width fits the world at a different zoom.
+
+The camera is fitted to **bounds, not a fixed centre/zoom** ([−168, −56] to [188, 76]), for the
+same reason: a fixed zoom would leave slack at the sides at one window width and overflow at
+another. The bounds stop short of Antarctica and the ice cap, which Mercator stretches enormously
+and where no investments are held.
 
 ### One degraded state, two messages
 
