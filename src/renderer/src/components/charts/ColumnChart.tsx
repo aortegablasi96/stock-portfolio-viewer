@@ -45,8 +45,9 @@ export function ColumnChart({
     return <p className="chart-empty">No income to plot over time yet.</p>
   }
 
-  // Widen the viewBox with the column count so bars stay legible for long histories.
-  const W = Math.max(720, PAD.left + PAD.right + columns.length * 56)
+  // Widen the viewBox with the column count so bars stay legible for long histories. The 1080
+  // floor matches the line chart's 4.5:1 plot, so a full-width chart doesn't tower (Story #76).
+  const W = Math.max(1080, PAD.left + PAD.right + columns.length * 56)
   const plotH = H - PAD.top - PAD.bottom
   const plotW = W - PAD.left - PAD.right
   const { top, bottom, ticks } = columnDomain(columns)
