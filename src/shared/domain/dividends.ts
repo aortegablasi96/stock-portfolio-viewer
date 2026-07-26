@@ -13,6 +13,10 @@ import { z } from 'zod'
  * Story #31 adds the forward-looking half: declared-but-unpaid dividends, sourced from
  * the latest statement's `OpenDividendAccrual` rows rather than the cash history (they
  * have not generated cash yet). See DDR-0010.
+ *
+ * Story #74 adds shares held and dividend-per-share to each cash event. Neither is in the
+ * Flex cash transaction, so the share count is reconstructed from the imported trade
+ * history and the per-share figure divided out of the row's own amount. See DDR-0016.
  */
 
 /** A single dividend/PIL or withholding cash event, for the detail table. */
@@ -28,6 +32,19 @@ export const dividendEventSchema = z.object({
   amountNative: z.number(),
   /** The same amount converted to base currency. */
   amountBase: z.number(),
+  /**
+   * Shares held on the day before the ex-date, reconstructed from the imported trade
+   * history (Story #74). Cash transactions carry no quantity, so this is derived; it is
+   * `null` whenever the trade history cannot account for the position (no trades for the
+   * instrument, or a non-positive running quantity), so the view shows "—" rather than a
+   * number that is quietly wrong. See DDR-0016.
+   */
+  sharesHeld: z.number().nullable(),
+  /**
+   * `amountNative / sharesHeld` — the dividend (or, on a withholding row, the tax) paid per
+   * share in the payment's native currency. `null` exactly when `sharesHeld` is.
+   */
+  perShareNative: z.number().nullable(),
 })
 export type DividendEvent = z.infer<typeof dividendEventSchema>
 

@@ -17,6 +17,9 @@ import type {
  * each row's Flex `fxRateToBase` (DDR-0005), and pairs that history with the
  * declared-but-unpaid dividends from the latest statement's accruals (DDR-0010).
  *
+ * Story #74 additionally reconstructs the shares held behind each cash event from the
+ * imported trade history, since Flex cash transactions carry no quantity (DDR-0016).
+ *
  * Reaches data only through `flexReadRepository`, so it is a pure unit-test target.
  */
 
@@ -48,6 +51,55 @@ function makeNameResolver(): (conid: number | null, symbol: string) => string {
 function startOfUtcDay(epochMs: number): number {
   const d = new Date(epochMs)
   return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())
+}
+
+/** Identify an instrument by conid when Flex reports one, else by ticker. */
+function instrumentKey(conid: number | null, symbol: string): string {
+  return conid != null ? `id:${conid}` : `sym:${symbol}`
+}
+
+/**
+ * Resolve "how many shares did I hold when this dividend was declared?" (Story #74).
+ *
+ * Flex `CashTransaction` rows carry no quantity, so the position is reconstructed by
+ * summing the imported trades for the instrument that settled **before** the ex-date —
+ * entitlement requires holding the share the day before the ex-date, so a trade dated on
+ * the ex-date itself does not count. Returns `null` rather than a number whenever the
+ * trade history cannot honestly account for the position (DDR-0016):
+ *
+ * - the event has no date to cut at;
+ * - the instrument has no trades at all, or has an undated trade that cannot be placed in
+ *   time (a position transferred in from another broker looks exactly like this);
+ * - the running quantity is zero or negative, which a paid dividend contradicts — proof
+ *   the imported statements start after the position was opened.
+ */
+function makePositionResolver(): (conid: number | null, symbol: string, date: number | null) => number | null {
+  const lots = new Map<string, { date: number; quantity: number }[]>()
+  const unreliable = new Set<string>()
+
+  for (const t of flexReadRepository.getTrades()) {
+    const key = instrumentKey(t.conid, t.symbol)
+    if (t.dateTime == null) {
+      unreliable.add(key)
+      continue
+    }
+    const existing = lots.get(key)
+    if (existing) existing.push({ date: t.dateTime, quantity: t.quantity })
+    else lots.set(key, [{ date: t.dateTime, quantity: t.quantity }])
+  }
+
+  return (conid, symbol, date) => {
+    if (date == null) return null
+    const key = instrumentKey(conid, symbol)
+    if (unreliable.has(key)) return null
+    const trades = lots.get(key)
+    if (!trades) return null
+
+    const cutoff = startOfUtcDay(date)
+    let held = 0
+    for (const t of trades) if (t.date < cutoff) held += t.quantity
+    return held > 0 ? held : null
+  }
 }
 
 /** Calendar month key ('YYYY-MM', UTC) for an epoch-ms date, or 'Unknown' when absent. */
@@ -144,6 +196,7 @@ export const dividendService = {
     const baseCurrency = flexReadRepository.baseCurrency() ?? 'EUR'
     const rows = flexReadRepository.getDividendCashTransactions()
     const nameOf = makeNameResolver()
+    const sharesHeldOn = makePositionResolver()
 
     const bySymbol = new Map<string, DividendGroup>()
     const byMonth = new Map<string, DividendGroup>()
@@ -155,6 +208,7 @@ export const dividendService = {
       const date = row.exDate ?? row.dateTime
       const amountBase = row.amount * row.fxRateToBase
       const name = nameOf(row.conid, row.symbol)
+      const sharesHeld = sharesHeldOn(row.conid, row.symbol, date)
 
       events.push({
         date,
@@ -164,6 +218,10 @@ export const dividendService = {
         currency: row.currency,
         amountNative: row.amount,
         amountBase,
+        sharesHeld,
+        // Divided out of the row's own amount, so the per-share figure always reconciles
+        // with the amount and share count shown beside it.
+        perShareNative: sharesHeld != null ? row.amount / sharesHeld : null,
       })
 
       if (row.type === WITHHOLDING_TYPE) totalWithholdingBase += -amountBase

@@ -5,6 +5,7 @@ import {
   flexReadRepository,
   type CashTransactionRow,
   type DividendAccrualRow,
+  type TradeRowRaw,
 } from '@repositories/flex/flexReadRepository'
 
 vi.mock('@repositories/flex/flexReadRepository', () => ({
@@ -14,6 +15,7 @@ vi.mock('@repositories/flex/flexReadRepository', () => ({
     getDividendCashTransactions: vi.fn(),
     getInstrumentNames: vi.fn(),
     getLatestOpenDividendAccruals: vi.fn(),
+    getTrades: vi.fn(),
   },
 }))
 
@@ -23,6 +25,8 @@ const repo = vi.mocked(flexReadRepository)
 const JAN = Date.UTC(2026, 0, 15)
 const FEB = Date.UTC(2026, 1, 10)
 const MAR = Date.UTC(2026, 2, 20)
+/** Before all of the above — a purchase predating the dividends under test. */
+const DEC = Date.UTC(2025, 11, 5)
 /** "Now" for the upcoming-dividends cut-off: mid-day so the UTC-midnight rounding shows. */
 const NOW = Date.UTC(2026, 1, 10, 13, 30)
 
@@ -57,11 +61,32 @@ function accrual(overrides: Partial<DividendAccrualRow>): DividendAccrualRow {
   }
 }
 
+function trade(overrides: Partial<TradeRowRaw>): TradeRowRaw {
+  return {
+    tradeKey: 'k',
+    conid: 11,
+    symbol: 'AAA',
+    description: '',
+    assetCategory: 'STK',
+    currency: 'USD',
+    fxRateToBase: 1,
+    dateTime: JAN,
+    quantity: 100,
+    tradePrice: 10,
+    proceeds: -1000,
+    ibCommission: -1,
+    fifoPnlRealized: 0,
+    openCloseIndicator: 'O',
+    ...overrides,
+  }
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   repo.baseCurrency.mockReturnValue('EUR')
   repo.getInstrumentNames.mockReturnValue([])
   repo.getLatestOpenDividendAccruals.mockReturnValue(undefined)
+  repo.getTrades.mockReturnValue([])
 })
 
 describe('dividendService.getDividends', () => {
@@ -139,6 +164,102 @@ describe('dividendService.getDividends', () => {
     if (result.status !== 'ok') throw new Error('expected ok')
     expect(result.report.totalNetBase).toBe(0)
     expect(result.report.events).toEqual([])
+  })
+})
+
+describe('dividendService.getDividends — shares held & per share (Story #74)', () => {
+  beforeEach(() => {
+    repo.hasStatements.mockReturnValue(true)
+  })
+
+  /** Run the service and return the single event it produced. */
+  function onlyEvent(): {
+    sharesHeld: number | null
+    perShareNative: number | null
+  } {
+    const result = dividendService.getDividends(NOW)
+    if (result.status !== 'ok') throw new Error('expected ok')
+    const event = result.report.events[0]
+    if (!event) throw new Error('expected one event')
+    return { sharesHeld: event.sharesHeld, perShareNative: event.perShareNative }
+  }
+
+  it('sums trades dated before the ex-date and divides the per-share out of the amount', () => {
+    repo.getDividendCashTransactions.mockReturnValue([
+      cash({ conid: 11, symbol: 'AAA', exDate: FEB, amount: 25 }),
+    ])
+    repo.getTrades.mockReturnValue([
+      trade({ conid: 11, symbol: 'AAA', dateTime: DEC, quantity: 100 }),
+      // Bought on the ex-date itself — too late to be entitled, so it must not count.
+      trade({ conid: 11, symbol: 'AAA', dateTime: FEB, quantity: 50 }),
+    ])
+
+    expect(onlyEvent()).toEqual({ sharesHeld: 100, perShareNative: 0.25 })
+  })
+
+  it('matches trades by conid even when the cash row carries a different ticker', () => {
+    repo.getDividendCashTransactions.mockReturnValue([
+      cash({ conid: 11, symbol: 'RENAMED', exDate: FEB, amount: 50 }),
+    ])
+    repo.getTrades.mockReturnValue([trade({ conid: 11, symbol: 'AAA', dateTime: DEC, quantity: 200 })])
+
+    expect(onlyEvent()).toEqual({ sharesHeld: 200, perShareNative: 0.25 })
+  })
+
+  it('falls back to the ticker when Flex reports no conid', () => {
+    repo.getDividendCashTransactions.mockReturnValue([
+      cash({ conid: null, symbol: 'AAA', exDate: FEB, amount: 10 }),
+    ])
+    repo.getTrades.mockReturnValue([trade({ conid: null, symbol: 'AAA', dateTime: DEC, quantity: 40 })])
+
+    expect(onlyEvent()).toEqual({ sharesHeld: 40, perShareNative: 0.25 })
+  })
+
+  it('reports the same share count and a tax-per-share on withholding rows', () => {
+    repo.getDividendCashTransactions.mockReturnValue([
+      cash({ conid: 11, exDate: FEB, type: 'Withholding Tax', amount: -7.5 }),
+    ])
+    repo.getTrades.mockReturnValue([trade({ conid: 11, dateTime: DEC, quantity: 100 })])
+
+    expect(onlyEvent()).toEqual({ sharesHeld: 100, perShareNative: -0.075 })
+  })
+
+  it('degrades to null when the instrument has no imported trades', () => {
+    repo.getDividendCashTransactions.mockReturnValue([cash({ conid: 99, exDate: FEB, amount: 25 })])
+    repo.getTrades.mockReturnValue([trade({ conid: 11, dateTime: DEC, quantity: 100 })])
+
+    expect(onlyEvent()).toEqual({ sharesHeld: null, perShareNative: null })
+  })
+
+  it('degrades to null when the running quantity is not positive by the ex-date', () => {
+    // Sold out before the ex-date, yet a dividend was paid — the imported history must
+    // start after the position was opened, so any number here would be wrong.
+    repo.getDividendCashTransactions.mockReturnValue([cash({ conid: 11, exDate: FEB, amount: 25 })])
+    repo.getTrades.mockReturnValue([
+      trade({ conid: 11, dateTime: DEC, quantity: 100 }),
+      trade({ conid: 11, dateTime: JAN, quantity: -100 }),
+    ])
+
+    expect(onlyEvent()).toEqual({ sharesHeld: null, perShareNative: null })
+  })
+
+  it('degrades to null when a trade for the instrument cannot be placed in time', () => {
+    repo.getDividendCashTransactions.mockReturnValue([cash({ conid: 11, exDate: FEB, amount: 25 })])
+    repo.getTrades.mockReturnValue([
+      trade({ conid: 11, dateTime: DEC, quantity: 100 }),
+      trade({ conid: 11, dateTime: null, quantity: 20 }),
+    ])
+
+    expect(onlyEvent()).toEqual({ sharesHeld: null, perShareNative: null })
+  })
+
+  it('degrades to null when the cash row has no date to cut the history at', () => {
+    repo.getDividendCashTransactions.mockReturnValue([
+      cash({ conid: 11, exDate: null, dateTime: null, amount: 25 }),
+    ])
+    repo.getTrades.mockReturnValue([trade({ conid: 11, dateTime: DEC, quantity: 100 })])
+
+    expect(onlyEvent()).toEqual({ sharesHeld: null, perShareNative: null })
   })
 })
 

@@ -22,6 +22,31 @@ export function formatCurrency(value: number, currency: string): string {
   }).format(value)
 }
 
+/**
+ * Format a per-share money figure — a dividend rate, or tax withheld per share. These run
+ * far smaller than the totals `formatCurrency` is tuned for (a real rate is often
+ * CAD 0.094), so two decimals would round a genuine rate to "0.09" or away to "0.00".
+ * Up to four decimals are kept, trailing zeros dropped past the usual two.
+ */
+export function formatPerShare(value: number, currency: string): string {
+  if (currency && currency !== 'BASE') {
+    try {
+      return new Intl.NumberFormat(undefined, {
+        style: 'currency',
+        currency,
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 4,
+      }).format(value)
+    } catch {
+      // Not a valid ISO currency code — fall through to plain formatting.
+    }
+  }
+  return new Intl.NumberFormat(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 4,
+  }).format(value)
+}
+
 /** Format a share/contract quantity (fractional shares allowed, no forced decimals). */
 export function formatQuantity(value: number): string {
   return new Intl.NumberFormat(undefined, { maximumFractionDigits: 4 }).format(value)
