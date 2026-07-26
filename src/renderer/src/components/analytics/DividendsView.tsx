@@ -7,13 +7,16 @@ import {
   formatPerShare,
   formatQuantity,
 } from '../../lib/format'
+import { datedExtent, filterByRange, windowFor } from '../../lib/dateRange'
 import { distinctTypes, filterByTypes } from '../../lib/tableFilter'
 import { useTypeSelection } from './useTypeSelection'
 import { ColumnChart, type StackedColumn } from '../charts/ColumnChart'
 import { useAnalytics } from './useAnalytics'
 import { NeedsImport } from './NeedsImport'
+import { RangeFilter } from './RangeFilter'
 import { StatTile } from './StatTile'
 import { TypeFilter } from './TypeFilter'
+import { useRangeSelection } from './useRangeSelection'
 
 /**
  * Dividend & income tracking (Milestone M3, Stories #23 and #31). Shows gross income,
@@ -227,6 +230,11 @@ export function DividendsView(): React.JSX.Element {
  * derived (Flex cash rows carry no quantity) and both are shown in the payment's own
  * currency, matching the Amount column and the Upcoming table's rate — the base-currency
  * conversion of the row stays in the final column. See DDR-0016.
+ *
+ * Story #75 adds a time-range filter composing with the type chips: the period narrows the
+ * rows first, the types then narrow those, and the count reports what survives both. The type
+ * chips stay derived from *all* events, so narrowing the period never makes a chip disappear
+ * mid-selection. See DDR-0017.
  */
 function Transactions({
   events,
@@ -236,27 +244,43 @@ function Transactions({
   baseCurrency: string
 }): React.JSX.Element {
   const { selected, toggle, clear } = useTypeSelection()
+  const { range, setRange, custom, editCustom } = useRangeSelection()
   const c = (v: number): string => formatCurrency(v, baseCurrency)
 
+  const extent = datedExtent(events, (e) => e.date)
+  const customBounds = custom ?? extent ?? { from: 0, to: 0 }
+  const bounds = windowFor(range, extent, customBounds)
+
   const types = distinctTypes(events, (e) => e.type)
-  const rows = filterByTypes(events, (e) => e.type, selected)
+  const inRange = filterByRange(events, (e) => e.date, bounds)
+  const rows = filterByTypes(inRange, (e) => e.type, selected)
 
   return (
     <section className="panel">
       <div className="panel-header">
         <h2 className="panel-title">Transactions</h2>
-        <TypeFilter
-          label="type"
-          types={types}
-          selected={selected}
-          onToggle={toggle}
-          onClear={clear}
-          shown={rows.length}
-          total={events.length}
-        />
+        <div className="panel-toolbar">
+          <RangeFilter
+            label="Transactions time range"
+            range={range}
+            onSelect={setRange}
+            extent={extent}
+            custom={customBounds}
+            onEditCustom={(edge, value) => editCustom(edge, value, customBounds)}
+          />
+          <TypeFilter
+            label="type"
+            types={types}
+            selected={selected}
+            onToggle={toggle}
+            onClear={clear}
+            shown={rows.length}
+            total={events.length}
+          />
+        </div>
       </div>
       {rows.length === 0 ? (
-        <p className="chart-empty">No transactions match this filter.</p>
+        <p className="chart-empty">No transactions match these filters.</p>
       ) : (
         <>
           <p className="source-note">
