@@ -126,7 +126,6 @@ export function AllocationView(): React.JSX.Element {
             <thead>
               <tr>
                 <th scope="col">Ticker</th>
-                <th scope="col">Class</th>
                 <th scope="col">Country</th>
                 <th scope="col">Sector</th>
                 <th scope="col" className="num">Market value</th>
@@ -142,7 +141,6 @@ export function AllocationView(): React.JSX.Element {
                     {p.symbol}
                     <span className="flex-import-file">{p.description}</span>
                   </th>
-                  <td>{p.assetCategory}</td>
                   <td>{p.issuerCountry || '—'}</td>
                   <td>{p.sector || '—'}</td>
                   <td className="num">{c(p.marketValueBase)}</td>
