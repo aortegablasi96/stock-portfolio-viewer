@@ -54,4 +54,5 @@ Other options and why they were not chosen.
 - `0016` — Dividend rows: shares held reconstructed from trades; per-share divided out of the amount
 - `0017` — Analytics tables: time-range filter anchored to the data, composed with the type filter
 - `0018` — One shared content measure for the shell; charts sized by aspect ratio
-- `0019` — Allocation map: Mapbox basemap with an SVG bubble overlay (supersedes `0014`)
+- `0019` — Allocation map: Mapbox basemap with an SVG bubble overlay (supersedes `0014`) *(superseded by 0020 on the overlay; basemap decisions still apply)*
+- `0020` — Allocation map: one canvas circle per holding, with a hover popup (supersedes `0019`)

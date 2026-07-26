@@ -1,6 +1,6 @@
 # 0019. Allocation map: Mapbox basemap with an SVG bubble overlay
 
-- **Status:** Accepted
+- **Status:** Superseded by 0020 (overlay and tooltips only — the basemap decisions below still apply)
 - **Date:** 2026-07-26
 
 ## Context
