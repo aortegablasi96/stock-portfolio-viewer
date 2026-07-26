@@ -7,6 +7,11 @@
  * `lib/tableFilter`), so this control stays reusable across the dividends and trades
  * tables, whose columns differ.
  *
+ * The count reports the table's whole filter stack, not just this control's: `shown` is
+ * whatever survived every filter the view applies (since Story #75 that includes the time
+ * range), so it reads "N of M" whenever rows are hidden for any reason. Only the Clear
+ * button is tied to this control, and clears only the type chips.
+ *
  * The chips are `aria-pressed` toggle buttons inside an `aria-label`led group, so the
  * control is labelled and fully keyboard-operable.
  */
@@ -30,7 +35,8 @@ export function TypeFilter({
   shown: number
   total: number
 }): React.JSX.Element {
-  const filtered = selected.size > 0
+  const typeFiltered = selected.size > 0
+  const hidingRows = shown !== total
   return (
     <div className="panel-toolbar">
       <div className="type-filter" role="group" aria-label={`Filter by ${label}`}>
@@ -48,14 +54,14 @@ export function TypeFilter({
             </button>
           )
         })}
-        {filtered && (
+        {typeFiltered && (
           <button type="button" className="type-filter-clear" onClick={onClear}>
             Clear
           </button>
         )}
       </div>
       <span className="panel-count" role="status">
-        {filtered ? `${shown} of ${total}` : `${total}`} shown
+        {hidingRows ? `${shown} of ${total}` : `${total}`} shown
       </span>
     </div>
   )

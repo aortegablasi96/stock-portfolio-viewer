@@ -6,20 +6,14 @@ import {
   formatSignedCurrency,
   formatSignedPercent,
 } from '../../lib/format'
-import type { Bounds, RangeId } from '../../lib/performanceRange'
-import {
-  boundsFor,
-  fromDateInput,
-  RANGE_OPTIONS,
-  seriesExtent,
-  sliceSeries,
-  toDateInput,
-  windowStats,
-} from '../../lib/performanceRange'
+import { boundsFor } from '../../lib/dateRange'
+import { seriesExtent, sliceSeries, windowStats } from '../../lib/performanceRange'
 import { LineChart } from '../charts/LineChart'
 import { useAnalytics } from './useAnalytics'
 import { NeedsImport } from './NeedsImport'
+import { RangeFilter } from './RangeFilter'
 import { StatTile, toneOf } from './StatTile'
+import { useRangeSelection } from './useRangeSelection'
 
 /** The two switchable Performance charts (Story #45). */
 const CHART_TABS = [
@@ -42,9 +36,7 @@ type ChartTab = (typeof CHART_TABS)[number]['id']
 export function PerformanceView(): React.JSX.Element {
   const { state, reload } = useAnalytics<PerformanceResult>(window.api.getPerformance)
   const [chartTab, setChartTab] = useState<ChartTab>('value')
-  const [range, setRange] = useState<RangeId>('all')
-  // Custom window; `null` until the user first edits it, when it defaults to the full extent.
-  const [custom, setCustom] = useState<Bounds | null>(null)
+  const { range, setRange, custom, editCustom } = useRangeSelection()
 
   if (state.phase === 'loading') {
     return (
@@ -83,57 +75,16 @@ export function PerformanceView(): React.JSX.Element {
 
   const periodLabel = range === 'all' ? 'Full history' : 'Selected period'
 
-  /** Update one edge of the custom window, seeding from the full extent on first edit. */
-  function editCustom(edge: 'from' | 'to', value: string): void {
-    const ms = fromDateInput(value)
-    if (ms === null) return
-    setCustom((prev) => ({ ...(prev ?? customBounds), [edge]: ms }))
-  }
-
   return (
     <div className="analytics-view">
-      <div className="range-bar">
-        <div className="chart-tabs" role="group" aria-label="Performance time range">
-          {RANGE_OPTIONS.map((opt) => (
-            <button
-              key={opt.id}
-              type="button"
-              title={opt.title}
-              aria-pressed={range === opt.id}
-              className={`chart-tab ${range === opt.id ? 'chart-tab-active' : ''}`}
-              onClick={() => setRange(opt.id)}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-        {range === 'custom' && extent && (
-          <div className="range-custom">
-            <label className="field-inline">
-              <span>From</span>
-              <input
-                type="date"
-                className="select-control"
-                value={toDateInput(customBounds.from)}
-                min={toDateInput(extent.from)}
-                max={toDateInput(extent.to)}
-                onChange={(e) => editCustom('from', e.target.value)}
-              />
-            </label>
-            <label className="field-inline">
-              <span>To</span>
-              <input
-                type="date"
-                className="select-control"
-                value={toDateInput(customBounds.to)}
-                min={toDateInput(extent.from)}
-                max={toDateInput(extent.to)}
-                onChange={(e) => editCustom('to', e.target.value)}
-              />
-            </label>
-          </div>
-        )}
-      </div>
+      <RangeFilter
+        label="Performance time range"
+        range={range}
+        onSelect={setRange}
+        extent={extent}
+        custom={customBounds}
+        onEditCustom={(edge, value) => editCustom(edge, value, customBounds)}
+      />
 
       <div className="stat-row">
         <StatTile label="Portfolio value" value={c(stats.endValue)} hint="At period end" />
