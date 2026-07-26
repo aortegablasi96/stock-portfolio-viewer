@@ -1,6 +1,7 @@
-import { useCallback, useRef, useState } from 'react'
-import type { AllocationSlice } from '@shared/domain/allocation'
-import { splitCountryBubbles, WORLD_SILHOUETTE_PATH } from '../../lib/worldGeo'
+import { useCallback, useMemo, useRef, useState } from 'react'
+import type { AllocationPosition, AllocationSlice } from '@shared/domain/allocation'
+import { WORLD_SILHOUETTE_PATH } from '../../lib/worldGeo'
+import { sectorPalette, splitSectorBubbles } from '../../lib/sectorMap'
 import {
   initialViewport,
   panBy,
@@ -12,34 +13,49 @@ import {
 } from '../../lib/mapViewport'
 
 /**
- * Equirectangular bubble map of holdings by country (Milestone M3, Stories #46 & #70, DDR-0014).
+ * Equirectangular bubble map of holdings by country, segmented by sector (Milestone M3,
+ * Stories #46, #70 & #71, DDR-0014).
  *
  * A faint world-land silhouette is drawn once as a single SVG path; each country the owner
  * holds is a circle placed at its centroid, with area proportional to market value. Silhouette
  * and circles share one projection (`projectEquirectangular`), so they align exactly — no
  * charting or geo dependency, matching the inline-SVG stance of the other charts (DDR-0006).
  *
+ * Each circle is split into sector wedges (Story #71): a country's positions are grouped by
+ * sector and drawn as pie slices of its bubble, coloured from the same palette the Sector donut
+ * uses (`lib/sectorMap` → `lib/pie`), so a sector wears one hue on the map, in the donut, and in
+ * the map's own legend. Unclassified positions take the neutral grey, consistent with the
+ * "Unclassified" allocation slice. Sector is derived entirely in the renderer from the report's
+ * positions — nothing below the renderer changes, and the map still renders offline.
+ *
  * The map is interactive (Story #70): the owner can zoom (wheel or the +/− buttons) and pan
  * (drag) to inspect crowded regions. Pan/zoom is just a moving `viewBox` over the same fixed
  * projection (`lib/mapViewport`), so nothing is re-projected or refetched — the map still
  * renders offline from imported data with the gateway closed.
  *
- * The map consumes the same `report.byCountry` slices the geography donut uses. Countries with
- * no centroid and the '' / 'Unknown' slice can't be placed, so `splitCountryBubbles` folds them
- * into an `unknown` bucket surfaced as a labelled legend chip rather than dropping them.
+ * Positions whose issuer country is missing or has no centroid can't be placed, so
+ * `splitSectorBubbles` folds them into an `unknown` bucket surfaced as a labelled legend chip
+ * rather than dropping them.
  */
 export function BubbleMap({
-  data,
+  positions,
+  bySector,
   formatValue,
   ariaLabel,
   emptyMessage = 'No country data to map yet.',
 }: {
-  data: AllocationSlice[]
+  positions: AllocationPosition[]
+  bySector: AllocationSlice[]
   formatValue: (v: number) => string
   ariaLabel: string
   emptyMessage?: string
 }): React.JSX.Element {
-  const { bubbles, unknown } = splitCountryBubbles(data)
+  const { bubbles, unknown, legend } = useMemo(() => {
+    const palette = sectorPalette(bySector)
+    const split = splitSectorBubbles(positions, palette)
+    return { ...split, legend: palette.legend }
+  }, [positions, bySector])
+
   const svgRef = useRef<SVGSVGElement | null>(null)
   const [view, setView] = useState<Viewport>(initialViewport)
   // Active drag: the world point grabbed at pointer-down, held fixed under the moving cursor.
@@ -113,9 +129,17 @@ export function BubbleMap({
         >
           <path className="bubble-map-land" d={WORLD_SILHOUETTE_PATH} />
           {bubbles.map((b) => (
-            <circle key={b.code} className="bubble-map-dot" cx={b.x} cy={b.y} r={b.r}>
-              <title>{`${b.name} — ${formatValue(b.value)} (${b.percent.toFixed(1)}% of NAV)`}</title>
-            </circle>
+            <g key={b.code} className="bubble-map-bubble">
+              {b.wedges.map((w) => (
+                <path key={w.key} className={`bubble-map-wedge ${w.colorClass}`} d={w.path}>
+                  <title>
+                    {`${b.name} · ${w.label} — ${formatValue(w.value)} (${w.percent.toFixed(1)}% of NAV)`}
+                  </title>
+                </path>
+              ))}
+              {/* A thin outline ring ties the wedges together as one country bubble. */}
+              <circle className="bubble-map-outline" cx={b.x} cy={b.y} r={b.r} />
+            </g>
           ))}
         </svg>
         <div className="bubble-map-controls" role="group" aria-label="Map zoom">
@@ -151,14 +175,21 @@ export function BubbleMap({
         </div>
       </div>
       <figcaption className="chart-legend bubble-map-legend">
-        <span className="bubble-map-hint">Circle size ∝ holding value</span>
-        <span className="bubble-map-pan-hint">Scroll to zoom · drag to pan</span>
+        <ul className="bubble-map-sectors" aria-label="Sector colours">
+          {legend.map((s) => (
+            <li key={s.key} className="bubble-map-sector">
+              <span className={`legend-swatch ${s.colorClass}`} aria-hidden="true" />
+              {s.label}
+            </li>
+          ))}
+        </ul>
+        <span className="bubble-map-pan-hint">Circle size ∝ holding value · scroll to zoom · drag to pan</span>
         {unknown.count > 0 && (
           <span
             className="bubble-map-unknown"
             title={`${unknown.count} country group(s) with no locatable country`}
           >
-            Unknown — {formatValue(unknown.value)} ({unknown.percent.toFixed(1)}% of NAV)
+            Unknown location — {formatValue(unknown.value)} ({unknown.percent.toFixed(1)}% of NAV)
           </span>
         )}
       </figcaption>
