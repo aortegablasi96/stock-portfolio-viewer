@@ -1,11 +1,8 @@
 /**
- * Pure helpers for the type-filtered, row-capped analytics tables (Stories #32, #33).
+ * Pure helpers for the type-filtered, row-capped analytics tables (Stories #32, #33, #73).
  * Kept out of the components so the option-derivation and filtering rules are unit-tested
  * directly, the way the other renderer helpers in this folder are.
  */
-
-/** Sentinel filter value meaning "no type filter applied" (all rows shown). */
-export const ALL_TYPES = 'all'
 
 /**
  * The distinct values of `key` across `rows`, in first-seen order — the option list for a
@@ -26,13 +23,14 @@ export function distinctTypes<T>(rows: readonly T[], key: (row: T) => string): s
 }
 
 /**
- * The rows whose `key` equals `selected`, or every row when `selected` is `ALL_TYPES`.
+ * The rows whose `key` is in `selected`, or every row when `selected` is empty (Story #73).
+ * An empty selection is the "no filter" state — clearing every type shows all rows again.
  * Returns a fresh array so callers can render it directly without aliasing the input.
  */
-export function filterByType<T>(
+export function filterByTypes<T>(
   rows: readonly T[],
   key: (row: T) => string,
-  selected: string,
+  selected: ReadonlySet<string>,
 ): T[] {
-  return selected === ALL_TYPES ? [...rows] : rows.filter((row) => key(row) === selected)
+  return selected.size === 0 ? [...rows] : rows.filter((row) => selected.has(key(row)))
 }

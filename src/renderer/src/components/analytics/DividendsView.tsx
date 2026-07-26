@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import type { DividendEvent, UpcomingDividends, DividendResult } from '@shared/domain/dividends'
 import {
   formatCompanyName,
@@ -7,7 +6,8 @@ import {
   formatMonth,
   formatQuantity,
 } from '../../lib/format'
-import { ALL_TYPES, distinctTypes, filterByType } from '../../lib/tableFilter'
+import { distinctTypes, filterByTypes } from '../../lib/tableFilter'
+import { useTypeSelection } from './useTypeSelection'
 import { ColumnChart, type StackedColumn } from '../charts/ColumnChart'
 import { useAnalytics } from './useAnalytics'
 import { NeedsImport } from './NeedsImport'
@@ -229,22 +229,22 @@ function Transactions({
   events: DividendEvent[]
   baseCurrency: string
 }): React.JSX.Element {
-  const [type, setType] = useState<string>(ALL_TYPES)
+  const { selected, toggle, clear } = useTypeSelection()
   const c = (v: number): string => formatCurrency(v, baseCurrency)
 
   const types = distinctTypes(events, (e) => e.type)
-  const rows = filterByType(events, (e) => e.type, type)
+  const rows = filterByTypes(events, (e) => e.type, selected)
 
   return (
     <section className="panel">
       <div className="panel-header">
         <h2 className="panel-title">Transactions</h2>
         <TypeFilter
-          id="dividend-tx-filter"
           label="type"
           types={types}
-          value={type}
-          onChange={setType}
+          selected={selected}
+          onToggle={toggle}
+          onClear={clear}
           shown={rows.length}
           total={events.length}
         />

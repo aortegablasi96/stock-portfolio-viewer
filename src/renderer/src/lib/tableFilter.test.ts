@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { ALL_TYPES, distinctTypes, filterByType } from './tableFilter'
+import { distinctTypes, filterByTypes } from './tableFilter'
 
 interface Row {
   type: string
@@ -28,18 +28,23 @@ describe('distinctTypes', () => {
   })
 })
 
-describe('filterByType', () => {
-  it('returns all rows for the ALL_TYPES sentinel', () => {
-    const result = filterByType(rows, typeOf, ALL_TYPES)
+describe('filterByTypes', () => {
+  it('returns all rows for an empty selection (no filter)', () => {
+    const result = filterByTypes(rows, typeOf, new Set())
     expect(result).toHaveLength(4)
     expect(result).not.toBe(rows) // fresh array, not the input aliased
   })
 
-  it('keeps only rows matching the selected type', () => {
-    expect(filterByType(rows, typeOf, 'Dividends').map((r) => r.n)).toEqual([1, 3])
+  it('keeps only rows matching a single selected type', () => {
+    expect(filterByTypes(rows, typeOf, new Set(['Dividends'])).map((r) => r.n)).toEqual([1, 3])
+  })
+
+  it('keeps rows matching any of several selected types (union)', () => {
+    const selected = new Set(['Dividends', 'Withholding Tax'])
+    expect(filterByTypes(rows, typeOf, selected).map((r) => r.n)).toEqual([1, 2, 3])
   })
 
   it('returns an empty array when nothing matches', () => {
-    expect(filterByType(rows, typeOf, 'Interest')).toEqual([])
+    expect(filterByTypes(rows, typeOf, new Set(['Interest']))).toEqual([])
   })
 })
