@@ -3,10 +3,21 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <!-- Lock the renderer down: no remote content, inline styles only. -->
+    <!--
+      Lock the renderer down: no remote content beyond basemap tiles, inline styles only.
+
+      `connect-src` allows exactly ONE external origin, api.mapbox.com, for the Allocation
+      map's basemap tiles (ADR-0007). `blob:` is required because Mapbox GL JS compiles its
+      worker from a blob URL.
+
+      events.mapbox.com is DELIBERATELY ABSENT. Mapbox GL JS posts usage telemetry there by
+      default; omitting the origin makes the browser block it regardless of library version or
+      configuration, which is what structurally guarantees that no portfolio data leaves this
+      machine. This is not an oversight -- do not add it.
+    -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; worker-src blob:; child-src blob:; connect-src 'self' https://api.mapbox.com"
     />
     <title>Stock Portfolio Viewer</title>
   </head>

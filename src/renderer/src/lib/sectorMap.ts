@@ -8,10 +8,16 @@
  *
  * Everything here is derived in the renderer from `report.positions` (which already carry
  * `issuerCountry`, `sector` and the base-currency value) plus `report.bySector` (for a stable,
- * donut-matching colour assignment) — nothing below the renderer changes and the map still
- * renders offline from imported data. Kept out of the component so the country grouping, wedge
- * aggregation, colour matching and radius scaling are unit-tested directly, the way the other
- * `lib/` helpers are.
+ * donut-matching colour assignment) — nothing below the renderer changes, and no holding data
+ * leaves the machine to draw the map (ADR-0007). Kept out of the component so the country
+ * grouping, wedge aggregation, colour matching and radius scaling are unit-tested directly, the
+ * way the other `lib/` helpers are — Vitest runs Node-only, so this module is where the map's
+ * testable logic lives.
+ *
+ * Output is deliberately **projection-free** (Story #89, DDR-0019): a bubble carries the
+ * `lon`/`lat` of its country's centroid and its wedges are laid out around a local 0,0 origin.
+ * The map owns projection, panning and zooming, so the same geometry is valid at every zoom
+ * level and this module never needs to know how the world is drawn.
  *
  * Colour identity is shared with the Sector donut: the wedge palette is built from the same
  * `groupTail` + `sliceColorClasses` pipeline (`lib/pie`), so a sector wears the same hue on the
@@ -21,7 +27,7 @@
  */
 import type { AllocationPosition, AllocationSlice } from '@shared/domain/allocation'
 import { groupTail, OTHER_KEY, sliceColorClasses, toArcs, type PieDatum } from './pie'
-import { centroidFor, type Centroid, projectEquirectangular } from './worldGeo'
+import { centroidFor, type Centroid } from './worldGeo'
 
 const NEUTRAL_CLASS = 'pie-series-neutral'
 
@@ -87,16 +93,28 @@ export interface SectorWedge {
   /** Share of NAV (percent) for this sector within the country. */
   percent: number
   colorClass: string
-  /** SVG path for the wedge, a full pie slice (inner radius 0) of the country bubble. */
+  /**
+   * SVG path for the wedge, a full pie slice (inner radius 0) of the country bubble, laid out
+   * around a local 0,0 origin so the overlay can position it at the bubble's projected point.
+   */
   path: string
 }
 
-/** One country bubble, sized by total value and split into sector wedges. */
+/**
+ * One country bubble, sized by total value and split into sector wedges.
+ *
+ * The bubble is anchored *geographically* (`lon`/`lat`, straight from the country's centroid);
+ * the map owns the projection, so the same bubble is positioned correctly at any zoom. Wedge
+ * paths are laid out around a local 0,0 origin (see `SectorWedge.path`) rather than an absolute
+ * frame coordinate, which is what lets the overlay be re-positioned without re-deriving geometry.
+ */
 export interface SectorBubble {
   code: string
   name: string
-  x: number
-  y: number
+  /** Longitude of the country's centroid, in degrees. */
+  lon: number
+  /** Latitude of the country's centroid, in degrees. */
+  lat: number
   /** Total base-currency market value held in this country. */
   value: number
   /** Total share of NAV (percent) held in this country. */
@@ -130,14 +148,13 @@ function radiusFor(value: number, maxValue: number): number {
 /**
  * Aggregate a country's positions into sector wedges laid out as pie slices of its bubble.
  * Positions are grouped by their palette display key (so at most one wedge per legend entry),
- * value-sorted with the neutral bucket last so hues lead, then turned into arc paths. Only
- * positive-valued wedges are drawn (a short/zero position can't own an angular share).
+ * value-sorted with the neutral bucket last so hues lead, then turned into arc paths around a
+ * local 0,0 origin. Only positive-valued wedges are drawn (a short/zero position can't own an
+ * angular share).
  */
 function buildWedges(
   positions: AllocationPosition[],
   palette: SectorPalette,
-  cx: number,
-  cy: number,
   r: number,
 ): SectorWedge[] {
   const byKey = new Map<string, { value: number; percent: number }>()
@@ -164,7 +181,7 @@ function buildWedges(
       return ra !== rb ? ra - rb : b.value - a.value
     })
 
-  const arcs = toArcs(data, cx, cy, r, 0)
+  const arcs = toArcs(data, 0, 0, r, 0)
   return arcs.map((arc, i) => ({
     key: arc.key,
     label: arc.label,
@@ -216,11 +233,19 @@ export function splitSectorBubbles(
   const maxValue = placeable.reduce((m, pl) => Math.max(m, totalOf(pl.positions)), 0)
 
   const bubbles: SectorBubble[] = placeable.map(({ code, centroid, positions: ps }) => {
-    const { x, y } = projectEquirectangular(centroid.lon, centroid.lat)
     const value = totalOf(ps)
     const percent = ps.reduce((sum, p) => sum + p.percentOfNav, 0)
     const r = radiusFor(value, maxValue)
-    return { code, name: centroid.name, x, y, value, percent, r, wedges: buildWedges(ps, palette, x, y, r) }
+    return {
+      code,
+      name: centroid.name,
+      lon: centroid.lon,
+      lat: centroid.lat,
+      value,
+      percent,
+      r,
+      wedges: buildWedges(ps, palette, r),
+    }
   })
   bubbles.sort((a, b) => b.value - a.value)
 

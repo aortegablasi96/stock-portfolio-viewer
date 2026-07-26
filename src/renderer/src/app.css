@@ -1332,34 +1332,61 @@ html {
   background: var(--series-neutral);
 }
 
-/* ---- Bubble map (world geography, Story #46, DDR-0014) ------------------- */
+/* ---- Bubble map (world geography, Story #46; #89/DDR-0019 basemap) ------- */
 .bubble-map-figure {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
 }
 
-/* Positioning context for the zoom controls overlaid on the map (Story #70). */
-/* The map keeps the world's 2:1 aspect, so its width is what sets its height — it takes a
-   measure of its own rather than the panel's full width, which on a wide window would make it
-   tall enough to push everything below it off-screen (Story #76). */
+/* Positioning context for the zoom controls overlaid on the map (Story #70).
+   The map now spans the full content measure (Story #89). The 56rem cap it used to carry
+   existed because the SVG was locked to the world's 2:1 aspect, so full width meant a frame
+   tall enough to push the breakdowns off-screen (DDR-0018). Mapbox owns the camera instead of
+   a fixed frame, so aspect is now a free choice: a flatter ratio spends the extra width on map
+   rather than on height. */
 .bubble-map-frame {
   position: relative;
   width: 100%;
-  max-width: 56rem;
-  margin: 0 auto;
+}
+
+/* The Mapbox canvas has no intrinsic size the way an SVG viewBox did, so the frame declares its
+   own proportion and the map fills it (Story #89). Without this the panel would collapse.
+   3:1 keeps a full-width map about as tall as the old 56rem one while spanning ~2x the width;
+   the camera fits the world to whatever shape it is given, so nothing is cropped. */
+.bubble-map-frame {
+  aspect-ratio: 3 / 1;
+  min-height: 20rem;
 }
 
 .bubble-map {
   width: 100%;
-  height: auto;
+  height: 100%;
   display: block;
+  border-radius: 6px;
+  overflow: hidden;
   touch-action: none; /* pointer-drag pans instead of scrolling the page */
-  cursor: grab;
 }
 
-.bubble-map.is-pannable:active {
-  cursor: grabbing;
+/* Degraded state: no token, or tiles unreachable. Sits where the basemap would be, reusing the
+   shared in-figure empty treatment rather than error styling — the view is still usable. */
+.bubble-map-unavailable {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  height: 100%;
+  padding: 1rem;
+  text-align: center;
+  background: var(--surface-hover, var(--border));
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.bubble-map-unavailable-hint {
+  font-size: 0.82rem;
+  opacity: 0.85;
 }
 
 /* Stacked +/− /reset buttons, top-right of the map. */
@@ -1402,27 +1429,27 @@ html {
   font-size: 0.95rem;
 }
 
-/* Faint land backdrop — the circles, not the map, carry the data. */
-.bubble-map-land {
-  fill: var(--border);
-  opacity: 0.55;
+/* Each country bubble is a pie of sector wedges (Story #71); a thin ring outlines the whole.
+   Opacity and stroke are heavier than the flat-silhouette era: over real terrain the old values
+   read as muddy, and the wedge hues must stay the most saturated thing on screen (DDR-0019). */
+.bubble-map-bubble {
+  cursor: pointer;
 }
 
-/* Each country bubble is a pie of sector wedges (Story #71); a thin ring outlines the whole. */
 .bubble-map-wedge {
-  fill-opacity: 0.72;
+  fill-opacity: 0.85;
   stroke: var(--card);
-  stroke-width: 0.4;
+  stroke-width: 0.5;
 }
 
 .bubble-map-bubble:hover .bubble-map-wedge {
-  fill-opacity: 0.95;
+  fill-opacity: 1;
 }
 
 .bubble-map-outline {
   fill: none;
   stroke: var(--card);
-  stroke-width: 0.75;
+  stroke-width: 1;
   pointer-events: none;
 }
 

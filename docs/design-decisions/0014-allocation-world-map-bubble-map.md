@@ -1,6 +1,6 @@
 # 0014. Allocation view: geographic exposure as an equirectangular bubble map
 
-- **Status:** Accepted
+- **Status:** Superseded by 0019 (basemap and projection only — the data semantics below still apply)
 - **Date:** 2026-07-24
 
 ## Context
