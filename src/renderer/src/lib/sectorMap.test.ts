@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AllocationPosition, AllocationSlice } from '@shared/domain/allocation'
-import { centroidFor, projectEquirectangular } from './worldGeo'
+import { centroidFor } from './worldGeo'
 import { OTHER_KEY } from './pie'
 import { sectorPalette, splitSectorBubbles } from './sectorMap'
 
@@ -120,11 +120,26 @@ describe('splitSectorBubbles', () => {
     expect(de.r - 3).toBeCloseTo((us.r - 3) / 2, 5)
   })
 
-  it('positions a bubble at its centroid projection', () => {
+  it('anchors a bubble to its country centroid in lon/lat', () => {
     const palette = sectorPalette([sectorSlice('Technology', 100)])
     const { bubbles } = splitSectorBubbles([position({ issuerCountry: 'US' })], palette)
     const us = centroidFor('US')!
-    expect(bubbles[0]).toMatchObject(projectEquirectangular(us.lon, us.lat))
+    expect(bubbles[0]).toMatchObject({ lon: us.lon, lat: us.lat })
+  })
+
+  it('lays wedge paths out around a local origin, not an absolute frame coordinate', () => {
+    // The map owns projection (DDR-0019), so wedge geometry must be position-independent —
+    // identical for two countries whose only difference is where they sit on the globe.
+    const palette = sectorPalette([sectorSlice('Technology', 100)])
+    const { bubbles } = splitSectorBubbles(
+      [
+        position({ issuerCountry: 'US', sector: 'Technology', marketValueBase: 100 }),
+        position({ issuerCountry: 'JP', sector: 'Technology', marketValueBase: 100 }),
+      ],
+      palette,
+    )
+    const [first, second] = bubbles
+    expect(first!.wedges[0]!.path).toBe(second!.wedges[0]!.path)
   })
 
   it('orders wedges with categorical hues first and the neutral bucket last', () => {
