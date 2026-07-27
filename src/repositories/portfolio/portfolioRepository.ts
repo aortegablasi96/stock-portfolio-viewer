@@ -1,5 +1,6 @@
 import type { AccountBalances, Holding } from '@shared/domain/portfolio'
 import { IbkrGatewayError, IbkrTimeoutError } from '@shared/errors'
+import { gatewayCache, LIVE_TTL_MS, SESSION_TTL_MS } from './gatewayCache'
 import { ibkrGateway, type LedgerEntry, type RawPosition } from './ibkrGateway'
 
 /**
@@ -7,6 +8,13 @@ import { ibkrGateway, type LedgerEntry, type RawPosition } from './ibkrGateway'
  * Portal Gateway (ADR-0004). This repository is the only place that knows the data
  * comes from IBKR: it maps raw gateway DTOs into domain models and exposes
  * domain-oriented methods. Services consume these without knowing the origin.
+ *
+ * It is also the only place that knows those reads are **coalesced and briefly reused**
+ * (Story #106, DDR-0024): every gateway read goes through `gatewayCache`, so one overview
+ * costs one auth check, one account-id resolution, one positions read and one ledger read
+ * however many methods the service calls, and a display-currency switch reuses figures
+ * fetched moments earlier. Services and the renderer are unaware of this by design — where
+ * data comes from, and how recently, is a repository concern.
  *
  * In M2 this same seam will compose local SQLite snapshots alongside IBKR; nothing
  * about that is built here yet (no speculative abstraction).
@@ -45,20 +53,37 @@ function resolveBaseCurrency(ledger: Record<string, LedgerEntry>): string {
   return baseLedgerEntry(ledger)?.currency ?? 'BASE'
 }
 
+/**
+ * The authenticated account every read is scoped to, resolved once per session window.
+ *
+ * Both reads are memoized, so the two halves of one overview — which the service runs in
+ * parallel — share a single auth check and a single account-id resolution instead of making
+ * two of each (Story #106). A disconnected or stalled gateway drops the memo, so reconnecting
+ * re-checks properly without restarting the app.
+ */
+async function authenticatedAccountId(): Promise<string> {
+  await gatewayCache.read('auth', SESSION_TTL_MS, () => ibkrGateway.ensureAuthenticated())
+  return gatewayCache.read('accountId', SESSION_TTL_MS, () => ibkrGateway.getAccountId())
+}
+
 export const portfolioRepository = {
   /** Current open positions (zero-quantity/closed positions are excluded). */
   async getHoldings(): Promise<Holding[]> {
-    await ibkrGateway.ensureAuthenticated()
-    const accountId = await ibkrGateway.getAccountId()
-    const positions = await ibkrGateway.getPositions(accountId)
+    const accountId = await authenticatedAccountId()
+    const positions = await gatewayCache.read(`positions:${accountId}`, LIVE_TTL_MS, () =>
+      ibkrGateway.getPositions(accountId),
+    )
+    // Mapped outside the cache: the entry holds the raw DTOs, and every caller gets its own
+    // freshly built domain objects, so a shared entry can never be mutated through one of them.
     return positions.filter((p) => (p.position ?? 0) !== 0).map(toHolding)
   },
 
   /** Account cash and value figures in the base currency. */
   async getBalances(): Promise<AccountBalances> {
-    await ibkrGateway.ensureAuthenticated()
-    const accountId = await ibkrGateway.getAccountId()
-    const ledger = await ibkrGateway.getLedger(accountId)
+    const accountId = await authenticatedAccountId()
+    const ledger = await gatewayCache.read(`ledger:${accountId}`, LIVE_TTL_MS, () =>
+      ibkrGateway.getLedger(accountId),
+    )
     const base = baseLedgerEntry(ledger)
     // Holdings value already in base currency (BASE ledger entry) — the figure snapshots
     // persist, so history never sums positions across mixed native currencies (Bug #68).
@@ -88,6 +113,15 @@ export const portfolioRepository = {
    * a total. A disconnected gateway (`IbkrNotConnectedError`) still propagates, degrading the
    * whole view to `not_connected`. Conversion itself is the service's job — this only fetches
    * rates.
+   *
+   * The pairs are fetched **concurrently** (Story #106). The owner's account trades in six
+   * currencies, and asking one at a time made every currency switch pay six serial round
+   * trips. This still honours DDR-0022's "never wait `timeout × currencies`" rule, and
+   * honours it better: with every request already in flight, a stalled gateway costs *one*
+   * timeout in total rather than one per remaining pair — and the pairs that did answer keep
+   * their rates instead of being skipped because an earlier one stalled. The fan-out is
+   * bounded by the currencies actually held (a handful), so this is not a request storm
+   * against the single local session.
    */
   async getExchangeRates(
     currencies: readonly string[],
@@ -95,24 +129,33 @@ export const portfolioRepository = {
   ): Promise<Record<string, number>> {
     const rates: Record<string, number> = { [target]: 1 }
     const distinct = [...new Set(currencies)].filter((c) => c && c !== target)
-    for (const source of distinct) {
-      try {
-        const rate = await ibkrGateway.getExchangeRate(source, target)
-        // A non-positive / non-finite rate is a bogus quote (e.g. the gateway returns 0 for
-        // an unsupported pair). Treat it as unavailable rather than letting `value × 0` zero
-        // a figure — the same "rate-unavailable as data" rule as a thrown error (DDR-0007).
-        if (Number.isFinite(rate) && rate > 0) rates[source] = rate
-      } catch (err) {
-        // A stalled gateway times out on *every* remaining pair, so continuing would make the
-        // view wait `timeout × currencies` instead of once. Stop asking and report the rates
-        // gathered so far — the rest render unconverted (DDR-0007, DDR-0022). This is the
-        // opposite of a retry loop: one bounded attempt, then give up.
-        if (err instanceof IbkrTimeoutError) break
-        // Rate unavailable for this pair → omit it (position shown unconverted). A
-        // not-connected error is not an IbkrGatewayError, so it propagates.
-        if (err instanceof IbkrGatewayError) continue
-        throw err
-      }
+
+    const fetched = await Promise.all(
+      distinct.map(async (source): Promise<readonly [string, number] | null> => {
+        try {
+          const rate = await gatewayCache.read(`fx:${source}>${target}`, LIVE_TTL_MS, () =>
+            ibkrGateway.getExchangeRate(source, target),
+          )
+          return [source, rate] as const
+        } catch (err) {
+          // Rate unavailable for this pair, whether the gateway refused it (`IbkrGatewayError`,
+          // e.g. an unsupported pair) or never answered (`IbkrTimeoutError`) → omit it, and the
+          // position renders unconverted rather than being multiplied by a made-up number
+          // (DDR-0007, DDR-0022). One bounded attempt, never a retry. A not-connected error is
+          // not an `IbkrGatewayError`, so it propagates and degrades the whole view.
+          if (err instanceof IbkrGatewayError || err instanceof IbkrTimeoutError) return null
+          throw err
+        }
+      }),
+    )
+
+    for (const pair of fetched) {
+      if (!pair) continue
+      const [source, rate] = pair
+      // A non-positive / non-finite rate is a bogus quote (e.g. the gateway returns 0 for
+      // an unsupported pair). Treat it as unavailable rather than letting `value × 0` zero
+      // a figure — the same "rate-unavailable as data" rule as a thrown error (DDR-0007).
+      if (Number.isFinite(rate) && rate > 0) rates[source] = rate
     }
     return rates
   },
