@@ -58,3 +58,4 @@ Other options and why they were not chosen.
 - `0020` — Allocation map: one canvas circle per holding, with a hover popup (supersedes `0019`)
 - `0021` — Allocation map: the gain/loss colour scale (red↔gray↔blue, fixed ±25%; extends `0020`)
 - `0022` — Bounded gateway requests; a stalled gateway as its own `not_responding` state (extends `0002`)
+- `0023` — Classification refresh: resumable (persist before reporting) and progress-reporting (extends `0009`)

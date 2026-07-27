@@ -150,9 +150,16 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IpcChannels.analyticsRealizedGains, () => realizedGainsService.getRealizedGains())
 
   // Story #30: the one analytics channel that talks to IBKR. The service already returns
-  // not_connected / error as data, so there is nothing to map here.
-  ipcMain.handle(IpcChannels.analyticsClassifyInstruments, () =>
-    classificationService.refreshClassifications(),
+  // not_connected / error as data, so there is nothing to map here. The progress callback is
+  // the handler's only real job (Story #105): the service owns the loop but must not import
+  // Electron, so *sending* each tick is a main-process concern. The sender can be gone by
+  // then — the owner may have closed the window mid-refresh — hence the destroyed check.
+  ipcMain.handle(IpcChannels.analyticsClassifyInstruments, (event) =>
+    classificationService.refreshClassifications((progress) => {
+      if (!event.sender.isDestroyed()) {
+        event.sender.send(IpcChannels.analyticsClassifyProgress, progress)
+      }
+    }),
   )
 
   // Custom frameless title-bar controls (Story #42). These carry no untrusted payload, so

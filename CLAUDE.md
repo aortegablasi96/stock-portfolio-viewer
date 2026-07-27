@@ -79,7 +79,13 @@ Live domains exist end-to-end as reference patterns:
   conids to fetch (latest statement's positions, uncached only, sequential). `allocationService`
   joins the cache with a plain sync read, so Allocation still renders with the gateway closed;
   unclassified positions form their own slice. The `analytics:classifyInstruments` channel is the
-  only analytics channel that reaches IBKR. See DDR-0009.
+  only analytics channel that reaches IBKR. A refresh is **resumable, not transactional**: the
+  fetch loop's failure is captured, the rows already fetched are written, and only then is the
+  outcome mapped — so a run that dies on instrument 30 of 40 keeps 29, and the next run re-derives
+  its work list from the cache and asks only for the rest. Every failure variant therefore carries
+  `partial: { fetched, classified, remaining }`, and the run pushes `analytics:classifyProgress`
+  events (`{ completed, total }`, where `total` counts *uncached* instruments) so the sequential
+  loop isn't silent. See DDR-0009, DDR-0023.
 
 > **Project name:** This project is **Stock Portfolio Viewer**, a **standalone,
 > single-user desktop application** for personal stock portfolio analytics. It is
@@ -195,8 +201,10 @@ Canonical flows to copy when adding a feature:
   almost all of them. The exception is the three payload-free `window:minimize |
   toggleMaximize | close` commands: they use `ipcRenderer.send` / `ipcMain.on` and skip
   `contract.ts` entirely, since with no payload there is nothing to Zod-validate. Main→renderer
-  events (`snapshot:captured`, `window:maximizeChanged`) are `ipcRenderer.on` subscriptions
-  that return an unsubscribe function (DDR-0011).
+  events (`snapshot:captured`, `window:maximizeChanged`, `analytics:classifyProgress`) are
+  `ipcRenderer.on` subscriptions that return an unsubscribe function (DDR-0011). A service that
+  needs to emit one takes a **callback** and lets the handler send it — services may not import
+  `electron` (DDR-0023).
 - **`instrument_classifications` is the one mutable table** — it's a *cache* of derived
   reference data (upserted by conid), not history (DDR-0009). Every other table is append-only
   **during normal operation**: no record is ever edited, partially deleted, or silently
@@ -729,7 +737,8 @@ Vitest picks up every `src/**/*.test.ts` and runs it in a **Node** environment (
 so no test may render a React component. This shapes the renderer: chart maths, filtering,
 sorting and formatting are **extracted out of components into pure modules under
 `renderer/src/lib/`** (`format`, `pie`, `worldGeo`, `mapBubbles`, `gainLoss`, `tableFilter`,
-`column`, `dateRange`, `sectorMap`, `performanceRange`) precisely so they can be tested — follow
+`column`, `dateRange`, `sectorMap`, `performanceRange`, `classifyProgress`) precisely so they can
+be tested — follow
 that split when adding a component with real logic in it. The map is the sharpest case: colour
 resolution needs `getComputedStyle` and so stays in the component, while `mapBubbles` and
 `gainLoss` emit palette *classes* — that seam is what keeps the map's geometry and colour scale

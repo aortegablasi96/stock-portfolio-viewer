@@ -1,4 +1,6 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import type { ClassificationPartial, ClassificationProgress } from '@shared/domain/classification'
+import { partialProgressNote, runningLabel } from '../../lib/classifyProgress'
 
 /**
  * The "some positions have no sector yet" prompt in the Allocation view (Story #30).
@@ -8,6 +10,10 @@ import { useCallback, useState } from 'react'
  * action that needs a live gateway, so it is opt-in — the sector chart renders without it,
  * with the unclassified positions in their own slice — and a closed gateway is reported
  * inline rather than replacing the view.
+ *
+ * The lookups are sequential (DDR-0009), so a few dozen instruments take a visible while:
+ * the refresh pushes a progress event per lookup and the button counts them off. A refresh
+ * that fails partway still saved what it fetched, so failures report that too (Story #105).
  */
 export function ClassifySectors({
   unclassifiedCount,
@@ -17,11 +23,17 @@ export function ClassifySectors({
   onClassified: () => void
 }): React.JSX.Element {
   const [running, setRunning] = useState(false)
+  const [progress, setProgress] = useState<ClassificationProgress | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [failed, setFailed] = useState(false)
 
+  // Subscribed for the component's lifetime rather than per-run: the unsubscribe is what the
+  // preload bridge returns, and ticks only arrive while a refresh this window started is running.
+  useEffect(() => window.api.onClassifyProgress(setProgress), [])
+
   const run = useCallback(async () => {
     setRunning(true)
+    setProgress(null)
     setMessage(null)
     setFailed(false)
     try {
@@ -43,24 +55,31 @@ export function ClassifySectors({
           break
         case 'not_connected':
           setFailed(true)
-          setMessage(`${result.message} Sector data is read from IBKR once, then cached locally.`)
+          setMessage(
+            `${result.message} Sector data is read from IBKR once, then cached locally.${saved(result.partial)}`,
+          )
           break
         case 'not_responding':
           setFailed(true)
           setMessage(
-            `${result.message} The gateway is running but didn’t answer — re-authenticate its session and try again.`,
+            `${result.message} The gateway is running but didn’t answer — re-authenticate its session and try again.${saved(result.partial)}`,
           )
           break
         case 'error':
           setFailed(true)
-          setMessage(result.message)
+          setMessage(`${result.message}${saved(result.partial)}`)
           break
+      }
+      // A partial run still changed the cache, so the view is refreshed either way.
+      if (result.status !== 'needs_import' && result.status !== 'ok') {
+        if (result.partial.fetched > 0) onClassified()
       }
     } catch (err) {
       setFailed(true)
       setMessage(err instanceof Error ? err.message : 'Unexpected error classifying instruments.')
     } finally {
       setRunning(false)
+      setProgress(null)
     }
   }, [onClassified])
 
@@ -72,8 +91,23 @@ export function ClassifySectors({
         cached locally.
       </p>
       <button type="button" className="retry-button" onClick={() => void run()} disabled={running}>
-        {running ? 'Classifying…' : 'Classify from IBKR'}
+        {running ? runningLabel(progress) : 'Classify from IBKR'}
       </button>
+      {running && progress !== null && progress.total > 0 && (
+        <div
+          className="classify-progress"
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={progress.total}
+          aria-valuenow={progress.completed}
+          aria-label={`Classifying instruments: ${progress.completed} of ${progress.total}`}
+        >
+          <span
+            className="classify-progress-bar"
+            style={{ inlineSize: `${(progress.completed / progress.total) * 100}%` }}
+          />
+        </div>
+      )}
       {message && (
         <p
           className={`capture-status${failed ? ' capture-status-error' : ''}`}
@@ -84,4 +118,10 @@ export function ClassifySectors({
       )}
     </div>
   )
+}
+
+/** Trailing sentence naming what a failed run still managed to save, or '' if nothing. */
+function saved(partial: ClassificationPartial): string {
+  const note = partialProgressNote(partial)
+  return note === null ? '' : ` ${note}`
 }

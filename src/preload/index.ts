@@ -3,6 +3,7 @@ import { IpcChannels } from '@shared/ipc/channels'
 import type {
   AllocationResult,
   CaptureSnapshotResult,
+  ClassificationProgress,
   ClassifyInstrumentsResult,
   ClearHistoryResult,
   ClearStatementsResult,
@@ -56,6 +57,12 @@ const api: RendererApi = {
     ipcRenderer.invoke(IpcChannels.analyticsRealizedGains),
   classifyInstruments: (): Promise<ClassifyInstrumentsResult> =>
     ipcRenderer.invoke(IpcChannels.analyticsClassifyInstruments),
+  onClassifyProgress: (callback: (progress: ClassificationProgress) => void): (() => void) => {
+    // Wrap so the raw IpcRendererEvent is never handed to the renderer callback.
+    const listener = (_event: unknown, progress: ClassificationProgress): void => callback(progress)
+    ipcRenderer.on(IpcChannels.analyticsClassifyProgress, listener)
+    return () => ipcRenderer.removeListener(IpcChannels.analyticsClassifyProgress, listener)
+  },
   // Window controls for the custom frameless title bar (Story #42). The commands are
   // fire-and-forget (send, not invoke); the query and event report maximize state.
   minimizeWindow: (): void => ipcRenderer.send(IpcChannels.windowMinimize),
