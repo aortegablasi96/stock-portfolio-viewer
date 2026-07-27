@@ -10,13 +10,16 @@ Current repositories, by data source:
 - **SQLite** (Drizzle) — `meta/`, `snapshots/`, `flex/` (a write-only `flexRepository`
   and a read-only `flexReadRepository` over the same immutable `flex_*` tables).
 - **IBKR Gateway** — `portfolio/portfolioRepository.ts` over `portfolio/ibkrGateway.ts`,
-  which validates every response with Zod at ingress.
+  which validates every response with Zod at ingress. Its reads are coalesced and briefly
+  reusable via `portfolio/gatewayCache.ts`, so one overview costs one auth check, one
+  account-id resolution, and one read of each figure (DDR-0024). That freshness policy stops
+  at this layer — services and the renderer stay unaware of it.
 - **Both** — `classification/`, which fronts the `instrument_classifications` cache and
   falls back to the gateway.
 
 Helpers that touch no data source (`flex/flexStatementParser.ts`, `flex/fifoSummary.ts`,
-`snapshots/snapshotMapping.ts`) live in their own modules so services and unit tests can
-import them without pulling in SQLite.
+`snapshots/snapshotMapping.ts`, `portfolio/gatewayCache.ts`) live in their own modules so
+services and unit tests can import them without pulling in SQLite or the gateway.
 
 Dependency direction (downward only, see `CLAUDE.md`):
 

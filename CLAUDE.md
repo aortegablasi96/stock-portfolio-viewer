@@ -227,8 +227,20 @@ Canonical flows to copy when adding a feature:
   usual failure is accepting the connection and *then* going quiet — which emits no error code
   at all and once hung the dashboard forever. It is deliberately not `request.setTimeout`
   (socket inactivity, reset by every byte). One bounded attempt, never a retry loop: a timed-out
-  FX rate degrades to *rate unavailable* (DDR-0007), and the first timeout stops any per-item
-  loop over the gateway rather than paying the timeout once per currency/instrument (DDR-0022).
+  FX rate degrades to *rate unavailable* (DDR-0007), and no per-item loop over the gateway may
+  pay the timeout once per currency/instrument (DDR-0022) — the sequential classification
+  refresh stops at the first timeout, while `getExchangeRates` instead issues every pair
+  **concurrently**, which bounds the wait the same way *and* keeps the rates that did answer
+  (DDR-0024).
+- **Portfolio gateway reads are coalesced and briefly reusable** — `gatewayCache` (DDR-0024)
+  sits between `portfolioRepository` and `ibkrGateway`, so one overview costs one auth check,
+  one account-id resolution, one positions read and one ledger read no matter how many methods
+  the service calls, and a display-currency switch reuses figures fetched moments earlier
+  (`SESSION_TTL_MS` 5min for auth/account, `LIVE_TTL_MS` 30s for positions/ledger/FX). A failed
+  read is never cached, and an `IbkrNotConnectedError` *or* `IbkrTimeoutError` drops **every**
+  entry — a memoized "authenticated" is exactly what a stalled gateway invalidates. The policy
+  stops at the repository: services and the renderer get no cache-control parameter, and cached
+  DTOs are re-mapped per call so no caller can mutate another's data.
 - **A fresh clone needs `.env`** (copy `.env.example`; `.env` is gitignored). electron-vite
   splits variables by prefix: `MAIN_VITE_*` / `PRELOAD_VITE_*` / `RENDERER_VITE_*` are inlined
   into that bundle's `import.meta.env` at **build** time (renderer types live in
