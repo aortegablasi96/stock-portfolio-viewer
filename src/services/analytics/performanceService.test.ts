@@ -53,6 +53,8 @@ function navPeriod(overrides: Partial<NavPeriodRow>): NavPeriodRow {
 
 function fifo(overrides: Partial<FifoSummaryRow>): FifoSummaryRow {
   return {
+    statementId: 1,
+    statementToDate: Date.UTC(2025, 11, 31),
     conid: null,
     symbol: 'X',
     description: '',
@@ -115,7 +117,7 @@ describe('performanceService.getPerformance', () => {
     ])
   })
 
-  it('sums deposits/withdrawals and realized/unrealized P&L across periods and summaries', () => {
+  it('sums deposits/withdrawals and realized/unrealized P&L across periods and instruments', () => {
     repo.hasStatements.mockReturnValue(true)
     repo.getNavPeriods.mockReturnValue([
       navPeriod({ depositsWithdrawals: 1000 }),
@@ -147,6 +149,26 @@ describe('performanceService.getPerformance', () => {
     if (result.status !== 'ok') throw new Error('expected ok')
     expect(result.report.totalRealizedPnl).toBe(500) // not 1000
     expect(result.report.totalUnrealizedPnl).toBe(25) // not 50
+  })
+
+  it('sums realized across statements but takes unrealized from the latest only (Bug #103)', () => {
+    const older = Date.UTC(2025, 11, 31)
+    const newer = Date.UTC(2026, 6, 22)
+    repo.hasStatements.mockReturnValue(true)
+    repo.getNavPeriods.mockReturnValue([navPeriod({}), navPeriod({})])
+    repo.getFifoSummaries.mockReturnValue([
+      // AAA is held through both statements, so it reports its unrealized gain in both.
+      fifo({ statementId: 1, statementToDate: older, symbol: 'AAA', totalRealizedPnl: 100, totalUnrealizedPnl: 800 }),
+      fifo({ statementId: 2, statementToDate: newer, symbol: 'AAA', totalRealizedPnl: -300, totalUnrealizedPnl: 950 }),
+      fifo({ statementId: 2, statementToDate: newer, symbol: 'BBB', totalRealizedPnl: 40, totalUnrealizedPnl: 60 }),
+    ])
+
+    const result = performanceService.getPerformance()
+    if (result.status !== 'ok') throw new Error('expected ok')
+    // Realized is a per-period flow over non-overlapping statements: 100 - 300 + 40.
+    expect(result.report.totalRealizedPnl).toBe(-160)
+    // Unrealized is an as-of balance: the latest statement's 950 + 60, not 1810.
+    expect(result.report.totalUnrealizedPnl).toBe(1010)
   })
 
   it('densifies the value series with daily MTM points anchored to the endpoints (#29)', () => {

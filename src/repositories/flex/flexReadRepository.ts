@@ -25,6 +25,11 @@ import {
  * across the whole history; statement-scoped tables (open positions, securities, open
  * dividend accruals) are read from the *latest* statement; per-period rows (NAV change,
  * FIFO summaries) are read across statements and summed by the caller.
+ *
+ * FIFO summaries are the one row shape that is *both*: realized P&L is a per-period flow
+ * that sums across statements, while unrealized P&L is an as-of balance that must not
+ * (Bug #103). So the rows carry their statement identity and the caller scopes the
+ * as-of half with `fromLatestStatement`.
  */
 
 /** The dividend/income cash-transaction types this app tracks (Story #23). */
@@ -66,6 +71,9 @@ export interface ContributionRow {
 }
 
 export interface FifoSummaryRow {
+  /** The statement this summary belongs to, and that statement's end date (Bug #103). */
+  statementId: number
+  statementToDate: number
   conid: number | null
   symbol: string
   description: string
@@ -236,10 +244,17 @@ export const flexReadRepository = {
       .all()
   },
 
-  /** All FIFO performance summaries across statements (Stories #21, #24). Values are base currency. */
+  /**
+   * All FIFO performance summaries across statements (Stories #21, #24). Values are base
+   * currency. Each row carries its statement id and that statement's end date so callers can
+   * scope the as-of half (unrealized P&L) to the latest statement — see `fromLatestStatement`
+   * and Bug #103.
+   */
   getFifoSummaries(): FifoSummaryRow[] {
     return getDb()
       .select({
+        statementId: flexFifoSummaries.statementId,
+        statementToDate: flexStatements.toDate,
         conid: flexFifoSummaries.conid,
         symbol: flexFifoSummaries.symbol,
         description: flexFifoSummaries.description,
@@ -252,6 +267,7 @@ export const flexReadRepository = {
         totalUnrealizedPnl: flexFifoSummaries.totalUnrealizedPnl,
       })
       .from(flexFifoSummaries)
+      .innerJoin(flexStatements, eq(flexFifoSummaries.statementId, flexStatements.id))
       .all()
   },
 

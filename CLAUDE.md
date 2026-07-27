@@ -59,14 +59,20 @@ Live domains exist end-to-end as reference patterns:
   currency (EUR) in the service, and each return an `ok | needs_import` result. Statement-scoped
   reads (`getLatestOpenPositions`, `getLatestOpenDividendAccruals`) deliberately use the
   **latest statement only** — older as-of rows describe state that has since changed and would
-  double-count. Two traps worth knowing before touching these services: IBKR's FIFO summary
+  double-count. Three traps worth knowing before touching these services. IBKR's FIFO summary
   carries a **"Total (All Assets)" aggregate row** (blank symbol) that must be filtered out or
   it doubles every total — use `isInstrumentSummary` (`repositories/flex/fifoSummary.ts`, kept
-  DB-free so services and their tests share the real predicate); and allocation's **cash slice
-  is the NAV residual** (`ChangeInNAV.endingValue − Σ invested market value`), *not* the
-  `percentOfNAV` shortfall, because Flex's `percentOfNAV` sums to 100% across positions and
-  excludes cash — the shortfall approach shipped broken once already. See DDR-0005, DDR-0010,
-  DDR-0015.
+  DB-free so services and their tests share the real predicate). The same FIFO summary mixes
+  **a flow and a balance in one row**: realized P&L is per-period and *must* be summed across
+  statements, while unrealized P&L is an as-of balance that must *not* be — an instrument held
+  through two statements reports its unrealized gain in both. Scope that half with
+  `fromLatestStatement` (same module); `getFifoSummaries()` therefore returns each row's
+  `statementId` + `statementToDate`, and "latest" means the largest **end date**, not the
+  largest id (ids follow import order). This shipped broken once, 25% overstated (#103).
+  Finally, allocation's **cash slice is the NAV residual**
+  (`ChangeInNAV.endingValue − Σ invested market value`), *not* the `percentOfNAV` shortfall,
+  because Flex's `percentOfNAV` sums to 100% across positions and excludes cash — the
+  shortfall approach shipped broken once already. See DDR-0005, DDR-0010, DDR-0015.
 - **classification** — instrument sector/industry (M3, Story #30). Flex carries **no sector
   field**, so `classificationRepository` fronts *two* sources — the mutable SQLite cache
   `instrument_classifications` and `ibkrGateway` — and `classificationService` decides which
