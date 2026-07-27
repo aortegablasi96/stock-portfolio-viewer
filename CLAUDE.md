@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current Repository State
 
-**M0–M2 are merged; M3 is built and reopened for refinement.** Scaffolding (M0), the
+**M0–M3 are merged and closed; refinement continues under M4.** Scaffolding (M0), the
 read-only portfolio dashboard (M1), historical snapshots (M2), and the performance &
 allocation analytics (M3, Stories #20–#24) are all on `main`. The app boots, connects to the
 Interactive Brokers Client Portal Gateway, renders live holdings/balances/allocation in a
@@ -13,19 +13,25 @@ IBKR Flex Query statements into local history, and renders four analytics views 
 imported data (performance, allocation, dividends, realized gains & trade history). A tab
 shell switches between the live Portfolio dashboard and the analytics views.
 
-**Epic #4 (M3) reopened to refine the views, and refinement is ongoing.** Three rounds have
-merged: #28–#33 (display currency, day-by-day performance, allocation donuts + sector
-breakdown, net dividend chart + upcoming dividends, filterable dividend and trade tables),
-#42–#73 (frameless window shell, destructive-reset controls, TWR curve + chart tabs, world
-bubble map, cash as an asset class, tabbed breakdowns, time-range filters, multi-select type
-filter, `Symbol`→`Ticker` renames), and #74, #75, #76, #89, #92, #95 (dividend shares held +
-per-share, time-range filter on the dividend and trade tables, a widened content measure with
-charts sized by aspect ratio, and the Allocation map's rebuild onto a Mapbox basemap with
-per-holding bubbles and a gain/loss colour mode). **The epic is deliberately left open for further
-refinement stories the owner plans to add** — read the backlog before assuming a view is
-final; a view you are told is "done" has usually been reworked several times. The Stack and
-Commands sections below are **live**. Still **not built**: AI features, multi-broker support,
-benchmark comparison, and tax reporting — those are later milestones.
+**The views have been refined repeatedly, and refinement is ongoing.** Epic #4 (M3) absorbed
+four rounds before being closed as delivered: #28–#33 (display currency, day-by-day
+performance, allocation donuts + sector breakdown, net dividend chart + upcoming dividends,
+filterable dividend and trade tables), #42–#73 (frameless window shell, destructive-reset
+controls, TWR curve + chart tabs, world bubble map, cash as an asset class, tabbed breakdowns,
+time-range filters, multi-select type filter, `Symbol`→`Ticker` renames), and #74, #75, #76,
+#89, #92, #95 (dividend shares held + per-share, time-range filter on the dividend and trade
+tables, a widened content measure with charts sized by aspect ratio, and the Allocation map's
+rebuild onto a Mapbox basemap with per-holding bubbles and a gain/loss colour mode).
+
+**Further refinement lives in milestone `M4 — Analytics refinement`, split across three
+view-scoped Epics** so no single Epic grows unbounded again: **#98 Allocation map**, **#99
+Analytics views polish** (the four analytics views + the live Portfolio dashboard), and
+**#100 App shell & layout** (window chrome, tab shell, page layout, shared controls). An Epic
+closes when its stories close; new refinement opens a new Epic under the current milestone
+rather than reopening a delivered one. **Read the backlog before assuming a view is final** — a
+view you are told is "done" has usually been reworked several times. The Stack and Commands
+sections below are **live**. Still **not built**: AI features, multi-broker support, benchmark
+comparison, and tax reporting — those are later milestones.
 
 Live domains exist end-to-end as reference patterns:
 

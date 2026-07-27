@@ -22,6 +22,17 @@ Milestones are GitHub **Milestones** (native), named `M0 — …`, `M1 — …`,
 Epic and User Story is assigned to the milestone it belongs to. The **current milestone** is
 prioritized over future ones unless the owner says otherwise.
 
+## Epic lifecycle
+
+**An Epic closes when its stories close.** Refinement work that arrives afterwards opens a
+**new** Epic under the current milestone — a delivered Epic is never reopened as a bucket for
+follow-up rounds.
+
+Scope Epics by **area of the app**, not by round of work: M3's Epic #4 accumulated 31 stories
+across four refinement rounds before being closed and split into #98 (Allocation map), #99
+(Analytics views polish) and #100 (App shell & layout). Closed stories stay in the milestone
+that delivered them; they are not re-filed.
+
 ## Labels
 
 Do not invent labels outside this list.
