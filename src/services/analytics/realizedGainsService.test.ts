@@ -37,8 +37,14 @@ function trade(overrides: Partial<TradeRowRaw>): TradeRowRaw {
   }
 }
 
+/** End dates of the two statements the multi-statement cases below import. */
+const EARLIER = Date.UTC(2025, 11, 31)
+const LATER = Date.UTC(2026, 6, 22)
+
 function fifo(overrides: Partial<FifoSummaryRow>): FifoSummaryRow {
   return {
+    statementId: 1,
+    statementToDate: EARLIER,
     conid: 1,
     symbol: 'AAA',
     description: 'Alpha',
@@ -101,9 +107,10 @@ describe('realizedGainsService.getRealizedGains', () => {
     repo.getTrades.mockReturnValue([])
     repo.getFifoSummaries.mockReturnValue([
       fifo({ conid: 1, symbol: 'AAA', realizedStProfit: 100, realizedStLoss: -30, totalRealizedPnl: 70 }),
-      fifo({ conid: 1, symbol: 'AAA', realizedLtProfit: 50, totalRealizedPnl: 50 }), // second statement, same symbol
+      // Second statement, same symbol — the realized rollup adds it in.
+      fifo({ statementId: 2, statementToDate: LATER, conid: 1, symbol: 'AAA', realizedLtProfit: 50, totalRealizedPnl: 50 }),
       fifo({ conid: 2, symbol: 'BBB', realizedLtLoss: -200, totalRealizedPnl: -200 }),
-      fifo({ conid: 3, symbol: 'CCC', totalRealizedPnl: 0, totalUnrealizedPnl: 40 }), // no realized → excluded
+      fifo({ statementId: 2, statementToDate: LATER, conid: 3, symbol: 'CCC', totalRealizedPnl: 0, totalUnrealizedPnl: 40 }), // no realized → excluded
     ])
 
     const result = realizedGainsService.getRealizedGains()
@@ -119,6 +126,28 @@ describe('realizedGainsService.getRealizedGains', () => {
     expect(result.report.totalRealizedShortTerm).toBe(70)
     expect(result.report.totalRealizedLongTerm).toBe(-150) // 50 - 200
     expect(result.report.totalUnrealized).toBe(40)
+  })
+
+  it('sums realized across statements but takes unrealized from the latest only (Bug #103)', () => {
+    repo.hasStatements.mockReturnValue(true)
+    repo.getTrades.mockReturnValue([])
+    repo.getFifoSummaries.mockReturnValue([
+      // AAA is still held at the end of both statements, so both report its unrealized gain.
+      fifo({ conid: 1, symbol: 'AAA', realizedStProfit: 100, totalRealizedPnl: 100, totalUnrealizedPnl: 800 }),
+      fifo({ statementId: 2, statementToDate: LATER, conid: 1, symbol: 'AAA', realizedStLoss: -300, totalRealizedPnl: -300, totalUnrealizedPnl: 950 }),
+      fifo({ statementId: 2, statementToDate: LATER, conid: 2, symbol: 'BBB', realizedLtProfit: 40, totalRealizedPnl: 40, totalUnrealizedPnl: 60 }),
+    ])
+
+    const result = realizedGainsService.getRealizedGains()
+    if (result.status !== 'ok') throw new Error('expected ok')
+
+    // Realized is a per-period flow over non-overlapping statements — unchanged by this fix.
+    expect(result.report.totalRealized).toBe(-160) // 100 - 300 + 40
+    expect(result.report.totalRealizedShortTerm).toBe(-200) // 100 - 300
+    expect(result.report.totalRealizedLongTerm).toBe(40)
+    expect(result.report.bySymbol.find((r) => r.symbol === 'AAA')!.totalRealized).toBe(-200)
+    // Unrealized is an as-of balance: the latest statement's 950 + 60, not 1810.
+    expect(result.report.totalUnrealized).toBe(1010)
   })
 
   it('excludes the IBKR "Total (All Assets)" aggregate row from totals and per-symbol rows', () => {

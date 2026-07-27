@@ -2,7 +2,7 @@ import {
   flexReadRepository,
   type FifoSummaryRow,
 } from '@repositories/flex/flexReadRepository'
-import { isInstrumentSummary } from '@repositories/flex/fifoSummary'
+import { fromLatestStatement, isInstrumentSummary } from '@repositories/flex/fifoSummary'
 import type {
   RealizedBySymbol,
   RealizedGainsResult,
@@ -90,7 +90,12 @@ export const realizedGainsService = {
         totalRealized: summaries.reduce((sum, s) => sum + s.totalRealizedPnl, 0),
         totalRealizedShortTerm: summaries.reduce((sum, s) => sum + shortTerm(s), 0),
         totalRealizedLongTerm: summaries.reduce((sum, s) => sum + longTerm(s), 0),
-        totalUnrealized: summaries.reduce((sum, s) => sum + s.totalUnrealizedPnl, 0),
+        // As-of balance, not a flow — latest statement only, or an instrument held through
+        // two statements contributes its unrealized gain twice (Bug #103).
+        totalUnrealized: fromLatestStatement(summaries).reduce(
+          (sum, s) => sum + s.totalUnrealizedPnl,
+          0,
+        ),
         bySymbol,
         trades,
       },

@@ -3,7 +3,7 @@ import type {
   DailyMtmRow,
 } from '@repositories/flex/flexReadRepository'
 import { flexReadRepository } from '@repositories/flex/flexReadRepository'
-import { isInstrumentSummary } from '@repositories/flex/fifoSummary'
+import { fromLatestStatement, isInstrumentSummary } from '@repositories/flex/fifoSummary'
 import type { NavPeriod, PerformanceResult, ValuePoint } from '@shared/domain/performance'
 
 /**
@@ -156,8 +156,13 @@ export const performanceService = {
     const dailyMtm = flexReadRepository.getDailyMtm()
     const contributions = flexReadRepository.getContributionCashFlows()
 
+    // Realized P&L is a per-period flow — sum every (non-overlapping) statement. Unrealized
+    // is an as-of balance, so it comes from the latest statement only (Bug #103).
     const totalRealizedPnl = summaries.reduce((sum, s) => sum + s.totalRealizedPnl, 0)
-    const totalUnrealizedPnl = summaries.reduce((sum, s) => sum + s.totalUnrealizedPnl, 0)
+    const totalUnrealizedPnl = fromLatestStatement(summaries).reduce(
+      (sum, s) => sum + s.totalUnrealizedPnl,
+      0,
+    )
     const totalDepositsWithdrawals = periods.reduce((sum, p) => sum + p.depositsWithdrawals, 0)
 
     return {
