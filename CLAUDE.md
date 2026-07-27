@@ -13,12 +13,15 @@ IBKR Flex Query statements into local history, and renders four analytics views 
 imported data (performance, allocation, dividends, realized gains & trade history). A tab
 shell switches between the live Portfolio dashboard and the analytics views.
 
-**Epic #4 (M3) reopened to refine the views, and refinement is ongoing.** Two rounds have
+**Epic #4 (M3) reopened to refine the views, and refinement is ongoing.** Three rounds have
 merged: #28–#33 (display currency, day-by-day performance, allocation donuts + sector
-breakdown, net dividend chart + upcoming dividends, filterable dividend and trade tables) and
+breakdown, net dividend chart + upcoming dividends, filterable dividend and trade tables),
 #42–#73 (frameless window shell, destructive-reset controls, TWR curve + chart tabs, world
 bubble map, cash as an asset class, tabbed breakdowns, time-range filters, multi-select type
-filter, `Symbol`→`Ticker` renames). **The epic is deliberately left open for further
+filter, `Symbol`→`Ticker` renames), and #74, #75, #76, #89, #92, #95 (dividend shares held +
+per-share, time-range filter on the dividend and trade tables, a widened content measure with
+charts sized by aspect ratio, and the Allocation map's rebuild onto a Mapbox basemap with
+per-holding bubbles and a gain/loss colour mode). **The epic is deliberately left open for further
 refinement stories the owner plans to add** — read the backlog before assuming a view is
 final; a view you are told is "done" has usually been reworked several times. The Stack and
 Commands sections below are **live**. Still **not built**: AI features, multi-broker support,
@@ -81,7 +84,8 @@ src/
   main/          Electron main: entry (index.ts) + ipc/handlers.ts (thin, Zod-validated)
   preload/       contextBridge bridge → window.api (types + channel names only, no Zod)
   renderer/      React + Vite UI (src/renderer/src/*; App tab shell under a custom
-                 TitleBar, components/ + components/analytics/ + components/charts/ +
+                 TitleBar, components/ + components/analytics/ (views, their use*
+                 hooks, shared filter controls) + components/charts/ +
                  lib/ — pure, unit-tested helpers extracted out of components)
   services/      pure business logic — primary unit-test target (system/, meta/,
                  portfolio/, snapshots/, flex/, analytics/, dividends/)
@@ -91,7 +95,8 @@ src/
   db/            client.ts (better-sqlite3 + Drizzle singleton), migrate.ts, schema.ts
   shared/        ipc/contract.ts (Zod schemas + inferred types), ipc/channels.ts,
                  domain/ (portfolio.ts, snapshot.ts, flex.ts, performance.ts,
-                 allocation.ts, dividends.ts, realizedGains.ts), errors.ts
+                 allocation.ts, dividends.ts, realizedGains.ts,
+                 classification.ts), errors.ts
 drizzle/         generated SQL migrations + meta journal
 e2e/             Playwright specs that launch the built Electron app
 docs/flex-queries/  real IBKR Flex exports + field reference (parser ground truth)
@@ -117,12 +122,19 @@ Canonical flows to copy when adding a feature:
   `ok | needs_import` result the renderer renders as a first-class empty state. Charts are
   dependency-free inline SVG (`components/charts/`) — including the allocation donuts and the
   performance view's cumulative **TWR** curve, chosen over a value curve so deposits and
-  withdrawals don't move it (DDR-0013). The **Allocation map is the one scoped exception**: a
-  Mapbox GL JS basemap (ADR-0007) carrying one canvas circle per holding, area-proportional to
-  market value and coloured from the Sector donut's palette, anchored to ISO-3166 alpha-2
+  withdrawals don't move it (DDR-0013). They are sized by **aspect ratio** (the `viewBox`), never
+  a pixel width, because they scale to a shared `--content-max` column (DDR-0018). The
+  **Allocation map is the one scoped exception**: a Mapbox GL JS basemap (ADR-0007) carrying one
+  canvas circle per holding, area-proportional to market value, anchored to ISO-3166 alpha-2
   centroids and fanned on a spiral so holdings sharing a country stay separately hoverable —
   which makes the map deliberately *approximate*, positioned by issuer country rather than by
-  company (DDR-0020, superseding DDR-0019 and DDR-0014). See DDR-0005, DDR-0006.
+  company (DDR-0020, superseding DDR-0019 and DDR-0014). Its circles take **two** colour modes
+  behind a toggle, switched with `setPaintProperty` over properties already on every feature: the
+  Sector donut's palette, and unrealized **return on cost** (not absolute P&L — radius already
+  encodes size). That second scale is **red ↔ gray ↔ blue, deliberately not the app's `--pos` /
+  `--neg` green/red**, which fails CVD contrast where fill colour is the only channel and no
+  number sits beside it; `--pos` / `--neg` are unchanged everywhere else, including the map's own
+  popup. Don't "restore" them on the circles (DDR-0021). See DDR-0005, DDR-0006.
 - **Fire-and-forget command + state event:** the `window:*` channels show the *other* IPC
   shape — `ipcRenderer.send` / `ipcMain.on` with no payload and no Zod (there is nothing to
   validate), plus one `invoke` query (`window:isMaximized`) and one main→renderer event
@@ -155,10 +167,14 @@ Canonical flows to copy when adding a feature:
 - **Adding an IPC channel touches four files, in this order**: `shared/ipc/channels.ts`
   (name) → `shared/ipc/contract.ts` (Zod request/response schema + the `RendererApi` method)
   → `preload/index.ts` (bridge impl) → `main/ipc/handlers.ts` (parse input, delegate to a
-  service). `contract.ts` is the single source of truth; the renderer and preload import only
-  *types* from it so Zod never lands in those bundles. Failures cross IPC **as result
-  variants, not exceptions** (`not_connected`, `needs_import`, `canceled`, `invalid`,
-  `error`) so the renderer can render each as a first-class state.
+  service). `contract.ts` is the single source of truth for the wire shape; the renderer and
+  preload import only *types* from it so Zod never lands in those bundles. Domain result
+  schemas themselves live in `shared/domain/*.ts` (that is where every analytics
+  `ok | needs_import` union is declared) and `contract.ts` composes them — put a new one there,
+  not inline. Failures cross IPC **as result variants, not exceptions** (`not_connected`,
+  `needs_import`, `canceled`, `invalid`, `error`) so the renderer can render each as a
+  first-class state. Success is *not* uniformly `ok`: capture returns `captured`, import
+  `imported`, and both clears `cleared`.
 - **That four-file recipe assumes a request/response channel** (`invoke`/`handle`), which is
   almost all of them. The exception is the three payload-free `window:minimize |
   toggleMaximize | close` commands: they use `ipcRenderer.send` / `ipcMain.on` and skip
@@ -183,6 +199,18 @@ Canonical flows to copy when adding a feature:
 - **The IBKR gateway is `https://localhost:5000`**, overridable via the `IBKR_GATEWAY_URL` env
   var. It serves a **self-signed certificate** that `ibkrGateway` accepts deliberately — that
   is not a TLS bug to fix.
+- **A fresh clone needs `.env`** (copy `.env.example`; `.env` is gitignored). electron-vite
+  splits variables by prefix: `MAIN_VITE_*` / `PRELOAD_VITE_*` / `RENDERER_VITE_*` are inlined
+  into that bundle's `import.meta.env` at **build** time (renderer types live in
+  `renderer/src/env.d.ts`); anything unprefixed — `IBKR_GATEWAY_URL` — stays in `process.env`
+  and is main-process only. Without `RENDERER_VITE_MAPBOX_TOKEN` (a public `pk.` token) the
+  Allocation map renders its own `no-token` placeholder rather than failing; every other view is
+  unaffected.
+- **The renderer's CSP admits exactly one external origin** (`https://api.mapbox.com`) and
+  `events.mapbox.com` is **omitted on purpose**, so the platform blocks Mapbox telemetry no
+  matter how the library is configured or upgraded. It looks like an oversight; it is the
+  enforcement mechanism. Only basemap tiles and the viewport leave the machine — no portfolio
+  data (ADR-0007).
 
 ## Skills System (`.claude/skills/`)
 
@@ -260,7 +288,7 @@ The application is **analytics-first**, not advice-first.
 
 # Stack
 
-* Node ≥20
+* Node ≥22.12 (`@electron/rebuild` / `node-abi` require it; CI runs Node 24)
 * npm
 * Electron (desktop shell)
 * React + Vite (renderer / UI)
@@ -270,6 +298,10 @@ The application is **analytics-first**, not advice-first.
 * Interactive Brokers (local Client Portal Gateway / MCP)
 * Vitest
 * Playwright
+
+The full runtime dependency list is deliberately short — `better-sqlite3`, `drizzle-orm`,
+`fast-xml-parser` (Flex statement parsing), `mapbox-gl` (the Allocation basemap only, ADR-0007),
+`react`, `react-dom`, `zod`. Charts are hand-written SVG rather than a charting library.
 
 The app is **local-first**: business logic and data access run in the Electron **main
 process** (TypeScript); the React **renderer** talks to it over IPC and never reaches data
@@ -406,7 +438,13 @@ Because the app is a desktop application that only runs when launched, snapshots
 Scheduler job invoking a headless capture) is a possible future enhancement for regular,
 unattended history.
 
-Analytics should primarily operate from stored snapshots instead of repeatedly querying Interactive Brokers.
+Analytics operates from **locally stored history**, never by repeatedly querying Interactive
+Brokers. As built there are two such stores, and they are not interchangeable: the **snapshots**
+tables back the Portfolio view's history section, while the four analytics views (performance,
+allocation, dividends, realized gains) read **imported Flex statements** through
+`flexReadRepository` — Flex carries the dated, multi-currency, per-instrument detail that
+on-open snapshots cannot reconstruct. The one analytics path that reaches IBKR at all is
+`analytics:classifyInstruments`, which fetches sector data the Flex export omits (DDR-0009).
 
 ---
 
@@ -417,8 +455,10 @@ Primary domains:
 * portfolio
 * holdings
 * snapshots
-* dividends
+* flex (imported IBKR statement history)
 * analytics
+* dividends
+* classification (instrument sector/industry)
 
 Future domains may include:
 
@@ -468,7 +508,8 @@ Responsible for:
 * persistence
 * external APIs
 
-Repositories expose domain-oriented methods.
+Repositories expose domain-oriented methods. `src/repositories/README.md` lists the current
+repositories by data source — keep it in step when adding one.
 
 ---
 
@@ -665,11 +706,12 @@ Mock repositories and external providers.
 Vitest picks up every `src/**/*.test.ts` and runs it in a **Node** environment (**no jsdom**),
 so no test may render a React component. This shapes the renderer: chart maths, filtering,
 sorting and formatting are **extracted out of components into pure modules under
-`renderer/src/lib/`** (`format`, `pie`, `worldGeo`, `mapBubbles`, `tableFilter`, `column`,
-`dateRange`, `sectorMap`, `performanceRange`) precisely so they can be tested — follow that
-split when adding a component with real logic in it. The map is the sharpest case: colour
-resolution needs `getComputedStyle` and so stays in the component, while `mapBubbles` emits
-palette *classes* — that seam is what keeps the map's geometry testable under Node. Pure repository helpers that touch no data source
+`renderer/src/lib/`** (`format`, `pie`, `worldGeo`, `mapBubbles`, `gainLoss`, `tableFilter`,
+`column`, `dateRange`, `sectorMap`, `performanceRange`) precisely so they can be tested — follow
+that split when adding a component with real logic in it. The map is the sharpest case: colour
+resolution needs `getComputedStyle` and so stays in the component, while `mapBubbles` and
+`gainLoss` emit palette *classes* — that seam is what keeps the map's geometry and colour scale
+testable under Node. Pure repository helpers that touch no data source
 (`flexStatementParser`, `snapshotMapping`, `fifoSummary`) are unit-tested the same way.
 
 Every completed feature should include:
