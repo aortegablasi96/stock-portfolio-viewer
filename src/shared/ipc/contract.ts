@@ -8,6 +8,7 @@ import { dividendResultSchema, type DividendResult } from '@shared/domain/divide
 import { realizedGainsResultSchema, type RealizedGainsResult } from '@shared/domain/realizedGains'
 import {
   classifyInstrumentsResultSchema,
+  type ClassificationProgress,
   type ClassifyInstrumentsResult,
 } from '@shared/domain/classification'
 
@@ -163,9 +164,13 @@ export type { PerformanceResult, AllocationResult, DividendResult, RealizedGains
  * Interactive Brokers: Flex carries no sector, so classifications are fetched from the
  * gateway and cached locally. It therefore adds `not_connected` to the usual variants —
  * again as data, not an exception (DDR-0009). Takes no payload.
+ *
+ * Because the lookups are sequential and can number in the dozens, the refresh also pushes
+ * `ClassificationProgress` events main→renderer while it runs (Story #105, DDR-0023). Those
+ * are a main→renderer *event*, like `snapshot:captured` — not part of the invoke response.
  */
 export { classifyInstrumentsResultSchema }
-export type { ClassifyInstrumentsResult }
+export type { ClassifyInstrumentsResult, ClassificationProgress }
 
 // ---- window.api bridge shape ------------------------------------------------
 
@@ -198,6 +203,11 @@ export interface RendererApi {
   getRealizedGains: () => Promise<RealizedGainsResult>
   /** Fetch & cache sector classification for the latest statement's positions (M3, Story #30). */
   classifyInstruments: () => Promise<ClassifyInstrumentsResult>
+  /**
+   * Subscribe to per-lookup progress while a classification refresh runs (Story #105).
+   * Returns an unsubscribe fn.
+   */
+  onClassifyProgress: (callback: (progress: ClassificationProgress) => void) => () => void
   /** Minimize the application window (custom frameless title bar, Story #42). */
   minimizeWindow: () => void
   /** Toggle the application window between maximized and restored (Story #42). */

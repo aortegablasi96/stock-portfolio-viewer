@@ -67,6 +67,18 @@ test('exposes the typed portfolio and snapshot channels on window.api', async ()
   expect(channels).toEqual({ overview: true, capture: true, list: true })
 })
 
+test('exposes the classification channel and its progress subscription (Story #105)', async () => {
+  // The progress event is a subscription like `onSnapshotCaptured`: it must hand back an
+  // unsubscribe function, or the Allocation view leaks a listener on every unmount.
+  const bridge = await page.evaluate(() => {
+    const unsubscribe = window.api?.onClassifyProgress(() => {})
+    const isFunction = typeof unsubscribe === 'function'
+    if (isFunction) unsubscribe()
+    return { classify: typeof window.api?.classifyInstruments === 'function', unsubscribe: isFunction }
+  })
+  expect(bridge).toEqual({ classify: true, unsubscribe: true })
+})
+
 test('renders the custom frameless title bar with window controls (Story #42)', async () => {
   // The window runs frameless (main sets `frame: false`); the in-app title bar replaces
   // the OS chrome with the app title and the three window controls.

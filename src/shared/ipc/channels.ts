@@ -18,6 +18,9 @@ export const IpcChannels = {
   analyticsDividends: 'analytics:getDividends',
   analyticsRealizedGains: 'analytics:getRealizedGains',
   analyticsClassifyInstruments: 'analytics:classifyInstruments',
+  // Main → renderer event: one sequential classification lookup finished, so the renderer can
+  // show "n of m" while a refresh runs (Story #105). Carries `{ completed, total }`.
+  analyticsClassifyProgress: 'analytics:classifyProgress',
   // Main → renderer event: a snapshot was captured (e.g. on-open capture completed),
   // so the renderer should refresh its history. Carries no payload.
   snapshotCaptured: 'snapshot:captured',

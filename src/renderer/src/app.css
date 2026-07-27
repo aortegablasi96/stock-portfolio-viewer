@@ -1650,6 +1650,26 @@ html {
   color: var(--muted);
 }
 
+/*
+ * Progress track for a running classification refresh (Story #105). The button carries the
+ * "n of m" wording and the track repeats it as a shape; assistive tech reads it from the
+ * element's own progressbar role, not from this styling.
+ */
+.classify-progress {
+  margin: 0.6rem 0 0;
+  block-size: 4px;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.classify-progress-bar {
+  display: block;
+  block-size: 100%;
+  background: var(--accent);
+  transition: inline-size 120ms linear;
+}
+
 .bar-list {
   list-style: none;
   margin: 0;
