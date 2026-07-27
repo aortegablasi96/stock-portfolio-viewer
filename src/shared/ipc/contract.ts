@@ -40,9 +40,12 @@ export type PingResponse = z.infer<typeof pingResponseSchema>
 
 /**
  * The read-only portfolio overview result. Connection state is modelled as *data*,
- * not thrown exceptions, so the renderer can render the `not_connected` and `error`
- * states as first-class UI (see the M1 Architecture Review and ADR-0004). The IPC
- * handler maps `IbkrNotConnectedError` / other failures onto these variants.
+ * not thrown exceptions, so the renderer can render the `not_connected`, `not_responding`
+ * and `error` states as first-class UI (see the M1 Architecture Review and ADR-0004). The IPC
+ * handler maps `IbkrNotConnectedError` / `IbkrTimeoutError` / other failures onto these
+ * variants. `not_connected` and `not_responding` are separate because their recovery differs:
+ * one means start the gateway, the other means it is running but stalled (Story #104,
+ * DDR-0022).
  *
  * `getPortfolioOverview` accepts an optional display currency (Story #28): when given, the
  * overview is converted into it; when omitted, it is returned in native currencies. The
@@ -56,6 +59,7 @@ export type PortfolioOverviewRequest = z.infer<typeof portfolioOverviewRequestSc
 export const portfolioOverviewResultSchema = z.discriminatedUnion('status', [
   z.object({ status: z.literal('ok'), overview: portfolioOverviewSchema }),
   z.object({ status: z.literal('not_connected'), message: z.string() }),
+  z.object({ status: z.literal('not_responding'), message: z.string() }),
   z.object({ status: z.literal('error'), message: z.string() }),
 ])
 export type PortfolioOverviewResult = z.infer<typeof portfolioOverviewResultSchema>
@@ -65,11 +69,13 @@ export type PortfolioOverviewResult = z.infer<typeof portfolioOverviewResultSche
 /**
  * Result of a manual "Capture now" request. Like the portfolio overview, the
  * connection state is modelled as data (DDR-0002/0003): a disconnected gateway is
- * a `not_connected` variant, not a thrown error. Takes no payload.
+ * a `not_connected` variant and a stalled one `not_responding`, not a thrown error
+ * (Story #104). Takes no payload.
  */
 export const captureSnapshotResultSchema = z.discriminatedUnion('status', [
   z.object({ status: z.literal('captured'), summary: snapshotSummarySchema }),
   z.object({ status: z.literal('not_connected'), message: z.string() }),
+  z.object({ status: z.literal('not_responding'), message: z.string() }),
   z.object({ status: z.literal('error'), message: z.string() }),
 ])
 export type CaptureSnapshotResult = z.infer<typeof captureSnapshotResultSchema>

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { classificationService } from './classificationService'
 import { classificationRepository } from '@repositories/classification/classificationRepository'
 import { flexReadRepository, type LatestPositions, type OpenPositionRow } from '@repositories/flex/flexReadRepository'
-import { IbkrNotConnectedError } from '@shared/errors'
+import { IbkrNotConnectedError, IbkrTimeoutError } from '@shared/errors'
 
 vi.mock('@repositories/classification/classificationRepository', () => ({
   classificationRepository: {
@@ -122,6 +122,23 @@ describe('classificationService.refreshClassifications', () => {
       message: 'Gateway is closed.',
     })
     expect(classifications.fetchClassification).not.toHaveBeenCalled()
+  })
+
+  it('reports a stalled gateway as not_responding, distinct from a closed one', async () => {
+    // Story #104: the sequential loop ends at the first timed-out lookup, so a refresh costs
+    // one bounded wait rather than one per instrument.
+    flex.getLatestOpenPositions.mockReturnValue(
+      latest([position({ conid: 1, symbol: 'AAA' }), position({ conid: 2, symbol: 'BBB' })]),
+    )
+    classifications.fetchClassification.mockRejectedValue(
+      new IbkrTimeoutError('no response within 15s'),
+    )
+
+    await expect(classificationService.refreshClassifications()).resolves.toEqual({
+      status: 'not_responding',
+      message: 'no response within 15s',
+    })
+    expect(classifications.fetchClassification).toHaveBeenCalledTimes(1)
   })
 
   it('reports an unexpected gateway failure as an error result', async () => {

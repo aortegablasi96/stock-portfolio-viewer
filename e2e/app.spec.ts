@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
+import { createServer, type Server } from 'node:http'
 import {
   test,
   expect,
@@ -115,6 +116,65 @@ test('exposes the typed clear channels on window.api (Story #43)', async () => {
 test('Clear history control is hidden when there is no snapshot history (Story #43)', async () => {
   // Fresh DB + no gateway, so nothing has been captured — there is nothing to clear.
   await expect(page.getByRole('button', { name: 'Clear history' })).toHaveCount(0)
+})
+
+test.describe('a gateway that stalls instead of refusing (Story #104)', () => {
+  // The failure this story is about can't be produced by simply having no gateway: the app
+  // needs one that *accepts* the connection and then goes quiet. So this block runs its own
+  // app instance pointed at a local stand-in that never answers, on a short bound.
+  let stalled: ElectronApplication
+  let stalledPage: Page
+  let gateway: Server
+
+  test.beforeAll(async () => {
+    gateway = createServer(() => {
+      /* accept the request and never respond */
+    })
+    await new Promise<void>((resolve) => gateway.listen(5099, '127.0.0.1', resolve))
+
+    const userDataDir = mkdtempSync(join(tmpdir(), 'spv-e2e-stall-'))
+    stalled = await electron.launch({
+      args: [join(__dirname, '..', 'out', 'main', 'index.js'), `--user-data-dir=${userDataDir}`],
+      env: {
+        ...process.env,
+        IBKR_GATEWAY_URL: 'http://127.0.0.1:5099',
+        // Short enough to keep the test quick, long enough to be a real wait, not an instant fail.
+        IBKR_GATEWAY_TIMEOUT_MS: '2000',
+      },
+    })
+    stalledPage = await stalled.firstWindow()
+    await stalledPage.waitForLoadState('domcontentloaded')
+  })
+
+  test.afterAll(async () => {
+    await stalled?.close()
+    gateway?.closeAllConnections()
+    await new Promise<void>((resolve) => gateway?.close(() => resolve()))
+  })
+
+  test('resolves to the not-responding state instead of loading forever', async () => {
+    // Before the bound this stayed on "Loading your portfolio…" indefinitely.
+    await expect(stalledPage.getByText('Interactive Brokers isn’t responding')).toBeVisible({
+      timeout: 15_000,
+    })
+    await expect(stalledPage.getByText('Loading your portfolio…')).toHaveCount(0)
+  })
+
+  test('offers Retry, and keeps it distinct from the not-connected state', async () => {
+    await expect(stalledPage.getByRole('button', { name: 'Retry' })).toBeVisible()
+    // The gateway is reachable — saying "not connected" here would send the owner to the
+    // wrong fix, so that panel must not appear.
+    await expect(stalledPage.getByText('Not connected to Interactive Brokers')).toHaveCount(0)
+  })
+
+  test('manual capture reports the stall rather than hanging on the button', async () => {
+    await stalledPage.getByRole('button', { name: 'Capture now' }).click()
+    await expect(
+      stalledPage.getByText('Interactive Brokers didn’t respond in time — try again.'),
+    ).toBeVisible({ timeout: 15_000 })
+    // Nothing half-formed was written.
+    await expect(stalledPage.getByText('No snapshots captured yet', { exact: false })).toBeVisible()
+  })
 })
 
 test('Clear statements confirms in place, then reports nothing to clear on an empty store (Story #43)', async () => {

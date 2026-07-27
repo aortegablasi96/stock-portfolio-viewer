@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { portfolioRepository } from './portfolioRepository'
 import { ibkrGateway, type LedgerEntry } from './ibkrGateway'
-import { IbkrGatewayError, IbkrNotConnectedError } from '@shared/errors'
+import { IbkrGatewayError, IbkrNotConnectedError, IbkrTimeoutError } from '@shared/errors'
 
 vi.mock('./ibkrGateway', () => ({
   ibkrGateway: {
@@ -79,5 +79,30 @@ describe('portfolioRepository.getExchangeRates', () => {
     await expect(portfolioRepository.getExchangeRates(['GBP'], 'EUR')).rejects.toBeInstanceOf(
       IbkrNotConnectedError,
     )
+  })
+
+  it('treats a timed-out rate as unavailable rather than zeroing the position (Story #104)', async () => {
+    // DDR-0007: no rate means the position renders unconverted (displayValue === null), never
+    // multiplied by a made-up number. A stall must land in that same bucket, not throw.
+    gw.getExchangeRate.mockRejectedValueOnce(new IbkrTimeoutError('no response within 15s'))
+
+    const rates = await portfolioRepository.getExchangeRates(['GBP'], 'EUR')
+
+    expect(rates).toEqual({ EUR: 1 })
+  })
+
+  it('stops asking after a timeout instead of waiting once per currency', async () => {
+    // A stalled gateway times out on every remaining pair, so continuing would make the view
+    // wait `timeout × currencies`. The rates gathered before the stall are kept.
+    gw.getExchangeRate.mockImplementation(async (source: string) => {
+      if (source === 'USD') return 0.87
+      throw new IbkrTimeoutError('no response within 15s')
+    })
+
+    const rates = await portfolioRepository.getExchangeRates(['USD', 'GBP', 'CHF'], 'EUR')
+
+    expect(rates).toEqual({ EUR: 1, USD: 0.87 })
+    // GBP stalled; CHF was never attempted.
+    expect(gw.getExchangeRate).toHaveBeenCalledTimes(2)
   })
 })

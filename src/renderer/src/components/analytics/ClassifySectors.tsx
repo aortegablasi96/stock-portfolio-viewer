@@ -45,6 +45,12 @@ export function ClassifySectors({
           setFailed(true)
           setMessage(`${result.message} Sector data is read from IBKR once, then cached locally.`)
           break
+        case 'not_responding':
+          setFailed(true)
+          setMessage(
+            `${result.message} The gateway is running but didn’t answer — re-authenticate its session and try again.`,
+          )
+          break
         case 'error':
           setFailed(true)
           setMessage(result.message)

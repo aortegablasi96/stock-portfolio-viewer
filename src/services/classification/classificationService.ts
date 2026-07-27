@@ -4,7 +4,7 @@ import {
 } from '@repositories/classification/classificationRepository'
 import { flexReadRepository } from '@repositories/flex/flexReadRepository'
 import type { ClassifyInstrumentsResult } from '@shared/domain/classification'
-import { IbkrNotConnectedError } from '@shared/errors'
+import { IbkrNotConnectedError, IbkrTimeoutError } from '@shared/errors'
 
 /**
  * Sector / industry classification refresh (Milestone M3, Story #30).
@@ -69,6 +69,13 @@ export const classificationService = {
         },
       }
     } catch (err) {
+      // A stall is reported separately from a closed gateway — the owner's fix differs. The
+      // first timed-out lookup ends the sequential loop, so the refresh is bounded by one
+      // timeout, not one per instrument (Story #104). Persisting the lookups completed before
+      // it is Story #105's job, not this one's.
+      if (err instanceof IbkrTimeoutError) {
+        return { status: 'not_responding', message: err.message }
+      }
       if (err instanceof IbkrNotConnectedError) {
         return { status: 'not_connected', message: err.message }
       }

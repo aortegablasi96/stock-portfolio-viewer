@@ -1,5 +1,5 @@
 import type { AccountBalances, Holding } from '@shared/domain/portfolio'
-import { IbkrGatewayError } from '@shared/errors'
+import { IbkrGatewayError, IbkrTimeoutError } from '@shared/errors'
 import { ibkrGateway, type LedgerEntry, type RawPosition } from './ibkrGateway'
 
 /**
@@ -83,10 +83,11 @@ export const portfolioRepository = {
   /**
    * FX rates converting each of `currencies` into `target`, as a `source → rate` map
    * (Story #28, DDR-0007). `target` maps to `1`. A currency whose rate cannot be fetched
-   * (an `IbkrGatewayError` — e.g. an unsupported pair) is **omitted**, so the service can
-   * flag those positions as unconverted rather than corrupt a total. A disconnected
-   * gateway (`IbkrNotConnectedError`) still propagates, degrading the whole view to
-   * `not_connected`. Conversion itself is the service's job — this only fetches rates.
+   * (an `IbkrGatewayError` — e.g. an unsupported pair — or an `IbkrTimeoutError`) is
+   * **omitted**, so the service can flag those positions as unconverted rather than corrupt
+   * a total. A disconnected gateway (`IbkrNotConnectedError`) still propagates, degrading the
+   * whole view to `not_connected`. Conversion itself is the service's job — this only fetches
+   * rates.
    */
   async getExchangeRates(
     currencies: readonly string[],
@@ -102,6 +103,11 @@ export const portfolioRepository = {
         // a figure — the same "rate-unavailable as data" rule as a thrown error (DDR-0007).
         if (Number.isFinite(rate) && rate > 0) rates[source] = rate
       } catch (err) {
+        // A stalled gateway times out on *every* remaining pair, so continuing would make the
+        // view wait `timeout × currencies` instead of once. Stop asking and report the rates
+        // gathered so far — the rest render unconverted (DDR-0007, DDR-0022). This is the
+        // opposite of a retry loop: one bounded attempt, then give up.
+        if (err instanceof IbkrTimeoutError) break
         // Rate unavailable for this pair → omit it (position shown unconverted). A
         // not-connected error is not an IbkrGatewayError, so it propagates.
         if (err instanceof IbkrGatewayError) continue

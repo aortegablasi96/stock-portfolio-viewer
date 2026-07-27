@@ -1,6 +1,6 @@
 import { snapshotRepository } from '@repositories/snapshots/snapshotRepository'
 import { portfolioService } from '@services/portfolio/portfolioService'
-import { IbkrNotConnectedError } from '@shared/errors'
+import { IbkrNotConnectedError, IbkrTimeoutError } from '@shared/errors'
 import type { SnapshotSummary } from '@shared/domain/snapshot'
 
 /**
@@ -23,12 +23,15 @@ export type CaptureOnOpenResult =
   | { status: 'captured'; summary: SnapshotSummary }
   | { status: 'skipped_recent'; latestCapturedAt: number }
   | { status: 'not_connected' }
+  /** The gateway accepted the request and then stalled past the bounded wait (Story #104). */
+  | { status: 'not_responding' }
 
 export const snapshotService = {
   /**
    * Capture a snapshot on app open, subject to the 12-hour de-dupe window. When
-   * the gateway is not connected the capture is skipped silently (no empty/error
-   * snapshot is written), consistent with the connection-as-data convention.
+   * the gateway is not connected — or is connected but stalled past its bounded wait
+   * (Story #104) — the capture is skipped silently (no empty/error snapshot is written),
+   * consistent with the connection-as-data convention.
    */
   async captureOnOpen(now: number = Date.now()): Promise<CaptureOnOpenResult> {
     const latest = snapshotRepository.latestCapturedAt()
@@ -41,6 +44,7 @@ export const snapshotService = {
       const summary = snapshotRepository.append({ capturedAt: now, source: 'ibkr', overview })
       return { status: 'captured', summary }
     } catch (err) {
+      if (err instanceof IbkrTimeoutError) return { status: 'not_responding' }
       if (err instanceof IbkrNotConnectedError) return { status: 'not_connected' }
       throw err
     }
@@ -99,8 +103,9 @@ export const snapshotService = {
 
 /**
  * Live FX rates converting every snapshot's base currency into `target`. A disconnected
- * gateway must not blank the history (it is a local read), so `IbkrNotConnectedError`
- * degrades to a rates map with `target` only — rows already in the display currency still
+ * gateway must not blank the history (it is a local read), so `IbkrNotConnectedError` — and
+ * equally a gateway that stalls past its bounded wait (`IbkrTimeoutError`, Story #104) —
+ * degrades to a rates map with `target` only: rows already in the display currency still
  * convert (rate `1`) and the rest are flagged unconverted. Other errors propagate.
  */
 async function ratesFor(
@@ -113,7 +118,9 @@ async function ratesFor(
       target,
     )
   } catch (err) {
-    if (err instanceof IbkrNotConnectedError) return { [target]: 1 }
+    if (err instanceof IbkrNotConnectedError || err instanceof IbkrTimeoutError) {
+      return { [target]: 1 }
+    }
     throw err
   }
 }

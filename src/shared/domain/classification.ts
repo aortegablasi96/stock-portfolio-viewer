@@ -23,11 +23,16 @@ export const classificationSummarySchema = z.object({
 })
 export type ClassificationSummary = z.infer<typeof classificationSummarySchema>
 
-/** Classification refresh result: a summary, or a first-class not-connected/error state. */
+/**
+ * Classification refresh result: a summary, or a first-class not-connected / not-responding /
+ * error state. `not_responding` is a gateway that accepted the request and then stalled past
+ * the bounded wait — distinct from one that isn't running (Story #104, DDR-0022).
+ */
 export const classifyInstrumentsResultSchema = z.discriminatedUnion('status', [
   z.object({ status: z.literal('ok'), summary: classificationSummarySchema }),
   z.object({ status: z.literal('needs_import') }),
   z.object({ status: z.literal('not_connected'), message: z.string() }),
+  z.object({ status: z.literal('not_responding'), message: z.string() }),
   z.object({ status: z.literal('error'), message: z.string() }),
 ])
 export type ClassifyInstrumentsResult = z.infer<typeof classifyInstrumentsResultSchema>
