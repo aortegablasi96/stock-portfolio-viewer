@@ -13,10 +13,15 @@ const DEFAULT_DISPLAY_CURRENCY = 'EUR'
 
 /**
  * The portfolio dashboard. Fetches the live overview from the main process on
- * mount and renders one of four exclusive states, driven by the
+ * mount and renders one of five exclusive states, driven by the
  * `PortfolioOverviewResult` discriminated union returned over IPC:
  *
- *   loading · ok · not_connected · error
+ *   loading · ok · not_connected · not_responding · error
+ *
+ * `not_connected` and `not_responding` are separate states on purpose (Story #104): the
+ * first means the gateway isn't running, the second that it accepted the request and then
+ * went quiet — typically an expired session needing a re-login, not a restart. Both offer
+ * Retry, because a bounded request that gave up is exactly the case worth retrying.
  *
  * Milestone M2 adds snapshot history (Story #19) and a manual "Capture now"
  * action (Story #18). History is read from local storage independently of the
@@ -28,6 +33,7 @@ type LoadState =
   | { phase: 'loading' }
   | { phase: 'ok'; overview: PortfolioOverview }
   | { phase: 'not_connected'; message: string }
+  | { phase: 'not_responding'; message: string }
   | { phase: 'error'; message: string }
 
 type CaptureState =
@@ -65,6 +71,9 @@ export function PortfolioDashboard(): React.JSX.Element {
           break
         case 'not_connected':
           setState({ phase: 'not_connected', message: result.message })
+          break
+        case 'not_responding':
+          setState({ phase: 'not_responding', message: result.message })
           break
         case 'error':
           setState({ phase: 'error', message: result.message })
@@ -120,6 +129,12 @@ export function PortfolioDashboard(): React.JSX.Element {
           break
         case 'not_connected':
           setCapture({ phase: 'error', message: 'Not connected — connect to capture a snapshot.' })
+          break
+        case 'not_responding':
+          setCapture({
+            phase: 'error',
+            message: 'Interactive Brokers didn’t respond in time — try again.',
+          })
           break
         case 'error':
           setCapture({ phase: 'error', message: result.message })
@@ -205,6 +220,20 @@ export function PortfolioDashboard(): React.JSX.Element {
         <section className="state-panel state-notice" role="status">
           <h2>Not connected to Interactive Brokers</h2>
           <p>{state.message}</p>
+          <button type="button" className="retry-button" onClick={() => void load(displayCurrency)}>
+            Retry
+          </button>
+        </section>
+      )}
+
+      {state.phase === 'not_responding' && (
+        <section className="state-panel state-notice" role="status">
+          <h2>Interactive Brokers isn’t responding</h2>
+          <p>{state.message}</p>
+          <p className="source-note">
+            The gateway is running but didn’t answer. Its session usually needs re-authenticating
+            at <code>https://localhost:5000</code>.
+          </p>
           <button type="button" className="retry-button" onClick={() => void load(displayCurrency)}>
             Retry
           </button>

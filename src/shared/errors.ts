@@ -27,5 +27,14 @@ export class NotFoundError extends AppError {}
  */
 export class IbkrNotConnectedError extends AppError {}
 
+/**
+ * A request to the IBKR gateway exceeded its bounded wait and was aborted (Story #104).
+ * Deliberately *not* a subclass of `IbkrNotConnectedError`: a refused connection means the
+ * gateway isn't running, whereas a stall means it accepted the connection and then went
+ * quiet — usually a half-expired session — and the two need different recovery advice.
+ * Surfaced to the renderer as its own `not_responding` state (DDR-0022).
+ */
+export class IbkrTimeoutError extends AppError {}
+
 /** The IBKR gateway responded, but with an error status or an unexpected shape. */
 export class IbkrGatewayError extends AppError {}

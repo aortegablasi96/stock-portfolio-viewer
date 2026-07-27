@@ -184,8 +184,12 @@ Canonical flows to copy when adding a feature:
   schemas themselves live in `shared/domain/*.ts` (that is where every analytics
   `ok | needs_import` union is declared) and `contract.ts` composes them — put a new one there,
   not inline. Failures cross IPC **as result variants, not exceptions** (`not_connected`,
-  `needs_import`, `canceled`, `invalid`, `error`) so the renderer can render each as a
-  first-class state. Success is *not* uniformly `ok`: capture returns `captured`, import
+  `not_responding`, `needs_import`, `canceled`, `invalid`, `error`) so the renderer can render
+  each as a first-class state. `not_connected` and `not_responding` are **not**
+  interchangeable: the first is a gateway that isn't running, the second one that accepted the
+  request and then stalled past its bounded wait, and `IbkrTimeoutError` is deliberately not a
+  subclass of `IbkrNotConnectedError` so no `instanceof` check can quietly merge them
+  (DDR-0022). Success is *not* uniformly `ok`: capture returns `captured`, import
   `imported`, and both clears `cleared`.
 - **That four-file recipe assumes a request/response channel** (`invoke`/`handle`), which is
   almost all of them. The exception is the three payload-free `window:minimize |
@@ -210,7 +214,13 @@ Canonical flows to copy when adding a feature:
   view uses gateway FX (DDR-0005, DDR-0007).
 - **The IBKR gateway is `https://localhost:5000`**, overridable via the `IBKR_GATEWAY_URL` env
   var. It serves a **self-signed certificate** that `ibkrGateway` accepts deliberately — that
-  is not a TLS bug to fix.
+  is not a TLS bug to fix. **Every** request is bounded by a whole-request deadline
+  (`IBKR_GATEWAY_TIMEOUT_MS`, default 15s) defined once in `ibkrGateway`, because the gateway's
+  usual failure is accepting the connection and *then* going quiet — which emits no error code
+  at all and once hung the dashboard forever. It is deliberately not `request.setTimeout`
+  (socket inactivity, reset by every byte). One bounded attempt, never a retry loop: a timed-out
+  FX rate degrades to *rate unavailable* (DDR-0007), and the first timeout stops any per-item
+  loop over the gateway rather than paying the timeout once per currency/instrument (DDR-0022).
 - **A fresh clone needs `.env`** (copy `.env.example`; `.env` is gitignored). electron-vite
   splits variables by prefix: `MAIN_VITE_*` / `PRELOAD_VITE_*` / `RENDERER_VITE_*` are inlined
   into that bundle's `import.meta.env` at **build** time (renderer types live in

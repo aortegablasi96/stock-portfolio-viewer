@@ -20,7 +20,7 @@ import { allocationService } from '@services/analytics/allocationService'
 import { realizedGainsService } from '@services/analytics/realizedGainsService'
 import { dividendService } from '@services/dividends/dividendService'
 import { classificationService } from '@services/classification/classificationService'
-import { IbkrNotConnectedError, ValidationError } from '@shared/errors'
+import { IbkrNotConnectedError, IbkrTimeoutError, ValidationError } from '@shared/errors'
 
 /**
  * Register all IPC handlers. Handlers are intentionally *thin*: they validate
@@ -35,6 +35,7 @@ export function registerIpcHandlers(): void {
 
   // Validates the optional display currency (Story #28); connection failures are mapped to
   // a serializable result variant so the renderer renders them as first-class states (ADR-0004).
+  // A stalled gateway is its own variant, distinct from one that isn't running (Story #104).
   ipcMain.handle(
     IpcChannels.portfolioGetOverview,
     async (_event, rawInput: unknown): Promise<PortfolioOverviewResult> => {
@@ -43,6 +44,9 @@ export function registerIpcHandlers(): void {
         const overview = await portfolioService.getOverview(displayCurrency)
         return { status: 'ok', overview }
       } catch (err) {
+        if (err instanceof IbkrTimeoutError) {
+          return { status: 'not_responding', message: err.message }
+        }
         if (err instanceof IbkrNotConnectedError) {
           return { status: 'not_connected', message: err.message }
         }
@@ -60,6 +64,9 @@ export function registerIpcHandlers(): void {
       const summary = await snapshotService.captureNow()
       return { status: 'captured', summary }
     } catch (err) {
+      if (err instanceof IbkrTimeoutError) {
+        return { status: 'not_responding', message: err.message }
+      }
       if (err instanceof IbkrNotConnectedError) {
         return { status: 'not_connected', message: err.message }
       }

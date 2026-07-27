@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { snapshotService, DEDUPE_WINDOW_MS } from './snapshotService'
 import { snapshotRepository } from '@repositories/snapshots/snapshotRepository'
 import { portfolioService } from '@services/portfolio/portfolioService'
-import { IbkrNotConnectedError } from '@shared/errors'
+import { IbkrNotConnectedError, IbkrTimeoutError } from '@shared/errors'
 import type { PortfolioOverview } from '@shared/domain/portfolio'
 import type { SnapshotSummary } from '@shared/domain/snapshot'
 
@@ -83,6 +83,18 @@ describe('snapshotService.captureOnOpen', () => {
     const result = await snapshotService.captureOnOpen(1_000)
 
     expect(result).toEqual({ status: 'not_connected' })
+    expect(mockRepo.append).not.toHaveBeenCalled()
+  })
+
+  it('skips silently (no write) when the gateway stalls past its bounded wait', async () => {
+    // Story #104: a stall must not write a half-formed snapshot, and must not crash the
+    // fire-and-forget on-open capture either — it is reported separately from "not running".
+    mockRepo.latestCapturedAt.mockReturnValue(undefined)
+    mockPortfolio.getOverview.mockRejectedValue(new IbkrTimeoutError('no response within 15s'))
+
+    const result = await snapshotService.captureOnOpen(1_000)
+
+    expect(result).toEqual({ status: 'not_responding' })
     expect(mockRepo.append).not.toHaveBeenCalled()
   })
 

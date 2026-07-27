@@ -2,7 +2,7 @@ import { request as httpsRequest } from 'node:https'
 import { request as httpRequest } from 'node:http'
 import type { IncomingMessage } from 'node:http'
 import { z } from 'zod'
-import { IbkrGatewayError, IbkrNotConnectedError } from '@shared/errors'
+import { IbkrGatewayError, IbkrNotConnectedError, IbkrTimeoutError } from '@shared/errors'
 
 /**
  * Low-level client for the Interactive Brokers **Client Portal Gateway** local REST
@@ -17,6 +17,25 @@ import { IbkrGatewayError, IbkrNotConnectedError } from '@shared/errors'
 
 const DEFAULT_BASE_URL = 'https://localhost:5000'
 const API_PREFIX = '/v1/api'
+
+/**
+ * The bounded wait for **every** gateway request, start to finished body (Story #104).
+ *
+ * 15s is generous for a localhost gateway — it proxies to IBKR, so a cold
+ * `/portfolio/.../positions` can genuinely take several seconds — while still failing fast
+ * enough to stay a recoverable UI state rather than an endless spinner.
+ */
+export const DEFAULT_GATEWAY_TIMEOUT_MS = 15_000
+
+/**
+ * The request deadline, in one place so no endpoint can be added without it. Overridable via
+ * `IBKR_GATEWAY_TIMEOUT_MS` like the base URL above (main-process env, never renderer); a
+ * missing or nonsensical value falls back to the default rather than disabling the bound.
+ */
+function timeoutMs(): number {
+  const configured = Number(process.env['IBKR_GATEWAY_TIMEOUT_MS'])
+  return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_GATEWAY_TIMEOUT_MS
+}
 
 /** Gateway base URL from config, trailing slashes trimmed. Defaults to the local gateway. */
 function baseUrl(): string {
@@ -91,13 +110,33 @@ const contractInfoSchema = z
 
 // ---- transport --------------------------------------------------------------
 
-/** GET a raw response body, mapping connection/HTTP failures to typed errors. */
+/**
+ * GET a raw response body, mapping connection/HTTP/timeout failures to typed errors.
+ *
+ * Every request is bounded by `timeoutMs()` (Story #104). Exceeding it destroys the request —
+ * releasing the socket rather than leaking it — and rejects with `IbkrTimeoutError`. Without
+ * this a gateway that accepts the TCP connection and then stalls (its common
+ * half-expired-session failure mode) never settles the promise, leaving the view on a spinner
+ * forever: `ECONNREFUSED` and friends only fire when the connection is refused outright.
+ */
 function rawGet(url: URL): Promise<string> {
   return new Promise((resolve, reject) => {
     const isHttps = url.protocol === 'https:'
     // The Client Portal Gateway returns 403 "Access Denied" to requests without a
     // User-Agent header (node:https sends none by default), so set one explicitly.
     const headers = { Accept: 'application/json', 'User-Agent': 'stock-portfolio-viewer' }
+
+    // One-shot settle: whichever of body / error / deadline lands first wins, and the
+    // deadline timer is always cleared so it can neither fire late nor hold the event loop.
+    // `deadline` is declared below (it needs `req` to abort); nothing can call `settle`
+    // before then, since every path into it is an async event on a request that exists.
+    let settled = false
+    const settle = (fn: () => void): void => {
+      if (settled) return
+      settled = true
+      clearTimeout(deadline)
+      fn()
+    }
 
     const onResponse = (res: IncomingMessage): void => {
       const chunks: Buffer[] = []
@@ -106,18 +145,22 @@ function rawGet(url: URL): Promise<string> {
         const status = res.statusCode ?? 0
         const body = Buffer.concat(chunks).toString('utf8')
         if (status === 401 || status === 403) {
-          reject(
-            new IbkrNotConnectedError(
-              'Interactive Brokers session is not authenticated. Log in to the Client Portal Gateway.',
+          settle(() =>
+            reject(
+              new IbkrNotConnectedError(
+                'Interactive Brokers session is not authenticated. Log in to the Client Portal Gateway.',
+              ),
             ),
           )
           return
         }
         if (status < 200 || status >= 300) {
-          reject(new IbkrGatewayError(`IBKR gateway returned HTTP ${status} for ${url.pathname}`))
+          settle(() =>
+            reject(new IbkrGatewayError(`IBKR gateway returned HTTP ${status} for ${url.pathname}`)),
+          )
           return
         }
-        resolve(body)
+        settle(() => resolve(body))
       })
     }
 
@@ -128,16 +171,47 @@ function rawGet(url: URL): Promise<string> {
       ? httpsRequest(url, { method: 'GET', headers, rejectUnauthorized: false }, onResponse)
       : httpRequest(url, { method: 'GET', headers }, onResponse)
 
-    req.on('error', (err: NodeJS.ErrnoException) => {
-      if (err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND' || err.code === 'ETIMEDOUT') {
+    // A whole-request deadline, not `req.setTimeout`: that one measures *socket inactivity*
+    // and is reset by every byte, so it never fires against a gateway that dribbles a response
+    // out forever. This covers the whole exchange — connect, headers, and body.
+    const limit = timeoutMs()
+    const deadline = setTimeout(() => {
+      settle(() => {
+        req.destroy()
         reject(
-          new IbkrNotConnectedError(
-            'Cannot reach the Interactive Brokers Client Portal Gateway. Is it running?',
+          new IbkrTimeoutError(
+            `The Interactive Brokers Client Portal Gateway did not respond within ${limit / 1000}s.`,
+          ),
+        )
+      })
+    }, limit)
+    // Never let a pending request keep the process alive on quit.
+    deadline.unref()
+
+    req.on('error', (err: NodeJS.ErrnoException) => {
+      // `ETIMEDOUT` is the OS giving up on the connect itself — the host is there but silent,
+      // which is "not responding", not "not running", so it joins the timeout state.
+      if (err.code === 'ETIMEDOUT') {
+        settle(() =>
+          reject(
+            new IbkrTimeoutError(
+              'The connection to the Interactive Brokers Client Portal Gateway timed out.',
+            ),
           ),
         )
         return
       }
-      reject(new IbkrGatewayError(err.message))
+      if (err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND') {
+        settle(() =>
+          reject(
+            new IbkrNotConnectedError(
+              'Cannot reach the Interactive Brokers Client Portal Gateway. Is it running?',
+            ),
+          ),
+        )
+        return
+      }
+      settle(() => reject(new IbkrGatewayError(err.message)))
     })
     req.end()
   })
