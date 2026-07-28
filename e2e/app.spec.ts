@@ -251,7 +251,9 @@ test('a second launch against the same user data exits instead of opening a wind
 test('an analytics tab stays mounted after switching away, and comes back without reloading (Story #109)', async () => {
   // A CSS locator rather than a role: a hidden panel is out of the accessibility tree by
   // design, so `getByRole` would report it as gone — which is the very thing under test.
-  const panels = page.locator('.tab-panel')
+  // The Portfolio tab's panel is excluded: it is a panel like the others (Story #111) but it
+  // unmounts on every switch away, so it is the one that never persists.
+  const panels = page.locator('.tab-panel:not(#panel-portfolio)')
   await expect(panels).toHaveCount(0)
 
   await page.getByRole('tab', { name: 'Performance' }).click()

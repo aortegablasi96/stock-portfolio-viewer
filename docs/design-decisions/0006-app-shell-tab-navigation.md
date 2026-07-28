@@ -1,6 +1,6 @@
 # 0006. App shell: client-side tab navigation for analytics views
 
-- **Status:** Accepted (extended by 0027 — the shell stands; analytics tabs no longer unmount on switch)
+- **Status:** Accepted (extended by 0027 — analytics tabs no longer unmount on switch; and by 0029 — the ARIA tabs pattern completed)
 - **Date:** 2026-07-21
 
 ## Context
@@ -24,7 +24,9 @@ would be a new dependency against the "avoid dependencies" principle).
   chrome (`.dashboard` layout + header) so the views are visually consistent.
 - Each analytics view **fetches its own report on mount** (via a shared `useAnalytics` hook),
   so only the active tab's IPC call runs — reports are not all loaded up front.
-- Tabs use `role="tab"` / `aria-selected` for accessibility.
+- Tabs use `role="tab"` / `aria-selected` for accessibility. *(Completed by
+  [[0029-tab-shell-aria-pattern-and-keyboard-navigation]]: real `tabpanel`s wired both ways,
+  arrow/Home/End movement with automatic activation, and a roving `tabindex`.)*
 
 ## Consequences
 
@@ -60,4 +62,5 @@ in-view drill-down or shareable locations become requirements.
 
 - [[0001-dashboard-layout-and-load-states]] — the dashboard chrome the analytics pages reuse
 - [[0005-analytics-read-model-and-base-currency-conversion]] — the views this shell hosts
+- [[0029-tab-shell-aria-pattern-and-keyboard-navigation]] — the tabs pattern completed
 - GitHub Issues #4 (Epic M3), #21–#24 (Stories)
