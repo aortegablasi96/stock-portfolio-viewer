@@ -84,6 +84,8 @@ one-way `send`/`on` is the right fit; `invoke` is reserved for the `isMaximized`
 
 ## References
 
+- [[0028-window-state-persistence]] — extends this decision: because the OS frame is gone, the
+  window's size, position and maximized state are the app's to remember
 - [[0006-app-shell-tab-navigation]] — the tab shell this title bar sits above
 - [[0002-connection-state-as-ipc-result]] — precedent for modelling state as IPC data/events
 - ADR-0001 — the locked-down Electron security posture kept intact here

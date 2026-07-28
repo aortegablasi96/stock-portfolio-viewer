@@ -110,7 +110,7 @@ src/
                  TitleBar, components/ + components/analytics/ (views, their use*
                  hooks, shared filter controls) + components/charts/ +
                  lib/ — pure, unit-tested helpers extracted out of components)
-  services/      pure business logic — primary unit-test target (system/, meta/,
+  services/      pure business logic — primary unit-test target (system/, meta/, window/,
                  portfolio/, snapshots/, flex/, analytics/, dividends/)
   repositories/  the ONLY layer that touches a data source: SQLite (meta/, snapshots/,
                  flex/), the IBKR gateway (portfolio/portfolioRepository.ts + ibkrGateway.ts),
@@ -198,6 +198,22 @@ Canonical flows to copy when adding a feature:
   `nodeIntegration: false`. Keep it that way; reach the main process only over IPC. The window
   also runs **frameless** (`frame: false`) with an in-app `TitleBar` supplying minimize /
   maximize / close — window chrome is app code, not OS chrome (DDR-0011).
+- **So is the window's size, position and maximized state** (DDR-0028): with no OS frame there
+  is no OS behaviour restoring anything. `windowStateService` keeps one JSON value under the
+  `app_meta` key `window_state` via `metaRepository` — metadata that is overwritten, not
+  history, so no new table and no migration. Three traps live here. The service may not import
+  `electron`, so `main` passes display geometry **in** as plain rectangles and the off-screen
+  recovery stays a pure, unit-tested function. What is persisted is **`getNormalBounds()`**,
+  never the maximized bounds — a maximized window must remember the size it restores *to*, and
+  a **minimized** one is skipped entirely because it reports neither useful bounds nor (on
+  Windows) its maximized state. And a restored rectangle is re-applied with **`setBounds()`,
+  not the constructor**: only `setBounds` is the inverse of `getNormalBounds()`, since Windows
+  adds its invisible resize border to a frameless window — round-trip through the constructor
+  instead and the window grows a couple of pixels *every launch*. `e2e/window-state.spec.ts`
+  opens the app three times specifically to pin that down. Reachability is judged on the 40px
+  **title bar**, not the window's area: a body covering the screen with its bar above the top
+  edge cannot be dragged. A reachable position is left exactly as the owner left it, including
+  one straddling two displays.
 - **Exactly one instance runs at a time.** `main/index.ts` requests
   `app.requestSingleInstanceLock()` at **module load**, before any `whenReady` work is
   registered, so the losing process quits without running migrations, capturing a snapshot, or
