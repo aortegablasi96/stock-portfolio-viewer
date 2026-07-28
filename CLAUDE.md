@@ -158,6 +158,17 @@ Canonical flows to copy when adding a feature:
   `--neg` green/red**, which fails CVD contrast where fill colour is the only channel and no
   number sits beside it; `--pos` / `--neg` are unchanged everywhere else, including the map's own
   popup. Don't "restore" them on the circles (DDR-0021). See DDR-0005, DDR-0006.
+- **A view that outlives its tab:** an analytics tab mounts on **first visit and then stays
+  mounted**, hidden rather than unmounted, so returning to it keeps both the report and every
+  bit of view-local state (time range, type chips, chart tab, map colour mode) — nothing is
+  restored because nothing was discarded. Unvisited tabs still issue no IPC. The consequence to
+  respect: a mounted view can go stale, so both Flex write paths (`FlexImport`'s import and
+  clear, the inline `NeedsImport` action) bump `renderer/src/lib/dataVersion`, and every
+  `useAnalytics` re-reads on a bump. `loading` therefore means the **first** load only — a
+  reload keeps the current report on screen and reports itself through `refreshing`, which is
+  what makes the shared `RefreshBar` (reading time + Refresh) non-destructive. The **Portfolio
+  tab is deliberately excluded** and still re-reads on every visit: it shows live IBKR data,
+  which changes with no event to signal it. See DDR-0027 (extends DDR-0006).
 - **Fire-and-forget command + state event:** the `window:*` channels show the *other* IPC
   shape — `ipcRenderer.send` / `ipcMain.on` with no payload and no Zod (there is nothing to
   validate), plus one `invoke` query (`window:isMaximized`) and one main→renderer event
@@ -763,9 +774,11 @@ Vitest picks up every `src/**/*.test.ts` and runs it in a **Node** environment (
 so no test may render a React component. This shapes the renderer: chart maths, filtering,
 sorting and formatting are **extracted out of components into pure modules under
 `renderer/src/lib/`** (`format`, `pie`, `worldGeo`, `mapBubbles`, `gainLoss`, `tableFilter`,
-`column`, `dateRange`, `sectorMap`, `performanceRange`, `classifyProgress`) precisely so they can
-be tested — follow
-that split when adding a component with real logic in it. The map is the sharpest case: colour
+`column`, `dateRange`, `sectorMap`, `performanceRange`, `classifyProgress`, `dataVersion`)
+precisely so they can be tested — follow
+that split when adding a component with real logic in it. `dataVersion` is the same move applied
+to state rather than maths: the cross-view staleness signal is a plain subscribable store a hook
+reads with `useSyncExternalStore`, so the part worth testing is testable without a renderer. The map is the sharpest case: colour
 resolution needs `getComputedStyle` and so stays in the component, while `mapBubbles` and
 `gainLoss` emit palette *classes* — that seam is what keeps the map's geometry and colour scale
 testable under Node. Pure repository helpers that touch no data source

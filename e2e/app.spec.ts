@@ -244,3 +244,37 @@ test('a second launch against the same user data exits instead of opening a wind
   // The instance that already held the lock is untouched and still driving its renderer.
   await expect(page.locator('h1')).toHaveText('Portfolio')
 })
+
+// Kept last in the file: once an analytics tab has been opened it stays in the DOM, so the
+// page carries more than one `h1` from here on — which is exactly what this test asserts, and
+// what would make the earlier single-`h1` locators ambiguous if it ran before them.
+test('an analytics tab stays mounted after switching away, and comes back without reloading (Story #109)', async () => {
+  // A CSS locator rather than a role: a hidden panel is out of the accessibility tree by
+  // design, so `getByRole` would report it as gone — which is the very thing under test.
+  const panels = page.locator('.tab-panel')
+  await expect(panels).toHaveCount(0)
+
+  await page.getByRole('tab', { name: 'Performance' }).click()
+  await expect(panels).toHaveCount(1)
+  await expect(panels.locator('h1')).toHaveText('Performance')
+  // No import has happened in this run, so the view resolves to its needs-import state.
+  await expect(page.getByText('No imported data yet')).toBeVisible()
+
+  // Back to Portfolio: the analytics panel is hidden, not destroyed.
+  await page.getByRole('tab', { name: 'Portfolio' }).click()
+  await expect(panels).toHaveCount(1)
+  await expect(panels).toBeHidden()
+
+  // Returning shows the same panel again, with no "Loading performance…" in between —
+  // the component never unmounted, so it never re-entered its loading phase.
+  await page.getByRole('tab', { name: 'Performance' }).click()
+  await expect(panels).toBeVisible()
+  await expect(page.getByText('Loading performance…')).toHaveCount(0)
+
+  // A second analytics tab adds its own panel and leaves the first one in place.
+  await page.getByRole('tab', { name: 'Dividends' }).click()
+  await expect(panels).toHaveCount(2)
+
+  // Leave the shell on the Portfolio tab, as the rest of the suite expects it.
+  await page.getByRole('tab', { name: 'Portfolio' }).click()
+})

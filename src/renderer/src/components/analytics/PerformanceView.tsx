@@ -12,6 +12,7 @@ import { LineChart } from '../charts/LineChart'
 import { useAnalytics } from './useAnalytics'
 import { NeedsImport } from './NeedsImport'
 import { RangeFilter } from './RangeFilter'
+import { RefreshBar } from './RefreshBar'
 import { StatTile, toneOf } from './StatTile'
 import { useRangeSelection } from './useRangeSelection'
 
@@ -32,9 +33,15 @@ type ChartTab = (typeof CHART_TABS)[number]['id']
  * pure presentation over the already-loaded daily series (`lib/performanceRange`), so switching
  * ranges is instant and never refetches. The per-period returns table stays whole-history
  * (table filters are out of scope for this story).
+ *
+ * The view stays mounted once visited (Story #109), so the range selection and chart tab below
+ * survive a trip to another tab; the `RefreshBar` gives the re-read that leaving and returning
+ * used to perform by accident.
  */
 export function PerformanceView(): React.JSX.Element {
-  const { state, reload } = useAnalytics<PerformanceResult>(window.api.getPerformance)
+  const { state, refreshing, loadedAt, reload } = useAnalytics<PerformanceResult>(
+    window.api.getPerformance,
+  )
   const [chartTab, setChartTab] = useState<ChartTab>('value')
   const { range, setRange, custom, editCustom } = useRangeSelection()
 
@@ -50,14 +57,19 @@ export function PerformanceView(): React.JSX.Element {
       <section className="state-panel state-error" role="alert">
         <h2>Couldn’t load performance</h2>
         <p>{state.message}</p>
-        <button type="button" className="retry-button" onClick={() => void reload()}>
-          Retry
+        <button
+          type="button"
+          className="retry-button"
+          disabled={refreshing}
+          onClick={() => void reload()}
+        >
+          {refreshing ? 'Retrying…' : 'Retry'}
         </button>
       </section>
     )
   }
   if (state.result.status === 'needs_import') {
-    return <NeedsImport onImported={() => void reload()} />
+    return <NeedsImport />
   }
 
   const r = state.result.report
@@ -77,6 +89,13 @@ export function PerformanceView(): React.JSX.Element {
 
   return (
     <div className="analytics-view">
+      <RefreshBar
+        label="performance"
+        loadedAt={loadedAt}
+        refreshing={refreshing}
+        onRefresh={() => void reload()}
+      />
+
       <RangeFilter
         label="Performance time range"
         range={range}

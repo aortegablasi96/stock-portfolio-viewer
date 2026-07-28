@@ -15,6 +15,7 @@ import { useTypeSelection } from './useTypeSelection'
 import { useAnalytics } from './useAnalytics'
 import { NeedsImport } from './NeedsImport'
 import { RangeFilter } from './RangeFilter'
+import { RefreshBar } from './RefreshBar'
 import { StatTile, toneOf } from './StatTile'
 import { TypeFilter } from './TypeFilter'
 import { useRangeSelection } from './useRangeSelection'
@@ -25,7 +26,9 @@ import { useRangeSelection } from './useRangeSelection'
  * split and totals — in the base currency, plus total unrealized P&L for context.
  */
 export function TradeHistoryView(): React.JSX.Element {
-  const { state, reload } = useAnalytics<RealizedGainsResult>(window.api.getRealizedGains)
+  const { state, refreshing, loadedAt, reload } = useAnalytics<RealizedGainsResult>(
+    window.api.getRealizedGains,
+  )
 
   if (state.phase === 'loading') {
     return (
@@ -39,14 +42,19 @@ export function TradeHistoryView(): React.JSX.Element {
       <section className="state-panel state-error" role="alert">
         <h2>Couldn’t load trade history</h2>
         <p>{state.message}</p>
-        <button type="button" className="retry-button" onClick={() => void reload()}>
-          Retry
+        <button
+          type="button"
+          className="retry-button"
+          disabled={refreshing}
+          onClick={() => void reload()}
+        >
+          {refreshing ? 'Retrying…' : 'Retry'}
         </button>
       </section>
     )
   }
   if (state.result.status === 'needs_import') {
-    return <NeedsImport onImported={() => void reload()} />
+    return <NeedsImport />
   }
 
   const r = state.result.report
@@ -54,6 +62,13 @@ export function TradeHistoryView(): React.JSX.Element {
 
   return (
     <div className="analytics-view">
+      <RefreshBar
+        label="trades and realized gains"
+        loadedAt={loadedAt}
+        refreshing={refreshing}
+        onRefresh={() => void reload()}
+      />
+
       <div className="stat-row">
         <StatTile label="Realized P&L" value={sc(r.totalRealized)} tone={toneOf(r.totalRealized)} />
         <StatTile label="Short-term" value={sc(r.totalRealizedShortTerm)} tone={toneOf(r.totalRealizedShortTerm)} />

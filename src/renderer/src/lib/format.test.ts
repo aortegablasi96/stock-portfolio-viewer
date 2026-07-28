@@ -11,6 +11,7 @@ import {
   formatQuantity,
   formatSignedCurrency,
   formatSignedPercent,
+  formatUpdatedAt,
 } from './format'
 
 describe('formatCurrency', () => {
@@ -138,5 +139,35 @@ describe('formatCompanyName', () => {
   it('returns the trimmed input unchanged when there is nothing to strip', () => {
     expect(formatCompanyName('  apple  ')).toBe('Apple')
     expect(formatCompanyName('')).toBe('')
+  })
+})
+
+describe('formatUpdatedAt', () => {
+  it('shows only a clock time when the reading is from today', () => {
+    const now = new Date(2026, 6, 28, 16, 5).getTime()
+    const at = new Date(2026, 6, 28, 14, 32).getTime()
+
+    const out = formatUpdatedAt(at, now)
+
+    expect(out).toMatch(/32/)
+    expect(out).not.toMatch(/jul/i)
+  })
+
+  it('adds the day and month once the reading is from an earlier day', () => {
+    const now = new Date(2026, 6, 28, 9, 0).getTime()
+    const at = new Date(2026, 6, 27, 21, 15).getTime()
+
+    const out = formatUpdatedAt(at, now)
+
+    expect(out).toMatch(/27/)
+    expect(out).toMatch(/jul/i)
+    expect(out).toMatch(/15/)
+  })
+
+  it('treats the same clock time a year apart as an earlier day', () => {
+    const now = new Date(2026, 6, 28, 10, 0).getTime()
+    const at = new Date(2025, 6, 28, 10, 0).getTime()
+
+    expect(formatUpdatedAt(at, now)).toMatch(/jul/i)
   })
 })

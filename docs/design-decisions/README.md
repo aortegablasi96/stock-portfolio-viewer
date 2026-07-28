@@ -62,3 +62,4 @@ Other options and why they were not chosen.
 - `0024` — Gateway reads coalesced in the repository behind a short freshness window; FX fetched concurrently (extends `0022`)
 - `0025` — Single-instance lock: the second launch quits before touching the database and focuses the first (extends `0011`)
 - `0026` — The Flex store describes itself: stored statements + coverage span, read on launch (extends `0004`)
+- `0027` — Analytics tabs stay mounted; a re-read becomes explicit and non-destructive (extends `0006`)
