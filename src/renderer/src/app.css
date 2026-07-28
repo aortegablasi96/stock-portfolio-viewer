@@ -800,6 +800,7 @@ html {
 }
 
 .app-tab {
+  position: relative;
   padding: 0.4rem 0.9rem;
   font: inherit;
   font-size: 0.9rem;
@@ -821,6 +822,23 @@ html {
   background: var(--card);
 }
 
+/* The active tab is marked by a bar under its label as well as by the accent colour and the
+   filled pill (Story #111). Both of those are colour, and colour is the one channel that can't
+   be relied on alone: a reader who doesn't separate the accent from the muted grey would have
+   no cue left. The bar is presence-or-absence, so it survives any palette. Deliberately inside
+   the pill and drawn in `currentColor` — this is the existing design gaining a cue, not a
+   restyle. */
+.app-tab-active::after {
+  content: '';
+  position: absolute;
+  left: 0.9rem;
+  right: 0.9rem;
+  bottom: 0.15rem;
+  height: 2px;
+  border-radius: 1px;
+  background: currentColor;
+}
+
 .app-tab:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
@@ -831,6 +849,14 @@ html {
    stated here because the behaviour is load-bearing, not incidental. */
 .tab-panel[hidden] {
   display: none;
+}
+
+/* Panels carry `tabindex="0"` so Tab moves from the tablist into the view rather than past it
+   (Story #111). That makes them focusable, so they need a ring of their own — inset, because a
+   panel runs the full width of the window and an outward offset would be clipped. */
+.tab-panel:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 
 /* ---- Analytics views (M3, Stories #21–#24) ------------------------------- */

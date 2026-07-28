@@ -169,6 +169,18 @@ Canonical flows to copy when adding a feature:
   what makes the shared `RefreshBar` (reading time + Refresh) non-destructive. The **Portfolio
   tab is deliberately excluded** and still re-reads on every visit: it shows live IBKR data,
   which changes with no event to signal it. See DDR-0027 (extends DDR-0006).
+- **The tab bar is the full WAI-ARIA tabs pattern**, not a styled row of buttons (DDR-0029).
+  Every view — the Portfolio dashboard included — is wrapped in a `TabPanel` (`role="tabpanel"`,
+  `id="panel-<tab>"`, `aria-labelledby="tab-<tab>"`, `tabIndex={0}`) and its tab points back with
+  `aria-controls`, **set only on the selected tab** because an unvisited tab has no panel in the
+  tree to name. A roving `tabindex` (selected `0`, the rest `-1`) makes the tablist one Tab stop,
+  so a keyboard move must `focus()` the new tab through the ref map — the tab being left stops
+  being focusable. Arrow/Home/End use **automatic activation** (focus selects), which is why
+  arrowing past an analytics tab mounts it exactly as clicking would; the index arithmetic sits
+  in `renderer/src/lib/tabKeyboard.ts` because nothing inside a component is testable under
+  Vitest's Node environment, and the attributes and focus moves are pinned by
+  `e2e/tab-navigation.spec.ts`. The active tab carries a 2px bar under its label as well as the
+  accent colour: accent-on-pill is two cues but both are colour. Don't drop the bar.
 - **Fire-and-forget command + state event:** the `window:*` channels show the *other* IPC
   shape — `ipcRenderer.send` / `ipcMain.on` with no payload and no Zod (there is nothing to
   validate), plus one `invoke` query (`window:isMaximized`) and one main→renderer event
@@ -790,7 +802,8 @@ Vitest picks up every `src/**/*.test.ts` and runs it in a **Node** environment (
 so no test may render a React component. This shapes the renderer: chart maths, filtering,
 sorting and formatting are **extracted out of components into pure modules under
 `renderer/src/lib/`** (`format`, `pie`, `worldGeo`, `mapBubbles`, `gainLoss`, `tableFilter`,
-`column`, `dateRange`, `sectorMap`, `performanceRange`, `classifyProgress`, `dataVersion`)
+`column`, `dateRange`, `sectorMap`, `performanceRange`, `classifyProgress`, `dataVersion`,
+`tabKeyboard`)
 precisely so they can be tested — follow
 that split when adding a component with real logic in it. `dataVersion` is the same move applied
 to state rather than maths: the cross-view staleness signal is a plain subscribable store a hook
