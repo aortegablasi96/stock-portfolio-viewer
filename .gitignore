@@ -8,6 +8,10 @@ out/
 release/
 .vite/
 
+# electron-vite writes a timestamped copy of its config beside the original while it
+# loads it, and does not always clean it up if the build is interrupted.
+electron.vite.config.*.mjs
+
 # Electron packaged artifacts
 *.exe
 *.dmg
