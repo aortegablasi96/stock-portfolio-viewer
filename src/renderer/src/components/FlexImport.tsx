@@ -161,7 +161,8 @@ export function FlexImport(): React.JSX.Element {
  * built from, and how current is it?", available on launch with no import required. The
  * coverage line gives the span at a glance; the rows below give each statement's own
  * period, so a gap between two of them, or a newest statement that ends months ago, is
- * visible without arithmetic.
+ * visible without arithmetic. Rows arrive newest first, matching the History card above —
+ * the first row is the statement the statement-scoped analytics reads treat as latest.
  */
 function StoredStatements({ store }: { store: FlexStatementStore | null }): React.JSX.Element {
   return (

@@ -188,9 +188,15 @@ export interface TradeRowRaw {
 
 export const flexReadRepository = {
   /**
-   * Every imported statement's header row, oldest → newest by period start (Story #108).
-   * The only read that describes the *store* rather than its contents, so the Portfolio
-   * view can show what analytics are built from without an import having just happened.
+   * Every imported statement's header row, newest first (Story #108). The only read that
+   * describes the *store* rather than its contents, so the Portfolio view can show what
+   * analytics are built from without an import having just happened.
+   *
+   * Ordered by **end** date, not start date or id, so the top row is the same statement the
+   * statement-scoped reads below treat as "latest" (`getLatestOpenPositions`,
+   * `getLatestOpenDividendAccruals`, `fromLatestStatement`). Ids follow import order and
+   * would put a back-filled older statement on top; start date would do the same for a
+   * statement that begins earlier but ends later. Ties break on start date.
    */
   getStatements(): StoredStatementRow[] {
     return getDb()
@@ -205,7 +211,7 @@ export const flexReadRepository = {
         importedAt: flexStatements.importedAt,
       })
       .from(flexStatements)
-      .orderBy(flexStatements.fromDate)
+      .orderBy(desc(flexStatements.toDate), desc(flexStatements.fromDate))
       .all()
   },
 

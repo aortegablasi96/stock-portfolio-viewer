@@ -24,7 +24,11 @@ Add one read-only channel, `flex:listStatements`, and render its result as a per
 
 **The read describes the store, not an import.** `flexReadRepository.getStatements()` returns
 the `flex_statements` header rows — account, period, base currency, source filename, import
-time — ordered oldest → newest. This is deliberately *not* `FlexStatementImport`, which
+time — **newest first, ordered by period end date**. End date rather than id or start date so
+the top row is the same statement the statement-scoped reads treat as "latest" (#103): ids
+follow import order, so a back-filled older statement would sort to the top, and a statement
+that starts earlier but ends later would do the same under a start-date sort. This is
+deliberately *not* `FlexStatementImport`, which
 describes an import's outcome (inserted vs. skipped rows, "already imported") and is only true
 in the instant it is produced. The two shapes answer different questions and both are kept: the
 import summary still reports what a given import did, the store list reports what is held.

@@ -16,9 +16,9 @@ import type { FlexStatementStore, FlexStoredStatement } from '@shared/domain/fle
  */
 export const flexStatementsService = {
   /**
-   * Every stored statement, oldest → newest, plus the span they cover end to end.
-   * Empty store → an empty list and `coverage: null`; that is a first-class empty state,
-   * not an error, so it needs no result variant of its own.
+   * Every stored statement in the repository's order (newest first), plus the span they
+   * cover end to end. Empty store → an empty list and `coverage: null`; that is a
+   * first-class empty state, not an error, so it needs no result variant of its own.
    */
   listStatements(): FlexStatementStore {
     const statements = flexReadRepository.getStatements()

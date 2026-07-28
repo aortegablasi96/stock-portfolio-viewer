@@ -292,7 +292,8 @@ export const flexStoredStatementSchema = z.object({
 export type FlexStoredStatement = z.infer<typeof flexStoredStatementSchema>
 
 /**
- * The whole imported statement store: every statement oldest → newest, plus the span the
+ * The whole imported statement store: every statement newest first (by period end date, so
+ * the first row is the one statement-scoped analytics treat as latest), plus the span the
  * statements cover end to end. `coverage` is the earliest `fromDate` and the latest
  * `toDate` across all of them, so a stale newest statement is visible at a glance; it is
  * `null` when nothing has been imported. Statements may overlap — the span is a min/max,

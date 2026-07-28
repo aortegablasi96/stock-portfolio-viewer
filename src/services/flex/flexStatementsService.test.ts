@@ -64,8 +64,9 @@ describe('flexStatementsService.listStatements', () => {
   })
 
   it('takes coverage as a min/max, not the first and last row', () => {
-    // Statements can be imported out of order, and the newest period is not necessarily
-    // the widest — an older statement may still hold the earliest start date.
+    // The repository returns statements newest first, so a naive `first.fromDate` /
+    // `last.toDate` read would report the span exactly backwards. Statements can also be
+    // imported out of order, so the calculation may not assume any ordering at all.
     repo.getStatements.mockReturnValue([
       statement({ id: 1, fromDate: JAN_2026, toDate: JUL_2026 }),
       statement({ id: 2, fromDate: APR_2025, toDate: DEC_2025 }),
