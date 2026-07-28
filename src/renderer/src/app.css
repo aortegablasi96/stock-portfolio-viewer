@@ -685,6 +685,21 @@ html {
   color: var(--accent);
 }
 
+/* ---- Stored Flex statements (Story #108) --------------------------------- */
+
+/* The span the imported history covers, above the per-statement rows. The dates carry
+   the emphasis — they are what tells the owner whether the newest statement is stale. */
+.flex-store-coverage {
+  margin: 0 0 1rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.flex-store-coverage strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
 /* ---- App shell + tab navigation (M3) ------------------------------------- */
 
 /* ---- Custom frameless title bar (Story #42) ------------------------------ */

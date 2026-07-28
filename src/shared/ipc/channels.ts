@@ -11,6 +11,9 @@ export const IpcChannels = {
   // Owner-confirmed full reset of the captured snapshot history (Story #43).
   snapshotClear: 'snapshot:clear',
   flexImport: 'flex:import',
+  // What the local Flex store currently holds, read on launch rather than after an
+  // import (Story #108).
+  flexListStatements: 'flex:listStatements',
   // Owner-confirmed full reset of the imported Flex statement store (Story #43).
   flexClear: 'flex:clear',
   analyticsPerformance: 'analytics:getPerformance',

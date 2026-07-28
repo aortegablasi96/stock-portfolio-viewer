@@ -198,6 +198,14 @@ test.describe('a gateway that stalls instead of refusing (Story #104)', () => {
   })
 })
 
+test('lists the stored Flex statements on launch, with an empty state before any import (Story #108)', async () => {
+  // The panel reads the store itself, so it renders without an import having happened —
+  // that is the whole point of the story. This run's user-data dir is fresh, so the
+  // store is empty and the empty state is what must appear (not a blank panel).
+  await expect(page.getByRole('heading', { name: 'Stored statements' })).toBeVisible()
+  await expect(page.getByText('No statements imported yet', { exact: false })).toBeVisible()
+})
+
 test('Clear statements confirms in place, then reports nothing to clear on an empty store (Story #43)', async () => {
   // Arm the destructive action: the button expands into an explicit warning + confirm/cancel.
   await page.getByRole('button', { name: 'Clear statements' }).click()

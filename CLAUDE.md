@@ -46,7 +46,12 @@ Live domains exist end-to-end as reference patterns:
 - **flex** — imported IBKR Flex Query history (M3, Story #20). A **write-only**
   `flexRepository` (parse XML + persist, two-tier de-dupe) and a **read-only**
   `flexReadRepository` (the only new `flex_*` read layer) fronting the immutable `flex_*`
-  tables. `flex_prior_period_positions` holds the per-instrument daily MTM series that backs
+  tables. The services mirror that split: `flexImportService` writes (import + whole-store
+  clear), `flexStatementsService` reads the store's *shape* — which statements are held and the
+  span they cover — behind `flex:listStatements`, so the Portfolio tab can answer "what are my
+  analytics built from?" on launch with no import. Coverage is a **min/max** over all
+  statements, computed in the service, because statements may overlap or be imported out of
+  order; an empty store is an empty list, not a result variant (DDR-0026). `flex_prior_period_positions` holds the per-instrument daily MTM series that backs
   day-by-day performance; `flex_open_dividend_accruals` holds declared-but-unpaid dividends
   (Story #31) — an **optional** Flex section, so an export without it degrades to an empty
   list rather than failing; `flex_fifo_summaries` holds IBKR's own FIFO performance summary,

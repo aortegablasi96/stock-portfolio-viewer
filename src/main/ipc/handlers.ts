@@ -8,6 +8,7 @@ import {
   type ClearHistoryResult,
   type ClearStatementsResult,
   type FlexImportResult,
+  type FlexStatementStore,
   type PortfolioOverviewResult,
   type SnapshotList,
 } from '@shared/ipc/contract'
@@ -15,6 +16,7 @@ import { systemService } from '@services/system/systemService'
 import { portfolioService } from '@services/portfolio/portfolioService'
 import { snapshotService } from '@services/snapshots/snapshotService'
 import { flexImportService } from '@services/flex/flexImportService'
+import { flexStatementsService } from '@services/flex/flexStatementsService'
 import { performanceService } from '@services/analytics/performanceService'
 import { allocationService } from '@services/analytics/allocationService'
 import { realizedGainsService } from '@services/analytics/realizedGainsService'
@@ -128,6 +130,14 @@ export function registerIpcHandlers(): void {
       return { status: 'error', message }
     }
   })
+
+  // What the local Flex store holds (Story #108). A pure local read with no payload and no
+  // connection state, so there is nothing to validate or map — the same shape as the
+  // analytics reads, minus the needs-import variant (an empty store is an empty list).
+  ipcMain.handle(
+    IpcChannels.flexListStatements,
+    (): FlexStatementStore => flexStatementsService.listStatements(),
+  )
 
   // Owner-confirmed full reset of the imported Flex store (Story #43). No payload; local and
   // destructive, so failures surface as an `error` result variant, never thrown.
