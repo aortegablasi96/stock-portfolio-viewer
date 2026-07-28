@@ -14,6 +14,7 @@ import { ColumnChart, type StackedColumn } from '../charts/ColumnChart'
 import { useAnalytics } from './useAnalytics'
 import { NeedsImport } from './NeedsImport'
 import { RangeFilter } from './RangeFilter'
+import { RefreshBar } from './RefreshBar'
 import { StatTile } from './StatTile'
 import { TypeFilter } from './TypeFilter'
 import { useRangeSelection } from './useRangeSelection'
@@ -105,7 +106,9 @@ function Upcoming({
   )
 }
 export function DividendsView(): React.JSX.Element {
-  const { state, reload } = useAnalytics<DividendResult>(window.api.getDividends)
+  const { state, refreshing, loadedAt, reload } = useAnalytics<DividendResult>(
+    window.api.getDividends,
+  )
 
   if (state.phase === 'loading') {
     return (
@@ -119,14 +122,19 @@ export function DividendsView(): React.JSX.Element {
       <section className="state-panel state-error" role="alert">
         <h2>Couldn’t load dividends</h2>
         <p>{state.message}</p>
-        <button type="button" className="retry-button" onClick={() => void reload()}>
-          Retry
+        <button
+          type="button"
+          className="retry-button"
+          disabled={refreshing}
+          onClick={() => void reload()}
+        >
+          {refreshing ? 'Retrying…' : 'Retry'}
         </button>
       </section>
     )
   }
   if (state.result.status === 'needs_import') {
-    return <NeedsImport onImported={() => void reload()} />
+    return <NeedsImport />
   }
 
   const r = state.result.report
@@ -137,6 +145,12 @@ export function DividendsView(): React.JSX.Element {
   if (r.events.length === 0) {
     return (
       <div className="analytics-view">
+        <RefreshBar
+          label="dividends"
+          loadedAt={loadedAt}
+          refreshing={refreshing}
+          onRefresh={() => void reload()}
+        />
         <section className="state-panel" role="status">
           <h2>No dividend income recorded</h2>
           <p>The imported statements contain no dividend or payment-in-lieu transactions.</p>
@@ -155,6 +169,13 @@ export function DividendsView(): React.JSX.Element {
 
   return (
     <div className="analytics-view">
+      <RefreshBar
+        label="dividends"
+        loadedAt={loadedAt}
+        refreshing={refreshing}
+        onRefresh={() => void reload()}
+      />
+
       <div className="stat-row">
         <StatTile label="Gross income" value={c(r.totalGrossBase)} />
         <StatTile label="Withholding tax" value={c(r.totalWithholdingBase)} hint="Withheld at source" />

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { TitleBar } from './components/TitleBar'
 import { PortfolioDashboard } from './components/PortfolioDashboard'
 import { FlexImport } from './components/FlexImport'
@@ -13,6 +13,16 @@ import { TradeHistoryView } from './components/analytics/TradeHistoryView'
  * built on imported Flex data (Stories #21–#24). All data flows over the typed IPC
  * bridge (`window.api`); the renderer holds no business logic and never reaches data
  * sources directly. See DDR-0006 for the navigation model.
+ *
+ * An analytics tab mounts the first time it is opened and then **stays mounted**, hidden
+ * rather than unmounted, for the rest of the session (Story #109, DDR-0027). That is what
+ * makes returning to a view instant: the report it read, its time range, its type filter and
+ * its chart tab are all still there, because the component that held them never went away.
+ * Nothing is fetched up front — an unvisited tab has no component and issues no IPC — and an
+ * import or a clear pushes every mounted view into a re-read through `lib/dataVersion`.
+ *
+ * The **Portfolio** tab is deliberately the exception: it reads live IBKR data, which changes
+ * on its own, so it keeps unmounting and re-reading on every visit.
  */
 type Tab = 'portfolio' | 'performance' | 'allocation' | 'dividends' | 'trades'
 
@@ -48,6 +58,22 @@ function AnalyticsPage({
 
 export function App(): React.JSX.Element {
   const [tab, setTab] = useState<Tab>('portfolio')
+  // Which analytics tabs have been opened at least once — the set of views that exist in the
+  // tree. It only ever grows, so a view is mounted once per session and never re-mounted.
+  const [visited, setVisited] = useState<ReadonlySet<Tab>>(() => new Set<Tab>())
+
+  const select = useCallback((id: Tab): void => {
+    setTab(id)
+    setVisited((prev) => (prev.has(id) ? prev : new Set(prev).add(id)))
+  }, [])
+
+  /** An analytics tab's panel: rendered from first visit, then hidden while another tab is active. */
+  const panel = (id: Tab, title: string, view: React.ReactNode): React.JSX.Element | null =>
+    visited.has(id) ? (
+      <div className="tab-panel" hidden={tab !== id}>
+        <AnalyticsPage title={title}>{view}</AnalyticsPage>
+      </div>
+    ) : null
 
   return (
     <div className="app">
@@ -61,7 +87,7 @@ export function App(): React.JSX.Element {
               role="tab"
               aria-selected={tab === t.id}
               className={`app-tab ${tab === t.id ? 'app-tab-active' : ''}`}
-              onClick={() => setTab(t.id)}
+              onClick={() => select(t.id)}
             >
               {t.label}
             </button>
@@ -75,26 +101,10 @@ export function App(): React.JSX.Element {
           <FlexImport />
         </>
       )}
-      {tab === 'performance' && (
-        <AnalyticsPage title="Performance">
-          <PerformanceView />
-        </AnalyticsPage>
-      )}
-      {tab === 'allocation' && (
-        <AnalyticsPage title="Allocation">
-          <AllocationView />
-        </AnalyticsPage>
-      )}
-      {tab === 'dividends' && (
-        <AnalyticsPage title="Dividends">
-          <DividendsView />
-        </AnalyticsPage>
-      )}
-      {tab === 'trades' && (
-        <AnalyticsPage title="Trades & realized gains">
-          <TradeHistoryView />
-        </AnalyticsPage>
-      )}
+      {panel('performance', 'Performance', <PerformanceView />)}
+      {panel('allocation', 'Allocation', <AllocationView />)}
+      {panel('dividends', 'Dividends', <DividendsView />)}
+      {panel('trades', 'Trades & realized gains', <TradeHistoryView />)}
     </div>
   )
 }

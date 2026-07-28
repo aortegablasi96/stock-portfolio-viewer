@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { FlexStatementImport, FlexStatementStore } from '@shared/domain/flex'
 import { formatDate, formatDateTime } from '../lib/format'
+import { flexDataVersion } from '../lib/dataVersion'
 import { ConfirmAction } from './ConfirmAction'
 
 /**
@@ -15,6 +16,11 @@ import { ConfirmAction } from './ConfirmAction'
  * than the last import: it loads on mount, so on launch the owner can see what their
  * analytics are built from and how current it is, and it reloads after an import or a
  * clear so the two never disagree.
+ *
+ * Both write paths also bump the shared data version (Story #109). The analytics views stay
+ * mounted once visited, so importing or clearing here would otherwise leave four views
+ * showing history that has just changed — or been deleted — until the owner refreshed each
+ * one by hand.
  */
 type ImportState =
   | { phase: 'idle' }
@@ -59,6 +65,7 @@ export function FlexImport(): React.JSX.Element {
       switch (result.status) {
         case 'imported':
           setState({ phase: 'imported', statements: result.summary.statements })
+          flexDataVersion.bump()
           await loadStore()
           break
         case 'canceled':
@@ -84,6 +91,7 @@ export function FlexImport(): React.JSX.Element {
       const result = await window.api.clearStatements()
       if (result.status === 'cleared') {
         setState({ phase: 'cleared', removedStatements: result.removedStatements })
+        flexDataVersion.bump()
         await loadStore()
       } else {
         setState({ phase: 'error', message: result.message })

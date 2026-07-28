@@ -1,6 +1,6 @@
 # 0006. App shell: client-side tab navigation for analytics views
 
-- **Status:** Accepted
+- **Status:** Accepted (extended by 0027 — the shell stands; analytics tabs no longer unmount on switch)
 - **Date:** 2026-07-21
 
 ## Context
@@ -39,7 +39,10 @@ Tradeoffs:
 * No URL/deep-linking or back-button history — acceptable for a single-window desktop app; a
   router can be introduced later if navigation needs grow (e.g. drill-down from a holding).
 * Switching tabs re-fetches (no cross-tab cache). Reports are cheap local reads, so this is
-  fine; memoization can be added if it ever isn't.
+  fine; memoization can be added if it ever isn't. *(Revised by
+  [[0027-analytics-views-persist-and-explicit-refresh]]: an analytics tab now mounts on first
+  visit and stays mounted, so returning to it neither re-fetches nor loses its filters. Tabs
+  are still not loaded up front, and the Portfolio tab still re-reads on every visit.)*
 
 ## Alternatives Considered
 

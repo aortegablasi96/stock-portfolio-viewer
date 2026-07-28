@@ -372,7 +372,14 @@ export function BubbleMap({
     // A canvas does not reflow with its container the way an SVG viewBox did; without this the
     // map renders letterboxed after a window resize. A wider frame also fits the world at a
     // different zoom, so an un-zoomed map re-fits rather than keeping a stale one.
-    const observer = new ResizeObserver(() => {
+    //
+    // A zero-size frame is ignored rather than fitted: since Story #109 the Allocation view stays
+    // mounted while another tab is open, and a hidden panel measures 0×0. Fitting the world into
+    // no width would throw the camera away, and the observer fires again with the real size the
+    // moment the tab is shown — which is the resize that matters.
+    const observer = new ResizeObserver((entries) => {
+      const rect = entries[entries.length - 1]?.contentRect
+      if (!rect || rect.width === 0 || rect.height === 0) return
       map.resize()
       if (!zoomedRef.current) fitWorld(0)
     })

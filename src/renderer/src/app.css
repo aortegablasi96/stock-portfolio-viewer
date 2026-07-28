@@ -291,6 +291,11 @@ html {
   border-color: var(--text);
 }
 
+.ghost-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .ghost-button:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
@@ -821,12 +826,42 @@ html {
   outline-offset: 2px;
 }
 
+/* An analytics tab stays in the tree once opened and is hidden while another tab is active
+   (Story #109). No `display` is set on the panel itself, so the UA's [hidden] rule applies —
+   stated here because the behaviour is load-bearing, not incidental. */
+.tab-panel[hidden] {
+  display: none;
+}
+
 /* ---- Analytics views (M3, Stories #21–#24) ------------------------------- */
 
 .analytics-view {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+}
+
+/* Freshness line + explicit refresh, above the view's own controls (Story #109). Right-aligned
+   and quiet: it reports on the view rather than being part of it, and the negative margin keeps
+   it tucked against whatever follows instead of reading as its own band. */
+.view-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-bottom: -0.75rem;
+}
+
+.view-updated {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.view-refresh {
+  padding: 0.35rem 0.85rem;
+  font-size: 0.85rem;
 }
 
 .stat-row {

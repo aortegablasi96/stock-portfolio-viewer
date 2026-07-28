@@ -6,6 +6,7 @@ import { AllocationBreakdown } from './AllocationBreakdown'
 import { useAnalytics } from './useAnalytics'
 import { ClassifySectors } from './ClassifySectors'
 import { NeedsImport } from './NeedsImport'
+import { RefreshBar } from './RefreshBar'
 import { StatTile, toneOf } from './StatTile'
 
 /**
@@ -51,7 +52,9 @@ function slicesFor(report: AllocationReport, tab: BreakdownTab): AllocationSlice
 }
 
 export function AllocationView(): React.JSX.Element {
-  const { state, reload } = useAnalytics<AllocationResult>(window.api.getAllocation)
+  const { state, refreshing, loadedAt, reload } = useAnalytics<AllocationResult>(
+    window.api.getAllocation,
+  )
   const [tab, setTab] = useState<BreakdownTab>('assetClass')
   const [colorMode, setColorMode] = useState<MapColorMode>('sector')
 
@@ -67,14 +70,19 @@ export function AllocationView(): React.JSX.Element {
       <section className="state-panel state-error" role="alert">
         <h2>Couldn’t load allocation</h2>
         <p>{state.message}</p>
-        <button type="button" className="retry-button" onClick={() => void reload()}>
-          Retry
+        <button
+          type="button"
+          className="retry-button"
+          disabled={refreshing}
+          onClick={() => void reload()}
+        >
+          {refreshing ? 'Retrying…' : 'Retry'}
         </button>
       </section>
     )
   }
   if (state.result.status === 'needs_import') {
-    return <NeedsImport onImported={() => void reload()} />
+    return <NeedsImport />
   }
 
   const r = state.result.report
@@ -84,6 +92,13 @@ export function AllocationView(): React.JSX.Element {
 
   return (
     <div className="analytics-view">
+      <RefreshBar
+        label="allocation"
+        loadedAt={loadedAt}
+        refreshing={refreshing}
+        onRefresh={() => void reload()}
+      />
+
       <div className="stat-row">
         <StatTile label="Invested value" value={c(r.totalMarketValueBase)} hint={r.reportDate ? `As of ${formatDate(r.reportDate)}` : undefined} />
         <StatTile label="Positions" value={String(r.positions.length)} />

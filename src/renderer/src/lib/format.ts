@@ -69,6 +69,27 @@ export function formatDateTime(epochMs: number): string {
   }).format(new Date(epochMs))
 }
 
+/**
+ * Format when a view last read its data, for the analytics views' freshness line
+ * (Story #109) — "14:32" while the app has been open since this morning, "27 Jul, 09:04"
+ * once the reading crosses a day boundary, because a bare clock time on a window left open
+ * overnight reads as fresher than it is.
+ *
+ * `now` is a parameter rather than a `Date.now()` call so the day comparison is testable.
+ */
+export function formatUpdatedAt(epochMs: number, now: number = Date.now()): string {
+  const at = new Date(epochMs)
+  const today = new Date(now)
+  const sameDay =
+    at.getFullYear() === today.getFullYear() &&
+    at.getMonth() === today.getMonth() &&
+    at.getDate() === today.getDate()
+
+  const time = new Intl.DateTimeFormat(undefined, { timeStyle: 'short' }).format(at)
+  if (sameDay) return time
+  return `${new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' }).format(at)}, ${time}`
+}
+
 /** Format a plain date (epoch milliseconds, UTC) — no time — for Flex statement ranges. */
 export function formatDate(epochMs: number): string {
   return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(epochMs))

@@ -1,12 +1,18 @@
 import { useCallback, useState } from 'react'
+import { flexDataVersion } from '../../lib/dataVersion'
 
 /**
  * The shared "no Flex data imported yet" empty state for the analytics views
  * (Stories #21–#24). Analytics read exclusively from imported Flex statements, so when
  * none exist each view renders this instead — with an inline import action that reuses
- * the same IPC as the Portfolio tab and re-runs the view's fetch on success.
+ * the same IPC as the Portfolio tab.
+ *
+ * A successful import bumps the shared data version rather than calling back into the view
+ * that happens to be showing this panel (Story #109). The views stay mounted once visited,
+ * so an import started here is an import the other three need to hear about too — one signal
+ * re-reads all of them, including this one's.
  */
-export function NeedsImport({ onImported }: { onImported: () => void }): React.JSX.Element {
+export function NeedsImport(): React.JSX.Element {
   const [importing, setImporting] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
 
@@ -17,7 +23,7 @@ export function NeedsImport({ onImported }: { onImported: () => void }): React.J
       const result = await window.api.importFlexStatements()
       switch (result.status) {
         case 'imported':
-          onImported()
+          flexDataVersion.bump()
           break
         case 'canceled':
           break
@@ -33,7 +39,7 @@ export function NeedsImport({ onImported }: { onImported: () => void }): React.J
     } finally {
       setImporting(false)
     }
-  }, [onImported])
+  }, [])
 
   return (
     <section className="state-panel state-notice" role="status">
