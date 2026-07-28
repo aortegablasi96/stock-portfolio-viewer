@@ -182,6 +182,15 @@ Canonical flows to copy when adding a feature:
   `nodeIntegration: false`. Keep it that way; reach the main process only over IPC. The window
   also runs **frameless** (`frame: false`) with an in-app `TitleBar` supplying minimize /
   maximize / close — window chrome is app code, not OS chrome (DDR-0011).
+- **Exactly one instance runs at a time.** `main/index.ts` requests
+  `app.requestSingleInstanceLock()` at **module load**, before any `whenReady` work is
+  registered, so the losing process quits without running migrations, capturing a snapshot, or
+  opening the database (`getDb()` is lazy — nothing before the lock request touches it); the
+  winner focuses its existing window on `second-instance`. That ordering is the point: every
+  write path assumes it is the only writer, and two processes on one SQLite file would
+  duplicate history silently rather than error. The lock is scoped to the user-data directory,
+  which is why the e2e suite's second app — its own `--user-data-dir` — still starts
+  (DDR-0025).
 - **Adding an IPC channel touches four files, in this order**: `shared/ipc/channels.ts`
   (name) → `shared/ipc/contract.ts` (Zod request/response schema + the `RendererApi` method)
   → `preload/index.ts` (bridge impl) → `main/ipc/handlers.ts` (parse input, delegate to a

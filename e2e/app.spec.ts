@@ -2,6 +2,8 @@ import { join } from 'node:path'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { createServer, type Server } from 'node:http'
+import { spawn } from 'node:child_process'
+import electronBinary from 'electron'
 import {
   test,
   expect,
@@ -10,17 +12,22 @@ import {
   type Page,
 } from '@playwright/test'
 
+// Outside Electron, the `electron` package resolves to the path of its binary.
+const electronPath = electronBinary as unknown as string
+const mainEntry = join(__dirname, '..', 'out', 'main', 'index.js')
+
 let app: ElectronApplication
 let page: Page
+let userDataDir: string
 
 test.beforeAll(async () => {
   // Launch the built app (electron-vite output) with an isolated, empty user-data
   // directory so the SQLite DB (and thus snapshot history) starts clean and the
   // run is deterministic. No Client Portal Gateway is running, so the app resolves
   // to its not_connected state and capture-on-open is skipped.
-  const userDataDir = mkdtempSync(join(tmpdir(), 'spv-e2e-'))
+  userDataDir = mkdtempSync(join(tmpdir(), 'spv-e2e-'))
   app = await electron.launch({
-    args: [join(__dirname, '..', 'out', 'main', 'index.js'), `--user-data-dir=${userDataDir}`],
+    args: [mainEntry, `--user-data-dir=${userDataDir}`],
   })
   page = await app.firstWindow()
   await page.waitForLoadState('domcontentloaded')
@@ -133,7 +140,9 @@ test('Clear history control is hidden when there is no snapshot history (Story #
 test.describe('a gateway that stalls instead of refusing (Story #104)', () => {
   // The failure this story is about can't be produced by simply having no gateway: the app
   // needs one that *accepts* the connection and then goes quiet. So this block runs its own
-  // app instance pointed at a local stand-in that never answers, on a short bound.
+  // app instance pointed at a local stand-in that never answers, on a short bound. It gets its
+  // own user-data directory, which is also what lets it start at all alongside the suite's
+  // first app — the single-instance lock is scoped to that directory (Story #107).
   let stalled: ElectronApplication
   let stalledPage: Page
   let gateway: Server
@@ -144,9 +153,9 @@ test.describe('a gateway that stalls instead of refusing (Story #104)', () => {
     })
     await new Promise<void>((resolve) => gateway.listen(5099, '127.0.0.1', resolve))
 
-    const userDataDir = mkdtempSync(join(tmpdir(), 'spv-e2e-stall-'))
+    const stallUserDataDir = mkdtempSync(join(tmpdir(), 'spv-e2e-stall-'))
     stalled = await electron.launch({
-      args: [join(__dirname, '..', 'out', 'main', 'index.js'), `--user-data-dir=${userDataDir}`],
+      args: [mainEntry, `--user-data-dir=${stallUserDataDir}`],
       env: {
         ...process.env,
         IBKR_GATEWAY_URL: 'http://127.0.0.1:5099',
@@ -202,4 +211,28 @@ test('Clear statements confirms in place, then reports nothing to clear on an em
   await page.getByRole('button', { name: 'Clear statements' }).click()
   await page.getByRole('button', { name: 'Yes, clear all statements' }).click()
   await expect(page.getByText('No imported statements to clear.')).toBeVisible()
+})
+
+test('a second launch against the same user data exits instead of opening a window (Story #107)', async () => {
+  // Two processes on one SQLite file is the single concurrency case that can actually reach
+  // the owner's data, so the second launch has to lose. Spawned raw rather than through
+  // Playwright's Electron launcher: the process under test is expected to quit before it is
+  // ever ready, which is precisely what that launcher waits for.
+  expect(app.windows()).toHaveLength(1)
+
+  const second = spawn(electronPath, [mainEntry, `--user-data-dir=${userDataDir}`], {
+    stdio: 'ignore',
+  })
+  const exitCode = await new Promise<number | null>((resolve, reject) => {
+    second.once('exit', resolve)
+    second.once('error', reject)
+  })
+
+  // Quit, not crashed — it asked for the lock, lost, and stood down.
+  expect(exitCode).toBe(0)
+  // Exiting before `whenReady` is what keeps it away from migrations, capture-on-open and the
+  // database; the observable half is that it never opened a window of its own.
+  expect(app.windows()).toHaveLength(1)
+  // The instance that already held the lock is untouched and still driving its renderer.
+  await expect(page.locator('h1')).toHaveText('Portfolio')
 })

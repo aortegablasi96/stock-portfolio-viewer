@@ -60,3 +60,4 @@ Other options and why they were not chosen.
 - `0022` — Bounded gateway requests; a stalled gateway as its own `not_responding` state (extends `0002`)
 - `0023` — Classification refresh: resumable (persist before reporting) and progress-reporting (extends `0009`)
 - `0024` — Gateway reads coalesced in the repository behind a short freshness window; FX fetched concurrently (extends `0022`)
+- `0025` — Single-instance lock: the second launch quits before touching the database and focuses the first (extends `0011`)

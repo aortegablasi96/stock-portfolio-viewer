@@ -67,38 +67,77 @@ function createWindow(): void {
   }
 }
 
-app.whenReady().then(() => {
-  // Bring the local schema up to date before anything reads the database.
-  runMigrations()
-  // Exercise the service -> repository -> SQLite slice on every launch.
-  console.log(`[app] install id ${metaService.getInstallId()}`)
-  registerIpcHandlers()
-  createWindow()
+/**
+ * Bring the already-running window forward after a second launch was refused (Story #107).
+ *
+ * The second process has quit by the time this fires, so all that is left is to make the
+ * running app visible — from the owner's point of view they asked for the app, and something
+ * has to happen. A minimized window cannot take focus, so restore before focusing.
+ */
+function focusExistingWindow(): void {
+  const [existing] = BrowserWindow.getAllWindows()
+  if (!existing || existing.isDestroyed()) return
+  if (existing.isMinimized()) existing.restore()
+  if (!existing.isVisible()) existing.show()
+  existing.focus()
+}
 
-  // Capture a portfolio snapshot on open (de-duplicated within 12h; skipped
-  // silently when the gateway isn't connected). Fire-and-forget so it never
-  // blocks the window (DDR-0003). When a snapshot is written, signal the renderer
-  // to refresh its history (the network fetch resolves after the renderer has
-  // mounted and subscribed).
-  void snapshotService
-    .captureOnOpen()
-    .then((result) => {
-      console.log(`[snapshot] capture-on-open: ${result.status}`)
-      if (result.status === 'captured') {
-        for (const window of BrowserWindow.getAllWindows()) {
-          if (!window.isDestroyed()) window.webContents.send(IpcChannels.snapshotCaptured)
+/** Everything the winning instance does on launch: schema, IPC, window, capture-on-open. */
+function startPrimaryInstance(): void {
+  app.whenReady().then(() => {
+    // Bring the local schema up to date before anything reads the database.
+    runMigrations()
+    // Exercise the service -> repository -> SQLite slice on every launch.
+    console.log(`[app] install id ${metaService.getInstallId()}`)
+    registerIpcHandlers()
+    createWindow()
+
+    // Capture a portfolio snapshot on open (de-duplicated within 12h; skipped
+    // silently when the gateway isn't connected). Fire-and-forget so it never
+    // blocks the window (DDR-0003). When a snapshot is written, signal the renderer
+    // to refresh its history (the network fetch resolves after the renderer has
+    // mounted and subscribed).
+    void snapshotService
+      .captureOnOpen()
+      .then((result) => {
+        console.log(`[snapshot] capture-on-open: ${result.status}`)
+        if (result.status === 'captured') {
+          for (const window of BrowserWindow.getAllWindows()) {
+            if (!window.isDestroyed()) window.webContents.send(IpcChannels.snapshotCaptured)
+          }
         }
-      }
-    })
-    .catch((err) => console.error('[snapshot] capture-on-open failed', err))
+      })
+      .catch((err) => console.error('[snapshot] capture-on-open failed', err))
 
-  // macOS: re-create a window when the dock icon is clicked and none are open.
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    // macOS: re-create a window when the dock icon is clicked and none are open.
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    })
   })
-})
+}
 
 // Quit when all windows are closed, except on macOS.
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
+
+/**
+ * Single-instance lock (Story #107).
+ *
+ * The app owns one SQLite file under `app.getPath('userData')`, and every write path —
+ * migrations on launch, capture-on-open, Flex import, the destructive clears — assumes it is
+ * the only writer. Without this, launching again while the app is already open (easy to do:
+ * double-clicking the shortcut while the window sits behind another app) starts a second
+ * process against the same file.
+ *
+ * The lock is requested at module load, before `whenReady`, so the losing process quits
+ * without running migrations, capturing a snapshot, or opening the database at all —
+ * `getDb()` is lazy, and nothing above this point has called it. The lock is scoped to the
+ * user-data directory, so a run with its own `--user-data-dir` (the e2e suite) is unaffected.
+ */
+if (app.requestSingleInstanceLock()) {
+  app.on('second-instance', focusExistingWindow)
+  startPrimaryInstance()
+} else {
+  app.quit()
+}
