@@ -268,3 +268,39 @@ export const flexImportSummarySchema = z.object({
   statements: z.array(flexStatementImportSchema),
 })
 export type FlexImportSummary = z.infer<typeof flexImportSummarySchema>
+
+// ---- stored statements (what the local store already holds) -----------------
+
+/**
+ * One Flex statement as it currently sits in the local store (Story #108). Deliberately
+ * *not* `FlexStatementImport`: that one describes the outcome of an import (inserted vs.
+ * skipped rows, "already imported"), which is only true in the moment it is produced.
+ * This one describes the store itself, so it answers "what is my analytics built from?"
+ * on launch, with no import required.
+ */
+export const flexStoredStatementSchema = z.object({
+  id: z.number().int(),
+  accountId: z.string(),
+  fromDate: z.number().int(),
+  toDate: z.number().int(),
+  period: z.string(),
+  baseCurrency: z.string(),
+  sourceFilename: z.string(),
+  /** When this statement was imported — epoch ms. */
+  importedAt: z.number().int(),
+})
+export type FlexStoredStatement = z.infer<typeof flexStoredStatementSchema>
+
+/**
+ * The whole imported statement store: every statement newest first (by period end date, so
+ * the first row is the one statement-scoped analytics treat as latest), plus the span the
+ * statements cover end to end. `coverage` is the earliest `fromDate` and the latest
+ * `toDate` across all of them, so a stale newest statement is visible at a glance; it is
+ * `null` when nothing has been imported. Statements may overlap — the span is a min/max,
+ * not a sum of periods, and flagging overlap is deliberately out of scope (Bug #103).
+ */
+export const flexStatementStoreSchema = z.object({
+  statements: z.array(flexStoredStatementSchema),
+  coverage: z.object({ fromDate: z.number().int(), toDate: z.number().int() }).nullable(),
+})
+export type FlexStatementStore = z.infer<typeof flexStatementStoreSchema>

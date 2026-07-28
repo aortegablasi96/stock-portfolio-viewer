@@ -42,6 +42,18 @@ export const DIVIDEND_CASH_TYPES = [
 /** External contributions/withdrawals — the dated NAV steps in the daily curve (Story #29). */
 export const CONTRIBUTION_CASH_TYPE = 'Deposits/Withdrawals'
 
+/** A statement header as stored — the period it covers and when it was imported (Story #108). */
+export interface StoredStatementRow {
+  id: number
+  accountId: string
+  fromDate: number
+  toDate: number
+  period: string
+  baseCurrency: string
+  sourceFilename: string
+  importedAt: number
+}
+
 export interface NavPeriodRow {
   fromDate: number
   toDate: number
@@ -175,6 +187,34 @@ export interface TradeRowRaw {
 }
 
 export const flexReadRepository = {
+  /**
+   * Every imported statement's header row, newest first (Story #108). The only read that
+   * describes the *store* rather than its contents, so the Portfolio view can show what
+   * analytics are built from without an import having just happened.
+   *
+   * Ordered by **end** date, not start date or id, so the top row is the same statement the
+   * statement-scoped reads below treat as "latest" (`getLatestOpenPositions`,
+   * `getLatestOpenDividendAccruals`, `fromLatestStatement`). Ids follow import order and
+   * would put a back-filled older statement on top; start date would do the same for a
+   * statement that begins earlier but ends later. Ties break on start date.
+   */
+  getStatements(): StoredStatementRow[] {
+    return getDb()
+      .select({
+        id: flexStatements.id,
+        accountId: flexStatements.accountId,
+        fromDate: flexStatements.fromDate,
+        toDate: flexStatements.toDate,
+        period: flexStatements.period,
+        baseCurrency: flexStatements.baseCurrency,
+        sourceFilename: flexStatements.sourceFilename,
+        importedAt: flexStatements.importedAt,
+      })
+      .from(flexStatements)
+      .orderBy(desc(flexStatements.toDate), desc(flexStatements.fromDate))
+      .all()
+  },
+
   /** True when at least one Flex statement has been imported (drives the needs-import state). */
   hasStatements(): boolean {
     return getDb().select({ id: flexStatements.id }).from(flexStatements).limit(1).get() !== undefined

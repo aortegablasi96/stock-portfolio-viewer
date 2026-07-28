@@ -9,6 +9,7 @@ import type {
   ClearStatementsResult,
   DividendResult,
   FlexImportResult,
+  FlexStatementStore,
   PerformanceResult,
   PingRequest,
   PingResponse,
@@ -45,6 +46,8 @@ const api: RendererApi = {
   },
   importFlexStatements: (): Promise<FlexImportResult> =>
     ipcRenderer.invoke(IpcChannels.flexImport),
+  listFlexStatements: (): Promise<FlexStatementStore> =>
+    ipcRenderer.invoke(IpcChannels.flexListStatements),
   clearStatements: (): Promise<ClearStatementsResult> =>
     ipcRenderer.invoke(IpcChannels.flexClear),
   clearHistory: (): Promise<ClearHistoryResult> => ipcRenderer.invoke(IpcChannels.snapshotClear),

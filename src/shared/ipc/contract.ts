@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { portfolioOverviewSchema } from '@shared/domain/portfolio'
 import { snapshotSummarySchema } from '@shared/domain/snapshot'
-import { flexImportSummarySchema } from '@shared/domain/flex'
+import { flexImportSummarySchema, flexStatementStoreSchema } from '@shared/domain/flex'
 import { performanceResultSchema, type PerformanceResult } from '@shared/domain/performance'
 import { allocationResultSchema, type AllocationResult } from '@shared/domain/allocation'
 import { dividendResultSchema, type DividendResult } from '@shared/domain/dividends'
@@ -128,6 +128,18 @@ export const flexImportResultSchema = z.discriminatedUnion('status', [
 ])
 export type FlexImportResult = z.infer<typeof flexImportResultSchema>
 
+// ---- flex:listStatements ----------------------------------------------------
+
+/**
+ * What the local Flex store currently holds (Story #108): every stored statement plus the
+ * span they cover. A pure local read with no payload, so — like `snapshot:list` — there is
+ * no result variant to discriminate: an empty store is an empty list, which the renderer
+ * renders as its own empty state. The schema lives with the domain; re-exported here as
+ * the IPC response.
+ */
+export { flexStatementStoreSchema }
+export type FlexStatementStore = z.infer<typeof flexStatementStoreSchema>
+
 // ---- flex:clear -------------------------------------------------------------
 
 /**
@@ -189,6 +201,8 @@ export interface RendererApi {
   onSnapshotCaptured: (callback: () => void) => () => void
   /** Open a file dialog to import IBKR Flex Query statement files into the local history. */
   importFlexStatements: () => Promise<FlexImportResult>
+  /** The statements currently in the local Flex store, and the period they cover (Story #108). */
+  listFlexStatements: () => Promise<FlexStatementStore>
   /** Owner-confirmed full reset of the imported Flex statement store (Story #43). */
   clearStatements: () => Promise<ClearStatementsResult>
   /** Owner-confirmed full reset of the captured snapshot history (Story #43). */

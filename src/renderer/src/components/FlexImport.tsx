@@ -1,6 +1,6 @@
-import { useCallback, useState } from 'react'
-import type { FlexStatementImport } from '@shared/domain/flex'
-import { formatDate } from '../lib/format'
+import { useCallback, useEffect, useState } from 'react'
+import type { FlexStatementImport, FlexStatementStore } from '@shared/domain/flex'
+import { formatDate, formatDateTime } from '../lib/format'
 import { ConfirmAction } from './ConfirmAction'
 
 /**
@@ -10,6 +10,11 @@ import { ConfirmAction } from './ConfirmAction'
  * triggers the import and renders the returned summary or state. The import result is
  * a discriminated union, so each outcome (imported / canceled / invalid / error) is a
  * first-class UI state (ADR-0005).
+ *
+ * Below it sits the stored-statement list (Story #108), which reads the *store* rather
+ * than the last import: it loads on mount, so on launch the owner can see what their
+ * analytics are built from and how current it is, and it reloads after an import or a
+ * clear so the two never disagree.
  */
 type ImportState =
   | { phase: 'idle' }
@@ -25,8 +30,27 @@ function totalInserted(statement: FlexStatementImport): number {
   return Object.values(statement.records).reduce((sum, count) => sum + count.inserted, 0)
 }
 
+/** The stored-statement list: `null` until the first read resolves (Story #108). */
+type StoreState = FlexStatementStore | null
+
 export function FlexImport(): React.JSX.Element {
   const [state, setState] = useState<ImportState>({ phase: 'idle' })
+  const [store, setStore] = useState<StoreState>(null)
+
+  // The store is the source of truth for what is held; every write path below re-reads it
+  // rather than patching local state from an import summary, so the list can't drift.
+  const loadStore = useCallback(async () => {
+    try {
+      setStore(await window.api.listFlexStatements())
+    } catch {
+      // A failed read leaves the previous list in place; the panel's own status line
+      // reports import/clear failures, and there is nothing the owner can act on here.
+    }
+  }, [])
+
+  useEffect(() => {
+    void loadStore()
+  }, [loadStore])
 
   const runImport = useCallback(async () => {
     setState({ phase: 'importing' })
@@ -35,6 +59,7 @@ export function FlexImport(): React.JSX.Element {
       switch (result.status) {
         case 'imported':
           setState({ phase: 'imported', statements: result.summary.statements })
+          await loadStore()
           break
         case 'canceled':
           setState({ phase: 'canceled' })
@@ -52,13 +77,14 @@ export function FlexImport(): React.JSX.Element {
         message: err instanceof Error ? err.message : 'Unexpected error importing the statements.',
       })
     }
-  }, [])
+  }, [loadStore])
 
   const runClear = useCallback(async () => {
     try {
       const result = await window.api.clearStatements()
       if (result.status === 'cleared') {
         setState({ phase: 'cleared', removedStatements: result.removedStatements })
+        await loadStore()
       } else {
         setState({ phase: 'error', message: result.message })
       }
@@ -68,7 +94,7 @@ export function FlexImport(): React.JSX.Element {
         message: err instanceof Error ? err.message : 'Unexpected error clearing the statements.',
       })
     }
-  }, [])
+  }, [loadStore])
 
   return (
     <div className="dashboard">
@@ -124,7 +150,75 @@ export function FlexImport(): React.JSX.Element {
 
         {state.phase === 'imported' && <ImportSummary statements={state.statements} />}
       </section>
+
+      <StoredStatements store={store} />
     </div>
+  )
+}
+
+/**
+ * What the local store currently holds (Story #108) — the answer to "what is my analytics
+ * built from, and how current is it?", available on launch with no import required. The
+ * coverage line gives the span at a glance; the rows below give each statement's own
+ * period, so a gap between two of them, or a newest statement that ends months ago, is
+ * visible without arithmetic. Rows arrive newest first, matching the History card above —
+ * the first row is the statement the statement-scoped analytics reads treat as latest.
+ */
+function StoredStatements({ store }: { store: FlexStatementStore | null }): React.JSX.Element {
+  return (
+    <section className="snapshot-history flex-store" aria-labelledby="flex-store-heading">
+      <h2 id="flex-store-heading">Stored statements</h2>
+
+      {store === null ? (
+        <p className="snapshot-empty">Loading stored statements…</p>
+      ) : store.statements.length === 0 ? (
+        <p className="snapshot-empty">
+          No statements imported yet. Import a Flex Query export above to build the history the
+          analytics views read from.
+        </p>
+      ) : (
+        <>
+          {store.coverage && (
+            <p className="flex-store-coverage">
+              Covering{' '}
+              <strong>
+                {formatDate(store.coverage.fromDate)} – {formatDate(store.coverage.toDate)}
+              </strong>{' '}
+              across {store.statements.length}{' '}
+              {store.statements.length === 1 ? 'statement' : 'statements'}.
+            </p>
+          )}
+
+          <div className="table-scroll">
+            <table className="holdings-table">
+              <thead>
+                <tr>
+                  <th scope="col">Account</th>
+                  <th scope="col">Period covered</th>
+                  <th scope="col">Base</th>
+                  <th scope="col">Imported</th>
+                </tr>
+              </thead>
+              <tbody>
+                {store.statements.map((s) => (
+                  <tr key={s.id}>
+                    <th scope="row" className="symbol">
+                      {s.accountId}
+                      <span className="flex-import-file">{s.sourceFilename}</span>
+                    </th>
+                    <td className="description">
+                      {formatDate(s.fromDate)} – {formatDate(s.toDate)}
+                    </td>
+                    <td>{s.baseCurrency}</td>
+                    <td className="description">{formatDateTime(s.importedAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </section>
   )
 }
 
