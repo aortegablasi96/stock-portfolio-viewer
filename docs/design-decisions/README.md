@@ -63,3 +63,4 @@ Other options and why they were not chosen.
 - `0025` — Single-instance lock: the second launch quits before touching the database and focuses the first (extends `0011`)
 - `0026` — The Flex store describes itself: stored statements + coverage span, read on launch (extends `0004`)
 - `0027` — Analytics tabs stay mounted; a re-read becomes explicit and non-destructive (extends `0006`)
+- `0028` — Window size/position/maximized remembered in `app_meta`; reachability judged on the title bar (extends `0011`)

@@ -1,12 +1,24 @@
 import { join } from 'node:path'
-import { app, BrowserWindow, shell } from 'electron'
+import { app, BrowserWindow, screen, shell } from 'electron'
 import { registerIpcHandlers } from './ipc/handlers'
 import { IpcChannels } from '@shared/ipc/channels'
 import { runMigrations } from '@db/migrate'
 import { metaService } from '@services/meta/metaService'
 import { snapshotService } from '@services/snapshots/snapshotService'
+import {
+  windowStateService,
+  WINDOW_MIN_HEIGHT,
+  WINDOW_MIN_WIDTH,
+} from '@services/window/windowStateService'
 
 const isDev = !app.isPackaged
+
+/**
+ * How long the window must sit still before its new geometry is written (Story #110).
+ * `resize` / `move` fire continuously while a window is dragged; the owner's intent is the
+ * position they stop at, not every pixel on the way there.
+ */
+const WINDOW_STATE_SAVE_DELAY_MS = 400
 
 /**
  * Create the single application window.
@@ -17,11 +29,21 @@ const isDev = !app.isPackaged
  * preload is a stub.
  */
 function createWindow(): void {
+  // Remembered size / position / maximized state (Story #110). The service is Electron-free,
+  // so the displays attached *now* are handed to it as plain rectangles; it decides whether
+  // the stored position is still reachable. `x` / `y` come back undefined when it is not, and
+  // Electron then centres the window as it did before anything was remembered.
+  const startup = windowStateService.getStartupState(
+    screen.getAllDisplays().map((display) => display.workArea),
+  )
+
   const mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 800,
-    minWidth: 940,
-    minHeight: 600,
+    x: startup.x,
+    y: startup.y,
+    width: startup.width,
+    height: startup.height,
+    minWidth: WINDOW_MIN_WIDTH,
+    minHeight: WINDOW_MIN_HEIGHT,
     show: false,
     // Frameless: the OS title bar is removed and replaced by the in-app custom title bar
     // (Story #42). Window controls are driven over IPC — the security posture below is
@@ -37,6 +59,25 @@ function createWindow(): void {
     },
   })
 
+  // Re-apply a restored rectangle through `setBounds`, which is the exact inverse of the
+  // `getNormalBounds()` we persist. The constructor's `width`/`height` are not: Windows adds
+  // its invisible resize border to a frameless window, so a size round-tripped through the
+  // constructor comes back a couple of pixels taller — and a window that grew every launch
+  // would eventually be a window the owner never sized.
+  if (startup.x !== undefined && startup.y !== undefined) {
+    mainWindow.setBounds({
+      x: startup.x,
+      y: startup.y,
+      width: startup.width,
+      height: startup.height,
+    })
+  }
+
+  // Maximize before the first paint, so the window is never shown at its restored size and
+  // then snapped. The title bar seeds its own icon with `window:isMaximized` on mount
+  // (DDR-0011), so it paints the restore icon straight away without needing this event.
+  if (startup.isMaximized) mainWindow.maximize()
+
   mainWindow.once('ready-to-show', () => {
     mainWindow.show()
   })
@@ -48,8 +89,50 @@ function createWindow(): void {
       mainWindow.webContents.send(IpcChannels.windowMaximizeChanged, isMaximized)
     }
   }
-  mainWindow.on('maximize', () => emitMaximizeState(true))
-  mainWindow.on('unmaximize', () => emitMaximizeState(false))
+
+  /**
+   * Persist the geometry to restore next launch (Story #110).
+   *
+   * `getNormalBounds()` is deliberate: a maximized window must remember the size it will be
+   * restored *to*, not the size of the screen. A minimized window is skipped entirely — it
+   * reports neither useful bounds nor (on Windows) its maximized state, so the last known good
+   * state is left in place. Persisting must never be what stops the app closing, hence the
+   * catch.
+   */
+  const persistWindowState = (): void => {
+    if (mainWindow.isDestroyed() || mainWindow.isMinimized()) return
+    try {
+      windowStateService.save({
+        bounds: mainWindow.getNormalBounds(),
+        isMaximized: mainWindow.isMaximized(),
+      })
+    } catch (err) {
+      console.error('[window] failed to persist window state', err)
+    }
+  }
+
+  let saveTimer: NodeJS.Timeout | undefined
+  const scheduleWindowStateSave = (): void => {
+    if (saveTimer) clearTimeout(saveTimer)
+    saveTimer = setTimeout(persistWindowState, WINDOW_STATE_SAVE_DELAY_MS)
+  }
+
+  mainWindow.on('resize', scheduleWindowStateSave)
+  mainWindow.on('move', scheduleWindowStateSave)
+  mainWindow.on('maximize', () => {
+    emitMaximizeState(true)
+    scheduleWindowStateSave()
+  })
+  mainWindow.on('unmaximize', () => {
+    emitMaximizeState(false)
+    scheduleWindowStateSave()
+  })
+  // The last word: written synchronously while the window still exists, so a close that lands
+  // inside the debounce window is not lost.
+  mainWindow.on('close', () => {
+    if (saveTimer) clearTimeout(saveTimer)
+    persistWindowState()
+  })
 
   // Open target="_blank" / external links in the OS browser, never in-app.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
