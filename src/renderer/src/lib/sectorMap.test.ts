@@ -8,7 +8,7 @@ import { sectorPalette } from './sectorMap'
  * the Sector donut's own slice colouring, since the map, the map legend and the donut all read
  * from it.
  *
- * The per-country wedge geometry this module used to own moved to `lib/mapBubbles` with Story #92,
+ * The per-country wedge geometry this module used to own moved to `lib/countrySunbursts`,
  * and its coverage moved with it.
  */
 

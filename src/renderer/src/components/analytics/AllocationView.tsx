@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { AllocationReport, AllocationResult, AllocationSlice } from '@shared/domain/allocation'
 import { formatCurrency, formatDate, formatSignedCurrency } from '../../lib/format'
-import { BubbleMap, type MapColorMode } from '../charts/BubbleMap'
+import { CountryMap, type MapColorMode } from '../charts/CountryMap'
 import { AllocationBreakdown } from './AllocationBreakdown'
 import { useAnalytics } from './useAnalytics'
 import { ClassifySectors } from './ClassifySectors'
@@ -29,7 +29,7 @@ const BREAKDOWN_TABS = [
 type BreakdownTab = (typeof BREAKDOWN_TABS)[number]['id']
 
 /**
- * What the map's circles encode with colour (Story #95). Sector is the default — the map opens the
+ * What the map's marks encode with colour (Story #95). Sector is the default — the map opens the
  * way it always has, and gain/loss is something the owner asks for. Deliberately not persisted:
  * the question "where am I losing money?" is one you ask, not a mode you live in.
  */
@@ -123,18 +123,19 @@ export function AllocationView(): React.JSX.Element {
             ))}
           </div>
         </div>
-        <BubbleMap
+        <CountryMap
           positions={r.positions}
           bySector={r.bySector}
           formatValue={c}
           formatSigned={(v) => formatSignedCurrency(v, r.baseCurrency)}
           colorMode={colorMode}
-          // The map's circles are canvas, so they carry no per-holding text a screen reader can
-          // reach. This label states what the map totals and points at the Positions table below,
-          // which lists every one of these holdings with the same figures (DDR-0020).
+          // The map's marks are hover-only — they carry no text a screen reader can reach, and
+          // keyboard operation is a separate story (#93). This label states what the map totals and
+          // points at the Positions table below, which lists every one of these holdings with the
+          // same figures (DDR-0030).
           ariaLabel={`World map of ${r.positions.length} holdings totalling ${c(
             r.totalMarketValueBase,
-          )}, positioned by issuer country and coloured by ${
+          )}, grouped into one mark per issuer country, split by sector and holding, and coloured by ${
             colorMode === 'sector' ? 'sector' : 'unrealized return'
           }. Each holding is listed with the same figures in the Positions table below.`}
         />

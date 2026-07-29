@@ -148,16 +148,28 @@ Canonical flows to copy when adding a feature:
   withdrawals don't move it (DDR-0013). They are sized by **aspect ratio** (the `viewBox`), never
   a pixel width, because they scale to a shared `--content-max` column (DDR-0018). The
   **Allocation map is the one scoped exception**: a Mapbox GL JS basemap (ADR-0007) carrying one
-  canvas circle per holding, area-proportional to market value, anchored to ISO-3166 alpha-2
-  centroids and fanned on a spiral so holdings sharing a country stay separately hoverable —
-  which makes the map deliberately *approximate*, positioned by issuer country rather than by
-  company (DDR-0020, superseding DDR-0019 and DDR-0014). Its circles take **two** colour modes
-  behind a toggle, switched with `setPaintProperty` over properties already on every feature: the
-  Sector donut's palette, and unrealized **return on cost** (not absolute P&L — radius already
-  encodes size). That second scale is **red ↔ gray ↔ blue, deliberately not the app's `--pos` /
-  `--neg` green/red**, which fails CVD contrast where fill colour is the only channel and no
-  number sits beside it; `--pos` / `--neg` are unchanged everywhere else, including the map's own
-  popup. Don't "restore" them on the circles (DDR-0021). See DDR-0005, DDR-0006.
+  **nested sunburst per issuer country** — area proportional to the country's market value, an
+  inner ring splitting it by sector, an outer ring splitting it by holding, each holding wedge
+  nested inside its own sector's arc — anchored to ISO-3166 alpha-2 centroids, which makes the map
+  deliberately *approximate*, positioned by issuer country rather than by company (DDR-0030,
+  superseding DDR-0020 on the unit, the spiral spread and the canvas layer). The marks are **SVG
+  carried by `mapboxgl.Marker`, not painted into the canvas**: a circle layer paints one flat fill
+  per feature, so wedges have no canvas equivalent. Two consequences worth knowing before touching
+  it. Colour needs no `getComputedStyle` — a palette class on a `<path>` *is* the fill, so
+  `.map-diverge-*` carries `fill` as well as `background` and a colour-mode switch is an ordinary
+  re-render, not `setPaintProperty`. And **hover has three depths** (outer wedge → holding, inner
+  wedge → that sector within that country, hub → the country), served by one `Popup` instance moved
+  and re-filled — `onMouseEnter` per wedge with a single `onMouseLeave` on the mark, because a
+  leave/enter pair in one frame flickers. Two colour modes ride behind a toggle: the Sector donut's
+  palette, and unrealized **return on cost** (not absolute P&L — size already encodes that). That
+  second scale is **red ↔ gray ↔ blue, deliberately not the app's `--pos` / `--neg` green/red**,
+  which fails CVD contrast where fill colour is the only channel and no number sits beside it.
+  Don't "restore" them on the wedges (DDR-0021) — but the popup *is* tinted `--pos` / `--neg` by
+  the hovered subject's return, which is exactly the case DDR-0021 carved out: a figure sits two
+  rows below the tint. Two degradations are deliberate, both in `lib/countrySunbursts`: a country
+  under a 14px radius becomes a **plain dot** (rings that thin are unhittable), and every wedge is
+  lifted to a **2% angular floor** so a negligible holding — or a short — stays reachable. See
+  DDR-0005, DDR-0006.
 - **A view that outlives its tab:** an analytics tab mounts on **first visit and then stays
   mounted**, hidden rather than unmounted, so returning to it keeps both the report and every
   bit of view-local state (time range, type chips, chart tab, map colour mode) — nothing is
@@ -801,16 +813,17 @@ Mock repositories and external providers.
 Vitest picks up every `src/**/*.test.ts` and runs it in a **Node** environment (**no jsdom**),
 so no test may render a React component. This shapes the renderer: chart maths, filtering,
 sorting and formatting are **extracted out of components into pure modules under
-`renderer/src/lib/`** (`format`, `pie`, `worldGeo`, `mapBubbles`, `gainLoss`, `tableFilter`,
+`renderer/src/lib/`** (`format`, `pie`, `worldGeo`, `countrySunbursts`, `gainLoss`, `tableFilter`,
 `column`, `dateRange`, `sectorMap`, `performanceRange`, `classifyProgress`, `dataVersion`,
 `tabKeyboard`)
 precisely so they can be tested — follow
 that split when adding a component with real logic in it. `dataVersion` is the same move applied
 to state rather than maths: the cross-view staleness signal is a plain subscribable store a hook
-reads with `useSyncExternalStore`, so the part worth testing is testable without a renderer. The map is the sharpest case: colour
-resolution needs `getComputedStyle` and so stays in the component, while `mapBubbles` and
-`gainLoss` emit palette *classes* — that seam is what keeps the map's geometry and colour scale
-testable under Node. Pure repository helpers that touch no data source
+reads with `useSyncExternalStore`, so the part worth testing is testable without a renderer. The
+map is the sharpest case: `countrySunbursts` and `gainLoss` emit palette *classes* rather than
+values, and every wedge path, share normalization and dot threshold falls out of that — the whole
+of the map's geometry and colour scale is testable under Node while the component keeps only the
+parts that need a DOM (DDR-0030). Pure repository helpers that touch no data source
 (`flexStatementParser`, `snapshotMapping`, `fifoSummary`) are unit-tested the same way.
 
 Every completed feature should include:
