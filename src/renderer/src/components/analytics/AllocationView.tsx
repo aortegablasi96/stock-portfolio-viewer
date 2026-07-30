@@ -135,7 +135,7 @@ export function AllocationView(): React.JSX.Element {
           // same figures (DDR-0030).
           ariaLabel={`World map of ${r.positions.length} holdings totalling ${c(
             r.totalMarketValueBase,
-          )}, grouped into one mark per issuer country, split by sector and holding, and coloured by ${
+          )}, drawn as a pair of donuts per issuer country — one split by holding, one by sector — coloured by ${
             colorMode === 'sector' ? 'sector' : 'unrealized return'
           }. Each holding is listed with the same figures in the Positions table below.`}
         />

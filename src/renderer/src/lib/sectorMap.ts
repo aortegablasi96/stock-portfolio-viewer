@@ -2,9 +2,13 @@
  * The shared sector → colour assignment (Milestone M3, Story #30).
  *
  * One palette, built once from the allocation report's `bySector` breakdown, so a sector wears the
- * same hue everywhere it appears: in the Sector donut, on the Allocation map's country sunbursts,
- * and in the map's own legend. That shared identity is the point — a colour must mean the same
- * thing on both surfaces or neither can be read against the other.
+ * same hue everywhere it appears: in the Sector donut, in the Allocation map's per-country sector
+ * donut, and in the map's own legend. That shared identity is the point — a colour must mean the
+ * same thing on both surfaces or neither can be read against the other.
+ *
+ * Note the scope. The map's *other* donut — the one splitting a country by holding — deliberately
+ * does **not** use this palette: it colours by rank so its slices can be told apart, because the
+ * donut beside it already carries sector identity (DDR-0030).
  *
  * Built from the donut's own `groupTail` + `sliceColorClasses` pipeline (`lib/pie`), so sectors past
  * the palette's eight slots fold into a neutral 'Other' exactly as the donut folds its tail, and
@@ -12,12 +16,12 @@
  *
  * Kept out of the components so it can be unit-tested in Vitest's Node environment, the way the
  * other `lib/` helpers are. It emits colour **classes**, never resolved colour values, which is what
- * leaves this module testable under Node (see `lib/countrySunbursts`).
+ * leaves this module testable under Node (see `lib/countryDonuts`).
  *
  * The map's geometry has moved twice since. Story #92 replaced the per-country sector wedges this
  * module used to lay out with per-holding circles in `lib/mapBubbles` (DDR-0020); Story #122
- * replaced those in turn with per-country nested sunbursts in `lib/countrySunbursts`, which consume
- * this palette for both of their rings (DDR-0030).
+ * replaced those in turn with a pair of per-country donuts in `lib/countryDonuts`, the right-hand
+ * one of which consumes this palette (DDR-0030).
  */
 import type { AllocationSlice } from '@shared/domain/allocation'
 import { groupTail, OTHER_KEY, sliceColorClasses, type PieDatum } from './pie'

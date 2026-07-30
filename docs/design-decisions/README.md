@@ -65,4 +65,4 @@ Other options and why they were not chosen.
 - `0027` — Analytics tabs stay mounted; a re-read becomes explicit and non-destructive (extends `0006`)
 - `0028` — Window size/position/maximized remembered in `app_meta`; reachability judged on the title bar (extends `0011`)
 - `0029` — Tab shell: the complete ARIA tabs pattern, roving tabindex, automatic activation (extends `0006`)
-- `0030` — Allocation map: one nested sunburst per country, hovered at three depths (supersedes `0020`)
+- `0030` — Allocation map: two donuts per country (holdings + sectors), hovered at three depths (supersedes `0020`)

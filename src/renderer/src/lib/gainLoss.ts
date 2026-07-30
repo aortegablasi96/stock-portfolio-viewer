@@ -23,7 +23,7 @@
  * Blue/red scores ΔE 23.8 and every step clears 3:1 on the basemap. `--pos` / `--neg` keep their
  * role wherever a figure accompanies them, including this map's own popup.
  *
- * Emits colour **classes**, never values, for the same reason `lib/countrySunbursts` does: resolving
+ * Emits colour **classes**, never values, for the same reason `lib/countryDonuts` does: resolving
  * one needs `getComputedStyle`, which does not exist in Vitest's Node environment.
  */
 

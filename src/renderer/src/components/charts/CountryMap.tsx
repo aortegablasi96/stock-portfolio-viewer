@@ -6,30 +6,37 @@ import type { AllocationPosition, AllocationSlice } from '@shared/domain/allocat
 import { formatCompanyName, formatSignedPercent } from '../../lib/format'
 import { sectorPalette } from '../../lib/sectorMap'
 import {
-  countrySunbursts,
-  type CountrySunburst,
-  type HoldingWedge,
-  type SectorWedge,
-} from '../../lib/countrySunbursts'
+  countryDonuts,
+  type CountryDonuts,
+  type DonutSide,
+  type DonutSlice,
+} from '../../lib/countryDonuts'
 import { DIVERGING_CLASSES, RETURN_BOUND } from '../../lib/gainLoss'
 
 /**
  * Geographic map of holdings by issuer country (Milestone M4, Story #122; DDR-0030, superseding
  * DDR-0020 on the map's unit and on how the data is drawn; earlier rounds #46, #70, #71, #89, #95).
  *
- * Each country is one **nested sunburst**: a hub, an inner ring splitting the country by sector, and
- * an outer ring splitting it by holding, with every holding wedge lying inside its own sector's arc.
- * The mark's area is proportional to what is held in that country. Hovering any part of it opens a
- * popup for exactly what is under the cursor — a holding, a sector within the country, or the
- * country itself — tinted green or red by that subject's unrealized return.
+ * Each country is **two donuts side by side** over the same holdings: the left splits the country by
+ * holding, the right splits it by sector. The pair's area is proportional to what is held there.
+ * Hovering any slice opens a popup for exactly what is under the cursor — a holding, a sector, or
+ * (from either donut's hole) the country — tinted green or red by that subject's unrealized return.
+ *
+ * The two donuts colour independently, and that is the point. Sector identity is global, so the
+ * right donut uses the shared `sectorPalette` and the map's legend explains it. The left donut does
+ * not carry sector identity at all — the donut beside it already does — so its slices take the app's
+ * ordinary categorical donut palette by rank, which is what makes one holding distinguishable from
+ * the next. An earlier round of this story tinted every holding with its sector's hue, and the ring
+ * read as one solid block.
  *
  * **Drawn over the map, not into it.** DDR-0020 moved the data into a Mapbox circle layer for
- * data-driven paint expressions. A circle layer paints one flat fill per feature, so wedges have no
- * canvas equivalent, and the marks return to SVG carried by `mapboxgl.Marker`. Two things follow.
- * Colour stops needing `getComputedStyle`: a palette class on a `<path>` *is* the fill, so `:root`
- * remains the single source of truth with no resolution step in between (the reason `lib/pie` and
- * `lib/sectorMap` have always emitted classes). And switching colour mode is a re-render rather than
- * a `setPaintProperty` call — the geometry is memoized and unchanged, so only fills move.
+ * data-driven paint expressions. A circle layer paints one flat fill per feature, so donut slices
+ * have no canvas equivalent, and the marks return to SVG carried by `mapboxgl.Marker`. Two things
+ * follow. Colour stops needing `getComputedStyle`: a palette class on a `<path>` *is* the fill, so
+ * `:root` remains the single source of truth with no resolution step in between (the reason
+ * `lib/pie` and `lib/sectorMap` have always emitted classes). And switching colour mode is a
+ * re-render rather than a `setPaintProperty` call — the geometry is memoized and unchanged, so only
+ * fills move.
  *
  * **No holding data leaves the machine.** Marks are built in the renderer from imported Flex data
  * and positioned by a bundled centroid table — never a network request. Only tiles and styles are
@@ -81,13 +88,12 @@ type MapStatus = 'pending' | 'ready' | 'no-token' | 'unavailable'
 export type MapColorMode = 'sector' | 'gainLoss'
 
 /**
- * What the cursor is over. The three depths are the point of the sunburst: an outer wedge is one
- * company, an inner wedge is one sector *within that country*, and the hub is the country itself.
+ * What the cursor is over: one slice of one of the two donuts, or — from either donut's hole — the
+ * country they both describe.
  */
 type Subject =
-  | { kind: 'holding'; country: CountrySunburst; holding: HoldingWedge }
-  | { kind: 'sector'; country: CountrySunburst; sector: SectorWedge }
-  | { kind: 'country'; country: CountrySunburst }
+  | { kind: 'slice'; country: CountryDonuts; slice: DonutSlice; side: DonutSide }
+  | { kind: 'country'; country: CountryDonuts }
 
 /** Tone class for a figure — the app's existing `--pos` / `--neg` treatment. */
 function toneFor(value: number): string {
@@ -95,7 +101,7 @@ function toneFor(value: number): string {
 }
 
 /**
- * Build the popup body for whichever depth is hovered.
+ * Build the popup body for whichever slice — or country — is hovered.
  *
  * Imperative DOM rather than JSX because `mapboxgl.Popup` owns its content element. Every string is
  * set with `textContent`, never `innerHTML` — tickers, company names, sectors and countries all
@@ -103,8 +109,8 @@ function toneFor(value: number): string {
  *
  * A holding's layout mirrors a Positions table row on purpose: same fields, same order, same
  * formatters, so the owner learns one layout rather than two and the surfaces read against each
- * other. The sector and country depths keep that shape and swap the identity lines, adding the
- * holding count — the one figure an aggregate has and a single position does not.
+ * other. Aggregate slices keep that shape and add the two figures an aggregate has and a single
+ * position does not: how many holdings it covers, and the share of the country its angle encodes.
  */
 function createPopupContent(
   subject: Subject,
@@ -114,57 +120,36 @@ function createPopupContent(
   const root = document.createElement('div')
   root.className = 'map-popup'
 
+  const country = subject.country
+  const isSlice = subject.kind === 'slice'
+  const source = isSlice ? subject.slice : country
+  const isHolding = isSlice && subject.side === 'holdings' && subject.slice.holdingCount === 1
+
   const title = document.createElement('p')
   title.className = 'map-popup-title'
+  title.textContent = isSlice ? subject.slice.label : country.countryName
+  root.appendChild(title)
+
+  if (isHolding && subject.slice.name !== '') {
+    const name = document.createElement('p')
+    name.className = 'map-popup-name'
+    // The same readable treatment the dividend tables give raw broker names.
+    name.textContent = formatCompanyName(subject.slice.name)
+    root.appendChild(name)
+  }
+
   const meta = document.createElement('p')
   meta.className = 'map-popup-meta'
   const swatch = document.createElement('span')
-  swatch.className = 'legend-swatch'
+  swatch.className = `legend-swatch ${isSlice ? subject.slice.colorClass : country.colorClass}`
   swatch.setAttribute('aria-hidden', 'true')
   const metaText = document.createElement('span')
-
-  let marketValue: number
-  let percentOfNav: number
-  let unrealizedPnl: number
-  let returnPercent: number | null
-  let holdingCount: number | null = null
-
-  if (subject.kind === 'holding') {
-    const { holding, country } = subject
-    title.textContent = holding.ticker
-    root.appendChild(title)
-    if (holding.name !== '') {
-      const name = document.createElement('p')
-      name.className = 'map-popup-name'
-      // The same readable treatment the dividend tables give raw broker names.
-      name.textContent = formatCompanyName(holding.name)
-      root.appendChild(name)
-    }
-    swatch.classList.add(holding.sectorClass)
-    // An unclassified holding reads '—', exactly as its row in the Positions table does.
-    metaText.textContent = `${holding.sectorLabel || '—'} · ${country.countryName}`
-    ;({ marketValueBase: marketValue, percentOfNav, unrealizedPnlBase: unrealizedPnl } = holding)
-    returnPercent = holding.returnPercent
-  } else if (subject.kind === 'sector') {
-    const { sector, country } = subject
-    title.textContent = sector.label
-    root.appendChild(title)
-    swatch.classList.add(sector.sectorClass)
-    metaText.textContent = country.countryName
-    ;({ marketValueBase: marketValue, percentOfNav, unrealizedPnlBase: unrealizedPnl } = sector)
-    returnPercent = sector.returnPercent
-    holdingCount = sector.holdingCount
-  } else {
-    const { country } = subject
-    title.textContent = country.countryName
-    root.appendChild(title)
-    swatch.classList.add(country.sectorClass)
-    metaText.textContent = `${country.sectors.length} sector${country.sectors.length === 1 ? '' : 's'}`
-    ;({ marketValueBase: marketValue, percentOfNav, unrealizedPnlBase: unrealizedPnl } = country)
-    returnPercent = country.returnPercent
-    holdingCount = country.holdingCount
-  }
-
+  metaText.textContent = isHolding
+    ? // An unclassified holding reads '—', exactly as its row in the Positions table does.
+      `${subject.slice.sectorLabel || '—'} · ${country.countryName}`
+    : isSlice
+      ? country.countryName
+      : `${country.holdingCount} holding${country.holdingCount === 1 ? '' : 's'} · ${country.sectors.length} sector${country.sectors.length === 1 ? '' : 's'}`
   meta.append(swatch, metaText)
   root.appendChild(meta)
 
@@ -181,20 +166,22 @@ function createPopupContent(
     row.append(dt, dd)
     rows.appendChild(row)
   }
-  addRow('Market value', formatValue(marketValue))
-  addRow('% of NAV', `${percentOfNav.toFixed(1)}%`)
-  if (holdingCount !== null) {
-    addRow('Holdings', String(holdingCount))
+  addRow('Market value', formatValue(source.marketValueBase))
+  addRow('% of NAV', `${source.percentOfNav.toFixed(1)}%`)
+  if (isSlice) {
+    // What the slice's angle actually encodes — a share of this country, not of the portfolio.
+    addRow(`% of ${country.countryName}`, `${subject.slice.percentOfCountry.toFixed(1)}%`)
+    if (!isHolding) addRow('Holdings', String(subject.slice.holdingCount))
   }
-  const tone = toneFor(unrealizedPnl)
-  addRow('Unrealized P&L', formatSigned(unrealizedPnl), tone)
+  const tone = toneFor(source.unrealizedPnlBase)
+  addRow('Unrealized P&L', formatSigned(source.unrealizedPnlBase), tone)
   // The figure the tint encodes, stated in text: the neutral tint means "flat *or* unknown", and
   // colour alone cannot tell those apart. '—' rather than a fabricated 0.0% when there is no cost
   // basis to measure against.
   addRow(
     'Return',
-    returnPercent === null ? '—' : formatSignedPercent(returnPercent),
-    returnPercent === null ? '' : tone,
+    source.returnPercent === null ? '—' : formatSignedPercent(source.returnPercent),
+    source.returnPercent === null ? '' : tone,
   )
   root.appendChild(rows)
 
@@ -211,21 +198,15 @@ const TINT_CLASSES = ['map-popup-pos', 'map-popup-neg']
 
 /** The return the popup's tint reflects — whichever depth is hovered. */
 function returnOf(subject: Subject): number | null {
-  switch (subject.kind) {
-    case 'holding':
-      return subject.holding.returnPercent
-    case 'sector':
-      return subject.sector.returnPercent
-    case 'country':
-      return subject.country.returnPercent
-  }
+  return subject.kind === 'slice' ? subject.slice.returnPercent : subject.country.returnPercent
 }
 
 /**
- * One country's mark, rendered into its Mapbox marker element by a portal.
+ * One country's mark — two donuts side by side — rendered into its Mapbox marker element by a
+ * portal.
  *
- * Hover is `onMouseEnter` per wedge and a single `onMouseLeave` on the mark as a whole: leaving one
- * wedge for its neighbour must re-fill the popup, never close and reopen it, or a dense mark
+ * Hover is `onMouseEnter` per slice and a single `onMouseLeave` on the mark as a whole: leaving one
+ * slice for its neighbour must re-fill the popup, never close and reopen it, or a dense mark
  * flickers under the cursor — exactly where a concentrated portfolio is read.
  */
 function CountryMark({
@@ -234,63 +215,66 @@ function CountryMark({
   onEnter,
   onLeave,
 }: {
-  country: CountrySunburst
+  country: CountryDonuts
   colorMode: MapColorMode
   onEnter: (subject: Subject) => void
   onLeave: () => void
 }): React.JSX.Element {
-  const size = country.r * 2
-  const fillOf = (sectorClass: string, gainLossClass: string): string =>
-    colorMode === 'sector' ? sectorClass : gainLossClass
+  const { r, cx, dot } = country
+  // The pair spans both donuts plus the gap between them; height is one donut.
+  const halfWidth = dot ? r : cx + r
+  const fillOf = (slice: DonutSlice): string =>
+    colorMode === 'sector' ? slice.colorClass : slice.gainLossClass
+
+  const donut = (slices: DonutSlice[], side: DonutSide, holeCx: number): React.JSX.Element => (
+    <g>
+      {slices.map((slice) => (
+        <path
+          key={slice.key}
+          className={`country-mark-slice ${fillOf(slice)}`}
+          d={slice.path}
+          onMouseEnter={() => onEnter({ kind: 'slice', country, slice, side })}
+        />
+      ))}
+      {/* Either hole is the country-level target: the two donuts describe the same country. */}
+      <circle
+        className="country-mark-hole"
+        cx={holeCx}
+        r={country.rHole}
+        onMouseEnter={() => onEnter({ kind: 'country', country })}
+      />
+    </g>
+  )
 
   return (
     <svg
       className="country-mark"
-      width={size}
-      height={size}
-      viewBox={`${-country.r} ${-country.r} ${size} ${size}`}
+      width={halfWidth * 2}
+      height={r * 2}
+      viewBox={`${-halfWidth} ${-r} ${halfWidth * 2} ${r * 2}`}
       aria-hidden="true"
       onMouseLeave={onLeave}
     >
-      {country.dot ? (
+      {dot ? (
         <circle
-          className={`country-mark-dot ${fillOf(country.sectorClass, country.gainLossClass)}`}
-          r={country.r}
-          // A country too small to split into rings has, almost always, a single holding — so the
+          className={`country-mark-dot ${
+            colorMode === 'sector' ? country.colorClass : country.gainLossClass
+          }`}
+          r={r}
+          // A country too small to draw as a pair has, almost always, a single holding — so the
           // popup goes straight to it rather than aggregating one thing.
           onMouseEnter={() =>
             onEnter(
-              country.holdings.length === 1
-                ? { kind: 'holding', country, holding: country.holdings[0]! }
+              country.holdingCount === 1 && country.holdings[0]
+                ? { kind: 'slice', country, slice: country.holdings[0], side: 'holdings' }
                 : { kind: 'country', country },
             )
           }
         />
       ) : (
         <>
-          {country.sectors.map((sector) => (
-            <path
-              key={sector.key}
-              className={`country-mark-wedge ${fillOf(sector.sectorClass, sector.gainLossClass)}`}
-              d={sector.path}
-              onMouseEnter={() => onEnter({ kind: 'sector', country, sector })}
-            />
-          ))}
-          {country.holdings.map((holding, i) => (
-            <path
-              key={`${holding.id}-${i}`}
-              className={`country-mark-wedge ${fillOf(holding.sectorClass, holding.gainLossClass)}`}
-              d={holding.path}
-              onMouseEnter={() => onEnter({ kind: 'holding', country, holding })}
-            />
-          ))}
-          {/* The hub is the country-level target, and the thing that makes the mark read as a ring
-              system rather than a filled pie. */}
-          <circle
-            className="country-mark-hub"
-            r={country.rHub}
-            onMouseEnter={() => onEnter({ kind: 'country', country })}
-          />
+          {donut(country.holdings, 'holdings', -cx)}
+          {donut(country.sectors, 'sectors', cx)}
         </>
       )}
     </svg>
@@ -316,7 +300,7 @@ export function CountryMap({
 }): React.JSX.Element {
   const { countries, unknown, legend } = useMemo(() => {
     const palette = sectorPalette(bySector)
-    const split = countrySunbursts(positions, palette)
+    const split = countryDonuts(positions, palette)
     return { ...split, legend: palette.legend }
   }, [positions, bySector])
 
@@ -338,7 +322,7 @@ export function CountryMap({
   const [status, setStatus] = useState<MapStatus>(MAPBOX_TOKEN ? 'pending' : 'no-token')
   const [zoomed, setZoomed] = useState(false)
   /**
-   * The marker elements the sunbursts portal into. Mapbox owns each element's position — it keeps
+   * The marker elements the donut pairs portal into. Mapbox owns each element's position — it keeps
    * them pinned to their coordinates through pan, zoom and world-copy wrapping — while React owns
    * what is drawn inside, so colour mode is an ordinary re-render.
    */
@@ -459,6 +443,8 @@ export function CountryMap({
 
     popup
       .setLngLat([country.lon, country.lat])
+      // Vertical clearance only: the pair is wider than it is tall, and Mapbox flips the popup
+      // above or below the mark, so the radius is the extent that has to be cleared.
       .setOffset(country.r + POPUP_GAP_PX)
       .setDOMContent(createPopupContent(subject, formatValueRef.current, formatSignedRef.current))
       .addTo(map)
@@ -582,8 +568,8 @@ export function CountryMap({
         )}
         <span className="country-map-pan-hint">
           {colorMode === 'sector'
-            ? 'Mark size ∝ country value · inner ring = sectors, outer = holdings · positioned by issuer country · scroll to zoom · drag to pan'
-            : `Colour = unrealized return on cost · inner ring per sector, outer per holding · beyond ±${RETURN_BOUND}% saturates · gray means flat or unknown`}
+            ? 'Each country: left donut = holdings, right donut = sectors (legend above) · size ∝ country value · positioned by issuer country · scroll to zoom · drag to pan'
+            : `Colour = unrealized return on cost · left donut per holding, right per sector · beyond ±${RETURN_BOUND}% saturates · gray means flat or unknown`}
         </span>
         {unknown.count > 0 && (
           <span

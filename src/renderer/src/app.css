@@ -1456,7 +1456,7 @@ html {
 }
 
 /* ---- Country map (world geography, Story #46; #89/DDR-0019 basemap;
-       #122/DDR-0030 per-country sunburst marks) ------------------------------ */
+       #122/DDR-0030 per-country donut pairs) ------------------------------ */
 .country-map-figure {
   display: flex;
   flex-direction: column;
@@ -1515,13 +1515,14 @@ html {
 
 /* ---- Country marks (Story #122, DDR-0030) --------------------------------
 
-   Each country is one SVG sunburst carried by a `mapboxgl.Marker`: Mapbox owns where the element
-   sits, React owns what is drawn in it. Because the marks are SVG rather than canvas circles, a
-   palette class *is* the fill — `:root` stays the single source of truth with no `getComputedStyle`
-   resolution step in between, which is what DDR-0020's circle layer had to do.
+   Each country is a pair of SVG donuts carried by one `mapboxgl.Marker`: Mapbox owns where the
+   element sits, React owns what is drawn in it. Because the marks are SVG rather than canvas
+   circles, a palette class *is* the fill — `:root` stays the single source of truth with no
+   `getComputedStyle` resolution step in between, which is what DDR-0020's circle layer had to do.
 
-   Marks are hit targets, but the marker box is square and the mark inside it is round: the corners
-   must stay transparent to the pointer or four invisible squares per country would swallow drags. */
+   Marks are hit targets, but the marker box is rectangular and the donuts inside it are round: the
+   corners and the gap between the two must stay transparent to the pointer, or invisible boxes
+   would swallow drags across the map. */
 .country-marker {
   /* The map beneath keeps the drag; only the drawn wedges take the pointer. */
   pointer-events: none;
@@ -1533,9 +1534,9 @@ html {
   pointer-events: none;
 }
 
-/* A surface-coloured hairline between neighbouring wedges, so two holdings in one sector stay
-   countable when they share their sector's hue — the same 2px ring the donuts use, at map scale. */
-.country-mark-wedge,
+/* A surface-coloured hairline between neighbouring slices — the same separator the view's own
+   donuts use (`.pie-slice`), at map scale. */
+.country-mark-slice,
 .country-mark-dot {
   pointer-events: auto;
   cursor: pointer;
@@ -1544,22 +1545,22 @@ html {
   transition: opacity 90ms ease-out;
 }
 
-.country-mark:hover .country-mark-wedge,
+.country-mark:hover .country-mark-slice,
 .country-mark:hover .country-mark-dot {
-  /* Everything recedes on hover so the one wedge under the cursor can come forward below. */
-  opacity: 0.55;
+  /* Everything recedes on hover so the one slice under the cursor can come forward below. */
+  opacity: 0.5;
 }
 
-.country-mark-wedge:hover,
+.country-mark-slice:hover,
 .country-mark-dot:hover {
   opacity: 1;
   stroke: var(--text);
   stroke-width: 1;
 }
 
-/* The hub is the country-level target and the thing that makes the mark read as a ring system
-   rather than a filled pie. Dark against the light basemap, like the popup. */
-.country-mark-hub {
+/* The hole is the country-level target, and what makes each mark read as a donut rather than a
+   pie. Dark against the light basemap, like the popup. */
+.country-mark-hole {
   pointer-events: auto;
   cursor: pointer;
   fill: var(--card);
@@ -1567,7 +1568,7 @@ html {
   stroke-width: 0.75;
 }
 
-.country-mark-hub:hover {
+.country-mark-hole:hover {
   stroke: var(--text);
 }
 
