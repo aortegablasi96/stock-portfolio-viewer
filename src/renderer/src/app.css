@@ -1315,26 +1315,36 @@ html {
   border-radius: 3px;
 }
 
-/* Gain/loss scale swatches (Story #95) — same shape as every other legend swatch. */
+/* Gain/loss scale (Story #95) — same shape as every other legend swatch. Each class carries `fill`
+   as well as `background`, exactly as `pie-series-*` does: since #122 the map's marks are SVG, so
+   one of these classes on a `<path>` paints the wedge and the same class on a `<span>` paints its
+   legend swatch, from the one variable (DDR-0030). */
 .map-diverge-1 {
+  fill: var(--diverge-1);
   background: var(--diverge-1);
 }
 .map-diverge-2 {
+  fill: var(--diverge-2);
   background: var(--diverge-2);
 }
 .map-diverge-3 {
+  fill: var(--diverge-3);
   background: var(--diverge-3);
 }
 .map-diverge-4 {
+  fill: var(--diverge-4);
   background: var(--diverge-4);
 }
 .map-diverge-5 {
+  fill: var(--diverge-5);
   background: var(--diverge-5);
 }
 .map-diverge-6 {
+  fill: var(--diverge-6);
   background: var(--diverge-6);
 }
 .map-diverge-7 {
+  fill: var(--diverge-7);
   background: var(--diverge-7);
 }
 
@@ -1445,8 +1455,9 @@ html {
   background: var(--series-neutral);
 }
 
-/* ---- Bubble map (world geography, Story #46; #89/DDR-0019 basemap) ------- */
-.bubble-map-figure {
+/* ---- Country map (world geography, Story #46; #89/DDR-0019 basemap;
+       #122/DDR-0030 per-country donut pairs) ------------------------------ */
+.country-map-figure {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -1458,7 +1469,7 @@ html {
    tall enough to push the breakdowns off-screen (DDR-0018). Mapbox owns the camera instead of
    a fixed frame, so aspect is now a free choice: a flatter ratio spends the extra width on map
    rather than on height. */
-.bubble-map-frame {
+.country-map-frame {
   position: relative;
   width: 100%;
 }
@@ -1467,12 +1478,12 @@ html {
    own proportion and the map fills it (Story #89). Without this the panel would collapse.
    3:1 keeps a full-width map about as tall as the old 56rem one while spanning ~2x the width;
    the camera fits the world to whatever shape it is given, so nothing is cropped. */
-.bubble-map-frame {
+.country-map-frame {
   aspect-ratio: 3 / 1;
   min-height: 20rem;
 }
 
-.bubble-map {
+.country-map {
   width: 100%;
   height: 100%;
   display: block;
@@ -1483,7 +1494,7 @@ html {
 
 /* Degraded state: no token, or tiles unreachable. Sits where the basemap would be, reusing the
    shared in-figure empty treatment rather than error styling — the view is still usable. */
-.bubble-map-unavailable {
+.country-map-unavailable {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1497,13 +1508,71 @@ html {
   border-radius: 6px;
 }
 
-.bubble-map-unavailable-hint {
+.country-map-unavailable-hint {
   font-size: 0.82rem;
   opacity: 0.85;
 }
 
+/* ---- Country marks (Story #122, DDR-0030) --------------------------------
+
+   Each country is a pair of SVG donuts carried by one `mapboxgl.Marker`: Mapbox owns where the
+   element sits, React owns what is drawn in it. Because the marks are SVG rather than canvas
+   circles, a palette class *is* the fill — `:root` stays the single source of truth with no
+   `getComputedStyle` resolution step in between, which is what DDR-0020's circle layer had to do.
+
+   Marks are hit targets, but the marker box is rectangular and the donuts inside it are round: the
+   corners and the gap between the two must stay transparent to the pointer, or invisible boxes
+   would swallow drags across the map. */
+.country-marker {
+  /* The map beneath keeps the drag; only the drawn wedges take the pointer. */
+  pointer-events: none;
+  line-height: 0;
+}
+
+.country-mark {
+  overflow: visible;
+  pointer-events: none;
+}
+
+/* The full-sweep track behind each bar. Without it a swept arc states no proportion — it is what
+   turns "an arc" into "38% of the way round". Dark against the light basemap, like the popup, and
+   pointer-transparent so only the ring's group takes the hover. */
+/* A surface-coloured hairline between neighbouring slices — the same separator the view's own
+   donuts use (`.pie-slice`), at map scale. Every slice is its own hit target: SVG hit-testing only
+   ever reaches leaves, so grouping them would catch nothing anyway. */
+.country-mark-slice,
+.country-mark-dot {
+  pointer-events: auto;
+  cursor: pointer;
+  stroke: var(--card);
+  stroke-width: 0.75;
+  transition: opacity 90ms ease-out;
+}
+
+/* The remainder of the left donut: the portfolio held *elsewhere*. Muted, because it is the
+   context that makes the blue arc read as a proportion rather than a subject of its own. */
+.country-mark-rest {
+  fill: var(--card);
+  fill-opacity: 0.42;
+  stroke: var(--border);
+  stroke-width: 0.5;
+}
+
+/* Everything recedes on hover so the one slice under the cursor can come forward. */
+.country-mark:hover .country-mark-slice,
+.country-mark:hover .country-mark-dot {
+  opacity: 0.5;
+}
+
+.country-mark-slice:hover,
+.country-mark-dot:hover {
+  opacity: 1;
+  stroke: var(--text);
+  stroke-width: 1;
+}
+
 /* Stacked +/− /reset buttons, top-right of the map. */
-.bubble-map-controls {
+.country-map-controls {
   position: absolute;
   top: 0.5rem;
   right: 0.5rem;
@@ -1542,18 +1611,18 @@ html {
   font-size: 0.95rem;
 }
 
-/* Hover popup over a holding's circle (Story #92, DDR-0020). Circles are painted into the map
-   canvas, so their sizing and colour are Mapbox paint properties rather than CSS — the only
-   styling left here is the popup, and the vendor chrome it arrives wrapped in.
+/* Hover popup over a mark (Story #92, DDR-0020; three hover depths and the return tint in #122,
+   DDR-0030). Mapbox ships the popup with a light default surface, so this is the one place the app
+   overrides a third-party stylesheet. It is a deliberate, scoped exception: using `Popup` buys
+   viewport-edge flipping for free, which is worth more than a handful of overrides.
 
-   Mapbox ships the popup with a light default surface, so this is the first place the app
-   overrides a third-party stylesheet. It is a deliberate, scoped exception (DDR-0020): using
-   `Popup` buys viewport-edge flipping for free, which is worth more than a handful of overrides. */
+   Surface and tip colour both come from `--popup-surface`, so the return tint below is a single
+   variable override rather than eight anchor-specific rules. */
 .mapboxgl-popup-content {
   padding: 0.6rem 0.7rem;
   color: var(--text);
-  background: var(--card);
-  border: 1px solid var(--border);
+  background: var(--popup-surface, var(--card));
+  border: 1px solid var(--popup-border, var(--border));
   border-radius: 6px;
   box-shadow: 0 1px 2px rgb(0 0 0 / 0.12);
   font: inherit;
@@ -1561,26 +1630,47 @@ html {
 
 /* The tip is drawn as a bordered triangle; each anchor position colours a different edge. */
 .mapboxgl-popup-anchor-top .mapboxgl-popup-tip {
-  border-bottom-color: var(--card);
+  border-bottom-color: var(--popup-surface, var(--card));
 }
 
 .mapboxgl-popup-anchor-bottom .mapboxgl-popup-tip {
-  border-top-color: var(--card);
+  border-top-color: var(--popup-surface, var(--card));
 }
 
 .mapboxgl-popup-anchor-left .mapboxgl-popup-tip {
-  border-right-color: var(--card);
+  border-right-color: var(--popup-surface, var(--card));
 }
 
 .mapboxgl-popup-anchor-right .mapboxgl-popup-tip {
-  border-left-color: var(--card);
+  border-left-color: var(--popup-surface, var(--card));
 }
 
 /* Hover-driven and pointer-transparent: the popup must never sit between the cursor and the
-   circle that opened it, or moving onto it would read as a mouseleave and close it. */
+   wedge that opened it, or moving onto it would read as a mouseleave and close it. */
 .map-popup-shell {
   pointer-events: none;
   animation: map-popup-in 120ms ease-out;
+}
+
+/* The return tint (Story #122): green when the hovered subject is up, red when it is down, and the
+   plain surface when it is flat or has no cost basis to measure against.
+
+   This is `--pos` / `--neg`, deliberately, and it does not reopen DDR-0021. That decision governs
+   *fill colour as the only channel* — a mark carries no number beside it, so its scale must clear
+   CVD contrast on its own, which is why the wedges use the diverging red/gray/blue. Here the tone
+   accompanies a figure printed in the popup two rows down, which is exactly the case DDR-0021
+   carved out for the app's green/red.
+
+   Mixed to 12% so it reads as a tint on the dark surface rather than a coloured panel: text keeps
+   the contrast it has against `--card`, and the tone is reinforcement, never the message. */
+.map-popup-shell.map-popup-pos {
+  --popup-surface: color-mix(in srgb, var(--pos) 12%, var(--card));
+  --popup-border: color-mix(in srgb, var(--pos) 45%, var(--border));
+}
+
+.map-popup-shell.map-popup-neg {
+  --popup-surface: color-mix(in srgb, var(--neg) 12%, var(--card));
+  --popup-border: color-mix(in srgb, var(--neg) 45%, var(--border));
 }
 
 @keyframes map-popup-in {
@@ -1589,8 +1679,9 @@ html {
   }
 }
 
-/* Mirrors a Positions table row: ticker, company name, then the figures in the same order. */
-.map-popup-ticker {
+/* Mirrors a Positions table row: ticker, company name, then the figures in the same order. The
+   sector and country depths keep the shape and swap the identity lines (Story #122). */
+.map-popup-title {
   margin: 0;
   font-size: 0.9rem;
   font-weight: 600;
@@ -1643,7 +1734,7 @@ html {
   font-variant-numeric: tabular-nums;
 }
 
-.bubble-map-legend {
+.country-map-legend {
   flex-wrap: wrap;
   gap: 0.4rem 1.25rem;
   align-items: center;
@@ -1651,7 +1742,7 @@ html {
 }
 
 /* Shared sector colour key — same hues as the Sector donut. */
-.bubble-map-sectors {
+.country-map-sectors {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -1662,7 +1753,7 @@ html {
   padding: 0;
 }
 
-.bubble-map-sector {
+.country-map-sector {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
@@ -1702,14 +1793,14 @@ html {
   border-radius: 0 3px 3px 0;
 }
 
-.bubble-map-pan-hint {
+.country-map-pan-hint {
   flex-basis: 100%;
   text-align: center;
   color: var(--muted);
   font-size: 0.82rem;
 }
 
-.bubble-map-unknown {
+.country-map-unknown {
   color: var(--text);
   font-variant-numeric: tabular-nums;
 }

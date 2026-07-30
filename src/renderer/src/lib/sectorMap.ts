@@ -2,24 +2,29 @@
  * The shared sector → colour assignment (Milestone M3, Story #30).
  *
  * One palette, built once from the allocation report's `bySector` breakdown, so a sector wears the
- * same hue everywhere it appears: in the Sector donut, on the Allocation map's holding circles, and
- * in the map's own legend. That shared identity is the point — a colour must mean the same thing on
- * both surfaces or neither can be read against the other.
+ * same hue everywhere it appears: in the Sector donut, in the Allocation map's per-country sector
+ * donut, and in the map's own legend. That shared identity is the point — a colour must mean the
+ * same thing on both surfaces or neither can be read against the other.
+ *
+ * Note the scope. The map's *other* donut — the country's weight in the portfolio — deliberately
+ * takes no colour from here: it shows one value against the rest of the portfolio, not a set of
+ * categories (DDR-0030).
  *
  * Built from the donut's own `groupTail` + `sliceColorClasses` pipeline (`lib/pie`), so sectors past
  * the palette's eight slots fold into a neutral 'Other' exactly as the donut folds its tail, and
  * unclassified positions share that neutral rather than consuming a categorical hue.
  *
  * Kept out of the components so it can be unit-tested in Vitest's Node environment, the way the
- * other `lib/` helpers are. It emits colour **classes**, never resolved colour values: resolving one
- * needs `getComputedStyle`, which does not exist under Node, and keeping that step in the component
- * is what leaves this module testable (see `lib/mapBubbles`).
+ * other `lib/` helpers are. It emits colour **classes**, never resolved colour values, which is what
+ * leaves this module testable under Node (see `lib/countryDonuts`).
  *
- * Story #92 moved the map's bubble geometry to `lib/mapBubbles`, where per-holding circles replaced
- * the per-country sector wedges this module used to lay out (DDR-0020).
+ * The map's geometry has moved twice since. Story #92 replaced the per-country sector wedges this
+ * module used to lay out with per-holding circles in `lib/mapBubbles` (DDR-0020); Story #122
+ * replaced those in turn with a pair of per-country donuts in `lib/countryDonuts`, the right-hand
+ * one of which consumes this palette, one slice per sector (DDR-0030).
  */
 import type { AllocationSlice } from '@shared/domain/allocation'
-import { groupTail, OTHER_KEY, sliceColorClasses, type PieDatum } from './pie'
+import { groupTail, OTHER_KEY, SECTOR_SLOT_OFFSET, sliceColorClasses, type PieDatum } from './pie'
 
 const NEUTRAL_CLASS = 'pie-series-neutral'
 
@@ -58,7 +63,9 @@ function toPieData(bySector: AllocationSlice[]): PieDatum[] {
 /** Build the shared sector palette from the allocation report's `bySector` breakdown. */
 export function sectorPalette(bySector: AllocationSlice[]): SectorPalette {
   const grouped = groupTail(toPieData(bySector))
-  const classes = sliceColorClasses(grouped)
+  // Sectors skip the palette's blue: the map spends it on a country's weight, and the two charts
+  // sit side by side on the same mark (Story #122).
+  const classes = sliceColorClasses(grouped, SECTOR_SLOT_OFFSET)
   const colorByKey = new Map<string, string>()
   const labelByKey = new Map<string, string>()
   const legend: SectorLegendEntry[] = grouped.map((g, i) => {

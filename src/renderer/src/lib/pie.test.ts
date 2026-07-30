@@ -92,11 +92,14 @@ describe('toArcs', () => {
     expect(arcs.every((a) => a.path.startsWith('M '))).toBe(true)
   })
 
-  it('draws a lone slice as a full ring, not a zero-length arc', () => {
+  it('draws a lone slice as a seamless full ring, not a zero-length arc', () => {
     const [arc] = toArcs([datum('a', 100)], 100, 100, 90, 50)
     expect(arc!.share).toBe(1)
-    // Two half-arcs — a single arc from 0 to 2π would collapse to a point.
+    // Two subpaths: the outer circle, then the inner one wound the other way to punch the hole.
     expect(arc!.path.match(/M /g)).toHaveLength(2)
+    // And crucially no radial edge. A segment closes with `L` from the outer arc to the inner one,
+    // and `.pie-slice` strokes that edge — which on a full circle paints a seam dividing nothing.
+    expect(arc!.path).not.toContain('L ')
   })
 
   it('starts the first slice at 12 o’clock and sweeps clockwise', () => {

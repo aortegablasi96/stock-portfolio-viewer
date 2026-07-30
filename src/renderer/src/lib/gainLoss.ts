@@ -6,14 +6,16 @@
  *
  * Three decisions are baked in here rather than left to the component:
  *
- * 1. **Return as a percentage of cost basis, not absolute P&L.** The circle's radius already
- *    encodes market value; colouring by absolute P&L would spend the colour channel re-encoding
- *    size, so a large holding barely up would outrank a small holding sharply down.
+ * 1. **Return as a percentage of cost basis, not absolute P&L.** Size already encodes market
+ *    value — the mark's area, and each wedge's angle within it; colouring by absolute P&L would
+ *    spend the colour channel re-encoding size, so a large holding barely up would outrank a small
+ *    holding sharply down.
  * 2. **A fixed ±25% bound, clamped.** The same colour therefore means the same return in every
  *    session, and a single outsized winner can't wash the rest of the map pale. A data-driven
  *    range was rejected for exactly that instability.
  * 3. **Seven steps, three per arm around a neutral middle.** Discrete buckets read better than a
- *    continuous gradient on a 4–16px circle, and give the legend something to label.
+ *    continuous gradient on a mark a few dozen pixels across, and give the legend something to
+ *    label.
  *
  * The palette is **red ↔ gray ↔ blue**, not the app's green/red `--pos` / `--neg` tokens. Measured
  * against the light basemap, green/red scores ΔE 4.1 under deuteranopia — below the 6.0 floor — and
@@ -21,8 +23,8 @@
  * Blue/red scores ΔE 23.8 and every step clears 3:1 on the basemap. `--pos` / `--neg` keep their
  * role wherever a figure accompanies them, including this map's own popup.
  *
- * Emits colour **classes**, never values, for the same reason `lib/mapBubbles` does: resolving one
- * needs `getComputedStyle`, which does not exist in Vitest's Node environment.
+ * Emits colour **classes**, never values, for the same reason `lib/countryDonuts` does: resolving
+ * one needs `getComputedStyle`, which does not exist in Vitest's Node environment.
  */
 
 /** The scale's outer bound, as a percentage. Returns beyond ±this saturate at the pole. */

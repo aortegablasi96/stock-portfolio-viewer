@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import type { AllocationReport, AllocationResult, AllocationSlice } from '@shared/domain/allocation'
 import { formatCurrency, formatDate, formatSignedCurrency } from '../../lib/format'
-import { BubbleMap, type MapColorMode } from '../charts/BubbleMap'
+import { SECTOR_SLOT_OFFSET } from '../../lib/pie'
+import { CountryMap, type MapColorMode } from '../charts/CountryMap'
 import { AllocationBreakdown } from './AllocationBreakdown'
 import { useAnalytics } from './useAnalytics'
 import { ClassifySectors } from './ClassifySectors'
@@ -29,7 +30,7 @@ const BREAKDOWN_TABS = [
 type BreakdownTab = (typeof BREAKDOWN_TABS)[number]['id']
 
 /**
- * What the map's circles encode with colour (Story #95). Sector is the default — the map opens the
+ * What the map's marks encode with colour (Story #95). Sector is the default — the map opens the
  * way it always has, and gain/loss is something the owner asks for. Deliberately not persisted:
  * the question "where am I losing money?" is one you ask, not a mode you live in.
  */
@@ -123,20 +124,21 @@ export function AllocationView(): React.JSX.Element {
             ))}
           </div>
         </div>
-        <BubbleMap
+        <CountryMap
           positions={r.positions}
           bySector={r.bySector}
           formatValue={c}
           formatSigned={(v) => formatSignedCurrency(v, r.baseCurrency)}
           colorMode={colorMode}
-          // The map's circles are canvas, so they carry no per-holding text a screen reader can
-          // reach. This label states what the map totals and points at the Positions table below,
-          // which lists every one of these holdings with the same figures (DDR-0020).
+          // The map's marks are hover-only — they carry no text a screen reader can reach, and
+          // keyboard operation is a separate story (#93). The map no longer draws individual
+          // holdings at all (DDR-0030), so this label states what it totals and points at the
+          // Positions table below, which is where one company's figures are read.
           ariaLabel={`World map of ${r.positions.length} holdings totalling ${c(
             r.totalMarketValueBase,
-          )}, positioned by issuer country and coloured by ${
+          )}, drawn as a pair of radial charts per issuer country — the country's weight in the portfolio, and one ring per sector — coloured by ${
             colorMode === 'sector' ? 'sector' : 'unrealized return'
-          }. Each holding is listed with the same figures in the Positions table below.`}
+          }. Every holding is listed individually in the Positions table below.`}
         />
       </section>
 
@@ -163,6 +165,10 @@ export function AllocationView(): React.JSX.Element {
           slices={slicesFor(r, tab)}
           formatValue={c}
           ariaLabel={`Allocation ${activeTab.title.toLowerCase()}`}
+          // Sectors skip the palette's blue, which the map reserves for a country's weight. The
+          // skip has to apply here too, or a sector would wear one hue on the map and another in
+          // its own donut (Story #122).
+          colorOffset={tab === 'sector' ? SECTOR_SLOT_OFFSET : 0}
           emptyMessage={tab === 'sector' ? 'No sector data yet.' : 'Nothing to plot yet.'}
         />
         {tab === 'sector' && r.unclassifiedCount > 0 && (

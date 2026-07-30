@@ -8,7 +8,7 @@ import { sectorPalette } from './sectorMap'
  * the Sector donut's own slice colouring, since the map, the map legend and the donut all read
  * from it.
  *
- * The per-country wedge geometry this module used to own moved to `lib/mapBubbles` with Story #92,
+ * The per-country wedge geometry this module used to own moved to `lib/countryDonuts`,
  * and its coverage moved with it.
  */
 
@@ -27,11 +27,23 @@ describe('sectorPalette', () => {
       sectorSlice('', 10, 5), // unclassified
     ])
 
-    expect(palette.colorClassOf('Technology')).toBe('pie-series-1')
-    expect(palette.colorClassOf('Financials')).toBe('pie-series-2')
+    // Sectors start at slot 2: slot 1 is the palette's only blue, and the Allocation map spends
+    // it on a country's weight in the portfolio, right beside the sector donut (Story #122).
+    expect(palette.colorClassOf('Technology')).toBe('pie-series-2')
+    expect(palette.colorClassOf('Financials')).toBe('pie-series-3')
     // The empty (unclassified) key is a residual — neutral, never a categorical hue.
     expect(palette.colorClassOf('')).toBe('pie-series-neutral')
     expect(palette.legend.map((e) => e.key)).toEqual(['Technology', 'Financials', ''])
+  })
+
+  it('never gives a sector the blue the map reserves for a country weight', () => {
+    // The invariant, not the arithmetic: whatever the sector mix, none of them may be slot 1.
+    const slices = Array.from({ length: 12 }, (_, i) => sectorSlice(`S${i}`, 100 - i))
+    const classes = sectorPalette(slices).legend.map((e) => e.colorClass)
+    expect(classes).not.toContain('pie-series-1')
+    // ...and they are still all distinct from one another, which is the point of a palette.
+    const categorical = classes.filter((c) => c !== 'pie-series-neutral')
+    expect(new Set(categorical).size).toBe(categorical.length)
   })
 
   it('folds sectors past the palette into a neutral Other, matching the donut tail', () => {

@@ -55,7 +55,7 @@ Other options and why they were not chosen.
 - `0017` — Analytics tables: time-range filter anchored to the data, composed with the type filter
 - `0018` — One shared content measure for the shell; charts sized by aspect ratio
 - `0019` — Allocation map: Mapbox basemap with an SVG bubble overlay (supersedes `0014`) *(superseded by 0020 on the overlay; basemap decisions still apply)*
-- `0020` — Allocation map: one canvas circle per holding, with a hover popup (supersedes `0019`)
+- `0020` — Allocation map: one canvas circle per holding, with a hover popup (supersedes `0019`) *(superseded by 0030 on the unit, spread, canvas layer and per-holding granularity; approximation and a11y stance still apply)*
 - `0021` — Allocation map: the gain/loss colour scale (red↔gray↔blue, fixed ±25%; extends `0020`)
 - `0022` — Bounded gateway requests; a stalled gateway as its own `not_responding` state (extends `0002`)
 - `0023` — Classification refresh: resumable (persist before reporting) and progress-reporting (extends `0009`)
@@ -65,3 +65,4 @@ Other options and why they were not chosen.
 - `0027` — Analytics tabs stay mounted; a re-read becomes explicit and non-destructive (extends `0006`)
 - `0028` — Window size/position/maximized remembered in `app_meta`; reachability judged on the title bar (extends `0011`)
 - `0029` — Tab shell: the complete ARIA tabs pattern, roving tabindex, automatic activation (extends `0006`)
+- `0030` — Allocation map: two donuts per country (country weight + sectors); per-holding marks retired; palette blue reserved from sectors (supersedes `0020`)

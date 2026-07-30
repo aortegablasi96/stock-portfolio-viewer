@@ -1,6 +1,7 @@
 # 0020. Allocation map: one canvas circle per holding, with a hover popup
 
-- **Status:** Accepted
+- **Status:** Superseded by 0030 (the unit, the spiral spread, the canvas circle layer, and the
+  per-holding granularity — the approximation and the accessibility position below still apply)
 - **Date:** 2026-07-26
 
 ## Context

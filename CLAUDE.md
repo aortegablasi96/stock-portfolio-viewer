@@ -147,17 +147,40 @@ Canonical flows to copy when adding a feature:
   performance view's cumulative **TWR** curve, chosen over a value curve so deposits and
   withdrawals don't move it (DDR-0013). They are sized by **aspect ratio** (the `viewBox`), never
   a pixel width, because they scale to a shared `--content-max` column (DDR-0018). The
-  **Allocation map is the one scoped exception**: a Mapbox GL JS basemap (ADR-0007) carrying one
-  canvas circle per holding, area-proportional to market value, anchored to ISO-3166 alpha-2
-  centroids and fanned on a spiral so holdings sharing a country stay separately hoverable —
-  which makes the map deliberately *approximate*, positioned by issuer country rather than by
-  company (DDR-0020, superseding DDR-0019 and DDR-0014). Its circles take **two** colour modes
-  behind a toggle, switched with `setPaintProperty` over properties already on every feature: the
-  Sector donut's palette, and unrealized **return on cost** (not absolute P&L — radius already
-  encodes size). That second scale is **red ↔ gray ↔ blue, deliberately not the app's `--pos` /
-  `--neg` green/red**, which fails CVD contrast where fill colour is the only channel and no
-  number sits beside it; `--pos` / `--neg` are unchanged everywhere else, including the map's own
-  popup. Don't "restore" them on the circles (DDR-0021). See DDR-0005, DDR-0006.
+  **Allocation map is the one scoped exception**: a Mapbox GL JS basemap (ADR-0007) carrying, per
+  issuer country, **two donuts side by side** — the left the country's weight in the portfolio (its
+  share of NAV in blue against a muted remainder, on an **absolute 0–100% scale**), the right one
+  slice per sector — with the pair's area proportional to the country's market value and anchored to
+  ISO-3166 alpha-2 centroids, which makes the map deliberately *approximate*, positioned by issuer
+  country rather than by company (DDR-0030, superseding DDR-0020 on the unit, the spiral spread, the
+  canvas layer and per-holding granularity). Six things to know before touching it. The marks are
+  **SVG carried by `mapboxgl.Marker`, not painted into the canvas** — a circle layer paints one flat
+  fill per feature, so donut slices have no canvas equivalent. Colour therefore needs no
+  `getComputedStyle`: a palette class on a `<path>` *is* the fill, so `.map-diverge-*` carries `fill`
+  as well as `background` and a colour-mode switch is an ordinary re-render, not `setPaintProperty`.
+  **The split into two charts is what makes the colour work, and three earlier forms failed on
+  exactly that** — a nested sunburst forced every holding to wear its sector's hue and rendered as
+  one solid block; a holdings donut needed eight distinguishable hues on a 40px mark. Here each chart
+  has one job and the colours that job needs exist: the left shows one number, the right shows
+  sectors, which already have a palette. **`pie-series-1` — the palette's only blue — is reserved for
+  the country weight, so the *sector* dimension starts at slot 2** (`SECTOR_SLOT_OFFSET` in
+  `lib/pie`), applied everywhere a sector appears (map, map legend, Sector donut, its table) because
+  the invariant is one sector/one hue *everywhere*. Only sectors pay it: asset class, currency and
+  country keep all eight slots. Don't put a new chart using slot 1 next to sectors, and don't
+  un-reserve the blue — widen the palette instead. **Holdings are not on the map at all** — that retires
+  DDR-0020's per-holding granularity; the Positions table is where one company is read, and the
+  `aria-label` says so. **The 2% slice floor applies to sectors only** — applying it to the weight
+  donut would overstate every small country, which is the one thing a proportion chart must not do.
+  Two colour modes ride behind a toggle: the sector palette, and unrealized **return on cost** (not
+  absolute P&L — size already encodes that). That second scale is **red ↔ gray ↔ blue, deliberately
+  not the app's `--pos` / `--neg` green/red**, which fails CVD contrast where fill colour is the only
+  channel and no number sits beside it. Don't "restore" them on the slices (DDR-0021) — but the popup
+  *is* tinted `--pos` / `--neg` by the hovered subject's return, which is exactly the case DDR-0021
+  carved out: a figure sits two rows below the tint. Finally, a country under an 8px radius becomes a
+  **single disc** in its largest sector's hue (two donuts that small are two smudges), and note that
+  an SVG `<g>` is only ever hit *through its children* — grouping slices and putting
+  `pointer-events: auto` on the group catches nothing. All of this lives in `lib/countryDonuts`. See
+  DDR-0005, DDR-0006.
 - **A view that outlives its tab:** an analytics tab mounts on **first visit and then stays
   mounted**, hidden rather than unmounted, so returning to it keeps both the report and every
   bit of view-local state (time range, type chips, chart tab, map colour mode) — nothing is
@@ -801,16 +824,17 @@ Mock repositories and external providers.
 Vitest picks up every `src/**/*.test.ts` and runs it in a **Node** environment (**no jsdom**),
 so no test may render a React component. This shapes the renderer: chart maths, filtering,
 sorting and formatting are **extracted out of components into pure modules under
-`renderer/src/lib/`** (`format`, `pie`, `worldGeo`, `mapBubbles`, `gainLoss`, `tableFilter`,
+`renderer/src/lib/`** (`format`, `pie`, `worldGeo`, `countryDonuts`, `gainLoss`, `tableFilter`,
 `column`, `dateRange`, `sectorMap`, `performanceRange`, `classifyProgress`, `dataVersion`,
 `tabKeyboard`)
 precisely so they can be tested — follow
 that split when adding a component with real logic in it. `dataVersion` is the same move applied
 to state rather than maths: the cross-view staleness signal is a plain subscribable store a hook
-reads with `useSyncExternalStore`, so the part worth testing is testable without a renderer. The map is the sharpest case: colour
-resolution needs `getComputedStyle` and so stays in the component, while `mapBubbles` and
-`gainLoss` emit palette *classes* — that seam is what keeps the map's geometry and colour scale
-testable under Node. Pure repository helpers that touch no data source
+reads with `useSyncExternalStore`, so the part worth testing is testable without a renderer. The
+map is the sharpest case: `countryDonuts` and `gainLoss` emit palette *classes* rather than values,
+and every slice path, share normalization and disc threshold falls out of that — the whole
+of the map's geometry and colour scale is testable under Node while the component keeps only the
+parts that need a DOM (DDR-0030). Pure repository helpers that touch no data source
 (`flexStatementParser`, `snapshotMapping`, `fifoSummary`) are unit-tested the same way.
 
 Every completed feature should include:
