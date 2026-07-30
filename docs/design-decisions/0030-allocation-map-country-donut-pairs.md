@@ -77,6 +77,61 @@ Sector donut below.
 The legend gains a `Country weight` entry for the blue. It is the one hue on the mark that is not a
 sector, and an unexplained colour in a legend-bearing chart is a defect.
 
+### The palette's blue is reserved, and sectors start at slot 2
+
+Saying "the weight arc is blue" is not enough on its own. `--series-1` is the palette's **only**
+blue, and `sectorPalette` assigned slot 1 to the largest sector — so the weight donut and the biggest
+sector beside it were *guaranteed* to be the same colour, on the same mark, whatever either chart
+did. This was found by looking at the running app, not by reasoning about it.
+
+Slot 1 is now reserved for the country weight, and the sector dimension starts at slot 2
+(`SECTOR_SLOT_OFFSET` in `lib/pie`).
+
+**The skip applies everywhere a sector appears** — the map, the map legend, the Sector donut and its
+composing table — because the invariant that matters is *one sector, one hue everywhere*, not which
+hue it is. Shifting only the map would have produced exactly the drift the shared palette exists to
+prevent: a sector wearing one colour on the mark and another in its own donut a few centimetres
+below. The Sector breakdown's colours therefore all move by one, which is a visible change to a panel
+this story otherwise does not touch.
+
+Three things follow, and the third is the reason this is recorded here rather than left in a commit
+message:
+
+- **Only the sector dimension pays.** Asset class, currency and country keep all eight slots; none of
+  them is ever drawn beside the weight donut. The offset is a per-dimension argument, not a global
+  change to `sliceColorClasses`.
+- **Sectors lose one categorical slot**, so the fold into a neutral `Other` happens one sector
+  earlier — seven named sectors rather than eight.
+- **The constraint is now permanent and inherited.** Any future chart placed beside a sector chart
+  must take its colour from outside the sector range, and any future use of slot 1 must not appear
+  next to sectors. The test asserts the *invariant* — no sector ever takes `pie-series-1`, and sector
+  hues stay mutually distinct — rather than the slot arithmetic, so a future reshuffle of the palette
+  cannot quietly reintroduce the collision.
+
+The alternative was a second blue outside the validated palette for the weight arc. Rejected: the
+palette has one blue because that is what cleared the CVD and contrast gates, and two blues of
+different lightness on marks this small read as one colour shaded, not as two categories.
+
+### A 100% slice is a ring, not a segment
+
+A donut segment is a closed shape with straight radial edges, and `.pie-slice` strokes its outline in
+the surface colour so neighbouring slices separate. On a slice that sweeps the full turn there are no
+neighbours — but the edges are still stroked, so a 100% chart painted two seams at 12 and 6 o'clock
+that looked like divisions and represented nothing.
+
+`fullRingPath` draws that case as a real ring instead: the outer circle clockwise, the inner circle
+anticlockwise, the hole punched by the nonzero fill rule. There are no radial edges, so there is
+nothing for the stroke to find.
+
+This is recorded because it is **not** a map decision. It lived in `lib/pie` and affected every donut
+in the Allocation view whenever a single category held 100% — one asset class, one currency, one
+country. The map merely made it common enough to notice: a country holding a single sector hits it
+every time.
+
+The tests around it asserted the defect. "A full turn is two half-arcs" passes for a ring too, since
+a ring also has two subpaths, so the assertion is now the absence of an `L` command — the radial edge
+is what makes a segment a segment, and its absence is the fix rather than a proxy for it.
+
 ### Why donuts rather than the radial bars that also worked
 
 Attempt 3's radial bars were correct and legible. The deciding argument was **consistency**: the
@@ -241,6 +296,10 @@ crowded against a real portfolio the answer is a smaller `R_MAX` or zoom-depende
 The absolute weight scale means most countries show a small blue arc, because most portfolios are not
 40% in one country. That is honest and comparable, and the mark's *size* plus the popup carry the
 magnitude.
+
+Reserving slot 1 leaves the sector dimension seven categorical hues. If sector granularity ever
+increases — a finer classification than the current broad sectors — that ceiling will bite before the
+others do, and the answer is to widen the palette rather than to un-reserve the blue.
 
 ## Supersedes
 

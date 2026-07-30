@@ -162,7 +162,12 @@ Canonical flows to copy when adding a feature:
   exactly that** — a nested sunburst forced every holding to wear its sector's hue and rendered as
   one solid block; a holdings donut needed eight distinguishable hues on a 40px mark. Here each chart
   has one job and the colours that job needs exist: the left shows one number, the right shows
-  sectors, which already have a palette. **Holdings are not on the map at all** — that retires
+  sectors, which already have a palette. **`pie-series-1` — the palette's only blue — is reserved for
+  the country weight, so the *sector* dimension starts at slot 2** (`SECTOR_SLOT_OFFSET` in
+  `lib/pie`), applied everywhere a sector appears (map, map legend, Sector donut, its table) because
+  the invariant is one sector/one hue *everywhere*. Only sectors pay it: asset class, currency and
+  country keep all eight slots. Don't put a new chart using slot 1 next to sectors, and don't
+  un-reserve the blue — widen the palette instead. **Holdings are not on the map at all** — that retires
   DDR-0020's per-holding granularity; the Positions table is where one company is read, and the
   `aria-label` says so. **The 2% slice floor applies to sectors only** — applying it to the weight
   donut would overstate every small country, which is the one thing a proportion chart must not do.
