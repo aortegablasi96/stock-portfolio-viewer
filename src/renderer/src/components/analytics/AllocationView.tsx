@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { AllocationReport, AllocationResult, AllocationSlice } from '@shared/domain/allocation'
 import { formatCurrency, formatDate, formatSignedCurrency } from '../../lib/format'
+import { SECTOR_SLOT_OFFSET } from '../../lib/pie'
 import { CountryMap, type MapColorMode } from '../charts/CountryMap'
 import { AllocationBreakdown } from './AllocationBreakdown'
 import { useAnalytics } from './useAnalytics'
@@ -164,6 +165,10 @@ export function AllocationView(): React.JSX.Element {
           slices={slicesFor(r, tab)}
           formatValue={c}
           ariaLabel={`Allocation ${activeTab.title.toLowerCase()}`}
+          // Sectors skip the palette's blue, which the map reserves for a country's weight. The
+          // skip has to apply here too, or a sector would wear one hue on the map and another in
+          // its own donut (Story #122).
+          colorOffset={tab === 'sector' ? SECTOR_SLOT_OFFSET : 0}
           emptyMessage={tab === 'sector' ? 'No sector data yet.' : 'Nothing to plot yet.'}
         />
         {tab === 'sector' && r.unclassifiedCount > 0 && (

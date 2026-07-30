@@ -99,8 +99,12 @@ describe('normalizedShares', () => {
 })
 
 describe('donutPath', () => {
-  it('draws a full turn as two half-arcs, so a single-sector country is not erased', () => {
-    expect(donutPath(0, 10, 5, 0, FULL_TURN).match(/M /g)).toHaveLength(2)
+  it('draws a full turn as a seamless ring, so a single-sector country is not erased or divided', () => {
+    const full = donutPath(0, 10, 5, 0, FULL_TURN)
+    // Two subpaths: the outer circle, then the inner one wound the other way to punch the hole.
+    expect(full.match(/M /g)).toHaveLength(2)
+    // No radial edge for the slice stroke to paint as a seam that divides nothing.
+    expect(full).not.toContain('L ')
   })
 
   it('draws a partial ring as one arc', () => {

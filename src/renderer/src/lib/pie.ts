@@ -87,22 +87,68 @@ export function arcPath(
 }
 
 /**
+ * How many leading palette slots the **sector** dimension skips (Story #122).
+ *
+ * Slot 1 is the palette's only blue, and the Allocation map spends it on a country's weight in the
+ * portfolio — a magnitude, which is exactly that slot's documented role. Sectors therefore start at
+ * slot 2, so no sector can ever wear the same hue as the weight donut beside it.
+ *
+ * The skip applies to *every* surface a sector appears on — the map, the map legend, the Sector
+ * donut and its composing table — because the invariant that matters is that one sector has one
+ * hue everywhere, not which hue it is. The cost is one fewer categorical slot before the tail
+ * folds into 'Other', which is why this is opt-in per dimension rather than global: asset class,
+ * currency and country keep all eight.
+ */
+export const SECTOR_SLOT_OFFSET = 1
+
+/**
  * Assign each slice its colour class, in the same fixed order the donut uses: categorical
  * hues (`pie-series-1…8`) go to the *named* categories only, while residual slices — the
  * aggregated tail and the empty "no value" key — take the neutral gray, so a hue always
  * means a real category. Shared by the donut and its composing-assets table (Story #48) so
  * a slice wears the same colour in both.
+ *
+ * `offset` skips that many leading slots — see `SECTOR_SLOT_OFFSET`.
  */
-export function sliceColorClasses(slices: Array<Pick<PieDatum, 'key'>>): string[] {
-  let slot = 0
+export function sliceColorClasses(
+  slices: Array<Pick<PieDatum, 'key'>>,
+  offset = 0,
+): string[] {
+  let slot = offset
   return slices.map((s) =>
     isResidual(s.key) ? 'pie-series-neutral' : `pie-series-${(slot += 1)}`,
   )
 }
 
 /**
- * Lay the data out as donut segments. A single 100% datum is drawn as a full ring (two
- * half-arcs), because an arc whose start and end coincide renders as nothing.
+ * A complete ring, with no radial edges.
+ *
+ * Two subpaths — the outer circle clockwise, the inner circle anticlockwise — so the nonzero fill
+ * rule punches the hole. Each circle is itself two half-arcs, because an arc whose start and end
+ * coincide renders as nothing.
+ *
+ * This exists because a 100% slice cannot be drawn as a donut *segment*. A segment is a closed
+ * shape with straight radial edges, and `.pie-slice` strokes its outline in the surface colour to
+ * separate neighbouring slices — so a full-circle segment paints two seams at 12 and 6 o'clock that
+ * look like divisions but represent nothing. A ring has no radial edges, so there is nothing there
+ * to stroke.
+ */
+export function fullRingPath(cx: number, cy: number, rOuter: number, rInner: number): string {
+  return [
+    `M ${cx - rOuter} ${cy}`,
+    `A ${rOuter} ${rOuter} 0 1 1 ${cx + rOuter} ${cy}`,
+    `A ${rOuter} ${rOuter} 0 1 1 ${cx - rOuter} ${cy}`,
+    'Z',
+    `M ${cx - rInner} ${cy}`,
+    `A ${rInner} ${rInner} 0 1 0 ${cx + rInner} ${cy}`,
+    `A ${rInner} ${rInner} 0 1 0 ${cx - rInner} ${cy}`,
+    'Z',
+  ].join(' ')
+}
+
+/**
+ * Lay the data out as donut segments. A single 100% datum is drawn as a seamless full ring — see
+ * `fullRingPath` for why it cannot be a segment.
  */
 export function toArcs(
   data: PieDatum[],
@@ -122,7 +168,7 @@ export function toArcs(
     angle = end
     const path =
       share >= 1
-        ? `${arcPath(cx, cy, rOuter, rInner, 0, Math.PI)} ${arcPath(cx, cy, rOuter, rInner, Math.PI, 2 * Math.PI)}`
+        ? fullRingPath(cx, cy, rOuter, rInner)
         : arcPath(cx, cy, rOuter, rInner, start, end)
     return { ...d, share, path }
   })

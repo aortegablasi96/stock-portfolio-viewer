@@ -22,15 +22,18 @@ export function AllocationBreakdown({
   slices,
   formatValue,
   ariaLabel,
+  colorOffset = 0,
   emptyMessage = 'Nothing to plot yet.',
 }: {
   slices: AllocationSlice[]
   formatValue: (v: number) => string
   ariaLabel: string
+  /** Palette slots to skip — `SECTOR_SLOT_OFFSET` for the sector breakdown (Story #122). */
+  colorOffset?: number
   emptyMessage?: string
 }): React.JSX.Element {
   const items = groupTail(toItems(slices))
-  const colors = sliceColorClasses(items)
+  const colors = sliceColorClasses(items, colorOffset)
 
   if (items.length === 0) {
     return <p className="chart-empty">{emptyMessage}</p>
@@ -62,7 +65,13 @@ export function AllocationBreakdown({
         </table>
       </div>
       <div className="breakdown-chart">
-        <PieChart data={items} formatValue={formatValue} ariaLabel={ariaLabel} showLegend={false} />
+        <PieChart
+          data={items}
+          formatValue={formatValue}
+          ariaLabel={ariaLabel}
+          showLegend={false}
+          colorOffset={colorOffset}
+        />
       </div>
     </div>
   )

@@ -28,7 +28,7 @@
  */
 import type { AllocationPosition } from '@shared/domain/allocation'
 import type { SectorPalette } from './sectorMap'
-import { arcPath } from './pie'
+import { arcPath, fullRingPath } from './pie'
 import { divergingClass, returnPercent } from './gainLoss'
 import { centroidFor } from './worldGeo'
 
@@ -166,9 +166,11 @@ export function normalizedShares(values: number[], minShare = MIN_SLICE_SHARE): 
 /**
  * A donut segment between two angles (radians, clockwise from 12 o'clock), centred on `cx`.
  *
- * A full turn is drawn as two half-arcs: an arc whose start and end coincide renders as nothing,
- * which would erase the most common mark on the map — a country holding one sector, or one that is
- * the entire portfolio. `lib/pie` handles the same case for the view's own donuts.
+ * A full turn becomes a **seamless ring**, not a segment: a segment carries straight radial edges,
+ * and the slice stroke would paint them as two seams that look like divisions but represent
+ * nothing. This is the common case on this map — a country holding one sector, or one whose weight
+ * rounds to the whole portfolio — so it is worth getting right. See `fullRingPath` in `lib/pie`,
+ * which the view's own donuts share.
  */
 export function donutPath(
   cx: number,
@@ -177,10 +179,7 @@ export function donutPath(
   start: number,
   end: number,
 ): string {
-  if (end - start >= FULL_TURN - 1e-9) {
-    const mid = start + Math.PI
-    return `${arcPath(cx, 0, rOuter, rInner, start, mid)} ${arcPath(cx, 0, rOuter, rInner, mid, end)}`
-  }
+  if (end - start >= FULL_TURN - 1e-9) return fullRingPath(cx, 0, rOuter, rInner)
   return arcPath(cx, 0, rOuter, rInner, start, end)
 }
 

@@ -24,7 +24,7 @@
  * one of which consumes this palette, one slice per sector (DDR-0030).
  */
 import type { AllocationSlice } from '@shared/domain/allocation'
-import { groupTail, OTHER_KEY, sliceColorClasses, type PieDatum } from './pie'
+import { groupTail, OTHER_KEY, SECTOR_SLOT_OFFSET, sliceColorClasses, type PieDatum } from './pie'
 
 const NEUTRAL_CLASS = 'pie-series-neutral'
 
@@ -63,7 +63,9 @@ function toPieData(bySector: AllocationSlice[]): PieDatum[] {
 /** Build the shared sector palette from the allocation report's `bySector` breakdown. */
 export function sectorPalette(bySector: AllocationSlice[]): SectorPalette {
   const grouped = groupTail(toPieData(bySector))
-  const classes = sliceColorClasses(grouped)
+  // Sectors skip the palette's blue: the map spends it on a country's weight, and the two charts
+  // sit side by side on the same mark (Story #122).
+  const classes = sliceColorClasses(grouped, SECTOR_SLOT_OFFSET)
   const colorByKey = new Map<string, string>()
   const labelByKey = new Map<string, string>()
   const legend: SectorLegendEntry[] = grouped.map((g, i) => {

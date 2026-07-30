@@ -22,6 +22,7 @@ export function PieChart({
   ariaLabel,
   emptyMessage = 'Nothing to plot yet.',
   showLegend = true,
+  colorOffset = 0,
 }: {
   data: PieDatum[]
   formatValue: (v: number) => string
@@ -30,6 +31,8 @@ export function PieChart({
   /** When false, the donut renders without its legend — used where a composing-assets
    *  table already carries the labels/values (Story #48). */
   showLegend?: boolean
+  /** Palette slots to skip — `SECTOR_SLOT_OFFSET` for the sector breakdown (Story #122). */
+  colorOffset?: number
 }): React.JSX.Element {
   const arcs = toArcs(groupTail(data), SIZE / 2, SIZE / 2, R_OUTER, R_INNER)
 
@@ -37,7 +40,7 @@ export function PieChart({
     return <p className="chart-empty">{emptyMessage}</p>
   }
 
-  const seriesClass = sliceColorClasses(arcs)
+  const seriesClass = sliceColorClasses(arcs, colorOffset)
 
   return (
     <figure className="chart-figure pie-figure">
