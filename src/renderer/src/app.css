@@ -1534,8 +1534,12 @@ html {
   pointer-events: none;
 }
 
+/* The full-sweep track behind each bar. Without it a swept arc states no proportion — it is what
+   turns "an arc" into "38% of the way round". Dark against the light basemap, like the popup, and
+   pointer-transparent so only the ring's group takes the hover. */
 /* A surface-coloured hairline between neighbouring slices — the same separator the view's own
-   donuts use (`.pie-slice`), at map scale. */
+   donuts use (`.pie-slice`), at map scale. Every slice is its own hit target: SVG hit-testing only
+   ever reaches leaves, so grouping them would catch nothing anyway. */
 .country-mark-slice,
 .country-mark-dot {
   pointer-events: auto;
@@ -1545,9 +1549,18 @@ html {
   transition: opacity 90ms ease-out;
 }
 
+/* The remainder of the left donut: the portfolio held *elsewhere*. Muted, because it is the
+   context that makes the blue arc read as a proportion rather than a subject of its own. */
+.country-mark-rest {
+  fill: var(--card);
+  fill-opacity: 0.42;
+  stroke: var(--border);
+  stroke-width: 0.5;
+}
+
+/* Everything recedes on hover so the one slice under the cursor can come forward. */
 .country-mark:hover .country-mark-slice,
 .country-mark:hover .country-mark-dot {
-  /* Everything recedes on hover so the one slice under the cursor can come forward below. */
   opacity: 0.5;
 }
 
@@ -1556,20 +1569,6 @@ html {
   opacity: 1;
   stroke: var(--text);
   stroke-width: 1;
-}
-
-/* The hole is the country-level target, and what makes each mark read as a donut rather than a
-   pie. Dark against the light basemap, like the popup. */
-.country-mark-hole {
-  pointer-events: auto;
-  cursor: pointer;
-  fill: var(--card);
-  stroke: var(--border);
-  stroke-width: 0.75;
-}
-
-.country-mark-hole:hover {
-  stroke: var(--text);
 }
 
 /* Stacked +/− /reset buttons, top-right of the map. */

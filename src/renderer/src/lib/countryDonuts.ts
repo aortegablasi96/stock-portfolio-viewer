@@ -2,90 +2,80 @@
  * Pure transforms behind the Allocation map's per-country donut pairs (Milestone M4, Story #122;
  * DDR-0030, superseding DDR-0020 on the map's unit and on how the data is drawn).
  *
- * The map has drawn its data several ways. DDR-0014 gave each issuer country one value-sized bubble;
- * Story #71 split that bubble into sector wedges; DDR-0020 replaced the whole thing with one flat
- * circle per *holding*, fanned onto a spiral so holdings sharing a country stayed separately
- * hoverable. This module returns the unit to the **country** and gives each one **two donuts side by
- * side**: the left splitting the country by holding, the right splitting the same country by sector.
+ * Each issuer country carries **two donuts side by side**, the same form the Allocation view's own
+ * breakdown charts use, so the map and the panels below it read as one chart language:
  *
- * Four things follow from that choice, and all four live here:
+ * - **Left, the country's weight in the portfolio:** two slices — the country's share of NAV in
+ *   blue, and the rest of the portfolio muted behind it. An absolute 0–100% scale, not one relative
+ *   to the largest country, so the same arc means the same weight in every session.
+ * - **Right, the country split by sector:** one slice per sector, each in its own hue from the
+ *   shared `sectorPalette`.
  *
- * 1. **The spiral is gone.** One mark per country means no coincident points to pull apart, so the
- *    map stops fanning holdings into a rosette that looked like located companies. Positioning is
- *    still by issuer-country centroid, and still approximate — but it no longer *implies* more.
- * 2. **The two donuts colour independently.** Sector identity is global — the right donut uses the
- *    shared `sectorPalette`, so a sector wears one hue here, in the map legend, and in the Sector
- *    donut below. The left donut does not carry sector identity at all, because the donut beside it
- *    already does; its slices take the app's ordinary categorical donut palette by rank, which is
- *    what makes one holding distinguishable from the next. An earlier round tinted every holding
- *    with its sector's hue and the ring read as a single solid block.
- * 3. **The left donut folds its tail, exactly as every other donut in the app does.** Eight slots,
- *    seven named holdings plus an aggregated `Other (n)` — `lib/pie`'s rule, applied per country.
- *    Beyond eight, slices are too fine to hover and too many to colour without cycling hues.
- * 4. **Small countries degrade to a dot** and **every slice keeps a reachable sliver**. Below
- *    `DOT_MAX_RADIUS` a pair of donuts is a pair of smudges, so the country is drawn as one disc
- *    that still opens a popup. And raw value shares would give a holding worth 0.1% of its country
- *    a sub-pixel slice, and a short (value ≤ 0) none at all; `normalizedShares` lifts every share to
- *    a floor and renormalizes.
+ * **Neither donut needs a colour it cannot afford, and that is why this form works.** Two earlier
+ * rounds of this story failed on exactly that. A nested sunburst forced every holding to wear its
+ * sector's hue and rendered as one solid block; a holdings donut needed eight distinguishable
+ * categorical hues on a 40px mark. Here the left donut shows one number, so it needs one colour, and
+ * the right donut shows sectors, which already have a palette the map's legend explains.
+ *
+ * The cost is recorded in DDR-0030 rather than hidden: **holdings are not on the map**. This retires
+ * the per-holding granularity DDR-0020 introduced. The map answers *where, and in what* — the
+ * Positions table is where one company's figures are read.
  *
  * Output carries **colour classes, never colour values**, the seam every `lib/` chart helper keeps:
  * resolving `pie-series-3` needs `getComputedStyle`, which does not exist in Vitest's Node
- * environment. Unlike the canvas era, nothing downstream has to resolve them — marks are SVG
- * elements now, so a class on a `<path>` *is* the colour (DDR-0030).
+ * environment. Nothing downstream has to resolve them — marks are SVG, so a class on a `<path>` *is*
+ * the colour (DDR-0030).
  */
 import type { AllocationPosition } from '@shared/domain/allocation'
 import type { SectorPalette } from './sectorMap'
-import { arcPath, MAX_SLICES, OTHER_KEY, sliceColorClasses } from './pie'
+import { arcPath } from './pie'
 import { divergingClass, returnPercent } from './gainLoss'
 import { centroidFor } from './worldGeo'
 
-/** Radius of each donut in the smallest country's pair. Also the hit-target floor for a dot. */
+/** Radius of each donut in the smallest country's pair. Also the hit-target floor for a disc. */
 const R_MIN = 5
 
 /**
- * Radius of each donut in the largest country's pair. Lower than a single mark could afford: the
- * pair spans roughly four radii plus a gap, and the dominant country must not cover its neighbours.
+ * Radius of each donut in the largest country's pair. The pair spans roughly four radii plus a gap,
+ * so this is where the dominant country stops covering its neighbours.
  */
-const R_MAX = 24
+const R_MAX = 25
 
-/**
- * Below this radius a pair of donuts is a pair of smudges, and the mark degrades to a single disc.
- * A one-ring donut survives smaller than the nested rings an earlier round used, so this is lower.
- */
-const DOT_MAX_RADIUS = 9
-
-/** The donut hole, as a fraction of the radius — enough ring to read, enough hole to aim at. */
-const HOLE_FRACTION = 0.46
+/** Below this radius a pair of donuts is a pair of smudges, and the mark degrades to one disc. */
+const DOT_MAX_RADIUS = 8
 
 /** Gap between the two donuts, as a fraction of one radius. Wide enough to read as two charts. */
 const GAP_FRACTION = 0.34
 
+/** The donut hole, as a fraction of the radius — enough ring to read, enough hole to read as a donut. */
+const HOLE_FRACTION = 0.5
+
 /**
- * Angular floor for one slice, as a share of its donut. Guarantees a holding worth almost nothing —
- * or nothing at all — is still large enough to hover. Bounded distortion is the price, paid
- * knowingly: the donut answers "what is in here?", and the figures come from the popup.
+ * Angular floor for one slice, as a share of its donut. A sector worth almost nothing would sweep a
+ * sub-degree arc and be impossible to hover. Bounded distortion is the price, paid knowingly: the
+ * donut answers "what is in here?", and the figures come from the popup.
  */
 const MIN_SLICE_SHARE = 0.02
 
 const FULL_TURN = 2 * Math.PI
 
 /** Which donut of the pair a slice belongs to. */
-export type DonutSide = 'holdings' | 'sectors'
+export type DonutSide = 'weight' | 'sectors'
+
+/** The colour class the country's weight slice always wears — the palette's magnitude slot. */
+export const WEIGHT_COLOR_CLASS = 'pie-series-1'
+
+/** Keys for the left donut's two slices. */
+export const WEIGHT_KEY = '__weight__'
+export const REST_KEY = '__rest__'
 
 /** One slice of one donut. */
 export interface DonutSlice {
-  /** Stable key within its donut — a conid/ticker, a sector display key, or the tail's own key. */
+  /** Stable key within its donut — a sector display key, or one of the two weight-donut keys. */
   key: string
-  /** What the popup titles itself with: a ticker, a sector name, or `Other (n)`. */
+  /** What the popup titles itself with: a sector name, or the country for the weight slice. */
   label: string
-  /** Company name for a holding slice, straight from the broker. Empty for every other slice. */
-  name: string
-  /**
-   * A holding's **own** sector, not the palette's display grouping — 'Other (2)' would be a lie in
-   * a popup about one company. Empty for aggregate slices; the popup renders that as '—'.
-   */
-  sectorLabel: string
-  /** Categorical colour class. Sector slices share the global palette; holdings are ranked locally. */
+  /** Categorical colour class. Blue for the country's weight, the shared palette for a sector. */
   colorClass: string
   /** Gain/loss-mode colour class, on the diverging return-on-cost scale (DDR-0021). */
   gainLossClass: string
@@ -93,15 +83,15 @@ export interface DonutSlice {
   marketValueBase: number
   unrealizedPnlBase: number
   percentOfNav: number
-  /** Share of the country this slice's donut describes, as a percent — what the angle encodes. */
+  /** Share of the country, as a percent. What a sector slice's angle encodes. */
   percentOfCountry: number
-  /** How many holdings the slice covers. 1 for a single holding; more for a sector or the tail. */
+  /** How many holdings the slice covers. */
   holdingCount: number
   /** SVG path, in the pair's shared coordinate system (origin between the two donuts). */
   path: string
 }
 
-/** One country's mark: two donuts over the same holdings, split two ways. */
+/** One country's mark: a weight donut and a sector donut, side by side. */
 export interface CountryDonuts {
   /** ISO 3166-1 alpha-2 code, as Flex reported it. */
   code: string
@@ -111,16 +101,16 @@ export interface CountryDonuts {
   lat: number
   /** Radius of each donut. The *pair's* area is proportional to the country's market value. */
   r: number
-  /** Donut hole radius — the country-level hover target at the centre of each donut. */
+  /** The donut hole radius. */
   rHole: number
-  /** Centre offset of each donut from the mark's origin: left sits at −this, right at +this. */
+  /** Centre offset of each donut from the mark's origin: left at −this, right at +this. */
   cx: number
   /**
-   * True when the mark is too small to draw as two donuts and is drawn as one disc instead.
-   * The slices are still populated (the popup and the totals need them); they carry no path.
+   * True when the mark is too small to draw as a pair and is drawn as one disc instead. The slices
+   * are still populated (the popup and totals need them); they carry no paths.
    */
   dot: boolean
-  /** Colour class for the disc when `dot` — the country's largest sector, so it matches the legend. */
+  /** Colour class for the disc when `dot` — the country's largest sector, which the legend explains. */
   colorClass: string
   gainLossClass: string
   returnPercent: number | null
@@ -128,9 +118,9 @@ export interface CountryDonuts {
   unrealizedPnlBase: number
   percentOfNav: number
   holdingCount: number
-  /** Left donut — the country split by holding, largest first, tail folded into `Other (n)`. */
-  holdings: DonutSlice[]
-  /** Right donut — the same country split by sector, largest first. */
+  /** Left donut: the country's share of NAV in blue, then the rest of the portfolio. */
+  weight: DonutSlice[]
+  /** Right donut: one slice per sector, largest first. */
   sectors: DonutSlice[]
 }
 
@@ -155,9 +145,9 @@ export interface CountryDonutMap {
  * Angular shares for one donut, each lifted to a floor and renormalized so they still sum to 1.
  *
  * Three cases are folded together deliberately. A donut whose values are all zero or negative — a
- * country holding only shorts — splits evenly rather than vanishing. A holding worth a rounding
- * error gets `floor` rather than a sub-pixel sliver. And the floor itself shrinks as the donut gets
- * busier (`0.5 / n`), so floors can never claim more than half of it however many slices share it.
+ * country holding only shorts — splits evenly rather than vanishing. A sector worth a rounding error
+ * gets `floor` rather than a sub-pixel sliver. And the floor itself shrinks as the donut gets busier
+ * (`0.5 / n`), so floors can never claim more than half of it.
  */
 export function normalizedShares(values: number[], minShare = MIN_SLICE_SHARE): number[] {
   const n = values.length
@@ -177,8 +167,8 @@ export function normalizedShares(values: number[], minShare = MIN_SLICE_SHARE): 
  * A donut segment between two angles (radians, clockwise from 12 o'clock), centred on `cx`.
  *
  * A full turn is drawn as two half-arcs: an arc whose start and end coincide renders as nothing,
- * which would erase the most common mark on the map — a country holding exactly one position, whose
- * every donut is a complete ring. `lib/pie` handles the same case for the view's own donuts.
+ * which would erase the most common mark on the map — a country holding one sector, or one that is
+ * the entire portfolio. `lib/pie` handles the same case for the view's own donuts.
  */
 export function donutPath(
   cx: number,
@@ -231,74 +221,20 @@ function sumTotals(positions: AllocationPosition[]): Totals {
 interface SliceSeed {
   key: string
   label: string
-  name: string
-  sectorLabel: string
+  colorClass: string
   totals: Totals
-}
-
-/**
- * The left donut's seeds: holdings largest-first, with everything past the palette's slots folded
- * into one `Other (n)`.
- *
- * Unlike `lib/pie`'s `groupTail`, a non-positive holding is **kept** rather than filtered out. A
- * short is a real position, it has to remain reachable, and `normalizedShares` is what gives it an
- * angle. It sorts last, so in a busy country it lands in the tail anyway.
- */
-function holdingSeeds(positions: AllocationPosition[]): SliceSeed[] {
-  const ordered = [...positions].sort((a, b) => b.marketValueBase - a.marketValueBase)
-  const seedOf = (p: AllocationPosition): SliceSeed => ({
-    key: String(p.conid ?? p.symbol),
-    label: p.symbol,
-    name: p.description,
-    sectorLabel: p.sector,
-    totals: sumTotals([p]),
-  })
-
-  if (ordered.length <= MAX_SLICES) return ordered.map(seedOf)
-
-  const head = ordered.slice(0, MAX_SLICES - 1)
-  const tail = ordered.slice(MAX_SLICES - 1)
-  return [
-    ...head.map(seedOf),
-    {
-      key: OTHER_KEY,
-      label: `Other (${tail.length})`,
-      name: '',
-      sectorLabel: '',
-      totals: sumTotals(tail),
-    },
-  ]
-}
-
-/** The right donut's seeds: the same holdings grouped by the palette's *display* sector key. */
-function sectorSeeds(positions: AllocationPosition[], palette: SectorPalette): SliceSeed[] {
-  const groups = new Map<string, AllocationPosition[]>()
-  for (const p of positions) {
-    const key = palette.displayKeyOf(p.sector)
-    groups.set(key, [...(groups.get(key) ?? []), p])
-  }
-  return [...groups.entries()]
-    .map(([key, group]) => ({
-      key,
-      label: palette.labelOf(key),
-      name: '',
-      sectorLabel: '',
-      totals: sumTotals(group),
-    }))
-    .sort((a, b) => b.totals.marketValueBase - a.totals.marketValueBase)
+  percentOfCountry: number
 }
 
 /** Lay seeds out as one donut's slices, in order, filling the full turn. */
 function layOut(
   seeds: SliceSeed[],
-  colorClasses: string[],
-  countryValue: number,
+  shares: number[],
   cx: number,
   r: number,
   rHole: number,
   dot: boolean,
 ): DonutSlice[] {
-  const shares = normalizedShares(seeds.map((s) => s.totals.marketValueBase))
   let angle = 0
   return seeds.map((seed, i) => {
     const span = (shares[i] ?? 0) * FULL_TURN
@@ -308,20 +244,42 @@ function layOut(
     return {
       key: seed.key,
       label: seed.label,
-      name: seed.name,
-      sectorLabel: seed.sectorLabel,
-      colorClass: colorClasses[i] ?? 'pie-series-neutral',
+      colorClass: seed.colorClass,
       gainLossClass: divergingClass(pct),
       returnPercent: pct,
       marketValueBase: seed.totals.marketValueBase,
       unrealizedPnlBase: seed.totals.unrealizedPnlBase,
       percentOfNav: seed.totals.percentOfNav,
-      percentOfCountry:
-        countryValue > 0 ? (seed.totals.marketValueBase / countryValue) * 100 : 0,
+      percentOfCountry: seed.percentOfCountry,
       holdingCount: seed.totals.holdingCount,
       path: dot ? '' : donutPath(cx, r, rHole, start, angle),
     }
   })
+}
+
+/** The right donut's seeds: the country's positions grouped by the palette's display sector key. */
+function sectorSeeds(
+  positions: AllocationPosition[],
+  palette: SectorPalette,
+  countryValue: number,
+): SliceSeed[] {
+  const groups = new Map<string, AllocationPosition[]>()
+  for (const p of positions) {
+    const key = palette.displayKeyOf(p.sector)
+    groups.set(key, [...(groups.get(key) ?? []), p])
+  }
+  return [...groups.entries()]
+    .map(([key, group]) => {
+      const totals = sumTotals(group)
+      return {
+        key,
+        label: palette.labelOf(key),
+        colorClass: palette.colorClassOf(key),
+        totals,
+        percentOfCountry: countryValue > 0 ? (totals.marketValueBase / countryValue) * 100 : 0,
+      }
+    })
+    .sort((a, b) => b.totals.marketValueBase - a.totals.marketValueBase)
 }
 
 /**
@@ -363,32 +321,56 @@ export function countryDonuts(
     const dot = r < DOT_MAX_RADIUS
     const rHole = r * HOLE_FRACTION
     const cx = r + (r * GAP_FRACTION) / 2
+    const countryReturn = returnPercent(totals.costBasisBase, totals.unrealizedPnlBase)
 
-    const hSeeds = holdingSeeds(group)
-    const sSeeds = sectorSeeds(group, palette)
-    const holdings = layOut(
-      hSeeds,
-      // The app's ordinary donut palette, assigned by rank within this country: the slices only
-      // have to be told apart from each other, and the donut beside them carries sector identity.
-      sliceColorClasses(hSeeds),
-      totals.marketValueBase,
+    // --- Left: the country's share of NAV, against the rest of the portfolio ------------
+    // Clamped because `percentOfNav` is IBKR's own figure and a rounding artefact above 100 would
+    // wrap the slice onto itself; the remainder is whatever is left of the portfolio.
+    const share = Math.min(1, Math.max(0, totals.percentOfNav / 100))
+    const weight = layOut(
+      [
+        {
+          key: WEIGHT_KEY,
+          label: centroid.name,
+          colorClass: WEIGHT_COLOR_CLASS,
+          totals,
+          percentOfCountry: 100,
+        },
+        {
+          key: REST_KEY,
+          label: 'Rest of portfolio',
+          colorClass: 'map-rest',
+          totals: {
+            marketValueBase: 0,
+            costBasisBase: 0,
+            unrealizedPnlBase: 0,
+            percentOfNav: 100 - totals.percentOfNav,
+            holdingCount: 0,
+          },
+          percentOfCountry: 0,
+        },
+      ],
+      // Not `normalizedShares`: this donut is an absolute 0–100% scale, so a country worth 3% of NAV
+      // must draw a 3% arc. Flooring it would overstate the small countries, which is the one thing
+      // this chart exists to report honestly.
+      [share, 1 - share],
       -cx,
       r,
       rHole,
       dot,
     )
+
+    // --- Right: one slice per sector ----------------------------------------------------
+    const seeds = sectorSeeds(group, palette, totals.marketValueBase)
     const sectors = layOut(
-      sSeeds,
-      // The *shared* palette, so a sector wears one hue here, in the legend, and in the Sector donut.
-      sSeeds.map((s) => palette.colorClassOf(s.key)),
-      totals.marketValueBase,
+      seeds,
+      normalizedShares(seeds.map((s) => s.totals.marketValueBase)),
       cx,
       r,
       rHole,
       dot,
     )
 
-    const countryReturn = returnPercent(totals.costBasisBase, totals.unrealizedPnlBase)
     return {
       code,
       countryName: centroid.name,
@@ -398,8 +380,8 @@ export function countryDonuts(
       rHole,
       cx,
       dot,
-      // A disc has one fill and must choose: the country's largest sector, which is the hue the
-      // legend can explain.
+      // A disc has one fill and must choose: the country's largest sector, the hue the legend
+      // explains. Deliberately not the weight blue, which would say nothing about what is held.
       colorClass: sectors[0]?.colorClass ?? 'pie-series-neutral',
       gainLossClass: divergingClass(countryReturn),
       returnPercent: countryReturn,
@@ -407,7 +389,7 @@ export function countryDonuts(
       unrealizedPnlBase: totals.unrealizedPnlBase,
       percentOfNav: totals.percentOfNav,
       holdingCount: group.length,
-      holdings,
+      weight,
       sectors,
     }
   })

@@ -130,14 +130,14 @@ export function AllocationView(): React.JSX.Element {
           formatSigned={(v) => formatSignedCurrency(v, r.baseCurrency)}
           colorMode={colorMode}
           // The map's marks are hover-only — they carry no text a screen reader can reach, and
-          // keyboard operation is a separate story (#93). This label states what the map totals and
-          // points at the Positions table below, which lists every one of these holdings with the
-          // same figures (DDR-0030).
+          // keyboard operation is a separate story (#93). The map no longer draws individual
+          // holdings at all (DDR-0030), so this label states what it totals and points at the
+          // Positions table below, which is where one company's figures are read.
           ariaLabel={`World map of ${r.positions.length} holdings totalling ${c(
             r.totalMarketValueBase,
-          )}, drawn as a pair of donuts per issuer country — one split by holding, one by sector — coloured by ${
+          )}, drawn as a pair of radial charts per issuer country — the country's weight in the portfolio, and one ring per sector — coloured by ${
             colorMode === 'sector' ? 'sector' : 'unrealized return'
-          }. Each holding is listed with the same figures in the Positions table below.`}
+          }. Every holding is listed individually in the Positions table below.`}
         />
       </section>
 

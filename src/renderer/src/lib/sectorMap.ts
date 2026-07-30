@@ -6,9 +6,9 @@
  * donut, and in the map's own legend. That shared identity is the point — a colour must mean the
  * same thing on both surfaces or neither can be read against the other.
  *
- * Note the scope. The map's *other* donut — the one splitting a country by holding — deliberately
- * does **not** use this palette: it colours by rank so its slices can be told apart, because the
- * donut beside it already carries sector identity (DDR-0030).
+ * Note the scope. The map's *other* donut — the country's weight in the portfolio — deliberately
+ * takes no colour from here: it shows one value against the rest of the portfolio, not a set of
+ * categories (DDR-0030).
  *
  * Built from the donut's own `groupTail` + `sliceColorClasses` pipeline (`lib/pie`), so sectors past
  * the palette's eight slots fold into a neutral 'Other' exactly as the donut folds its tail, and
@@ -21,7 +21,7 @@
  * The map's geometry has moved twice since. Story #92 replaced the per-country sector wedges this
  * module used to lay out with per-holding circles in `lib/mapBubbles` (DDR-0020); Story #122
  * replaced those in turn with a pair of per-country donuts in `lib/countryDonuts`, the right-hand
- * one of which consumes this palette (DDR-0030).
+ * one of which consumes this palette, one slice per sector (DDR-0030).
  */
 import type { AllocationSlice } from '@shared/domain/allocation'
 import { groupTail, OTHER_KEY, sliceColorClasses, type PieDatum } from './pie'
