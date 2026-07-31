@@ -7,6 +7,7 @@ import { AllocationPanel } from './AllocationPanel'
 import { SnapshotHistory } from './SnapshotHistory'
 import { CurrencySelector } from './CurrencySelector'
 import { ConfirmAction } from './ConfirmAction'
+import { Button } from './ui/Button'
 
 /** Default display currency on first load: the account base currency (Story #28). */
 const DEFAULT_DISPLAY_CURRENCY = 'EUR'
@@ -190,14 +191,9 @@ export function PortfolioDashboard(): React.JSX.Element {
             disabled={busy}
             onChange={onCurrencyChange}
           />
-          <button
-            type="button"
-            className="capture-button"
-            onClick={() => void captureNow()}
-            disabled={capture.phase === 'capturing'}
-          >
+          <Button onClick={() => void captureNow()} disabled={capture.phase === 'capturing'}>
             {capture.phase === 'capturing' ? 'Capturing…' : 'Capture now'}
-          </button>
+          </Button>
         </div>
       </header>
 
@@ -220,9 +216,9 @@ export function PortfolioDashboard(): React.JSX.Element {
         <section className="state-panel state-notice" role="status">
           <h2>Not connected to Interactive Brokers</h2>
           <p>{state.message}</p>
-          <button type="button" className="retry-button" onClick={() => void load(displayCurrency)}>
+          <Button variant="primary" onClick={() => void load(displayCurrency)}>
             Retry
-          </button>
+          </Button>
         </section>
       )}
 
@@ -234,9 +230,9 @@ export function PortfolioDashboard(): React.JSX.Element {
             The gateway is running but didn’t answer. Its session usually needs re-authenticating
             at <code>https://localhost:5000</code>.
           </p>
-          <button type="button" className="retry-button" onClick={() => void load(displayCurrency)}>
+          <Button variant="primary" onClick={() => void load(displayCurrency)}>
             Retry
-          </button>
+          </Button>
         </section>
       )}
 
@@ -244,9 +240,9 @@ export function PortfolioDashboard(): React.JSX.Element {
         <section className="state-panel state-error" role="alert">
           <h2>Couldn’t load your portfolio</h2>
           <p>{state.message}</p>
-          <button type="button" className="retry-button" onClick={() => void load(displayCurrency)}>
+          <Button variant="primary" onClick={() => void load(displayCurrency)}>
             Retry
-          </button>
+          </Button>
         </section>
       )}
 

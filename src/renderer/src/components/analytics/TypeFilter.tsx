@@ -1,3 +1,5 @@
+import { Button } from '../ui/Button'
+
 /**
  * The toolbar for a type-filtered analytics table (Stories #32, #33, #73): a group of
  * toggle chips — one per type — plus a live count of how many rows are shown out of the
@@ -55,9 +57,9 @@ export function TypeFilter({
           )
         })}
         {typeFiltered && (
-          <button type="button" className="type-filter-clear" onClick={onClear}>
+          <Button variant="link" size="sm" onClick={onClear}>
             Clear
-          </button>
+          </Button>
         )}
       </div>
       <span className="panel-count" role="status">

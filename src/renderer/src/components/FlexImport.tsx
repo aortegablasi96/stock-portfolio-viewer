@@ -3,6 +3,7 @@ import type { FlexStatementImport, FlexStatementStore } from '@shared/domain/fle
 import { formatDate, formatDateTime } from '../lib/format'
 import { flexDataVersion } from '../lib/dataVersion'
 import { ConfirmAction } from './ConfirmAction'
+import { Button } from './ui/Button'
 
 /**
  * Flex Query import panel (Milestone M3, Story #20). Lets the owner import IBKR
@@ -116,14 +117,9 @@ export function FlexImport(): React.JSX.Element {
             </p>
           </div>
           <div className="flex-import-actions">
-            <button
-              type="button"
-              className="capture-button"
-              onClick={() => void runImport()}
-              disabled={state.phase === 'importing'}
-            >
+            <Button onClick={() => void runImport()} disabled={state.phase === 'importing'}>
               {state.phase === 'importing' ? 'Importing…' : 'Import statements…'}
-            </button>
+            </Button>
             <ConfirmAction
               label="Clear statements"
               confirmLabel="Yes, clear all statements"
