@@ -2,23 +2,42 @@
   "mcpServers": {
     "context7": {
       "command": "npx",
-      "args": ["-y", "@upstash/context7-mcp"]
+      "args": [
+        "-y",
+        "@upstash/context7-mcp"
+      ]
     },
     "playwright": {
       "command": "npx",
-      "args": ["-y", "@playwright/mcp@latest"]
+      "args": [
+        "-y",
+        "@playwright/mcp@latest"
+      ]
     },
     "filesystem": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-filesystem", "."]
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "."
+      ]
     },
     "interactive-brokers": {
       "command": "REPLACE_WITH_RUNTIME",
-      "args": ["REPLACE_WITH_IBKR_MCP_SERVER"],
+      "args": [
+        "REPLACE_WITH_IBKR_MCP_SERVER"
+      ],
       "env": {
         "IBKR_GATEWAY_URL": "https://localhost:5000",
         "IBKR_ACCOUNT_ID": "${IBKR_ACCOUNT_ID}"
       }
+    },
+    "shadcn": {
+      "command": "npx",
+      "args": [
+        "shadcn@latest",
+        "mcp"
+      ]
     }
   }
 }
