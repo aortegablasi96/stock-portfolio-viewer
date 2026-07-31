@@ -1,5 +1,6 @@
 import type { SnapshotSummary } from '@shared/domain/snapshot'
 import { formatCurrency, formatDateTime } from '../lib/format'
+import { Card, CardContent, CardHeader, CardTitle } from './ui/Card'
 
 /**
  * Snapshot history list (Milestone M2, Story #19). Presentational: it renders the
@@ -24,13 +25,15 @@ export function SnapshotHistory({
 }): React.JSX.Element {
   if (snapshots.length === 0) {
     return (
-      <section className="snapshot-history" aria-labelledby="snapshot-history-heading">
-        <h2 id="snapshot-history-heading">History</h2>
-        <p className="snapshot-empty">
-          No snapshots captured yet. One is captured automatically when you open the app while
-          connected, or capture one now.
-        </p>
-      </section>
+      <Card aria-labelledby="snapshot-history-heading">
+        <CardTitle id="snapshot-history-heading">History</CardTitle>
+        <CardContent>
+          <p className="snapshot-empty">
+            No snapshots captured yet. One is captured automatically when you open the app while
+            connected, or capture one now.
+          </p>
+        </CardContent>
+      </Card>
     )
   }
 
@@ -40,33 +43,38 @@ export function SnapshotHistory({
   const hasUnconverted = displayCurrency != null && snapshots.some((s) => s.displayValue === null)
 
   return (
-    <section className="snapshot-history" aria-labelledby="snapshot-history-heading">
-      <div className="snapshot-history-head">
-        <h2 id="snapshot-history-heading">History</h2>
+    <Card aria-labelledby="snapshot-history-heading">
+      <CardHeader align="start">
+        <CardTitle id="snapshot-history-heading">History</CardTitle>
         {action}
-      </div>
-      {hasUnconverted && (
-        <p className="table-notice" role="status">
-          Some snapshots have no available exchange rate and are shown in their captured
-          currency.
-        </p>
-      )}
-      <ol className="snapshot-list">
-        {snapshots.map((snapshot) => (
-          <li key={snapshot.id} className="snapshot-item">
-            <time className="snapshot-time" dateTime={new Date(snapshot.capturedAt).toISOString()}>
-              {formatDateTime(snapshot.capturedAt)}
-            </time>
-            <span className="snapshot-value">
-              <SnapshotValue snapshot={snapshot} />
-            </span>
-            <span className="snapshot-count">
-              {snapshot.holdingsCount} {snapshot.holdingsCount === 1 ? 'holding' : 'holdings'}
-            </span>
-          </li>
-        ))}
-      </ol>
-    </section>
+      </CardHeader>
+      <CardContent>
+        {hasUnconverted && (
+          <p className="table-notice" role="status">
+            Some snapshots have no available exchange rate and are shown in their captured
+            currency.
+          </p>
+        )}
+        <ol className="snapshot-list">
+          {snapshots.map((snapshot) => (
+            <li key={snapshot.id} className="snapshot-item">
+              <time
+                className="snapshot-time"
+                dateTime={new Date(snapshot.capturedAt).toISOString()}
+              >
+                {formatDateTime(snapshot.capturedAt)}
+              </time>
+              <span className="snapshot-value">
+                <SnapshotValue snapshot={snapshot} />
+              </span>
+              <span className="snapshot-count">
+                {snapshot.holdingsCount} {snapshot.holdingsCount === 1 ? 'holding' : 'holdings'}
+              </span>
+            </li>
+          ))}
+        </ol>
+      </CardContent>
+    </Card>
   )
 }
 

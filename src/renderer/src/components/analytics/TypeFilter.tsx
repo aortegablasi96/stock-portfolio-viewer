@@ -40,7 +40,7 @@ export function TypeFilter({
   const typeFiltered = selected.size > 0
   const hidingRows = shown !== total
   return (
-    <div className="panel-toolbar">
+    <div className="card-toolbar">
       <div className="type-filter" role="group" aria-label={`Filter by ${label}`}>
         {types.map((type) => {
           const active = selected.has(type)
@@ -62,7 +62,7 @@ export function TypeFilter({
           </Button>
         )}
       </div>
-      <span className="panel-count" role="status">
+      <span className="card-count" role="status">
         {hidingRows ? `${shown} of ${total}` : `${total}`} shown
       </span>
     </div>

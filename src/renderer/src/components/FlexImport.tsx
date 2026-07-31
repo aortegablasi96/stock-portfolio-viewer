@@ -4,6 +4,7 @@ import { formatDate, formatDateTime } from '../lib/format'
 import { flexDataVersion } from '../lib/dataVersion'
 import { ConfirmAction } from './ConfirmAction'
 import { Button } from './ui/Button'
+import { Card, CardContent, CardHeader, CardTitle } from './ui/Card'
 
 /**
  * Flex Query import panel (Milestone M3, Story #20). Lets the owner import IBKR
@@ -107,10 +108,10 @@ export function FlexImport(): React.JSX.Element {
 
   return (
     <div className="dashboard">
-      <section className="snapshot-history flex-import" aria-labelledby="flex-import-heading">
-        <div className="flex-import-head">
+      <Card aria-labelledby="flex-import-heading">
+        <CardHeader align="start">
           <div>
-            <h2 id="flex-import-heading">Flex Query import</h2>
+            <CardTitle id="flex-import-heading">Flex Query import</CardTitle>
             <p className="flex-import-intro">
               Import IBKR Portfolio Analyst Flex Query statements (.xml) to build your history for
               performance, allocation, dividend, and realized-gains analytics.
@@ -128,32 +129,38 @@ export function FlexImport(): React.JSX.Element {
               onConfirm={runClear}
             />
           </div>
-        </div>
+        </CardHeader>
 
-        {state.phase === 'cleared' && (
-          <p className="capture-status" role="status">
-            {state.removedStatements === 0
-              ? 'No imported statements to clear.'
-              : `Cleared ${state.removedStatements} statement${state.removedStatements === 1 ? '' : 's'}. The analytics views will show their needs-import state until you import again.`}
-          </p>
+        {/* Rendered only when there is something to report: an empty body would still take the
+            header's gap below it, and the idle panel is the header alone. */}
+        {state.phase !== 'idle' && state.phase !== 'importing' && (
+          <CardContent>
+            {state.phase === 'cleared' && (
+              <p className="capture-status" role="status">
+                {state.removedStatements === 0
+                  ? 'No imported statements to clear.'
+                  : `Cleared ${state.removedStatements} statement${state.removedStatements === 1 ? '' : 's'}. The analytics views will show their needs-import state until you import again.`}
+              </p>
+            )}
+
+            {state.phase === 'canceled' && (
+              <p className="snapshot-empty" role="status">
+                Import canceled — no files were selected.
+              </p>
+            )}
+
+            {(state.phase === 'invalid' || state.phase === 'error') && (
+              <p className="capture-status capture-status-error" role="alert">
+                {state.phase === 'invalid'
+                  ? `That file isn’t a valid Flex Query statement, so nothing was imported. ${state.message}`
+                  : state.message}
+              </p>
+            )}
+
+            {state.phase === 'imported' && <ImportSummary statements={state.statements} />}
+          </CardContent>
         )}
-
-        {state.phase === 'canceled' && (
-          <p className="snapshot-empty" role="status">
-            Import canceled — no files were selected.
-          </p>
-        )}
-
-        {(state.phase === 'invalid' || state.phase === 'error') && (
-          <p className="capture-status capture-status-error" role="alert">
-            {state.phase === 'invalid'
-              ? `That file isn’t a valid Flex Query statement, so nothing was imported. ${state.message}`
-              : state.message}
-          </p>
-        )}
-
-        {state.phase === 'imported' && <ImportSummary statements={state.statements} />}
-      </section>
+      </Card>
 
       <StoredStatements store={store} />
     </div>
@@ -170,59 +177,60 @@ export function FlexImport(): React.JSX.Element {
  */
 function StoredStatements({ store }: { store: FlexStatementStore | null }): React.JSX.Element {
   return (
-    <section className="snapshot-history flex-store" aria-labelledby="flex-store-heading">
-      <h2 id="flex-store-heading">Stored statements</h2>
+    <Card aria-labelledby="flex-store-heading">
+      <CardTitle id="flex-store-heading">Stored statements</CardTitle>
+      <CardContent>
+        {store === null ? (
+          <p className="snapshot-empty">Loading stored statements…</p>
+        ) : store.statements.length === 0 ? (
+          <p className="snapshot-empty">
+            No statements imported yet. Import a Flex Query export above to build the history the
+            analytics views read from.
+          </p>
+        ) : (
+          <>
+            {store.coverage && (
+              <p className="flex-store-coverage">
+                Covering{' '}
+                <strong>
+                  {formatDate(store.coverage.fromDate)} – {formatDate(store.coverage.toDate)}
+                </strong>{' '}
+                across {store.statements.length}{' '}
+                {store.statements.length === 1 ? 'statement' : 'statements'}.
+              </p>
+            )}
 
-      {store === null ? (
-        <p className="snapshot-empty">Loading stored statements…</p>
-      ) : store.statements.length === 0 ? (
-        <p className="snapshot-empty">
-          No statements imported yet. Import a Flex Query export above to build the history the
-          analytics views read from.
-        </p>
-      ) : (
-        <>
-          {store.coverage && (
-            <p className="flex-store-coverage">
-              Covering{' '}
-              <strong>
-                {formatDate(store.coverage.fromDate)} – {formatDate(store.coverage.toDate)}
-              </strong>{' '}
-              across {store.statements.length}{' '}
-              {store.statements.length === 1 ? 'statement' : 'statements'}.
-            </p>
-          )}
-
-          <div className="table-scroll">
-            <table className="holdings-table">
-              <thead>
-                <tr>
-                  <th scope="col">Account</th>
-                  <th scope="col">Period covered</th>
-                  <th scope="col">Base</th>
-                  <th scope="col">Imported</th>
-                </tr>
-              </thead>
-              <tbody>
-                {store.statements.map((s) => (
-                  <tr key={s.id}>
-                    <th scope="row" className="symbol">
-                      {s.accountId}
-                      <span className="flex-import-file">{s.sourceFilename}</span>
-                    </th>
-                    <td className="description">
-                      {formatDate(s.fromDate)} – {formatDate(s.toDate)}
-                    </td>
-                    <td>{s.baseCurrency}</td>
-                    <td className="description">{formatDateTime(s.importedAt)}</td>
+            <div className="table-scroll">
+              <table className="holdings-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Account</th>
+                    <th scope="col">Period covered</th>
+                    <th scope="col">Base</th>
+                    <th scope="col">Imported</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
-    </section>
+                </thead>
+                <tbody>
+                  {store.statements.map((s) => (
+                    <tr key={s.id}>
+                      <th scope="row" className="symbol">
+                        {s.accountId}
+                        <span className="flex-import-file">{s.sourceFilename}</span>
+                      </th>
+                      <td className="description">
+                        {formatDate(s.fromDate)} – {formatDate(s.toDate)}
+                      </td>
+                      <td>{s.baseCurrency}</td>
+                      <td className="description">{formatDateTime(s.importedAt)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 

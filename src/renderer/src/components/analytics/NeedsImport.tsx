@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react'
 import { flexDataVersion } from '../../lib/dataVersion'
 import { Button } from '../ui/Button'
+import { Card } from '../ui/Card'
 
 /**
  * The shared "no Flex data imported yet" empty state for the analytics views
@@ -43,7 +44,7 @@ export function NeedsImport(): React.JSX.Element {
   }, [])
 
   return (
-    <section className="state-panel state-notice" role="status">
+    <Card size="lg" className="state-panel state-notice" role="status">
       <h2>No imported data yet</h2>
       <p>
         This analysis is built from your imported IBKR Flex Query statements. Import one or more
@@ -57,6 +58,6 @@ export function NeedsImport(): React.JSX.Element {
           {message}
         </p>
       )}
-    </section>
+    </Card>
   )
 }
