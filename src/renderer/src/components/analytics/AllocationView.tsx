@@ -10,6 +10,7 @@ import { NeedsImport } from './NeedsImport'
 import { RefreshBar } from './RefreshBar'
 import { StatTile, toneOf } from './StatTile'
 import { Button } from '../ui/Button'
+import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card'
 
 /**
  * Allocation analysis (Milestone M3, Stories #22, #30 and #48). Breaks the latest imported
@@ -62,20 +63,20 @@ export function AllocationView(): React.JSX.Element {
 
   if (state.phase === 'loading') {
     return (
-      <p className="state-panel" role="status">
+      <Card as="p" size="lg" className="state-panel" role="status">
         Loading allocation…
-      </p>
+      </Card>
     )
   }
   if (state.phase === 'error') {
     return (
-      <section className="state-panel state-error" role="alert">
+      <Card size="lg" className="state-panel state-error" role="alert">
         <h2>Couldn’t load allocation</h2>
         <p>{state.message}</p>
         <Button variant="primary" disabled={refreshing} onClick={() => void reload()}>
           {refreshing ? 'Retrying…' : 'Retry'}
         </Button>
-      </section>
+      </Card>
     )
   }
   if (state.result.status === 'needs_import') {
@@ -102,9 +103,9 @@ export function AllocationView(): React.JSX.Element {
         {top && <StatTile label="Largest holding" value={top.symbol} hint={`${top.percentOfNav.toFixed(1)}% of NAV`} />}
       </div>
 
-      <section className="panel">
-        <div className="panel-header">
-          <h2 className="panel-title">By geography &amp; sector (world map)</h2>
+      <Card>
+        <CardHeader>
+          <CardTitle>By geography &amp; sector (world map)</CardTitle>
           <div className="chart-tabs" role="tablist" aria-label="Map colour">
             {COLOR_MODES.map((m) => (
               <button
@@ -119,28 +120,30 @@ export function AllocationView(): React.JSX.Element {
               </button>
             ))}
           </div>
-        </div>
-        <CountryMap
-          positions={r.positions}
-          bySector={r.bySector}
-          formatValue={c}
-          formatSigned={(v) => formatSignedCurrency(v, r.baseCurrency)}
-          colorMode={colorMode}
-          // The map's marks are hover-only — they carry no text a screen reader can reach, and
-          // keyboard operation is a separate story (#93). The map no longer draws individual
-          // holdings at all (DDR-0030), so this label states what it totals and points at the
-          // Positions table below, which is where one company's figures are read.
-          ariaLabel={`World map of ${r.positions.length} holdings totalling ${c(
-            r.totalMarketValueBase,
-          )}, drawn as a pair of radial charts per issuer country — the country's weight in the portfolio, and one ring per sector — coloured by ${
-            colorMode === 'sector' ? 'sector' : 'unrealized return'
-          }. Every holding is listed individually in the Positions table below.`}
-        />
-      </section>
+        </CardHeader>
+        <CardContent>
+          <CountryMap
+            positions={r.positions}
+            bySector={r.bySector}
+            formatValue={c}
+            formatSigned={(v) => formatSignedCurrency(v, r.baseCurrency)}
+            colorMode={colorMode}
+            // The map's marks are hover-only — they carry no text a screen reader can reach, and
+            // keyboard operation is a separate story (#93). The map no longer draws individual
+            // holdings at all (DDR-0030), so this label states what it totals and points at the
+            // Positions table below, which is where one company's figures are read.
+            ariaLabel={`World map of ${r.positions.length} holdings totalling ${c(
+              r.totalMarketValueBase,
+            )}, drawn as a pair of radial charts per issuer country — the country's weight in the portfolio, and one ring per sector — coloured by ${
+              colorMode === 'sector' ? 'sector' : 'unrealized return'
+            }. Every holding is listed individually in the Positions table below.`}
+          />
+        </CardContent>
+      </Card>
 
-      <section className="panel">
-        <div className="panel-header">
-          <h2 className="panel-title" id="allocation-breakdown-title">{activeTab.title}</h2>
+      <Card>
+        <CardHeader>
+          <CardTitle id="allocation-breakdown-title">{activeTab.title}</CardTitle>
           <div className="chart-tabs" role="tablist" aria-label="Allocation breakdown">
             {BREAKDOWN_TABS.map((t) => (
               <button
@@ -155,59 +158,63 @@ export function AllocationView(): React.JSX.Element {
               </button>
             ))}
           </div>
-        </div>
-        <AllocationBreakdown
-          key={tab}
-          slices={slicesFor(r, tab)}
-          formatValue={c}
-          ariaLabel={`Allocation ${activeTab.title.toLowerCase()}`}
-          // Sectors skip the palette's blue, which the map reserves for a country's weight. The
-          // skip has to apply here too, or a sector would wear one hue on the map and another in
-          // its own donut (Story #122).
-          colorOffset={tab === 'sector' ? SECTOR_SLOT_OFFSET : 0}
-          emptyMessage={tab === 'sector' ? 'No sector data yet.' : 'Nothing to plot yet.'}
-        />
-        {tab === 'sector' && r.unclassifiedCount > 0 && (
-          <ClassifySectors unclassifiedCount={r.unclassifiedCount} onClassified={() => void reload()} />
-        )}
-      </section>
+        </CardHeader>
+        <CardContent>
+          <AllocationBreakdown
+            key={tab}
+            slices={slicesFor(r, tab)}
+            formatValue={c}
+            ariaLabel={`Allocation ${activeTab.title.toLowerCase()}`}
+            // Sectors skip the palette's blue, which the map reserves for a country's weight. The
+            // skip has to apply here too, or a sector would wear one hue on the map and another in
+            // its own donut (Story #122).
+            colorOffset={tab === 'sector' ? SECTOR_SLOT_OFFSET : 0}
+            emptyMessage={tab === 'sector' ? 'No sector data yet.' : 'Nothing to plot yet.'}
+          />
+          {tab === 'sector' && r.unclassifiedCount > 0 && (
+            <ClassifySectors unclassifiedCount={r.unclassifiedCount} onClassified={() => void reload()} />
+          )}
+        </CardContent>
+      </Card>
 
-      <section className="panel">
-        <h2 className="panel-title">Positions</h2>
-        <div className="table-scroll">
-          <table className="holdings-table">
-            <thead>
-              <tr>
-                <th scope="col">Ticker</th>
-                <th scope="col">Country</th>
-                <th scope="col">Sector</th>
-                <th scope="col" className="num">Market value</th>
-                <th scope="col" className="num">Cost basis</th>
-                <th scope="col" className="num">Unrealized P&L</th>
-                <th scope="col" className="num">% of NAV</th>
-              </tr>
-            </thead>
-            <tbody>
-              {r.positions.map((p) => (
-                <tr key={p.conid ?? p.symbol}>
-                  <th scope="row" className="symbol">
-                    {p.symbol}
-                    <span className="flex-import-file">{p.description}</span>
-                  </th>
-                  <td>{p.issuerCountry || '—'}</td>
-                  <td>{p.sector || '—'}</td>
-                  <td className="num">{c(p.marketValueBase)}</td>
-                  <td className="num">{c(p.costBasisBase)}</td>
-                  <td className={`num stat-${toneOf(p.unrealizedPnlBase)}`}>
-                    {formatSignedCurrency(p.unrealizedPnlBase, r.baseCurrency)}
-                  </td>
-                  <td className="num">{p.percentOfNav.toFixed(1)}%</td>
+      <Card>
+        <CardTitle>Positions</CardTitle>
+        <CardContent>
+          <div className="table-scroll">
+            <table className="holdings-table">
+              <thead>
+                <tr>
+                  <th scope="col">Ticker</th>
+                  <th scope="col">Country</th>
+                  <th scope="col">Sector</th>
+                  <th scope="col" className="num">Market value</th>
+                  <th scope="col" className="num">Cost basis</th>
+                  <th scope="col" className="num">Unrealized P&L</th>
+                  <th scope="col" className="num">% of NAV</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
+              </thead>
+              <tbody>
+                {r.positions.map((p) => (
+                  <tr key={p.conid ?? p.symbol}>
+                    <th scope="row" className="symbol">
+                      {p.symbol}
+                      <span className="flex-import-file">{p.description}</span>
+                    </th>
+                    <td>{p.issuerCountry || '—'}</td>
+                    <td>{p.sector || '—'}</td>
+                    <td className="num">{c(p.marketValueBase)}</td>
+                    <td className="num">{c(p.costBasisBase)}</td>
+                    <td className={`num stat-${toneOf(p.unrealizedPnlBase)}`}>
+                      {formatSignedCurrency(p.unrealizedPnlBase, r.baseCurrency)}
+                    </td>
+                    <td className="num">{p.percentOfNav.toFixed(1)}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }

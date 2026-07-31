@@ -329,6 +329,125 @@ html {
   background: var(--border);
 }
 
+/* ---- Card primitive (Story #128, DDR-0033) -------------------------------
+   One surface replacing the five the Epic #125 audit found — `.state-panel`,
+   `.panel`, `.allocation`, `.snapshot-history` and `.highlight-card` — which
+   restated the same three declarations and then disagreed about the padding
+   four different ways.
+
+   Two axes, the same shape as the button above: a variant carries the surface
+   colour, a size carries the padding. The sizes *are* the `--surface-pad-*`
+   steps (DDR-0031), so the component API and this stylesheet share one
+   vocabulary and cannot drift apart.
+
+   No rule here declares a focus ring; `.tab-panel` and the controls inside a
+   card fall through to the base rule at the top of this file. */
+
+.card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+/* -- Sizes: padding only -------------------------------------------------- */
+
+.card-sm {
+  padding: var(--surface-pad-sm);
+}
+
+.card-md {
+  padding: var(--surface-pad-md);
+}
+
+.card-lg {
+  padding: var(--surface-pad-lg);
+}
+
+/* -- Variants: surface colour only ---------------------------------------- */
+
+.card-default {
+  background: var(--card);
+}
+
+/* A card inside a card. Repeating `--card` on `--card` draws a box with no
+   surface behind it, so a nested card recedes to the page background and reads
+   as an inset well instead. */
+.card-nested {
+  background: var(--bg);
+}
+
+/* -- Parts ---------------------------------------------------------------- */
+
+/* One heading treatment for every card. The audit found two doing this job —
+   sentence case on `.panel-title`, uppercase and letter-spaced on
+   `.snapshot-history h2` — and sentence case wins: it was already fourteen of
+   the fifteen call sites, and uppercase-with-tracking is the app's treatment
+   for a *label* naming one figure (`.balance-label`, `.stat-label`,
+   `.highlight-label`), which is a different job. No `font-weight`: the `h2`
+   default is what both superseded rules rendered. */
+.card-title {
+  margin: 0 0 var(--space-5);
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+/* A title beside what the card offers to do with itself. */
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-5);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-5);
+}
+
+.card-header-center {
+  align-items: center;
+}
+
+/* For a header whose title wraps to two lines or carries a lede beneath it,
+   where centring would float the heading down the block. */
+.card-header-start {
+  align-items: flex-start;
+}
+
+.card-header .card-title {
+  margin: 0;
+}
+
+/* A header that is the whole card — the import panel before anything has been
+   imported — owns no gap below itself. */
+.card-header:last-child {
+  margin-bottom: 0;
+}
+
+/* The body is a scope, not decoration: the two overrides `.panel` used to
+   declare on its descendants hang off the body rather than the surface, which
+   is what keeps a card whose content is prose (a state panel) out of reach of
+   them. */
+.card-content .table-scroll {
+  border: none;
+  background: transparent;
+}
+
+/* Explanatory line between a card title and its chart or table. */
+.card-content .source-note {
+  margin: calc(-1 * var(--space-3)) 0 var(--space-5);
+  line-height: var(--leading-normal);
+}
+
+/* Filter chips and a row count beside a card title. */
+.card-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.card-count {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 /* ---- Dashboard layout ---------------------------------------------------- */
 
 .dashboard {
@@ -471,11 +590,10 @@ html {
 
 /* ---- State panels (loading / not connected / error / empty) -------------- */
 
+/* The surface is now `<Card size="lg">` (Story #128). What survives here is the
+   part a card doesn't own — muted prose, a louder heading, a red border on the
+   error variant — which Story #133 folds into a `StatePanel` primitive. */
 .state-panel {
-  padding: 2rem;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
   color: var(--muted);
 }
 
@@ -541,19 +659,6 @@ html {
 }
 
 /* ---- Allocation panel (Story #16) ---------------------------------------- */
-
-.allocation {
-  padding: 1.25rem;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-}
-
-.panel-title {
-  margin: 0 0 1rem;
-  font-size: 0.9rem;
-  color: var(--muted);
-}
 
 .allocation-list {
   list-style: none;
@@ -661,36 +766,6 @@ html {
 
 /* ---- Snapshot history (Story #19) ---------------------------------------- */
 
-.snapshot-history {
-  padding: 1.25rem;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-}
-
-.snapshot-history h2 {
-  margin: 0 0 1rem;
-  font-size: 0.9rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-/* When a header action (e.g. Clear history) is present, lay the heading and control
-   out on one row and drop the heading's bottom margin (the row owns the spacing). */
-.snapshot-history-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-  flex-wrap: wrap;
-  margin-bottom: 1rem;
-}
-
-.snapshot-history-head h2 {
-  margin: 0;
-}
-
 .snapshot-empty {
   margin: 0;
   color: var(--muted);
@@ -747,20 +822,6 @@ html {
 }
 
 /* ---- Flex Query import (M3, Story #20) ----------------------------------- */
-
-.flex-import {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.flex-import-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
 
 .flex-import-actions {
   display: flex;
@@ -1049,51 +1110,6 @@ html {
   color: var(--neg);
 }
 
-.panel {
-  padding: 1.25rem;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-}
-
-.panel .table-scroll {
-  border: none;
-  background: transparent;
-}
-
-/* Explanatory line between a panel title and its chart/table (e.g. gross-vs-net). */
-.panel .source-note {
-  margin: -0.5rem 0 1rem;
-  line-height: 1.45;
-}
-
-/* Panel title beside a toolbar (type filter + row count) — Stories #32, #33. */
-.panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  flex-wrap: wrap;
-  margin-bottom: 1rem;
-}
-
-.panel-header .panel-title {
-  margin: 0;
-}
-
-.panel-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.panel-count {
-  font-size: 0.8rem;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
 /* Cap a scrollable table to 5 rows; the sticky header stays put as the body scrolls.
    Measured against this stylesheet: header ≈ 39.6px, rows ≈ 42.4px — 17rem (272px) shows
    the header + 5 full rows with ~48% of the 6th peeking, a clear "scroll for more" cue. */
@@ -1147,13 +1163,6 @@ html {
   display: flex;
   flex-direction: column;
   gap: 1rem;
-}
-
-.highlight-card {
-  padding: 1rem 1.1rem;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 12px;
 }
 
 .highlight-label {

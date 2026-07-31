@@ -20,6 +20,7 @@ import { StatTile, toneOf } from './StatTile'
 import { TypeFilter } from './TypeFilter'
 import { useRangeSelection } from './useRangeSelection'
 import { Button } from '../ui/Button'
+import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card'
 
 /**
  * Realized gains & trade history (Milestone M3, Story #24). Lists trades from the
@@ -33,20 +34,20 @@ export function TradeHistoryView(): React.JSX.Element {
 
   if (state.phase === 'loading') {
     return (
-      <p className="state-panel" role="status">
+      <Card as="p" size="lg" className="state-panel" role="status">
         Loading trade history…
-      </p>
+      </Card>
     )
   }
   if (state.phase === 'error') {
     return (
-      <section className="state-panel state-error" role="alert">
+      <Card size="lg" className="state-panel state-error" role="alert">
         <h2>Couldn’t load trade history</h2>
         <p>{state.message}</p>
         <Button variant="primary" disabled={refreshing} onClick={() => void reload()}>
           {refreshing ? 'Retrying…' : 'Retry'}
         </Button>
-      </section>
+      </Card>
     )
   }
   if (state.result.status === 'needs_import') {
@@ -72,41 +73,43 @@ export function TradeHistoryView(): React.JSX.Element {
         <StatTile label="Unrealized P&L" value={sc(r.totalUnrealized)} tone={toneOf(r.totalUnrealized)} />
       </div>
 
-      <section className="panel">
-        <h2 className="panel-title">Realized gains by Ticker</h2>
-        {r.bySymbol.length === 0 ? (
-          <p className="snapshot-empty">No closed positions with realized P&L yet.</p>
-        ) : (
-          <div className="realized-split">
-            <div className="table-scroll table-scroll-rows">
-              <table className="holdings-table">
-                <thead>
-                  <tr>
-                    <th scope="col">Ticker</th>
-                    <th scope="col" className="num">Short-term</th>
-                    <th scope="col" className="num">Long-term</th>
-                    <th scope="col" className="num">Total realized</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {r.bySymbol.map((s) => (
-                    <tr key={s.conid ?? s.symbol}>
-                      <th scope="row" className="symbol">
-                        {s.symbol}
-                        <span className="flex-import-file">{s.description}</span>
-                      </th>
-                      <td className={`num stat-${toneOf(s.realizedShortTerm)}`}>{sc(s.realizedShortTerm)}</td>
-                      <td className={`num stat-${toneOf(s.realizedLongTerm)}`}>{sc(s.realizedLongTerm)}</td>
-                      <td className={`num stat-${toneOf(s.totalRealized)}`}>{sc(s.totalRealized)}</td>
+      <Card>
+        <CardTitle>Realized gains by Ticker</CardTitle>
+        <CardContent>
+          {r.bySymbol.length === 0 ? (
+            <p className="snapshot-empty">No closed positions with realized P&L yet.</p>
+          ) : (
+            <div className="realized-split">
+              <div className="table-scroll table-scroll-rows">
+                <table className="holdings-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">Ticker</th>
+                      <th scope="col" className="num">Short-term</th>
+                      <th scope="col" className="num">Long-term</th>
+                      <th scope="col" className="num">Total realized</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {r.bySymbol.map((s) => (
+                      <tr key={s.conid ?? s.symbol}>
+                        <th scope="row" className="symbol">
+                          {s.symbol}
+                          <span className="flex-import-file">{s.description}</span>
+                        </th>
+                        <td className={`num stat-${toneOf(s.realizedShortTerm)}`}>{sc(s.realizedShortTerm)}</td>
+                        <td className={`num stat-${toneOf(s.realizedLongTerm)}`}>{sc(s.realizedLongTerm)}</td>
+                        <td className={`num stat-${toneOf(s.totalRealized)}`}>{sc(s.totalRealized)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <RealizedHighlights bySymbol={r.bySymbol} sc={sc} />
             </div>
-            <RealizedHighlights bySymbol={r.bySymbol} sc={sc} />
-          </div>
-        )}
-      </section>
+          )}
+        </CardContent>
+      </Card>
 
       <TradeHistory trades={r.trades} baseCurrency={r.baseCurrency} />
     </div>
@@ -147,7 +150,7 @@ function HighlightCard({
   sc: (v: number) => string
 }): React.JSX.Element {
   return (
-    <div className="highlight-card">
+    <Card as="div" variant="nested" size="sm">
       <p className="highlight-label">{label}</p>
       <p className="highlight-symbol">
         {item.symbol}
@@ -156,7 +159,7 @@ function HighlightCard({
       <p className={`highlight-value stat-${toneOf(item.totalRealized)}`}>
         {sc(item.totalRealized)}
       </p>
-    </div>
+    </Card>
   )
 }
 
@@ -190,10 +193,10 @@ function TradeHistory({
   const rows = filterByTypes(inRange, (t) => t.tradeType, selected)
 
   return (
-    <section className="panel">
-      <div className="panel-header">
-        <h2 className="panel-title">Trade history</h2>
-        <div className="panel-toolbar">
+    <Card>
+      <CardHeader>
+        <CardTitle>Trade history</CardTitle>
+        <div className="card-toolbar">
           <RangeFilter
             label="Trade history time range"
             range={range}
@@ -212,46 +215,48 @@ function TradeHistory({
             total={trades.length}
           />
         </div>
-      </div>
-      {rows.length === 0 ? (
-        <p className="chart-empty">No trades match these filters.</p>
-      ) : (
-        <div className="table-scroll table-scroll-rows">
-          <table className="holdings-table">
-            <thead>
-              <tr>
-                <th scope="col">Date</th>
-                <th scope="col">Ticker</th>
-                <th scope="col">Side</th>
-                <th scope="col" className="num">Quantity</th>
-                <th scope="col" className="num">Price</th>
-                <th scope="col" className="num">Proceeds</th>
-                <th scope="col" className="num">Commission</th>
-                <th scope="col" className="num">Realized P&L</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((t) => (
-                <tr key={t.tradeKey}>
-                  <td>{t.dateTime != null ? formatDateTime(t.dateTime) : '—'}</td>
-                  <th scope="row" className="symbol">
-                    {t.symbol}
-                    <span className="flex-import-file">{t.description}</span>
-                  </th>
-                  <td>{t.side}</td>
-                  <td className="num">{formatQuantity(t.quantity)}</td>
-                  <td className="num">{formatCurrency(t.tradePrice, t.currency)}</td>
-                  <td className="num">{formatCurrency(t.proceedsNative, t.currency)}</td>
-                  <td className="num">{formatCurrency(t.commissionNative, t.currency)}</td>
-                  <td className={`num stat-${toneOf(t.realizedBase)}`}>
-                    {t.realizedNative !== 0 ? sc(t.realizedBase) : '—'}
-                  </td>
+      </CardHeader>
+      <CardContent>
+        {rows.length === 0 ? (
+          <p className="chart-empty">No trades match these filters.</p>
+        ) : (
+          <div className="table-scroll table-scroll-rows">
+            <table className="holdings-table">
+              <thead>
+                <tr>
+                  <th scope="col">Date</th>
+                  <th scope="col">Ticker</th>
+                  <th scope="col">Side</th>
+                  <th scope="col" className="num">Quantity</th>
+                  <th scope="col" className="num">Price</th>
+                  <th scope="col" className="num">Proceeds</th>
+                  <th scope="col" className="num">Commission</th>
+                  <th scope="col" className="num">Realized P&L</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </section>
+              </thead>
+              <tbody>
+                {rows.map((t) => (
+                  <tr key={t.tradeKey}>
+                    <td>{t.dateTime != null ? formatDateTime(t.dateTime) : '—'}</td>
+                    <th scope="row" className="symbol">
+                      {t.symbol}
+                      <span className="flex-import-file">{t.description}</span>
+                    </th>
+                    <td>{t.side}</td>
+                    <td className="num">{formatQuantity(t.quantity)}</td>
+                    <td className="num">{formatCurrency(t.tradePrice, t.currency)}</td>
+                    <td className="num">{formatCurrency(t.proceedsNative, t.currency)}</td>
+                    <td className="num">{formatCurrency(t.commissionNative, t.currency)}</td>
+                    <td className={`num stat-${toneOf(t.realizedBase)}`}>
+                      {t.realizedNative !== 0 ? sc(t.realizedBase) : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }

@@ -68,3 +68,4 @@ Other options and why they were not chosen.
 - `0030` — Allocation map: two donuts per country (country weight + sectors); per-holding marks retired; palette blue reserved from sectors (supersedes `0020`)
 - `0031` — Spacing, radius, type and focus scales on `:root`; one focus ring as a zero-specificity base rule (extends `0018`)
 - `0032` — One `Button` primitive: seven role-named variants, four sizes, `className` for placement only (extends `0031`)
+- `0033` — One `Card` primitive: `default`/`nested` surfaces, `--surface-pad-*` sizes, sentence-case titles, `CardContent` as the body scope (extends `0032`)

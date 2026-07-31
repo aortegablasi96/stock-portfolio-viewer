@@ -11,6 +11,7 @@ import { seriesExtent, sliceSeries, windowStats } from '../../lib/performanceRan
 import { LineChart } from '../charts/LineChart'
 import { useAnalytics } from './useAnalytics'
 import { Button } from '../ui/Button'
+import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card'
 import { NeedsImport } from './NeedsImport'
 import { RangeFilter } from './RangeFilter'
 import { RefreshBar } from './RefreshBar'
@@ -48,20 +49,20 @@ export function PerformanceView(): React.JSX.Element {
 
   if (state.phase === 'loading') {
     return (
-      <p className="state-panel" role="status">
+      <Card as="p" size="lg" className="state-panel" role="status">
         Loading performance…
-      </p>
+      </Card>
     )
   }
   if (state.phase === 'error') {
     return (
-      <section className="state-panel state-error" role="alert">
+      <Card size="lg" className="state-panel state-error" role="alert">
         <h2>Couldn’t load performance</h2>
         <p>{state.message}</p>
         <Button variant="primary" disabled={refreshing} onClick={() => void reload()}>
           {refreshing ? 'Retrying…' : 'Retry'}
         </Button>
-      </section>
+      </Card>
     )
   }
   if (state.result.status === 'needs_import') {
@@ -123,11 +124,11 @@ export function PerformanceView(): React.JSX.Element {
         />
       </div>
 
-      <section className="panel">
-        <div className="panel-header">
-          <h2 className="panel-title" id="perf-chart-title">
+      <Card>
+        <CardHeader>
+          <CardTitle id="perf-chart-title">
             {chartTab === 'value' ? 'Portfolio value over time' : 'Performance change over time'}
-          </h2>
+          </CardTitle>
           <div className="chart-tabs" role="tablist" aria-label="Performance chart">
             {CHART_TABS.map((t) => (
               <button
@@ -142,61 +143,65 @@ export function PerformanceView(): React.JSX.Element {
               </button>
             ))}
           </div>
-        </div>
-        {chartTab === 'value' ? (
-          <LineChart
-            key="value"
-            points={valueSeries}
-            formatValue={c}
-            formatDate={formatDate}
-            ariaLabel="Portfolio value over time"
-          />
-        ) : (
-          <LineChart
-            key="return"
-            points={returnSeries}
-            formatValue={formatSignedPercent}
-            formatDate={formatDate}
-            ariaLabel="Cumulative time-weighted return over time"
-          />
-        )}
-      </section>
+        </CardHeader>
+        <CardContent>
+          {chartTab === 'value' ? (
+            <LineChart
+              key="value"
+              points={valueSeries}
+              formatValue={c}
+              formatDate={formatDate}
+              ariaLabel="Portfolio value over time"
+            />
+          ) : (
+            <LineChart
+              key="return"
+              points={returnSeries}
+              formatValue={formatSignedPercent}
+              formatDate={formatDate}
+              ariaLabel="Cumulative time-weighted return over time"
+            />
+          )}
+        </CardContent>
+      </Card>
 
-      <section className="panel">
-        <h2 className="panel-title">Returns by period</h2>
-        <div className="table-scroll">
-          <table className="holdings-table">
-            <thead>
-              <tr>
-                <th scope="col">Period</th>
-                <th scope="col" className="num">Start</th>
-                <th scope="col" className="num">End</th>
-                <th scope="col" className="num">TWR</th>
-                <th scope="col" className="num">Market P&L</th>
-                <th scope="col" className="num">Deposits</th>
-                <th scope="col" className="num">Dividends</th>
-                <th scope="col" className="num">Commissions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {r.periods.map((p) => (
-                <tr key={`${p.fromDate}-${p.toDate}`}>
-                  <th scope="row" className="symbol">
-                    {formatDate(p.fromDate)} – {formatDate(p.toDate)}
-                  </th>
-                  <td className="num">{c(p.startingValue)}</td>
-                  <td className="num">{c(p.endingValue)}</td>
-                  <td className={`num stat-${toneOf(p.twr)}`}>{formatSignedPercent(p.twr)}</td>
-                  <td className={`num stat-${toneOf(p.mtm)}`}>{formatSignedCurrency(p.mtm, r.baseCurrency)}</td>
-                  <td className="num">{formatSignedCurrency(p.depositsWithdrawals, r.baseCurrency)}</td>
-                  <td className="num">{c(p.dividends)}</td>
-                  <td className="num">{c(p.commissions)}</td>
+      <Card>
+        <CardTitle>Returns by period</CardTitle>
+        <CardContent>
+          <div className="table-scroll">
+            <table className="holdings-table">
+              <thead>
+                <tr>
+                  <th scope="col">Period</th>
+                  <th scope="col" className="num">Start</th>
+                  <th scope="col" className="num">End</th>
+                  <th scope="col" className="num">TWR</th>
+                  <th scope="col" className="num">Market P&L</th>
+                  <th scope="col" className="num">Deposits</th>
+                  <th scope="col" className="num">Dividends</th>
+                  <th scope="col" className="num">Commissions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
+              </thead>
+              <tbody>
+                {r.periods.map((p) => (
+                  <tr key={`${p.fromDate}-${p.toDate}`}>
+                    <th scope="row" className="symbol">
+                      {formatDate(p.fromDate)} – {formatDate(p.toDate)}
+                    </th>
+                    <td className="num">{c(p.startingValue)}</td>
+                    <td className="num">{c(p.endingValue)}</td>
+                    <td className={`num stat-${toneOf(p.twr)}`}>{formatSignedPercent(p.twr)}</td>
+                    <td className={`num stat-${toneOf(p.mtm)}`}>{formatSignedCurrency(p.mtm, r.baseCurrency)}</td>
+                    <td className="num">{formatSignedCurrency(p.depositsWithdrawals, r.baseCurrency)}</td>
+                    <td className="num">{c(p.dividends)}</td>
+                    <td className="num">{c(p.commissions)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }

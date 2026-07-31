@@ -8,6 +8,7 @@ import { SnapshotHistory } from './SnapshotHistory'
 import { CurrencySelector } from './CurrencySelector'
 import { ConfirmAction } from './ConfirmAction'
 import { Button } from './ui/Button'
+import { Card } from './ui/Card'
 
 /** Default display currency on first load: the account base currency (Story #28). */
 const DEFAULT_DISPLAY_CURRENCY = 'EUR'
@@ -207,23 +208,23 @@ export function PortfolioDashboard(): React.JSX.Element {
       )}
 
       {state.phase === 'loading' && (
-        <p className="state-panel" role="status">
+        <Card as="p" size="lg" className="state-panel" role="status">
           Loading your portfolio…
-        </p>
+        </Card>
       )}
 
       {state.phase === 'not_connected' && (
-        <section className="state-panel state-notice" role="status">
+        <Card size="lg" className="state-panel state-notice" role="status">
           <h2>Not connected to Interactive Brokers</h2>
           <p>{state.message}</p>
           <Button variant="primary" onClick={() => void load(displayCurrency)}>
             Retry
           </Button>
-        </section>
+        </Card>
       )}
 
       {state.phase === 'not_responding' && (
-        <section className="state-panel state-notice" role="status">
+        <Card size="lg" className="state-panel state-notice" role="status">
           <h2>Interactive Brokers isn’t responding</h2>
           <p>{state.message}</p>
           <p className="source-note">
@@ -233,31 +234,31 @@ export function PortfolioDashboard(): React.JSX.Element {
           <Button variant="primary" onClick={() => void load(displayCurrency)}>
             Retry
           </Button>
-        </section>
+        </Card>
       )}
 
       {state.phase === 'error' && (
-        <section className="state-panel state-error" role="alert">
+        <Card size="lg" className="state-panel state-error" role="alert">
           <h2>Couldn’t load your portfolio</h2>
           <p>{state.message}</p>
           <Button variant="primary" onClick={() => void load(displayCurrency)}>
             Retry
           </Button>
-        </section>
+        </Card>
       )}
 
       {state.phase === 'ok' && (
         <>
           {busy && (
-            <p className="state-panel converting-note" role="status">
+            <Card as="p" size="lg" className="state-panel converting-note" role="status">
               Converting to {displayCurrency}…
-            </p>
+            </Card>
           )}
           <BalancesSummary balances={state.overview.balances} />
           {state.overview.holdings.length === 0 ? (
-            <p className="state-panel" role="status">
+            <Card as="p" size="lg" className="state-panel" role="status">
               No open positions in this account.
-            </p>
+            </Card>
           ) : (
             <div className="dashboard-columns">
               <div className="col-main">

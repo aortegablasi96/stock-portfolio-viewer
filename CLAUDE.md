@@ -338,6 +338,24 @@ Canonical flows to copy when adding a feature:
   inherit` leaves it `normal`, which is what all eight families used, and "adopting"
   `--leading-tight` here takes ~3px off every button and lifts the whole Portfolio page, since
   `.dashboard-header` is `align-items: flex-end` over the actions column.
+- **There is one card surface too, on the same two axes** (Story #128, DDR-0033).
+  `components/ui/Card.tsx` (`Card` / `CardHeader` / `CardTitle` / `CardContent`) replaced
+  `.state-panel`, `.panel`, `.allocation`, `.snapshot-history` and `.highlight-card`. **Variants
+  carry the surface colour**: `default` (`--card`) · `nested` (`--bg`). **Sizes carry the padding**
+  and *are* the `--surface-pad-*` steps — `sm` nested, `md` panel, `lg` state panel — so the API and
+  the CSS can't drift; a test fails if a size stops resolving to its step. Five things to know.
+  `.highlight-card`'s `--bg` was **kept, not normalised**: that card sits inside a panel, where
+  `--card` on `--card` is a border with nothing behind it. **`CardContent` is a scope, not
+  decoration** — the two rules `.panel` declared on its descendants (a `.table-scroll` filling the
+  body drops its border; a `.source-note` lede sits tighter) now hang off `.card-content`, which is
+  what keeps a state panel's prose out of their reach; scoping them to `.card` would give the *not
+  responding* panel a negative top margin it was never written for. **`as` is a prop** because the
+  superseded surfaces weren't one element — the one-line loading states are a `<p>` whose UA margins
+  space `.dashboard`'s flex column. **One heading treatment, sentence case**, because
+  uppercase-with-tracking is this app's *label* treatment for a single figure (`.stat-label` and
+  friends) and spending it on section headings loses the distinction. And `.state-panel` survives
+  shrunken to `color: var(--muted)` — only the surface moved; Story #133's `StatePanel` folds the
+  rest, so `className="state-panel state-error"` is transitional, not the pattern.
 - **Never write a focus rule.** One ring — `--focus-ring` / `--focus-ring-offset`, always
   `--accent`, destructive controls included — is applied by a **zero-specificity `:where(...)`
   base rule** at the top of `app.css`, so an interactive element is ringed by default and can't
@@ -889,7 +907,7 @@ so no test may render a React component. This shapes the renderer: chart maths, 
 sorting and formatting are **extracted out of components into pure modules under
 `renderer/src/lib/`** (`format`, `pie`, `worldGeo`, `countryDonuts`, `gainLoss`, `tableFilter`,
 `column`, `dateRange`, `sectorMap`, `performanceRange`, `classifyProgress`, `dataVersion`,
-`tabKeyboard`, `buttonVariants`)
+`tabKeyboard`, `buttonVariants`, `cardVariants`)
 precisely so they can be tested — follow
 that split when adding a component with real logic in it. `dataVersion` is the same move applied
 to state rather than maths: the cross-view staleness signal is a plain subscribable store a hook
