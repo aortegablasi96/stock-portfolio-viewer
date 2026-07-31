@@ -10,6 +10,7 @@ import { boundsFor } from '../../lib/dateRange'
 import { seriesExtent, sliceSeries, windowStats } from '../../lib/performanceRange'
 import { LineChart } from '../charts/LineChart'
 import { useAnalytics } from './useAnalytics'
+import { Button } from '../ui/Button'
 import { NeedsImport } from './NeedsImport'
 import { RangeFilter } from './RangeFilter'
 import { RefreshBar } from './RefreshBar'
@@ -57,14 +58,9 @@ export function PerformanceView(): React.JSX.Element {
       <section className="state-panel state-error" role="alert">
         <h2>Couldn’t load performance</h2>
         <p>{state.message}</p>
-        <button
-          type="button"
-          className="retry-button"
-          disabled={refreshing}
-          onClick={() => void reload()}
-        >
+        <Button variant="primary" disabled={refreshing} onClick={() => void reload()}>
           {refreshing ? 'Retrying…' : 'Retry'}
-        </button>
+        </Button>
       </section>
     )
   }

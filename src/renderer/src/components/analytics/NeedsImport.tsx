@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react'
 import { flexDataVersion } from '../../lib/dataVersion'
+import { Button } from '../ui/Button'
 
 /**
  * The shared "no Flex data imported yet" empty state for the analytics views
@@ -48,14 +49,9 @@ export function NeedsImport(): React.JSX.Element {
         This analysis is built from your imported IBKR Flex Query statements. Import one or more
         Portfolio Analyst statement files to get started.
       </p>
-      <button
-        type="button"
-        className="retry-button"
-        onClick={() => void runImport()}
-        disabled={importing}
-      >
+      <Button variant="primary" onClick={() => void runImport()} disabled={importing}>
         {importing ? 'Importing…' : 'Import statements…'}
-      </button>
+      </Button>
       {message && (
         <p className="capture-status capture-status-error" role="alert">
           {message}

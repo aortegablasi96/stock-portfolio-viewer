@@ -19,6 +19,7 @@ import { RefreshBar } from './RefreshBar'
 import { StatTile, toneOf } from './StatTile'
 import { TypeFilter } from './TypeFilter'
 import { useRangeSelection } from './useRangeSelection'
+import { Button } from '../ui/Button'
 
 /**
  * Realized gains & trade history (Milestone M3, Story #24). Lists trades from the
@@ -42,14 +43,9 @@ export function TradeHistoryView(): React.JSX.Element {
       <section className="state-panel state-error" role="alert">
         <h2>Couldn’t load trade history</h2>
         <p>{state.message}</p>
-        <button
-          type="button"
-          className="retry-button"
-          disabled={refreshing}
-          onClick={() => void reload()}
-        >
+        <Button variant="primary" disabled={refreshing} onClick={() => void reload()}>
           {refreshing ? 'Retrying…' : 'Retry'}
-        </button>
+        </Button>
       </section>
     )
   }

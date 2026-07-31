@@ -1,4 +1,5 @@
 import { formatUpdatedAt } from '../../lib/format'
+import { Button } from '../ui/Button'
 
 /**
  * The freshness line and explicit re-read shared by the four analytics views (Story #109).
@@ -33,15 +34,15 @@ export function RefreshBar({
             ? ''
             : `Updated ${formatUpdatedAt(loadedAt)}`}
       </p>
-      <button
-        type="button"
-        className="ghost-button view-refresh"
+      <Button
+        variant="secondary"
+        size="sm"
         aria-label={`Refresh ${label}`}
         disabled={refreshing}
         onClick={onRefresh}
       >
         Refresh
-      </button>
+      </Button>
     </div>
   )
 }

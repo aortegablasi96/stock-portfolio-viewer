@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Button } from './ui/Button'
 
 /**
  * A destructive action that confirms in place before running (Story #43). Rather than a
@@ -31,9 +32,9 @@ export function ConfirmAction({
 
   if (phase === 'idle') {
     return (
-      <button type="button" className="danger-button" onClick={() => setPhase('confirming')}>
+      <Button variant="danger" onClick={() => setPhase('confirming')}>
         {label}
-      </button>
+      </Button>
     )
   }
 
@@ -52,22 +53,12 @@ export function ConfirmAction({
         {warning}
       </p>
       <div className="confirm-buttons">
-        <button
-          type="button"
-          className="danger-button"
-          onClick={() => void run()}
-          disabled={phase === 'busy'}
-        >
+        <Button variant="danger" onClick={() => void run()} disabled={phase === 'busy'}>
           {phase === 'busy' ? busyLabel : confirmLabel}
-        </button>
-        <button
-          type="button"
-          className="ghost-button"
-          onClick={() => setPhase('idle')}
-          disabled={phase === 'busy'}
-        >
+        </Button>
+        <Button variant="secondary" onClick={() => setPhase('idle')} disabled={phase === 'busy'}>
           Cancel
-        </button>
+        </Button>
       </div>
     </div>
   )

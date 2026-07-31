@@ -12,6 +12,7 @@ import {
   type DonutSlice,
 } from '../../lib/countryDonuts'
 import { DIVERGING_CLASSES, RETURN_BOUND } from '../../lib/gainLoss'
+import { Button } from '../ui/Button'
 
 /**
  * Geographic map of holdings by issuer country (Milestone M4, Story #122; DDR-0030, superseding
@@ -494,35 +495,36 @@ export function CountryMap({
                 : null
             })}
             <div className="country-map-controls" role="group" aria-label="Map zoom">
-              <button
-                type="button"
-                className="map-zoom-btn"
+              <Button
+                variant="surface"
+                size="icon"
                 aria-label="Zoom in"
                 title="Zoom in"
                 onClick={() => zoomBy(1)}
               >
                 +
-              </button>
-              <button
-                type="button"
-                className="map-zoom-btn"
+              </Button>
+              <Button
+                variant="surface"
+                size="icon"
                 aria-label="Zoom out"
                 title="Zoom out"
                 disabled={!zoomed}
                 onClick={() => zoomBy(-1)}
               >
                 −
-              </button>
-              <button
-                type="button"
-                className="map-zoom-btn map-zoom-reset"
+              </Button>
+              <Button
+                variant="surface"
+                size="icon"
+                className="map-zoom-reset"
                 aria-label="Reset map view"
                 title="Reset view"
                 disabled={!zoomed}
                 onClick={resetView}
               >
                 ⤢
-              </button>
+              </Button>
             </div>
           </>
         )}

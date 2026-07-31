@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Button } from './ui/Button'
 
 /**
  * Custom in-app title bar for the frameless window (Story #42). The OS frame is removed in
@@ -26,33 +27,34 @@ export function TitleBar(): React.JSX.Element {
         <span className="titlebar-title">Stock Portfolio Viewer</span>
       </div>
       <div className="titlebar-controls">
-        <button
-          type="button"
-          className="titlebar-button"
+        <Button
+          variant="ghost"
+          size="icon"
           aria-label="Minimize"
           title="Minimize"
           onClick={() => window.api.minimizeWindow()}
         >
           <MinimizeIcon />
-        </button>
-        <button
-          type="button"
-          className="titlebar-button"
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
           aria-label={isMaximized ? 'Restore' : 'Maximize'}
           title={isMaximized ? 'Restore' : 'Maximize'}
           onClick={() => window.api.toggleMaximizeWindow()}
         >
           {isMaximized ? <RestoreIcon /> : <MaximizeIcon />}
-        </button>
-        <button
-          type="button"
-          className="titlebar-button titlebar-button-close"
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="titlebar-close"
           aria-label="Close"
           title="Close"
           onClick={() => window.api.closeWindow()}
         >
           <CloseIcon />
-        </button>
+        </Button>
       </div>
     </div>
   )

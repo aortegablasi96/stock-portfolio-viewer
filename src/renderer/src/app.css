@@ -186,6 +186,149 @@ html {
   border: 0;
 }
 
+/* ---- Button primitive (Story #127, DDR-0032) -----------------------------
+   One control replacing the eight button families the Epic #125 audit found.
+   A variant carries colour and border only; a size carries padding and type,
+   so the two axes compose. Every value is a step from the scale above
+   (DDR-0031) — no rule here picks a raw length.
+
+   No variant declares a focus ring. The zero-specificity base rule at the top
+   of this file supplies it, destructive actions included. */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  font: inherit;
+  font-weight: 600;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+/* No `line-height` here, deliberately. `font: inherit` leaves it `normal`, which is
+   what all eight superseded families used; pinning it to `--leading-tight` instead
+   takes ~3px off every button in the app and lifts the whole page with it. The type
+   scale's line heights are for prose and headings (DDR-0031), not for a one-line
+   label in a box. `.btn-icon` is the exception and sets its own. */
+
+/* One disabled treatment for every variant. The filled primary previously had
+   none at all, so a disabled Retry looked identical to a live one. */
+.btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* -- Sizes: padding and type only ---------------------------------------- */
+
+.btn-sm {
+  padding: var(--control-pad-sm);
+  font-size: var(--text-xs);
+}
+
+.btn-md {
+  padding: var(--control-pad-md);
+}
+
+.btn-lg {
+  padding: var(--control-pad-lg);
+}
+
+/* Icon-only: a square with no text box, sized for a glyph rather than a label,
+   and given the small corner because a large one on a 30px box reads as a
+   circle. The call site supplies the accessible name. */
+.btn-icon {
+  padding: 0;
+  inline-size: 1.9rem;
+  block-size: 1.9rem;
+  font-size: var(--text-md);
+  line-height: 1;
+  border-radius: var(--radius-sm);
+}
+
+/* -- Variants: colour and border only ------------------------------------ */
+
+.btn-outline {
+  border-color: var(--border);
+}
+
+.btn-outline:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.btn-primary {
+  color: #ffffff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.btn-primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.btn-secondary {
+  color: var(--muted);
+  border-color: var(--border);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--text);
+}
+
+/* The severity lives in the red label and the red hover fill — not in the
+   focus ring, which is the shared accent one like everything else (DDR-0031). */
+.btn-danger {
+  color: var(--neg);
+  border-color: var(--border);
+}
+
+.btn-danger:hover:not(:disabled) {
+  color: #ffffff;
+  background: var(--neg);
+  border-color: var(--neg);
+}
+
+/* Borderless and hover-tinted: window chrome, where a border would draw a box
+   around something meant to read as part of the bar (DDR-0011). */
+.btn-ghost {
+  color: var(--muted);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--card);
+}
+
+/* A quiet inline affordance. Normal weight deliberately — it sits beside chips
+   and must not out-shout them. */
+.btn-link {
+  font-weight: 400;
+  color: var(--muted);
+  text-decoration: underline;
+}
+
+.btn-link:hover:not(:disabled) {
+  color: var(--text);
+}
+
+/* Floats over a canvas the app does not own (the Mapbox basemap), so it carries
+   its own surface and shadow — a transparent button would be unreadable against
+   tiles. */
+.btn-surface {
+  background: var(--card);
+  border-color: var(--border);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.12);
+}
+
+.btn-surface:hover:not(:disabled) {
+  background: var(--border);
+}
+
 /* ---- Dashboard layout ---------------------------------------------------- */
 
 .dashboard {
@@ -282,32 +425,6 @@ html {
 
 /* ---- Capture now (Story #18) --------------------------------------------- */
 
-.capture-button {
-  padding: 0.5rem 1rem;
-  font: inherit;
-  font-weight: 600;
-  color: var(--text);
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  cursor: pointer;
-}
-
-.capture-button:hover:not(:disabled) {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.capture-button:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-
-.capture-button:focus-visible {
-  outline: var(--focus-ring);
-  outline-offset: var(--focus-ring-offset);
-}
-
 .capture-status {
   margin: 0;
   padding: 0.6rem 0.9rem;
@@ -320,62 +437,10 @@ html {
 
 /* ---- Destructive actions + inline confirm (Story #43) -------------------- */
 
-.danger-button {
-  padding: 0.5rem 1rem;
-  font: inherit;
-  font-weight: 600;
-  color: var(--neg);
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  cursor: pointer;
-}
-
-.danger-button:hover:not(:disabled) {
-  color: #ffffff;
-  background: var(--neg);
-  border-color: var(--neg);
-}
-
-.danger-button:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-
-/* The one deliberate correction in Story #126: this ring was `--neg`, alone in the
-   app. Focus is a "where am I" cue, not a severity cue — the button's own red text
-   and hover fill already carry the warning — so it joins the single treatment. */
-.danger-button:focus-visible {
-  outline: var(--focus-ring);
-  outline-offset: var(--focus-ring-offset);
-}
-
-.ghost-button {
-  padding: 0.5rem 1rem;
-  font: inherit;
-  font-weight: 600;
-  color: var(--muted);
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  cursor: pointer;
-}
-
-.ghost-button:hover:not(:disabled) {
-  color: var(--text);
-  border-color: var(--text);
-}
-
-.ghost-button:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-
-.ghost-button:focus-visible {
-  outline: var(--focus-ring);
-  outline-offset: var(--focus-ring-offset);
-}
-
+/* The trigger and its confirm are `variant="danger"`, Cancel is `variant="secondary"`
+   (Story #127). Story #126 corrected the one ring in the app that was `--neg`: focus is a
+   "where am I" cue, not a severity cue, and the red label and hover fill already carry the
+   warning. */
 .confirm-action {
   display: flex;
   flex-direction: column;
@@ -425,25 +490,11 @@ html {
   border-color: #5a2b2b;
 }
 
-.retry-button {
-  margin-top: 1rem;
-  padding: 0.55rem 1.1rem;
-  font: inherit;
-  font-weight: 600;
-  color: #fff;
-  background: var(--accent);
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-}
-
-.retry-button:hover {
-  filter: brightness(1.08);
-}
-
-.retry-button:focus-visible {
-  outline: var(--focus-ring);
-  outline-offset: var(--focus-ring-offset);
+/* A state panel's action (Retry, Import statements…) is `variant="primary"` — the panel
+   offers exactly one thing to do, which is what the filled accent is for. Only its
+   position below the explanation belongs to the panel, so only that is declared here. */
+.state-panel .btn {
+  margin-top: var(--space-5);
 }
 
 /* ---- Balances summary (Story #16) ---------------------------------------- */
@@ -823,30 +874,26 @@ html {
   align-items: stretch;
 }
 
-.titlebar-button {
-  width: 46px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--muted);
-  background: transparent;
-  border: none;
-  cursor: pointer;
+/* The controls are `variant="ghost" size="icon"` (Story #127); what stays here is the
+   chrome geometry the primitive has no business knowing. They fill the bar's full height
+   and square off against its edges, so the icon button's box is overridden rather than
+   parameterised. */
+.titlebar-controls .btn {
+  inline-size: 46px;
+  block-size: 100%;
+  border-radius: 0;
 }
 
-.titlebar-button:hover {
-  color: var(--text);
-  background: var(--card);
+/* Inset, because the bar would clip an outward offset (DDR-0031). */
+.titlebar-controls .btn:focus-visible {
+  outline-offset: var(--focus-ring-offset-inset);
 }
 
-.titlebar-button-close:hover {
+/* Close is the one control with a destructive hover, and it has to out-specify the ghost
+   variant's own hover to win it. */
+.titlebar-controls .titlebar-close:hover:not(:disabled) {
   color: #ffffff;
   background: #e81123;
-}
-
-.titlebar-button:focus-visible {
-  outline: var(--focus-ring);
-  outline-offset: var(--focus-ring-offset-inset);
 }
 
 .app-nav {
@@ -958,11 +1005,6 @@ html {
   font-size: 0.8rem;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
-}
-
-.view-refresh {
-  padding: 0.35rem 0.85rem;
-  font-size: 0.85rem;
 }
 
 .stat-row {
@@ -1312,27 +1354,6 @@ html {
   flex-wrap: wrap;
 }
 
-.type-filter-clear {
-  padding: 0.35rem 0.5rem;
-  font: inherit;
-  font-size: 0.82rem;
-  color: var(--muted);
-  background: transparent;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  text-decoration: underline;
-}
-
-.type-filter-clear:hover {
-  color: var(--text);
-}
-
-.type-filter-clear:focus-visible {
-  outline: var(--focus-ring);
-  outline-offset: var(--focus-ring-offset);
-}
-
 /* Performance time-range filter: preset strip + optional custom date inputs (Story #69). */
 .range-bar {
   display: flex;
@@ -1656,34 +1677,11 @@ html {
   gap: 0.25rem;
 }
 
-.map-zoom-btn {
-  width: 1.9rem;
-  height: 1.9rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  font-size: 1.1rem;
-  line-height: 1;
-  color: var(--text);
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  cursor: pointer;
-  box-shadow: 0 1px 2px rgb(0 0 0 / 0.12);
-}
-
-.map-zoom-btn:hover:not(:disabled) {
-  background: var(--surface-hover, var(--border));
-}
-
-.map-zoom-btn:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
-.map-zoom-reset {
-  font-size: 0.95rem;
+/* The +/−/reset controls are `variant="surface" size="icon"` (Story #127). Only the reset
+   glyph needs anything local: ⤢ is a wider mark than + or − and is stepped down so the
+   three buttons read as one stack. */
+.country-map-controls .map-zoom-reset {
+  font-size: var(--text-sm);
 }
 
 /* Hover popup over a mark (Story #92, DDR-0020; three hover depths and the return tint in #122,
@@ -1890,6 +1888,11 @@ html {
   margin: 0 0 0.75rem;
   font-size: 0.82rem;
   color: var(--muted);
+}
+
+/* Same placement as a state panel's action: the button sits below its explanation. */
+.classify-prompt .btn {
+  margin-top: var(--space-5);
 }
 
 /*

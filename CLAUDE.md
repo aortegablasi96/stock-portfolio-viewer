@@ -111,6 +111,7 @@ src/
   renderer/      React + Vite UI (src/renderer/src/*; App tab shell under a custom
                  TitleBar, components/ + components/analytics/ (views, their use*
                  hooks, shared filter controls) + components/charts/ +
+                 components/ui/ (shared primitives, Epic #125) +
                  lib/ — pure, unit-tested helpers extracted out of components)
   services/      pure business logic — primary unit-test target (system/, meta/, window/,
                  portfolio/, snapshots/, flex/, analytics/, dividends/)
@@ -316,6 +317,27 @@ Canonical flows to copy when adding a feature:
   until the Epic closes both conventions coexist on purpose. The named collision to know:
   `--text-xl` is **1.4rem, not 1.5rem**, because `.stat-row` packs tiles into `minmax(11rem, 1fr)`
   columns where the bigger figure risks wrapping.
+- **There is one button, and adding one means naming a role, not writing CSS** (Story #127,
+  DDR-0032). `components/ui/Button.tsx` replaced the eight families the audit found —
+  `.capture-button`, `.danger-button`, `.ghost-button`, `.retry-button`, `.view-refresh`,
+  `.type-filter-clear`, `.titlebar-button`, `.map-zoom-btn` — with `variant` ×
+  `size`. **Variants carry colour and border only**: `outline` (default) · `primary` (filled
+  accent — the one action a panel offers) · `secondary` (bordered but quieter: Cancel, Refresh) ·
+  `danger` · `ghost` (**borderless**, window chrome) · `link` · `surface` (its own `--card` fill and
+  shadow, because it floats over the Mapbox basemap and a transparent button on arbitrary tiles is
+  unreadable). Note `ghost` changed meaning: the old `.ghost-button` had a border and is now
+  `secondary`. **Sizes carry padding and type only** — `sm|md|lg` are the `--control-pad-*` steps,
+  while `icon` is a *shape*, a square with no text box, which is why the two icon buttons differ by
+  variant rather than sharing one. Four things to know before touching it. `type` defaults to
+  `"button"`, so no caller can ship a submit button by omission. **No variant declares a focus ring
+  or its own `:disabled`** — both fall through to the shared rules, and
+  `lib/buttonVariants.test.ts` fails if one tries, if a union member has no rule in `app.css`, or
+  if any of the eight superseded selectors reappears. `className` is appended for **placement, not
+  restyling** (`.titlebar-controls .btn`, `.map-zoom-reset`); a `className` carrying colour rebuilds
+  the problem one view at a time. And `.btn` declares **no `line-height`** on purpose: `font:
+  inherit` leaves it `normal`, which is what all eight families used, and "adopting"
+  `--leading-tight` here takes ~3px off every button and lifts the whole Portfolio page, since
+  `.dashboard-header` is `align-items: flex-end` over the actions column.
 - **Never write a focus rule.** One ring — `--focus-ring` / `--focus-ring-offset`, always
   `--accent`, destructive controls included — is applied by a **zero-specificity `:where(...)`
   base rule** at the top of `app.css`, so an interactive element is ringed by default and can't
@@ -323,8 +345,8 @@ Canonical flows to copy when adding a feature:
   still wins, so deleting a per-class focus rule during #125 makes it *fall through* to the base
   rather than lose its ring. Same instinct as the ESLint layer boundaries and the CSP's omitted
   telemetry origin — the invariant is enforced by the platform. `--focus-ring-offset-inset`
-  (`-2px`) is for the two controls whose ring an ancestor would clip (`.titlebar-button`,
-  `.tab-panel`). `src/renderer/src/lib/designTokens.test.ts` fails if `outline` ever appears in
+  (`-2px`) is for the two controls whose ring an ancestor would clip (the title bar's window
+  controls, now `.titlebar-controls .btn`, and `.tab-panel`). `src/renderer/src/lib/designTokens.test.ts` fails if `outline` ever appears in
   the stylesheet with a second value, if a scale stops ascending, or if a validated palette colour
   moves — it's a test with no module under test, guarding the stylesheet itself.
 - **Two money-storage conventions coexist** — don't mix them. `snapshots` /
@@ -867,7 +889,7 @@ so no test may render a React component. This shapes the renderer: chart maths, 
 sorting and formatting are **extracted out of components into pure modules under
 `renderer/src/lib/`** (`format`, `pie`, `worldGeo`, `countryDonuts`, `gainLoss`, `tableFilter`,
 `column`, `dateRange`, `sectorMap`, `performanceRange`, `classifyProgress`, `dataVersion`,
-`tabKeyboard`)
+`tabKeyboard`, `buttonVariants`)
 precisely so they can be tested — follow
 that split when adding a component with real logic in it. `dataVersion` is the same move applied
 to state rather than maths: the cross-view staleness signal is a plain subscribable store a hook

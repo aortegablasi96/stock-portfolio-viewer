@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { ClassificationPartial, ClassificationProgress } from '@shared/domain/classification'
 import { partialProgressNote, runningLabel } from '../../lib/classifyProgress'
+import { Button } from '../ui/Button'
 
 /**
  * The "some positions have no sector yet" prompt in the Allocation view (Story #30).
@@ -90,9 +91,9 @@ export function ClassifySectors({
         Sector data isn’t in Flex statements — fetch it from Interactive Brokers once and it’s
         cached locally.
       </p>
-      <button type="button" className="retry-button" onClick={() => void run()} disabled={running}>
+      <Button variant="primary" onClick={() => void run()} disabled={running}>
         {running ? runningLabel(progress) : 'Classify from IBKR'}
-      </button>
+      </Button>
       {running && progress !== null && progress.total > 0 && (
         <div
           className="classify-progress"

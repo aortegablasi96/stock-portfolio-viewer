@@ -9,6 +9,7 @@ import { ClassifySectors } from './ClassifySectors'
 import { NeedsImport } from './NeedsImport'
 import { RefreshBar } from './RefreshBar'
 import { StatTile, toneOf } from './StatTile'
+import { Button } from '../ui/Button'
 
 /**
  * Allocation analysis (Milestone M3, Stories #22, #30 and #48). Breaks the latest imported
@@ -71,14 +72,9 @@ export function AllocationView(): React.JSX.Element {
       <section className="state-panel state-error" role="alert">
         <h2>Couldn’t load allocation</h2>
         <p>{state.message}</p>
-        <button
-          type="button"
-          className="retry-button"
-          disabled={refreshing}
-          onClick={() => void reload()}
-        >
+        <Button variant="primary" disabled={refreshing} onClick={() => void reload()}>
           {refreshing ? 'Retrying…' : 'Retry'}
-        </button>
+        </Button>
       </section>
     )
   }
