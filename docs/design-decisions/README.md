@@ -66,3 +66,4 @@ Other options and why they were not chosen.
 - `0028` — Window size/position/maximized remembered in `app_meta`; reachability judged on the title bar (extends `0011`)
 - `0029` — Tab shell: the complete ARIA tabs pattern, roving tabindex, automatic activation (extends `0006`)
 - `0030` — Allocation map: two donuts per country (country weight + sectors); per-holding marks retired; palette blue reserved from sectors (supersedes `0020`)
+- `0031` — Spacing, radius, type and focus scales on `:root`; one focus ring as a zero-specificity base rule (extends `0018`)

@@ -23,12 +23,14 @@ time-range filters, multi-select type filter, `Symbol`→`Ticker` renames), and 
 tables, a widened content measure with charts sized by aspect ratio, and the Allocation map's
 rebuild onto a Mapbox basemap with per-holding bubbles and a gain/loss colour mode).
 
-**Further refinement lives in milestone `M4 — Analytics refinement`, split across three
-view-scoped Epics** so no single Epic grows unbounded again: **#98 Allocation map**, **#99
-Analytics views polish** (the four analytics views + the live Portfolio dashboard), and
-**#100 App shell & layout** (window chrome, tab shell, page layout, shared controls). An Epic
-closes when its stories close; new refinement opens a new Epic under the current milestone
-rather than reopening a delivered one. **Read the backlog before assuming a view is final** — a
+**Further refinement lives in milestone `M4 — Analytics refinement`, split across area-scoped
+Epics** so no single Epic grows unbounded again. Open as of 2026-07-31: **#98 Allocation map**,
+**#99 Analytics views polish** (the four analytics views + the live Portfolio dashboard), **#102
+Gateway & data reliability**, and **#125 Shared UI primitives & visual consistency** (stories
+#126–#134). **#100 App shell & layout** (window chrome, tab shell, page layout) is closed as
+delivered — its shared-control scope was superseded by #125. An Epic closes when its stories
+close; new refinement opens a new Epic under the current milestone rather than reopening a
+delivered one. **Read the backlog before assuming a view is final** — a
 view you are told is "done" has usually been reworked several times. The Stack and Commands
 sections below are **live**. Still **not built**: AI features, multi-broker support, benchmark
 comparison, and tax reporting — those are later milestones.
@@ -288,6 +290,43 @@ Canonical flows to copy when adding a feature:
   whole-store, owner-confirmed reset per domain (`flexRepository.clearAll()` /
   `snapshotRepository.clearAll()`), so bad imports can be discarded wholesale and rebuilt.
   Deliberately no delete-by-id/date/statement variant; don't add one (ADR-0006).
+- **Renderer styling is being consolidated in-house, and shadcn/ui was deliberately declined**
+  (Epic #125, scoped 2026-07-31). The `shadcn` CLI sits in devDependencies and its MCP server is
+  enabled — as a *reference* for the component API, not as a dependency to install. Do not run
+  `shadcn add`, and do not propose adopting the package again without new reasons: it would pull
+  Tailwind v4 + PostCSS into the renderer build plus `radix-ui`, `cva`, `clsx`, `tailwind-merge`
+  and `lucide-react`; ~40% of the 1,880-line `renderer/src/app.css` is chart/donut/map styling
+  shadcn has no equivalent for (so the app would run two styling systems); Radix Tabs would
+  displace `lib/tabKeyboard.ts`, which exists precisely because Vitest is Node-only (DDR-0029);
+  and DDR-0012 already rules out the modal components carrying much of shadcn's value. What *is*
+  adopted is the API shape — a `variant`/`size` prop contract and `Card`/`CardHeader`/
+  `CardContent` composition — for primitives built under `renderer/src/components/ui/` and styled
+  by the existing CSS custom properties. That decision is now recorded as **ADR-0008**, so it is
+  overridden by a superseding ADR, not by a pull request. The CVD-safe palettes stay untouched
+  (DDR-0021, DDR-0030).
+- **`app.css` has a full token scale now, and a rule uses a step rather than a raw length**
+  (Story #126, DDR-0031): `--space-1..8` (a 4px grid with one deliberate 6px half-step at
+  `--space-2`, where the app's dense controls actually sit), the composite `--control-pad-*` /
+  `--surface-pad-*` in `sm|md|lg` (the same vocabulary as the primitives' `size` prop, so the CSS
+  and the component API agree by construction), `--radius-sm|md|lg|pill` in **px** so a corner
+  doesn't grow with the type scale, and `--text-2xs..2xl` + `--leading-tight|normal`. Two things
+  are deliberately *off* the scale: chart and map SVG label sizes, which scale from a `viewBox`
+  rather than the page (DDR-0018), and the sub-6px radii, which are chart geometry. The scale is
+  declared but **only partly adopted** — each story in #125 converts the rules it extracts, so
+  until the Epic closes both conventions coexist on purpose. The named collision to know:
+  `--text-xl` is **1.4rem, not 1.5rem**, because `.stat-row` packs tiles into `minmax(11rem, 1fr)`
+  columns where the bigger figure risks wrapping.
+- **Never write a focus rule.** One ring — `--focus-ring` / `--focus-ring-offset`, always
+  `--accent`, destructive controls included — is applied by a **zero-specificity `:where(...)`
+  base rule** at the top of `app.css`, so an interactive element is ringed by default and can't
+  ship without one. `:where()` is the mechanism, not a style choice: it means every existing rule
+  still wins, so deleting a per-class focus rule during #125 makes it *fall through* to the base
+  rather than lose its ring. Same instinct as the ESLint layer boundaries and the CSP's omitted
+  telemetry origin — the invariant is enforced by the platform. `--focus-ring-offset-inset`
+  (`-2px`) is for the two controls whose ring an ancestor would clip (`.titlebar-button`,
+  `.tab-panel`). `src/renderer/src/lib/designTokens.test.ts` fails if `outline` ever appears in
+  the stylesheet with a second value, if a scale stops ascending, or if a validated palette colour
+  moves — it's a test with no module under test, guarding the stylesheet itself.
 - **Two money-storage conventions coexist** — don't mix them. `snapshots` /
   `snapshot_holdings` store **integer minor units** (cents) plus a currency (DDR-0003);
   the `flex_*` tables store **`real`** for money, prices, FX rates and P&L, because Flex is
@@ -364,8 +403,10 @@ must stop and return to the owning workflow skill rather than being made inline.
 
 ## Enabled MCP Servers
 
-`.claude/settings.local.json` enables `context7`, `filesystem`, `playwright`, and
-`interactive-brokers` (the `postgres` server has been retired following the move to SQLite).
+`.claude/settings.local.json` enables `context7`, `filesystem`, `playwright`,
+`interactive-brokers`, and `shadcn` (the `postgres` server has been retired following the move
+to SQLite). The `shadcn` server is there to *read* component APIs for Epic #125 — the package is
+not adopted; see the styling gotcha above before reaching for it.
 Note that the `interactive-brokers` entry in `.mcp.json` still uses a **placeholder runtime**
 (`REPLACE_WITH_RUNTIME`), so enabling it does not make it functional until the runtime is
 finalized. Separately, a connected `Interactive_Brokers_IBKR` MCP is available with read-only
