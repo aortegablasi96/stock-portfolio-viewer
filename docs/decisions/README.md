@@ -43,3 +43,4 @@ Trade-offs, follow-ups, and what becomes easier or harder.
 - `0005` — Flex Query file import as an offline authoritative data source
 - `0006` — Sanctioned full reset of imported/captured local history (owner-confirmed clear)
 - `0007` — Mapbox GL JS basemap and the renderer's network policy (single allowlisted origin)
+- `0008` — An in-house design system for the renderer; shadcn/ui declined, its component API adopted
