@@ -15,7 +15,7 @@ import { useAnalytics } from './useAnalytics'
 import { NeedsImport } from './NeedsImport'
 import { RangeFilter } from './RangeFilter'
 import { RefreshBar } from './RefreshBar'
-import { StatTile } from './StatTile'
+import { StatRow, StatTile } from '../ui/StatTile'
 import { TypeFilter } from './TypeFilter'
 import { useRangeSelection } from './useRangeSelection'
 import { Button } from '../ui/Button'
@@ -177,7 +177,7 @@ export function DividendsView(): React.JSX.Element {
         onRefresh={() => void reload()}
       />
 
-      <div className="stat-row">
+      <StatRow>
         <StatTile label="Gross income" value={c(r.totalGrossBase)} />
         <StatTile label="Withholding tax" value={c(r.totalWithholdingBase)} hint="Withheld at source" />
         <StatTile
@@ -186,7 +186,7 @@ export function DividendsView(): React.JSX.Element {
           hint="Actually received"
           tone="positive"
         />
-      </div>
+      </StatRow>
 
       <Upcoming upcoming={r.upcoming} baseCurrency={r.baseCurrency} />
 

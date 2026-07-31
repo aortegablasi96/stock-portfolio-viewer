@@ -12,6 +12,7 @@ import {
   type DonutSlice,
 } from '../../lib/countryDonuts'
 import { DIVERGING_CLASSES, RETURN_BOUND } from '../../lib/gainLoss'
+import { toneClassName, toneOf } from '../../lib/statTileVariants'
 import { Button } from '../ui/Button'
 
 /**
@@ -102,11 +103,6 @@ type Subject =
   | { kind: 'sector'; country: CountryDonuts; slice: DonutSlice }
   | { kind: 'country'; country: CountryDonuts }
 
-/** Tone class for a figure — the app's existing `--pos` / `--neg` treatment. */
-function toneFor(value: number): string {
-  return value === 0 ? '' : value > 0 ? 'stat-positive' : 'stat-negative'
-}
-
 /**
  * Build the popup body for whichever bar — or country — is hovered.
  *
@@ -168,7 +164,9 @@ function createPopupContent(
     addRow(`% of ${country.countryName}`, `${subject.slice.percentOfCountry.toFixed(1)}%`)
     addRow('Holdings', String(subject.slice.holdingCount))
   }
-  const tone = toneFor(source.unrealizedPnlBase)
+  // The shared `--pos` / `--neg` treatment (DDR-0034): a figure sits beside the tint here, which
+  // is the case DDR-0021 carves out of the map's own red↔blue scale.
+  const tone = toneClassName(toneOf(source.unrealizedPnlBase))
   addRow('Unrealized P&L', formatSigned(source.unrealizedPnlBase), tone)
   // The figure the tint encodes, stated in text: the neutral tint means "flat *or* unknown", and
   // colour alone cannot tell those apart. '—' rather than a fabricated 0.0% when there is no cost

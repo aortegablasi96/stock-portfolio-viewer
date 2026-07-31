@@ -1,9 +1,13 @@
 import type { AccountBalances } from '@shared/domain/portfolio'
 import { formatCurrency } from '../lib/format'
+import { StatRow, StatTile } from './ui/StatTile'
 
 /**
  * Account balances summary (Story #16): three stat tiles showing the headline
  * figures. Presentational only — the values are computed/fetched upstream.
+ *
+ * The tiles are the shared `StatTile` since Story #129; the hand-written copy this file
+ * carried was the same component with a larger figure, no tone and no hint line.
  *
  * All three tiles use base-ledger figures (converted to the display currency) so they
  * reconcile: Holdings value is `stockMarketValue` (IBKR's own valuation), and Net = Holdings
@@ -25,13 +29,10 @@ export function BalancesSummary({
   ]
 
   return (
-    <section className="balances" aria-label="Account balances">
+    <StatRow as="section" aria-label="Account balances">
       {tiles.map((tile) => (
-        <div key={tile.label} className="balance-tile">
-          <p className="balance-label">{tile.label}</p>
-          <p className="balance-value">{tile.value}</p>
-        </div>
+        <StatTile key={tile.label} label={tile.label} value={tile.value} />
       ))}
-    </section>
+    </StatRow>
   )
 }

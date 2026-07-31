@@ -15,7 +15,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card'
 import { NeedsImport } from './NeedsImport'
 import { RangeFilter } from './RangeFilter'
 import { RefreshBar } from './RefreshBar'
-import { StatTile, toneOf } from './StatTile'
+import { StatRow, StatTile } from '../ui/StatTile'
+import { toneClassName, toneOf } from '../../lib/statTileVariants'
 import { useRangeSelection } from './useRangeSelection'
 
 /** The two switchable Performance charts (Story #45). */
@@ -102,7 +103,7 @@ export function PerformanceView(): React.JSX.Element {
         onEditCustom={(edge, value) => editCustom(edge, value, customBounds)}
       />
 
-      <div className="stat-row">
+      <StatRow>
         <StatTile label="Portfolio value" value={c(stats.endValue)} hint="At period end" />
         <StatTile
           label="Value change"
@@ -122,7 +123,7 @@ export function PerformanceView(): React.JSX.Element {
           hint={range === 'all' ? 'Chain-linked across periods' : 'Over selected period'}
           tone={toneOf(stats.twr)}
         />
-      </div>
+      </StatRow>
 
       <Card>
         <CardHeader>
@@ -190,8 +191,8 @@ export function PerformanceView(): React.JSX.Element {
                     </th>
                     <td className="num">{c(p.startingValue)}</td>
                     <td className="num">{c(p.endingValue)}</td>
-                    <td className={`num stat-${toneOf(p.twr)}`}>{formatSignedPercent(p.twr)}</td>
-                    <td className={`num stat-${toneOf(p.mtm)}`}>{formatSignedCurrency(p.mtm, r.baseCurrency)}</td>
+                    <td className={toneClassName(toneOf(p.twr), 'num')}>{formatSignedPercent(p.twr)}</td>
+                    <td className={toneClassName(toneOf(p.mtm), 'num')}>{formatSignedCurrency(p.mtm, r.baseCurrency)}</td>
                     <td className="num">{formatSignedCurrency(p.depositsWithdrawals, r.baseCurrency)}</td>
                     <td className="num">{c(p.dividends)}</td>
                     <td className="num">{c(p.commissions)}</td>

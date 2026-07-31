@@ -356,6 +356,23 @@ Canonical flows to copy when adding a feature:
   friends) and spending it on section headings loses the distinction. And `.state-panel` survives
   shrunken to `color: var(--muted)` — only the surface moved; Story #133's `StatePanel` folds the
   rest, so `className="state-panel state-error"` is transitional, not the pattern.
+- **A headline figure is a `StatTile`, and it has no surface rule of its own** (Story #129,
+  DDR-0034). `components/ui/StatTile.tsx` (`StatTile` + `StatRow`) replaced the same component
+  written twice — the dashboard's `.balance-tile` and the analytics views' `.stat-tile`, whose
+  labels were byte-identical and whose values disagreed only on `1.5rem` vs `1.4rem` (`--text-xl`,
+  1.4rem, wins). The two tile rules collapse to **none**: a tile *is* a `Card` at `default`/`md`,
+  so the surface is the card's and only the three lines and the tone remain. Four things to know.
+  The tile's axis is **`tone`, not `variant`/`size`** — a headline figure is always a panel-level
+  tile, so those two axes would each have one value. **Neutral is the absence of a tone**:
+  `toneClassName('neutral')` returns `''` and there is deliberately no `.stat-neutral` rule, which
+  is what lets one helper serve a tile, a table cell, the realized-gains highlight and the map
+  popup, each keeping the ink it inherits. `.stat-positive` / `.stat-negative` keep their names
+  because those three non-tile callers wear them — they are the app's tone semantic, not the
+  tile's internals, and they stay `--pos` / `--neg` (the case DDR-0021 carves out, since a figure
+  sits beside the colour). And `.stat-row` is `auto-fit` over `minmax(11rem, 1fr)` for both
+  callers, which is why the balances row needs no breakpoint of its own any more.
+  `lib/statTileVariants.test.ts` fails if a `.stat-*` rule starts declaring a surface again, if a
+  part or tone has no rule, or if `.stat-neutral` acquires one.
 - **Never write a focus rule.** One ring — `--focus-ring` / `--focus-ring-offset`, always
   `--accent`, destructive controls included — is applied by a **zero-specificity `:where(...)`
   base rule** at the top of `app.css`, so an interactive element is ringed by default and can't
@@ -907,7 +924,7 @@ so no test may render a React component. This shapes the renderer: chart maths, 
 sorting and formatting are **extracted out of components into pure modules under
 `renderer/src/lib/`** (`format`, `pie`, `worldGeo`, `countryDonuts`, `gainLoss`, `tableFilter`,
 `column`, `dateRange`, `sectorMap`, `performanceRange`, `classifyProgress`, `dataVersion`,
-`tabKeyboard`, `buttonVariants`, `cardVariants`)
+`tabKeyboard`, `buttonVariants`, `cardVariants`, `statTileVariants`)
 precisely so they can be tested — follow
 that split when adding a component with real logic in it. `dataVersion` is the same move applied
 to state rather than maths: the cross-view staleness signal is a plain subscribable store a hook

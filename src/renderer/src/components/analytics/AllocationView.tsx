@@ -8,7 +8,8 @@ import { useAnalytics } from './useAnalytics'
 import { ClassifySectors } from './ClassifySectors'
 import { NeedsImport } from './NeedsImport'
 import { RefreshBar } from './RefreshBar'
-import { StatTile, toneOf } from './StatTile'
+import { StatRow, StatTile } from '../ui/StatTile'
+import { toneClassName, toneOf } from '../../lib/statTileVariants'
 import { Button } from '../ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card'
 
@@ -97,11 +98,11 @@ export function AllocationView(): React.JSX.Element {
         onRefresh={() => void reload()}
       />
 
-      <div className="stat-row">
+      <StatRow>
         <StatTile label="Invested value" value={c(r.totalMarketValueBase)} hint={r.reportDate ? `As of ${formatDate(r.reportDate)}` : undefined} />
         <StatTile label="Positions" value={String(r.positions.length)} />
         {top && <StatTile label="Largest holding" value={top.symbol} hint={`${top.percentOfNav.toFixed(1)}% of NAV`} />}
-      </div>
+      </StatRow>
 
       <Card>
         <CardHeader>
@@ -204,7 +205,7 @@ export function AllocationView(): React.JSX.Element {
                     <td>{p.sector || '—'}</td>
                     <td className="num">{c(p.marketValueBase)}</td>
                     <td className="num">{c(p.costBasisBase)}</td>
-                    <td className={`num stat-${toneOf(p.unrealizedPnlBase)}`}>
+                    <td className={toneClassName(toneOf(p.unrealizedPnlBase), 'num')}>
                       {formatSignedCurrency(p.unrealizedPnlBase, r.baseCurrency)}
                     </td>
                     <td className="num">{p.percentOfNav.toFixed(1)}%</td>
