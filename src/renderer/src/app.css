@@ -434,6 +434,66 @@ html {
   line-height: var(--leading-normal);
 }
 
+/* ---- StatTile primitive (Story #129, DDR-0034) ---------------------------
+   One headline figure, replacing the two the audit found: the dashboard's
+   `.balance-tile` and the analytics views' `.stat-tile`. They were the same
+   component written twice — `.balance-label` and `.stat-label` byte-identical,
+   `.balance-value` and `.stat-value` apart only on `1.5rem` vs `1.4rem`.
+
+   There is no `.stat-tile` rule, and that is the point: the tile's surface is
+   entirely the card's (`default` at `md`), so the two superseded tile rules
+   collapse to none rather than to one. What is left is the three lines and the
+   tone — the parts a card knows nothing about. */
+
+.stat-row {
+  display: grid;
+  /* `auto-fit` rather than a fixed column count: it reflows on the space
+     available, so one grid serves the dashboard's three balances and the
+     analytics rows of three and four, and no breakpoint is needed to collapse
+     it. `11rem` is wide enough for a `--text-xl` currency figure. */
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: var(--space-5);
+}
+
+/* The uppercase, letter-spaced treatment reserved for a label naming one
+   figure — the distinction `.card-title` deliberately leaves alone (DDR-0033).
+   Also worn by the realized-gains highlight card's label, which was a
+   byte-identical third copy of this rule. */
+.stat-label {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.stat-value {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-hint {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+/* -- Tone: colour only ----------------------------------------------------
+   `--pos` / `--neg` are correct here and not on the map: a figure sits beside
+   the colour, so the hue is a second cue rather than the only channel — the
+   case DDR-0021 carves out. Neutral has no rule on purpose; a neutral figure
+   keeps the ink of whatever it sits in (a tile, a table cell, a map popup). */
+
+.stat-positive {
+  color: var(--pos);
+}
+
+.stat-negative {
+  color: var(--neg);
+}
+
 /* Filter chips and a row count beside a card title. */
 .card-toolbar {
   display: flex;
@@ -615,36 +675,6 @@ html {
   margin-top: var(--space-5);
 }
 
-/* ---- Balances summary (Story #16) ---------------------------------------- */
-
-.balances {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1rem;
-}
-
-.balance-tile {
-  padding: 1.1rem 1.25rem;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-}
-
-.balance-label {
-  margin: 0 0 0.4rem;
-  font-size: 0.78rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.balance-value {
-  margin: 0;
-  font-size: 1.5rem;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-
 /* ---- Two-column region: holdings + allocation ---------------------------- */
 
 .dashboard-columns {
@@ -700,10 +730,6 @@ html {
 
 @media (max-width: 720px) {
   .dashboard-columns {
-    grid-template-columns: 1fr;
-  }
-
-  .balances {
     grid-template-columns: 1fr;
   }
 }
@@ -1068,48 +1094,6 @@ html {
   font-variant-numeric: tabular-nums;
 }
 
-.stat-row {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
-  gap: 1rem;
-}
-
-.stat-tile {
-  padding: 1.1rem 1.25rem;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-}
-
-.stat-label {
-  margin: 0 0 0.4rem;
-  font-size: 0.78rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.stat-value {
-  margin: 0;
-  font-size: 1.4rem;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-
-.stat-hint {
-  margin: 0.35rem 0 0;
-  font-size: 0.78rem;
-  color: var(--muted);
-}
-
-.stat-positive {
-  color: var(--pos);
-}
-
-.stat-negative {
-  color: var(--neg);
-}
-
 /* Cap a scrollable table to 5 rows; the sticky header stays put as the body scrolls.
    Measured against this stylesheet: header ≈ 39.6px, rows ≈ 42.4px — 17rem (272px) shows
    the header + 5 full rows with ~48% of the 6th peeking, a clear "scroll for more" cue. */
@@ -1165,14 +1149,11 @@ html {
   gap: 1rem;
 }
 
-.highlight-label {
-  margin: 0 0 0.4rem;
-  font-size: 0.78rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
+/* The highlight card's label was a byte-identical third copy of `.stat-label`
+   and now wears that rule instead. The card itself is not a StatTile: a symbol
+   line sits between its label and its figure, and the figure is deliberately
+   secondary (`--text-lg`), since it annotates the table beside it rather than
+   heading the view. */
 .highlight-symbol {
   margin: 0;
   font-weight: 600;
@@ -1180,8 +1161,8 @@ html {
 }
 
 .highlight-value {
-  margin: 0.5rem 0 0;
-  font-size: 1.25rem;
+  margin: var(--space-3) 0 0;
+  font-size: var(--text-lg);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }

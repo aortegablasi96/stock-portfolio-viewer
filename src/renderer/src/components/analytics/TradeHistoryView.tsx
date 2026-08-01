@@ -16,7 +16,8 @@ import { useAnalytics } from './useAnalytics'
 import { NeedsImport } from './NeedsImport'
 import { RangeFilter } from './RangeFilter'
 import { RefreshBar } from './RefreshBar'
-import { StatTile, toneOf } from './StatTile'
+import { StatRow, StatTile } from '../ui/StatTile'
+import { statPartClassName, toneClassName, toneOf } from '../../lib/statTileVariants'
 import { TypeFilter } from './TypeFilter'
 import { useRangeSelection } from './useRangeSelection'
 import { Button } from '../ui/Button'
@@ -66,12 +67,12 @@ export function TradeHistoryView(): React.JSX.Element {
         onRefresh={() => void reload()}
       />
 
-      <div className="stat-row">
+      <StatRow>
         <StatTile label="Realized P&L" value={sc(r.totalRealized)} tone={toneOf(r.totalRealized)} />
         <StatTile label="Short-term" value={sc(r.totalRealizedShortTerm)} tone={toneOf(r.totalRealizedShortTerm)} />
         <StatTile label="Long-term" value={sc(r.totalRealizedLongTerm)} tone={toneOf(r.totalRealizedLongTerm)} />
         <StatTile label="Unrealized P&L" value={sc(r.totalUnrealized)} tone={toneOf(r.totalUnrealized)} />
-      </div>
+      </StatRow>
 
       <Card>
         <CardTitle>Realized gains by Ticker</CardTitle>
@@ -97,9 +98,9 @@ export function TradeHistoryView(): React.JSX.Element {
                           {s.symbol}
                           <span className="flex-import-file">{s.description}</span>
                         </th>
-                        <td className={`num stat-${toneOf(s.realizedShortTerm)}`}>{sc(s.realizedShortTerm)}</td>
-                        <td className={`num stat-${toneOf(s.realizedLongTerm)}`}>{sc(s.realizedLongTerm)}</td>
-                        <td className={`num stat-${toneOf(s.totalRealized)}`}>{sc(s.totalRealized)}</td>
+                        <td className={toneClassName(toneOf(s.realizedShortTerm), 'num')}>{sc(s.realizedShortTerm)}</td>
+                        <td className={toneClassName(toneOf(s.realizedLongTerm), 'num')}>{sc(s.realizedLongTerm)}</td>
+                        <td className={toneClassName(toneOf(s.totalRealized), 'num')}>{sc(s.totalRealized)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -140,6 +141,12 @@ function RealizedHighlights({
   )
 }
 
+/**
+ * Not a `StatTile` (Story #129): a symbol line sits between the label and the figure, and the
+ * figure is deliberately secondary — it annotates the table beside it rather than heading the
+ * view. What it does share is the label treatment, which was a byte-identical third copy of
+ * `.stat-label`, and the tone.
+ */
 function HighlightCard({
   label,
   item,
@@ -151,12 +158,12 @@ function HighlightCard({
 }): React.JSX.Element {
   return (
     <Card as="div" variant="nested" size="sm">
-      <p className="highlight-label">{label}</p>
+      <p className={statPartClassName('label')}>{label}</p>
       <p className="highlight-symbol">
         {item.symbol}
         <span className="flex-import-file">{item.description}</span>
       </p>
-      <p className={`highlight-value stat-${toneOf(item.totalRealized)}`}>
+      <p className={toneClassName(toneOf(item.totalRealized), 'highlight-value')}>
         {sc(item.totalRealized)}
       </p>
     </Card>
@@ -247,7 +254,7 @@ function TradeHistory({
                     <td className="num">{formatCurrency(t.tradePrice, t.currency)}</td>
                     <td className="num">{formatCurrency(t.proceedsNative, t.currency)}</td>
                     <td className="num">{formatCurrency(t.commissionNative, t.currency)}</td>
-                    <td className={`num stat-${toneOf(t.realizedBase)}`}>
+                    <td className={toneClassName(toneOf(t.realizedBase), 'num')}>
                       {t.realizedNative !== 0 ? sc(t.realizedBase) : '—'}
                     </td>
                   </tr>
