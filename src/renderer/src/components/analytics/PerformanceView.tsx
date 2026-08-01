@@ -16,6 +16,7 @@ import { NeedsImport } from './NeedsImport'
 import { RangeFilter } from './RangeFilter'
 import { RefreshBar } from './RefreshBar'
 import { StatRow, StatTile } from '../ui/StatTile'
+import { ToggleGroup } from '../ui/ToggleGroup'
 import { toneClassName, toneOf } from '../../lib/statTileVariants'
 import { useRangeSelection } from './useRangeSelection'
 
@@ -130,20 +131,12 @@ export function PerformanceView(): React.JSX.Element {
           <CardTitle id="perf-chart-title">
             {chartTab === 'value' ? 'Portfolio value over time' : 'Performance change over time'}
           </CardTitle>
-          <div className="chart-tabs" role="tablist" aria-label="Performance chart">
-            {CHART_TABS.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                role="tab"
-                aria-selected={chartTab === t.id}
-                className={`chart-tab ${chartTab === t.id ? 'chart-tab-active' : ''}`}
-                onClick={() => setChartTab(t.id)}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
+          <ToggleGroup
+            label="Performance chart"
+            options={CHART_TABS}
+            value={chartTab}
+            onSelect={setChartTab}
+          />
         </CardHeader>
         <CardContent>
           {chartTab === 'value' ? (

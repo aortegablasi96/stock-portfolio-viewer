@@ -391,6 +391,25 @@ Canonical flows to copy when adding a feature:
   or if any of the three superseded selectors reappears. `DateInput` fixes `type` rather than
   defaulting it: a different type would strip the meaning from the `min`/`max` bounds that keep
   the picker inside the imported history (DDR-0017).
+- **A group of related choices is a `ToggleGroup`, and it is never a tablist** (Story #131,
+  DDR-0036). `components/ui/ToggleGroup.tsx` replaced `.chart-tab` — the class the audit called
+  "a control invented twice", which was in fact invented **five** times: the Performance chart
+  switcher, the Allocation map's colour toggle and its breakdown strip, the `RangeFilter`
+  presets and the `TypeFilter` chips. Four things to know. Its axis is **`mode`
+  (`single | multiple`), and the mode is *worn*** — a single-select item keeps `--radius-md`, a
+  multi-select item is `--radius-pill` — because the Dividends and Trade history views stack
+  both kinds one above the other and until this story they were indistinguishable; `.toggle-item`
+  declares no corner at all, so neither mode is the other's silent default. **The three
+  `role="tablist"` call sites were corrected, not completed**: they declared `role="tab"` +
+  `aria-selected` with no roving `tabindex`, no arrow keys and no `role="tabpanel"` — a promise
+  the app keeps only in `lib/tabKeyboard.ts` (DDR-0029) — and they aren't tabs anyway, they
+  switch what one card draws, which is `aria-pressed`. `.app-tab` stays out; it is a real
+  tablist. The active item carries a **doubled stroke** (`box-shadow: inset 0 0 0 1px`) as well
+  as the accent, DDR-0029's "both cues are colour" rule applied to a bordered box, and
+  `lib/toggleGroupVariants.test.ts` fails if that goes, if a mode has no rule, if a `.toggle-*`
+  rule declares `outline`, or if any of the superseded selectors reappears. Watch the option
+  shape: `ToggleOption.title` is a **tooltip**, and `BREAKDOWN_TABS.title` already meant the
+  card's heading — `AllocationView` strips it at the call site.
 - **Never write a focus rule.** One ring — `--focus-ring` / `--focus-ring-offset`, always
   `--accent`, destructive controls included — is applied by a **zero-specificity `:where(...)`
   base rule** at the top of `app.css`, so an interactive element is ringed by default and can't
@@ -942,7 +961,8 @@ so no test may render a React component. This shapes the renderer: chart maths, 
 sorting and formatting are **extracted out of components into pure modules under
 `renderer/src/lib/`** (`format`, `pie`, `worldGeo`, `countryDonuts`, `gainLoss`, `tableFilter`,
 `column`, `dateRange`, `sectorMap`, `performanceRange`, `classifyProgress`, `dataVersion`,
-`tabKeyboard`, `buttonVariants`, `cardVariants`, `statTileVariants`, `fieldVariants`)
+`tabKeyboard`, `buttonVariants`, `cardVariants`, `statTileVariants`, `fieldVariants`,
+`toggleGroupVariants`)
 precisely so they can be tested — follow
 that split when adding a component with real logic in it. `dataVersion` is the same move applied
 to state rather than maths: the cross-view staleness signal is a plain subscribable store a hook

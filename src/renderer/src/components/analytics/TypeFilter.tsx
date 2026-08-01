@@ -1,4 +1,5 @@
 import { Button } from '../ui/Button'
+import { ToggleGroup } from '../ui/ToggleGroup'
 
 /**
  * The toolbar for a type-filtered analytics table (Stories #32, #33, #73): a group of
@@ -14,8 +15,11 @@ import { Button } from '../ui/Button'
  * range), so it reads "N of M" whenever rows are hidden for any reason. Only the Clear
  * button is tied to this control, and clears only the type chips.
  *
- * The chips are `aria-pressed` toggle buttons inside an `aria-label`led group, so the
- * control is labelled and fully keyboard-operable.
+ * The chips are a multi-select `ToggleGroup` (Story #131, DDR-0036), which is what makes this
+ * control tell its own story: a pill says "pick any number of these", against the control
+ * corner the single-select range presets above it wear. Clear sits *outside* the group rather
+ * than as its last child — it is not one of the choices, and a `role="group"` labelled "Filter
+ * by type" should contain only things that can be pressed on.
  */
 export function TypeFilter({
   label,
@@ -41,27 +45,18 @@ export function TypeFilter({
   const hidingRows = shown !== total
   return (
     <div className="card-toolbar">
-      <div className="type-filter" role="group" aria-label={`Filter by ${label}`}>
-        {types.map((type) => {
-          const active = selected.has(type)
-          return (
-            <button
-              key={type}
-              type="button"
-              className={`chart-tab ${active ? 'chart-tab-active' : ''}`}
-              aria-pressed={active}
-              onClick={() => onToggle(type)}
-            >
-              {type}
-            </button>
-          )
-        })}
-        {typeFiltered && (
-          <Button variant="link" size="sm" onClick={onClear}>
-            Clear
-          </Button>
-        )}
-      </div>
+      <ToggleGroup
+        mode="multiple"
+        label={`Filter by ${label}`}
+        options={types.map((type) => ({ id: type, label: type }))}
+        value={selected}
+        onSelect={onToggle}
+      />
+      {typeFiltered && (
+        <Button variant="link" size="sm" onClick={onClear}>
+          Clear
+        </Button>
+      )}
       <span className="card-count" role="status">
         {hidingRows ? `${shown} of ${total}` : `${total}`} shown
       </span>

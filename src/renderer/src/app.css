@@ -1333,46 +1333,72 @@ html {
   font-variant-numeric: tabular-nums;
 }
 
-/* Segmented control switching the two Performance charts (Story #45). */
-.chart-tabs {
+/* ---- ToggleGroup primitive (Story #131, DDR-0036) ------------------------
+   One segmented control replacing `.chart-tabs` / `.chart-tab` — a class
+   written for the Performance view's chart switcher (Story #45) that four
+   later controls borrowed verbatim, plus the `.type-filter` wrapper that
+   differed from `.chart-tabs` by one `align-items`.
+
+   One axis: `mode`, carrying the item's corner and nothing else. Four of the
+   five groups pick exactly one option and keep the control radius every other
+   box in the app uses; the type filter picks any number and is a pill. The
+   Dividends and Trade history views stack both kinds one above the other, and
+   until this story they were rendered by the same class and looked identical.
+
+   Deliberately not a joined segmented track, which is the other conventional
+   way to say "exactly one": five range presets wrap on a narrow window, and a
+   joined track breaks with them.
+
+   No focus rule. The zero-specificity base rule at the top of this file
+   supplies it, which is how `.chart-tab:focus-visible` — a hand-copied
+   duplicate of it — deletes without losing its ring. */
+
+.toggle-group {
   display: flex;
-  gap: 0.25rem;
+  align-items: center;
+  gap: var(--space-1);
   flex-wrap: wrap;
 }
 
-.chart-tab {
-  padding: 0.35rem 0.75rem;
+/* Everything a toggle item is regardless of mode. The corner is deliberately
+   absent — that is the mode's single declaration, below, so neither mode is
+   the silent default of the other. */
+.toggle-item {
+  padding: var(--control-pad-sm);
   font: inherit;
-  font-size: 0.82rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   color: var(--muted);
   background: transparent;
   border: 1px solid var(--border);
-  border-radius: 8px;
   cursor: pointer;
 }
 
-.chart-tab:hover {
+/* "Exactly one of these" — the control corner every other box in the app uses. */
+.toggle-item-single {
+  border-radius: var(--radius-md);
+}
+
+/* "Any number of these" — a chip. */
+.toggle-item-multiple {
+  border-radius: var(--radius-pill);
+}
+
+.toggle-item:hover:not(:disabled) {
   color: var(--text);
 }
 
-.chart-tab-active {
+/* The active item carries a doubled stroke as well as the accent. Accent text
+   inside an accent border is two cues that are both colour, and colour is the
+   one channel that cannot be relied on alone — the same reasoning that gave
+   the active app tab its 2px bar (DDR-0029). A ring rather than a bar because
+   these items are bordered boxes with 6px of vertical padding: thickening the
+   stroke they already have is the cue that fits the shape. `box-shadow` and
+   not `border-width`, so nothing moves when the selection changes. */
+.toggle-item-active {
   color: var(--accent);
   border-color: var(--accent);
-}
-
-.chart-tab:focus-visible {
-  outline: var(--focus-ring);
-  outline-offset: var(--focus-ring-offset);
-}
-
-/* Multi-select type filter (Story #73): a group of toggle chips (reusing .chart-tab) plus
-   a "Clear" affordance shown only while something is selected. */
-.type-filter {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  flex-wrap: wrap;
+  box-shadow: inset 0 0 0 1px var(--accent);
 }
 
 /* Performance time-range filter: preset strip + optional custom date inputs (Story #69). */

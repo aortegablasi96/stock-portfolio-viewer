@@ -2,6 +2,7 @@ import type { Bounds, RangeId } from '../../lib/dateRange'
 import { RANGE_OPTIONS, toDateInput } from '../../lib/dateRange'
 import { DateInput } from '../ui/DateInput'
 import { Field } from '../ui/Field'
+import { ToggleGroup } from '../ui/ToggleGroup'
 
 /**
  * The time-range control: a group of period presets (1M / 3M / 1Y / All / Custom) plus the two
@@ -13,12 +14,14 @@ import { Field } from '../ui/Field'
  * resolves it to a window (through `lib/dateRange`), because what a window *does* differs by
  * view: charts slice a series to it, tables filter rows against it.
  *
- * The presets are `aria-pressed` toggle buttons inside an `aria-label`led group, so the control
- * is labelled and fully keyboard-operable. The date inputs are `Field`s (Story #130, DDR-0035),
- * which matters more here than anywhere else in the app: all three views carrying a
- * `RangeFilter` can be mounted at once (DDR-0027), so their labels are paired to generated ids
- * rather than to any name this file could pick. They stay bounded by the data extent, so the
- * picker can't offer a day the imported history doesn't cover.
+ * The presets are a single-select `ToggleGroup` (Story #131, DDR-0036) — exactly one period is
+ * in force, so they wear the control corner rather than the type filter's pills.
+ *
+ * The date inputs are `Field`s (Story #130, DDR-0035), which matters more here than anywhere
+ * else in the app: all three views carrying a `RangeFilter` can be mounted at once (DDR-0027),
+ * so their labels are paired to generated ids rather than to any name this file could pick.
+ * They stay bounded by the data extent, so the picker can't offer a day the imported history
+ * doesn't cover.
  */
 export function RangeFilter({
   label,
@@ -40,20 +43,7 @@ export function RangeFilter({
 }): React.JSX.Element {
   return (
     <div className="range-bar">
-      <div className="chart-tabs" role="group" aria-label={label}>
-        {RANGE_OPTIONS.map((opt) => (
-          <button
-            key={opt.id}
-            type="button"
-            title={opt.title}
-            aria-pressed={range === opt.id}
-            className={`chart-tab ${range === opt.id ? 'chart-tab-active' : ''}`}
-            onClick={() => onSelect(opt.id)}
-          >
-            {opt.label}
-          </button>
-        ))}
-      </div>
+      <ToggleGroup label={label} options={RANGE_OPTIONS} value={range} onSelect={onSelect} />
       {range === 'custom' && extent && (
         <div className="range-custom">
           <Field label="From">
