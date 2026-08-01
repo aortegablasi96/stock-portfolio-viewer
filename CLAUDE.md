@@ -410,6 +410,24 @@ Canonical flows to copy when adding a feature:
   rule declares `outline`, or if any of the superseded selectors reappears. Watch the option
   shape: `ToggleOption.title` is a **tooltip**, and `BREAKDOWN_TABS.title` already meant the
   card's heading — `AllocationView` strips it at the call site.
+- **A small label is a `Badge`, and it is never a pill** (Story #132, DDR-0037).
+  `components/ui/Badge.tsx` replaced the four rules that rendered the same idea — `.native-chip`,
+  `.flex-import-badge` / `-new`, `.card-count` and `.flex-import-dup` — on the button's two axes:
+  **`variant` carries the boundary and the ink** (`neutral` · `accent` · `plain`), **`size`
+  carries the type and the box padding**. Four things to know. The pill is *spoken for*: #131 gave
+  that corner a meaning one story earlier — a multi-select toggle item, "any number of these can
+  be pressed" (DDR-0036) — so `.flex-import-badge`'s 999px becomes `--radius-sm`, the story's one
+  deliberate visual change. **`size` is structural, not a taste for a smaller box**: a badge is an
+  `inline-block`, and an inline-block with vertical padding grows the line box around it, so `sm`
+  (the chip *inside* a run of text) carries none — 4px there adds ~7px to every holdings row.
+  `plain` is the badge with **no boundary, and therefore no box padding**, declared doubled
+  (`.badge.badge-plain`) so it beats the size's padding by specificity rather than source order.
+  And badges carry **no background**: the fill `.native-chip` declared was painting the `--card`
+  surface it already stood on. `role="status"` stays at the count's call site — it is a fact about
+  that one figure, not about badges — and `.flex-import-dim` stays a rule because it colours a
+  `<td>`, not a label. `lib/badgeVariants.test.ts` fails if a badge acquires a pill, a background
+  or a focus ring, if a variant or size has no rule, or if any of the five superseded selectors
+  reappears.
 - **Never write a focus rule.** One ring — `--focus-ring` / `--focus-ring-offset`, always
   `--accent`, destructive controls included — is applied by a **zero-specificity `:where(...)`
   base rule** at the top of `app.css`, so an interactive element is ringed by default and can't
