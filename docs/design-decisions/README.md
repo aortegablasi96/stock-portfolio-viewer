@@ -70,3 +70,4 @@ Other options and why they were not chosen.
 - `0032` — One `Button` primitive: seven role-named variants, four sizes, `className` for placement only (extends `0031`)
 - `0033` — One `Card` primitive: `default`/`nested` surfaces, `--surface-pad-*` sizes, sentence-case titles, `CardContent` as the body scope (extends `0032`)
 - `0034` — One `StatTile`: no surface of its own (the card supplies it), `tone` as the only axis, neutral as the absence of a tone (extends `0033`)
+- `0035` — One `Field` owning an explicit `htmlFor` and a generated id; one `.control` box for `Select`/`DateInput`, `kind` as the only axis (extends `0034`)
