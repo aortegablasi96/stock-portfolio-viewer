@@ -508,6 +508,71 @@ html {
   white-space: nowrap;
 }
 
+/* ---- Field and form controls (Story #130, DDR-0035) ----------------------
+   One labelled control replacing `.field-inline`, `.select-control` and the
+   `.range-custom` date override. The two form controls in the app shared a
+   class but not a labelling technique, which is what `.range-custom
+   .field-inline span` was for: a rule that existed only because one call site
+   put its label text in a `<span>` where the other used a `<label>`.
+
+   The control has no size axis. Both call sites are the same dense box, so a
+   scale here would ship with one value in use (the call DDR-0034 made for the
+   tile). A `kind` carries cursor and colour-scheme only — what follows from
+   the native element — and everything else is the shared `.control` box, whose
+   hover and disabled states are the button's.
+
+   No focus rule. The zero-specificity base rule at the top of this file
+   supplies it, which is how `.select-control:focus-visible` — a hand-copied
+   duplicate of it — deletes without losing its ring. */
+
+.field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--text-xs);
+}
+
+.field-label {
+  color: var(--muted);
+}
+
+.control {
+  padding: var(--control-pad-sm);
+  font: inherit;
+  font-size: var(--text-xs);
+  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+/* The hover the old `.select-control` never had, matching `.btn-outline`'s so
+   that a control and a button beside it answer the pointer the same way. */
+.control:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* One disabled treatment, and the same one the button uses — the currency
+   selector is disabled while a conversion is in flight (DDR-0007), which means
+   exactly what a disabled button means. */
+.control:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.control-select {
+  cursor: pointer;
+}
+
+/* `color-scheme` is what makes the browser's own calendar glyph and picker
+   render for a dark surface; without it the control draws a light-mode icon on
+   a dark box. */
+.control-date {
+  cursor: text;
+  color-scheme: light dark;
+}
+
 /* ---- Dashboard layout ---------------------------------------------------- */
 
 .dashboard {
@@ -543,40 +608,6 @@ html {
   flex-direction: column;
   align-items: flex-end;
   gap: 0.5rem;
-}
-
-/* ---- Display-currency selector (Story #28) ------------------------------- */
-
-.field-inline {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.85rem;
-}
-
-.field-inline label {
-  color: var(--muted);
-}
-
-.select-control {
-  padding: 0.35rem 0.6rem;
-  font: inherit;
-  font-size: 0.85rem;
-  color: var(--text);
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  cursor: pointer;
-}
-
-.select-control:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-
-.select-control:focus-visible {
-  outline: var(--focus-ring);
-  outline-offset: var(--focus-ring-offset);
 }
 
 /* Muted chip showing a holding's native currency/amount next to its converted value. */
@@ -1357,15 +1388,6 @@ html {
   align-items: center;
   gap: 0.75rem 1rem;
   flex-wrap: wrap;
-}
-
-.range-custom .field-inline span {
-  color: var(--muted);
-}
-
-.range-custom input[type='date'] {
-  cursor: text;
-  color-scheme: light dark;
 }
 
 .chart-bar-lower {

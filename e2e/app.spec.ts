@@ -45,6 +45,28 @@ test('renders the portfolio dashboard', async () => {
   await expect(page.locator('h1')).toHaveText('Portfolio')
 })
 
+test('the display-currency control is labelled and keyboard-reachable (Story #130)', async () => {
+  // `Field` pairs a label with a generated id (DDR-0035), so the control is found by its
+  // accessible name — which is what a screen reader announces — rather than by a class.
+  const currency = page.getByLabel('Display currency')
+  await expect(currency).toBeVisible()
+  await currency.focus()
+  await expect(currency).toBeFocused()
+
+  // The generated ids have to actually resolve, and resolve to one element each. This is the
+  // failure a hard-coded id would produce once two views carrying the same field are mounted
+  // at the same time (DDR-0027): the label would silently point at the first control in the
+  // document and leave the rest unnamed.
+  const danglingLabels = await page.evaluate(() =>
+    [...document.querySelectorAll('label[for]')].filter(
+      (label) =>
+        document.querySelectorAll(`#${CSS.escape((label as HTMLLabelElement).htmlFor)}`).length !==
+        1,
+    ).length,
+  )
+  expect(danglingLabels).toBe(0)
+})
+
 test('shows the not-connected state when no IBKR gateway is running', async () => {
   // The test environment has no Client Portal Gateway, so the overview fetch fails
   // to connect and the dashboard resolves to its not_connected state (ADR-0004).

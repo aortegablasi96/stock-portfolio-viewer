@@ -1,18 +1,22 @@
+import { Field } from './ui/Field'
+import { Select } from './ui/Select'
+
 /**
- * Display-currency selector for the Portfolio view (Story #28, DDR-0007). A labelled
- * native `<select>` — the app's first — kept generic so later filter controls (the
- * dividends/trade type filters, Stories #32/#33) can reuse it rather than each inventing
- * their own dropdown. Presentational only: the parent owns the value and the refetch.
+ * Display-currency selector for the Portfolio view (Story #28, DDR-0007). Presentational only:
+ * the parent owns the value and the refetch.
+ *
+ * What is left here after Story #130 is the domain half — which codes to offer, and what the
+ * control is called. The label pairing, the identity and the box belong to `Field` and `Select`
+ * (DDR-0035), which is why this no longer takes an `id`: `Field` generates one, so no two
+ * instances can collide.
  */
 export function CurrencySelector({
-  id = 'display-currency',
   label = 'Display currency',
   value,
   options,
   disabled = false,
   onChange,
 }: {
-  id?: string
   label?: string
   value: string
   options: readonly string[]
@@ -20,21 +24,21 @@ export function CurrencySelector({
   onChange: (value: string) => void
 }): React.JSX.Element {
   return (
-    <div className="field-inline">
-      <label htmlFor={id}>{label}</label>
-      <select
-        id={id}
-        className="select-control"
-        value={value}
-        disabled={disabled}
-        onChange={(e) => onChange(e.target.value)}
-      >
-        {options.map((code) => (
-          <option key={code} value={code}>
-            {code}
-          </option>
-        ))}
-      </select>
-    </div>
+    <Field label={label}>
+      {(id) => (
+        <Select
+          id={id}
+          value={value}
+          disabled={disabled}
+          onChange={(e) => onChange(e.target.value)}
+        >
+          {options.map((code) => (
+            <option key={code} value={code}>
+              {code}
+            </option>
+          ))}
+        </Select>
+      )}
+    </Field>
   )
 }

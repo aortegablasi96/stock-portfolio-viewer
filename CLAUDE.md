@@ -373,6 +373,24 @@ Canonical flows to copy when adding a feature:
   callers, which is why the balances row needs no breakpoint of its own any more.
   `lib/statTileVariants.test.ts` fails if a `.stat-*` rule starts declaring a surface again, if a
   part or tone has no rule, or if `.stat-neutral` acquires one.
+- **A labelled control is a `Field`, and it owns the `id`** (Story #130, DDR-0035).
+  `components/ui/Field.tsx` + `Select.tsx` + `DateInput.tsx` replaced `.field-inline`,
+  `.select-control` and the `.range-custom` date override — one class that styled both form
+  controls while the two call sites *labelled* them differently (`<label htmlFor>` + `id` vs a
+  `<label>` wrapping a bare `<span>`), which is the only reason
+  `.range-custom .field-inline span` existed. Four things to know. **`Field` generates the id
+  with `useId()` and takes no `id` prop**, because analytics tabs stay mounted (DDR-0027) — all
+  three views carrying a `RangeFilter` can be in the document at once, and a defaulted id would
+  appear three times, silently pointing every label at the first control and leaving the rest
+  unnamed. The control is passed as **a function of that id** (`{(id) => <Select id={id} …/>}`)
+  so a call site can't receive it and forget to apply it. **The control has no `size` axis** —
+  both call sites are the same dense box, so `kind` (`select | date`) is the only one, carrying
+  cursor and `color-scheme` only; everything else is the shared `.control`. And its hover and
+  disabled rules **are** `.btn-outline`'s and `.btn`'s, compared body-for-body by
+  `lib/fieldVariants.test.ts`, which also fails if a `.control`/`.field` rule declares `outline`
+  or if any of the three superseded selectors reappears. `DateInput` fixes `type` rather than
+  defaulting it: a different type would strip the meaning from the `min`/`max` bounds that keep
+  the picker inside the imported history (DDR-0017).
 - **Never write a focus rule.** One ring — `--focus-ring` / `--focus-ring-offset`, always
   `--accent`, destructive controls included — is applied by a **zero-specificity `:where(...)`
   base rule** at the top of `app.css`, so an interactive element is ringed by default and can't
@@ -924,7 +942,7 @@ so no test may render a React component. This shapes the renderer: chart maths, 
 sorting and formatting are **extracted out of components into pure modules under
 `renderer/src/lib/`** (`format`, `pie`, `worldGeo`, `countryDonuts`, `gainLoss`, `tableFilter`,
 `column`, `dateRange`, `sectorMap`, `performanceRange`, `classifyProgress`, `dataVersion`,
-`tabKeyboard`, `buttonVariants`, `cardVariants`, `statTileVariants`)
+`tabKeyboard`, `buttonVariants`, `cardVariants`, `statTileVariants`, `fieldVariants`)
 precisely so they can be tested — follow
 that split when adding a component with real logic in it. `dataVersion` is the same move applied
 to state rather than maths: the cross-view staleness signal is a plain subscribable store a hook
