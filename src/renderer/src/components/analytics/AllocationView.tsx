@@ -12,6 +12,7 @@ import { StatRow, StatTile } from '../ui/StatTile'
 import { toneClassName, toneOf } from '../../lib/statTileVariants'
 import { Button } from '../ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card'
+import { ToggleGroup } from '../ui/ToggleGroup'
 
 /**
  * Allocation analysis (Milestone M3, Stories #22, #30 and #48). Breaks the latest imported
@@ -107,20 +108,12 @@ export function AllocationView(): React.JSX.Element {
       <Card>
         <CardHeader>
           <CardTitle>By geography &amp; sector (world map)</CardTitle>
-          <div className="chart-tabs" role="tablist" aria-label="Map colour">
-            {COLOR_MODES.map((m) => (
-              <button
-                key={m.id}
-                type="button"
-                role="tab"
-                aria-selected={colorMode === m.id}
-                className={`chart-tab ${colorMode === m.id ? 'chart-tab-active' : ''}`}
-                onClick={() => setColorMode(m.id)}
-              >
-                {m.label}
-              </button>
-            ))}
-          </div>
+          <ToggleGroup
+            label="Map colour"
+            options={COLOR_MODES}
+            value={colorMode}
+            onSelect={setColorMode}
+          />
         </CardHeader>
         <CardContent>
           <CountryMap
@@ -145,20 +138,14 @@ export function AllocationView(): React.JSX.Element {
       <Card>
         <CardHeader>
           <CardTitle id="allocation-breakdown-title">{activeTab.title}</CardTitle>
-          <div className="chart-tabs" role="tablist" aria-label="Allocation breakdown">
-            {BREAKDOWN_TABS.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                role="tab"
-                aria-selected={tab === t.id}
-                className={`chart-tab ${tab === t.id ? 'chart-tab-active' : ''}`}
-                onClick={() => setTab(t.id)}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
+          <ToggleGroup
+            label="Allocation breakdown"
+            // `title` here is the card's heading, not a tooltip — the shape a `ToggleOption`
+            // would otherwise pick up structurally and hang off every button.
+            options={BREAKDOWN_TABS.map(({ id, label }) => ({ id, label }))}
+            value={tab}
+            onSelect={setTab}
+          />
         </CardHeader>
         <CardContent>
           <AllocationBreakdown
