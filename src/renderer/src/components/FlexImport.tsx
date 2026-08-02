@@ -3,6 +3,7 @@ import type { FlexStatementImport, FlexStatementStore } from '@shared/domain/fle
 import { formatDate, formatDateTime } from '../lib/format'
 import { flexDataVersion } from '../lib/dataVersion'
 import { ConfirmAction } from './ConfirmAction'
+import { Badge } from './ui/Badge'
 import { Button } from './ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card'
 
@@ -286,11 +287,11 @@ function ImportSummary({ statements }: { statements: FlexStatementImport[] }): R
                 <RecordCell count={s.records.securities} dim={s.alreadyImported} />
                 <td>
                   {s.alreadyImported ? (
-                    <span className="flex-import-badge">Already imported</span>
+                    <Badge>Already imported</Badge>
                   ) : totalInserted(s) === 0 ? (
-                    <span className="flex-import-badge">No new rows</span>
+                    <Badge>No new rows</Badge>
                   ) : (
-                    <span className="flex-import-badge flex-import-badge-new">Imported</span>
+                    <Badge variant="accent">Imported</Badge>
                   )}
                 </td>
               </tr>
@@ -313,7 +314,14 @@ function RecordCell({
   return (
     <td className="num">
       {count.inserted}
-      {count.skipped > 0 && <span className="flex-import-dup"> (+{count.skipped} dup)</span>}
+      {/* The space is outside the badge on purpose: a badge is an inline-block, and a
+          block container strips the white space that starts its first line. */}
+      {count.skipped > 0 && (
+        <>
+          {' '}
+          <Badge variant="plain">(+{count.skipped} dup)</Badge>
+        </>
+      )}
     </td>
   )
 }

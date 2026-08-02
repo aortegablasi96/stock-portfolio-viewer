@@ -1,5 +1,6 @@
 import type { SnapshotSummary } from '@shared/domain/snapshot'
 import { formatCurrency, formatDateTime } from '../lib/format'
+import { Badge } from './ui/Badge'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card'
 
 /**
@@ -94,9 +95,9 @@ function SnapshotValue({ snapshot }: { snapshot: SnapshotSummary }): React.JSX.E
     return (
       <>
         {native}
-        <span className="native-chip" title="No exchange rate available">
+        <Badge size="sm" title="No exchange rate available">
           {snapshot.baseCurrency}
-        </span>
+        </Badge>
       </>
     )
   }
@@ -105,9 +106,7 @@ function SnapshotValue({ snapshot }: { snapshot: SnapshotSummary }): React.JSX.E
   return (
     <>
       {formatCurrency(snapshot.displayValue, snapshot.displayCurrency)}
-      {snapshot.baseCurrency !== snapshot.displayCurrency && (
-        <span className="native-chip">{native}</span>
-      )}
+      {snapshot.baseCurrency !== snapshot.displayCurrency && <Badge size="sm">{native}</Badge>}
     </>
   )
 }

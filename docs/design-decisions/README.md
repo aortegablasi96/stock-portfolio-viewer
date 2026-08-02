@@ -72,3 +72,4 @@ Other options and why they were not chosen.
 - `0034` — One `StatTile`: no surface of its own (the card supplies it), `tone` as the only axis, neutral as the absence of a tone (extends `0033`)
 - `0035` — One `Field` owning an explicit `htmlFor` and a generated id; one `.control` box for `Select`/`DateInput`, `kind` as the only axis (extends `0034`)
 - `0036` — One `ToggleGroup`: `mode` as the only axis (single-select box vs multi-select pill), `aria-pressed` buttons replacing three tablists that never implemented the pattern (extends `0035`)
+- `0037` — One `Badge`: `variant` as boundary and ink, `size` as inline chip vs standalone label; never a pill, because `0036` spent that corner on "pressable" (extends `0036`)

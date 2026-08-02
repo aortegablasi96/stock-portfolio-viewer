@@ -501,11 +501,78 @@ html {
   gap: var(--space-4);
 }
 
-.card-count {
-  font-size: var(--text-xs);
+/* ---- Badge primitive (Story #132, DDR-0037) ------------------------------
+   One small label replacing the four rules the audit found rendering the same
+   idea: `.native-chip`, `.flex-import-badge` / `-new`, `.card-count` and
+   `.flex-import-dup`.
+
+   Two axes. A `variant` carries the boundary and the ink; a `size` carries the
+   type and the box padding.
+
+   No pill, at either size. Story #131 spent that corner on a meaning — a
+   multi-select toggle item (DDR-0036) — so a static label wearing it reads as
+   something the owner can press. `.flex-import-badge` was a 999px pill; every
+   badge is now `--radius-sm`, the corner the radius scale reserves for exactly
+   this, an inline chip.
+
+   No background either. Both boxed call sites sit on `--card`, where the fill
+   `.native-chip` declared was drawing the surface it already stood on; a badge
+   that carries its own lighter fill would start reading as a button the first
+   time one lands on a nested surface.
+
+   No focus rule, because a badge is not focusable — a `<span>`, never a
+   control. The one thing here that must survive is `role="status"` on the row
+   count, which is the call site's, not the primitive's. */
+
+.badge {
+  display: inline-block;
+  border-radius: var(--radius-sm);
   color: var(--muted);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+/* -- Variants: boundary and ink ------------------------------------------ */
+
+.badge-neutral {
+  border: 1px solid var(--border);
+}
+
+/* The one badge that reports news. It is marked by weight as well as accent,
+   so the distinction survives where colour is not read — the labels differ too
+   ("Imported" against "Already imported"), but the primitive should not depend
+   on a call site wording them well. */
+.badge-accent {
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* -- Sizes: type and box padding ----------------------------------------- */
+
+/* Inline: a chip following the value it qualifies, inside that value's line.
+   Vertical padding is deliberately absent — an inline-block with padding grows
+   the line box around it, which would add ~7px to every row of the holdings
+   table. The left margin is the gap from the value, part of the inline form. */
+.badge-sm {
+  margin-left: var(--space-2);
+  padding: 0 var(--space-2);
+  font-size: var(--text-2xs);
+}
+
+/* Standalone: alone in a table cell or a toolbar, sharing its line with
+   nothing, so the box can have height. */
+.badge-md {
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-xs);
+}
+
+/* `plain` is the badge without a boundary, so it takes no box padding either —
+   the count sits in a `gap`-spaced toolbar and the qualifier follows a figure
+   in a table cell, and padding would move both. Two classes deep so it beats
+   the size's padding whatever order these rules end up in. */
+.badge.badge-plain {
+  padding: 0;
 }
 
 /* ---- Field and form controls (Story #130, DDR-0035) ----------------------
@@ -608,18 +675,6 @@ html {
   flex-direction: column;
   align-items: flex-end;
   gap: 0.5rem;
-}
-
-/* Muted chip showing a holding's native currency/amount next to its converted value. */
-.native-chip {
-  margin-left: 0.4rem;
-  padding: 0.05rem 0.35rem;
-  font-size: 0.72rem;
-  color: var(--muted);
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  white-space: nowrap;
 }
 
 .table-notice {
@@ -910,28 +965,11 @@ html {
   color: var(--muted);
 }
 
-.flex-import-dup {
-  color: var(--muted);
-  font-size: 0.8rem;
-}
-
+/* The em dash standing in for a count that was not re-imported. A cell colour
+   rather than a label, which is why it stays a rule of its own beside the
+   badges that replaced its neighbours (Story #132). */
 .flex-import-dim {
   color: var(--muted);
-}
-
-.flex-import-badge {
-  display: inline-block;
-  padding: 0.15rem 0.55rem;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  font-size: 0.78rem;
-  color: var(--muted);
-  white-space: nowrap;
-}
-
-.flex-import-badge-new {
-  border-color: var(--accent);
-  color: var(--accent);
 }
 
 /* ---- Stored Flex statements (Story #108) --------------------------------- */

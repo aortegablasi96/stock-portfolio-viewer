@@ -1,5 +1,6 @@
 import type { AllocationSlice, Holding } from '@shared/domain/portfolio'
 import { formatCurrency, formatPercent, formatQuantity } from '../lib/format'
+import { Badge } from './ui/Badge'
 
 /**
  * The current-holdings table (Story #15; display currency added in Story #28).
@@ -97,9 +98,9 @@ function MarketValueCell({
     return (
       <>
         {native}
-        <span className="native-chip" title="No exchange rate available">
+        <Badge size="sm" title="No exchange rate available">
           {holding.currency}
-        </span>
+        </Badge>
       </>
     )
   }
@@ -108,7 +109,7 @@ function MarketValueCell({
   return (
     <>
       {formatCurrency(holding.displayValue, displayCurrency)}
-      {holding.currency !== displayCurrency && <span className="native-chip">{native}</span>}
+      {holding.currency !== displayCurrency && <Badge size="sm">{native}</Badge>}
     </>
   )
 }

@@ -1,3 +1,4 @@
+import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
 import { ToggleGroup } from '../ui/ToggleGroup'
 
@@ -57,9 +58,11 @@ export function TypeFilter({
           Clear
         </Button>
       )}
-      <span className="card-count" role="status">
+      {/* `role="status"` stays on the count, so a changed filter is announced rather than
+          silently re-rendered. It belongs to this call site, not to the badge (Story #132). */}
+      <Badge variant="plain" role="status">
         {hidingRows ? `${shown} of ${total}` : `${total}`} shown
-      </span>
+      </Badge>
     </div>
   )
 }
