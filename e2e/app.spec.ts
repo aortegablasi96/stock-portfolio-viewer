@@ -50,6 +50,11 @@ test('the display-currency control is labelled and keyboard-reachable (Story #13
   // accessible name — which is what a screen reader announces — rather than by a class.
   const currency = page.getByLabel('Display currency')
   await expect(currency).toBeVisible()
+  // Enabled, not merely visible (Bug #142). The dashboard disables the selector while its first
+  // overview load is in flight (DDR-0007), and `focus()` waits for the element to be attached,
+  // not for it to be actionable — so focusing it a moment too early is a silent no-op that the
+  // `toBeFocused` retry can never recover from, because nothing focuses it a second time.
+  await expect(currency).toBeEnabled()
   await currency.focus()
   await expect(currency).toBeFocused()
 
