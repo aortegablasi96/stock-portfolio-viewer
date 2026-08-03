@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import type { ValuePoint } from '@shared/domain/performance'
+import { StatePanel } from '../ui/StatePanel'
 
 /**
  * A dependency-free line chart for a value-over-time series (Milestone M3, Stories #21,
@@ -37,7 +38,7 @@ export function LineChart({
   const [hover, setHover] = useState<number | null>(null)
 
   if (points.length < 2) {
-    return <p className="chart-empty">Not enough data points to plot a trend yet.</p>
+    return <StatePanel surface="inline">Not enough data points to plot a trend yet.</StatePanel>
   }
 
   const values = points.map((p) => p.value)

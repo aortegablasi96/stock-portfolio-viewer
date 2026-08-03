@@ -12,6 +12,7 @@ import { StatRow, StatTile } from '../ui/StatTile'
 import { toneClassName, toneOf } from '../../lib/statTileVariants'
 import { Button } from '../ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card'
+import { StatePanel } from '../ui/StatePanel'
 import { ToggleGroup } from '../ui/ToggleGroup'
 
 /**
@@ -64,21 +65,21 @@ export function AllocationView(): React.JSX.Element {
   const [colorMode, setColorMode] = useState<MapColorMode>('sector')
 
   if (state.phase === 'loading') {
-    return (
-      <Card as="p" size="lg" className="state-panel" role="status">
-        Loading allocation…
-      </Card>
-    )
+    return <StatePanel variant="loading">Loading allocation…</StatePanel>
   }
   if (state.phase === 'error') {
     return (
-      <Card size="lg" className="state-panel state-error" role="alert">
-        <h2>Couldn’t load allocation</h2>
-        <p>{state.message}</p>
-        <Button variant="primary" disabled={refreshing} onClick={() => void reload()}>
-          {refreshing ? 'Retrying…' : 'Retry'}
-        </Button>
-      </Card>
+      <StatePanel
+        variant="error"
+        heading="Couldn’t load allocation"
+        action={
+          <Button variant="primary" disabled={refreshing} onClick={() => void reload()}>
+            {refreshing ? 'Retrying…' : 'Retry'}
+          </Button>
+        }
+      >
+        {state.message}
+      </StatePanel>
     )
   }
   if (state.result.status === 'needs_import') {

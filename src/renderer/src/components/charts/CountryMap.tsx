@@ -14,6 +14,7 @@ import {
 import { DIVERGING_CLASSES, RETURN_BOUND } from '../../lib/gainLoss'
 import { toneClassName, toneOf } from '../../lib/statTileVariants'
 import { Button } from '../ui/Button'
+import { StatePanel } from '../ui/StatePanel'
 
 /**
  * Geographic map of holdings by issuer country (Milestone M4, Story #122; DDR-0030, superseding
@@ -449,7 +450,7 @@ export function CountryMap({
   }, [])
 
   if (countries.length === 0 && unknown.count === 0) {
-    return <p className="chart-empty">{emptyMessage}</p>
+    return <StatePanel surface="inline">{emptyMessage}</StatePanel>
   }
 
   const degraded = status === 'no-token' || status === 'unavailable'
@@ -458,22 +459,25 @@ export function CountryMap({
   return (
     <figure className="chart-figure country-map-figure">
       <div className="country-map-frame">
+        {/* The basemap is the one part of this view that can be missing on its own, so its
+            degraded state is a `notice` in the frame the map would have filled — inline,
+            because the card around it already exists (Story #133). */}
         {degraded ? (
-          <div className="country-map-unavailable" role="status">
-            <p className="chart-empty">
-              {status === 'no-token'
-                ? 'Map unavailable — no Mapbox token configured.'
-                : 'Map unavailable — couldn’t reach the map service.'}
-            </p>
-            <p className="chart-empty country-map-unavailable-hint">
-              {status === 'no-token'
-                ? 'Set RENDERER_VITE_MAPBOX_TOKEN in .env to enable the map.'
-                : 'Check your connection; your allocation data is unaffected.'}
-            </p>
-            <p className="chart-empty country-map-unavailable-hint">
-              Country and sector values are unchanged — see the breakdown below.
-            </p>
-          </div>
+          <StatePanel
+            variant="notice"
+            surface="inline"
+            className="country-map-unavailable"
+            heading="Map unavailable"
+            hint={
+              status === 'no-token'
+                ? 'Set RENDERER_VITE_MAPBOX_TOKEN in .env to enable the map. Country and sector values are unchanged — see the breakdown below.'
+                : 'Check your connection. Country and sector values are unchanged — see the breakdown below.'
+            }
+          >
+            {status === 'no-token'
+              ? 'No Mapbox token is configured.'
+              : 'Couldn’t reach the map service.'}
+          </StatePanel>
         ) : (
           <>
             <div ref={containerRef} className="country-map" role="img" aria-label={ariaLabel} />

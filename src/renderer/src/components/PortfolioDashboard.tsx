@@ -9,6 +9,7 @@ import { CurrencySelector } from './CurrencySelector'
 import { ConfirmAction } from './ConfirmAction'
 import { Button } from './ui/Button'
 import { Card } from './ui/Card'
+import { StatePanel } from './ui/StatePanel'
 
 /** Default display currency on first load: the account base currency (Story #28). */
 const DEFAULT_DISPLAY_CURRENCY = 'EUR'
@@ -207,58 +208,70 @@ export function PortfolioDashboard(): React.JSX.Element {
         </p>
       )}
 
-      {state.phase === 'loading' && (
-        <Card as="p" size="lg" className="state-panel" role="status">
-          Loading your portfolio…
-        </Card>
-      )}
+      {state.phase === 'loading' && <StatePanel variant="loading">Loading your portfolio…</StatePanel>}
 
       {state.phase === 'not_connected' && (
-        <Card size="lg" className="state-panel state-notice" role="status">
-          <h2>Not connected to Interactive Brokers</h2>
-          <p>{state.message}</p>
-          <Button variant="primary" onClick={() => void load(displayCurrency)}>
-            Retry
-          </Button>
-        </Card>
+        <StatePanel
+          variant="notice"
+          heading="Not connected to Interactive Brokers"
+          action={
+            <Button variant="primary" onClick={() => void load(displayCurrency)}>
+              Retry
+            </Button>
+          }
+        >
+          {state.message}
+        </StatePanel>
       )}
 
+      {/* Distinct from not_connected by its heading and by the fix it names: this gateway is
+          running, so a restart is the wrong advice (DDR-0022). */}
       {state.phase === 'not_responding' && (
-        <Card size="lg" className="state-panel state-notice" role="status">
-          <h2>Interactive Brokers isn’t responding</h2>
-          <p>{state.message}</p>
-          <p className="source-note">
-            The gateway is running but didn’t answer. Its session usually needs re-authenticating
-            at <code>https://localhost:5000</code>.
-          </p>
-          <Button variant="primary" onClick={() => void load(displayCurrency)}>
-            Retry
-          </Button>
-        </Card>
+        <StatePanel
+          variant="notice"
+          heading="Interactive Brokers isn’t responding"
+          hint={
+            <>
+              The gateway is running but didn’t answer. Its session usually needs re-authenticating
+              at <code>https://localhost:5000</code>.
+            </>
+          }
+          action={
+            <Button variant="primary" onClick={() => void load(displayCurrency)}>
+              Retry
+            </Button>
+          }
+        >
+          {state.message}
+        </StatePanel>
       )}
 
       {state.phase === 'error' && (
-        <Card size="lg" className="state-panel state-error" role="alert">
-          <h2>Couldn’t load your portfolio</h2>
-          <p>{state.message}</p>
-          <Button variant="primary" onClick={() => void load(displayCurrency)}>
-            Retry
-          </Button>
-        </Card>
+        <StatePanel
+          variant="error"
+          heading="Couldn’t load your portfolio"
+          action={
+            <Button variant="primary" onClick={() => void load(displayCurrency)}>
+              Retry
+            </Button>
+          }
+        >
+          {state.message}
+        </StatePanel>
       )}
 
       {state.phase === 'ok' && (
         <>
+          {/* A refresh, not a state: the figures stay on screen while they are re-converted,
+              which is why this is the `converting-note` and not a `StatePanel` (DDR-0027). */}
           {busy && (
-            <Card as="p" size="lg" className="state-panel converting-note" role="status">
+            <Card as="p" size="lg" className="converting-note" role="status">
               Converting to {displayCurrency}…
             </Card>
           )}
           <BalancesSummary balances={state.overview.balances} />
           {state.overview.holdings.length === 0 ? (
-            <Card as="p" size="lg" className="state-panel" role="status">
-              No open positions in this account.
-            </Card>
+            <StatePanel variant="empty">No open positions in this account.</StatePanel>
           ) : (
             <div className="dashboard-columns">
               <div className="col-main">

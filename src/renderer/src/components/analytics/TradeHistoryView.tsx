@@ -22,6 +22,7 @@ import { TypeFilter } from './TypeFilter'
 import { useRangeSelection } from './useRangeSelection'
 import { Button } from '../ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card'
+import { StatePanel } from '../ui/StatePanel'
 
 /**
  * Realized gains & trade history (Milestone M3, Story #24). Lists trades from the
@@ -34,21 +35,21 @@ export function TradeHistoryView(): React.JSX.Element {
   )
 
   if (state.phase === 'loading') {
-    return (
-      <Card as="p" size="lg" className="state-panel" role="status">
-        Loading trade history…
-      </Card>
-    )
+    return <StatePanel variant="loading">Loading trade history…</StatePanel>
   }
   if (state.phase === 'error') {
     return (
-      <Card size="lg" className="state-panel state-error" role="alert">
-        <h2>Couldn’t load trade history</h2>
-        <p>{state.message}</p>
-        <Button variant="primary" disabled={refreshing} onClick={() => void reload()}>
-          {refreshing ? 'Retrying…' : 'Retry'}
-        </Button>
-      </Card>
+      <StatePanel
+        variant="error"
+        heading="Couldn’t load trade history"
+        action={
+          <Button variant="primary" disabled={refreshing} onClick={() => void reload()}>
+            {refreshing ? 'Retrying…' : 'Retry'}
+          </Button>
+        }
+      >
+        {state.message}
+      </StatePanel>
     )
   }
   if (state.result.status === 'needs_import') {
@@ -78,7 +79,7 @@ export function TradeHistoryView(): React.JSX.Element {
         <CardTitle>Realized gains by Ticker</CardTitle>
         <CardContent>
           {r.bySymbol.length === 0 ? (
-            <p className="snapshot-empty">No closed positions with realized P&L yet.</p>
+            <StatePanel surface="inline">No closed positions with realized P&L yet.</StatePanel>
           ) : (
             <div className="realized-split">
               <div className="table-scroll table-scroll-rows">
@@ -225,7 +226,7 @@ function TradeHistory({
       </CardHeader>
       <CardContent>
         {rows.length === 0 ? (
-          <p className="chart-empty">No trades match these filters.</p>
+          <StatePanel surface="inline">No trades match these filters.</StatePanel>
         ) : (
           <div className="table-scroll table-scroll-rows">
             <table className="holdings-table">

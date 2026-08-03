@@ -12,6 +12,7 @@ import { LineChart } from '../charts/LineChart'
 import { useAnalytics } from './useAnalytics'
 import { Button } from '../ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card'
+import { StatePanel } from '../ui/StatePanel'
 import { NeedsImport } from './NeedsImport'
 import { RangeFilter } from './RangeFilter'
 import { RefreshBar } from './RefreshBar'
@@ -50,21 +51,21 @@ export function PerformanceView(): React.JSX.Element {
   const { range, setRange, custom, editCustom } = useRangeSelection()
 
   if (state.phase === 'loading') {
-    return (
-      <Card as="p" size="lg" className="state-panel" role="status">
-        Loading performance…
-      </Card>
-    )
+    return <StatePanel variant="loading">Loading performance…</StatePanel>
   }
   if (state.phase === 'error') {
     return (
-      <Card size="lg" className="state-panel state-error" role="alert">
-        <h2>Couldn’t load performance</h2>
-        <p>{state.message}</p>
-        <Button variant="primary" disabled={refreshing} onClick={() => void reload()}>
-          {refreshing ? 'Retrying…' : 'Retry'}
-        </Button>
-      </Card>
+      <StatePanel
+        variant="error"
+        heading="Couldn’t load performance"
+        action={
+          <Button variant="primary" disabled={refreshing} onClick={() => void reload()}>
+            {refreshing ? 'Retrying…' : 'Retry'}
+          </Button>
+        }
+      >
+        {state.message}
+      </StatePanel>
     )
   }
   if (state.result.status === 'needs_import') {

@@ -1,4 +1,5 @@
 import { groupTail, sliceColorClasses, toArcs, type PieDatum } from '../../lib/pie'
+import { StatePanel } from '../ui/StatePanel'
 
 /**
  * A categorical donut chart (Milestone M3, Story #30). Slice angles come from the
@@ -37,7 +38,7 @@ export function PieChart({
   const arcs = toArcs(groupTail(data), SIZE / 2, SIZE / 2, R_OUTER, R_INNER)
 
   if (arcs.length === 0) {
-    return <p className="chart-empty">{emptyMessage}</p>
+    return <StatePanel surface="inline">{emptyMessage}</StatePanel>
   }
 
   const seriesClass = sliceColorClasses(arcs, colorOffset)

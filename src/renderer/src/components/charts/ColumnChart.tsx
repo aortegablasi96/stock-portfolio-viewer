@@ -1,4 +1,5 @@
 import { columnDomain } from '../../lib/column'
+import { StatePanel } from '../ui/StatePanel'
 
 /**
  * A stacked column chart over a time axis (Milestone M3, Story #23). Each column stacks a
@@ -42,7 +43,7 @@ export function ColumnChart({
   ariaLabel: string
 }): React.JSX.Element {
   if (columns.length === 0) {
-    return <p className="chart-empty">No income to plot over time yet.</p>
+    return <StatePanel surface="inline">No income to plot over time yet.</StatePanel>
   }
 
   // Widen the viewBox with the column count so bars stay legible for long histories. The 1080

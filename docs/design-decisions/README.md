@@ -73,3 +73,4 @@ Other options and why they were not chosen.
 - `0035` — One `Field` owning an explicit `htmlFor` and a generated id; one `.control` box for `Select`/`DateInput`, `kind` as the only axis (extends `0034`)
 - `0036` — One `ToggleGroup`: `mode` as the only axis (single-select box vs multi-select pill), `aria-pressed` buttons replacing three tablists that never implemented the pattern (extends `0035`)
 - `0037` — One `Badge`: `variant` as boundary and ink, `size` as inline chip vs standalone label; never a pill, because `0036` spent that corner on "pressable" (extends `0036`)
+- `0038` — One `StatePanel`: `variant` as the state (loading/empty/notice/error), `surface` as "does it bring a card"; element and ARIA role derived, only `error` paints (extends `0037`)

@@ -20,6 +20,7 @@ import { TypeFilter } from './TypeFilter'
 import { useRangeSelection } from './useRangeSelection'
 import { Button } from '../ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card'
+import { StatePanel } from '../ui/StatePanel'
 
 /**
  * Dividend & income tracking (Milestone M3, Stories #23 and #31). Shows gross income,
@@ -50,15 +51,15 @@ function Upcoming({
       <CardTitle>Upcoming dividends</CardTitle>
       <CardContent>
         {!upcoming.sectionPresent ? (
-          <p className="chart-empty">
+          <StatePanel surface="inline">
             Your imported statements carry no dividend accruals. Enable the{' '}
             <strong>Open Dividend Accruals</strong> section on your IBKR Flex Query, then re-export
             and import it to see dividends that have been announced but not yet paid.
-          </p>
+          </StatePanel>
         ) : upcoming.items.length === 0 ? (
-          <p className="chart-empty">
+          <StatePanel surface="inline">
             No announced dividends are pending{asOf ? ` as of ${asOf}` : ''}.
-          </p>
+          </StatePanel>
         ) : (
           <>
             <p className="source-note">
@@ -117,21 +118,21 @@ export function DividendsView(): React.JSX.Element {
   )
 
   if (state.phase === 'loading') {
-    return (
-      <Card as="p" size="lg" className="state-panel" role="status">
-        Loading dividends…
-      </Card>
-    )
+    return <StatePanel variant="loading">Loading dividends…</StatePanel>
   }
   if (state.phase === 'error') {
     return (
-      <Card size="lg" className="state-panel state-error" role="alert">
-        <h2>Couldn’t load dividends</h2>
-        <p>{state.message}</p>
-        <Button variant="primary" disabled={refreshing} onClick={() => void reload()}>
-          {refreshing ? 'Retrying…' : 'Retry'}
-        </Button>
-      </Card>
+      <StatePanel
+        variant="error"
+        heading="Couldn’t load dividends"
+        action={
+          <Button variant="primary" disabled={refreshing} onClick={() => void reload()}>
+            {refreshing ? 'Retrying…' : 'Retry'}
+          </Button>
+        }
+      >
+        {state.message}
+      </StatePanel>
     )
   }
   if (state.result.status === 'needs_import') {
@@ -152,10 +153,9 @@ export function DividendsView(): React.JSX.Element {
           refreshing={refreshing}
           onRefresh={() => void reload()}
         />
-        <Card size="lg" className="state-panel" role="status">
-          <h2>No dividend income recorded</h2>
-          <p>The imported statements contain no dividend or payment-in-lieu transactions.</p>
-        </Card>
+        <StatePanel variant="empty" heading="No dividend income recorded">
+          The imported statements contain no dividend or payment-in-lieu transactions.
+        </StatePanel>
         <Upcoming upcoming={r.upcoming} baseCurrency={r.baseCurrency} />
       </div>
     )
@@ -308,7 +308,7 @@ function Transactions({
       </CardHeader>
       <CardContent>
         {rows.length === 0 ? (
-          <p className="chart-empty">No transactions match these filters.</p>
+          <StatePanel surface="inline">No transactions match these filters.</StatePanel>
         ) : (
           <>
             <p className="source-note">

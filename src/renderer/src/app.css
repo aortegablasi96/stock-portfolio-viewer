@@ -683,9 +683,14 @@ html {
   color: var(--muted);
 }
 
+/* The Portfolio tab's refresh indicator, not one of its states: the figures stay
+   on screen while they are re-converted, which is the live-data half of DDR-0027.
+   It borrowed `.state-panel` for its muted ink until Story #133 gave that class an
+   owner; the two lines it always had of its own are now all of it. */
 .converting-note {
   padding: 0.6rem 0.9rem;
   font-size: 0.85rem;
+  color: var(--muted);
 }
 
 /* ---- Capture now (Story #18) --------------------------------------------- */
@@ -734,24 +739,69 @@ html {
   color: var(--text);
 }
 
-/* ---- State panels (loading / not connected / error / empty) -------------- */
+/* ---- StatePanel primitive (Story #133, DDR-0038) -------------------------
+   One presentation for the four states the app already models as first-class
+   result variants (DDR-0002, DDR-0022), replacing the five the audit found:
+   `.state-panel` / `.state-notice` / `.state-error`, `NeedsImport`'s own panel,
+   `.snapshot-empty`, `.chart-empty` — which was byte-identical to
+   `.snapshot-empty` — and the map's `.country-map-unavailable` lines.
 
-/* The surface is now `<Card size="lg">` (Story #128). What survives here is the
-   part a card doesn't own — muted prose, a louder heading, a red border on the
-   error variant — which Story #133 folds into a `StatePanel` primitive. */
+   The axes are not the button's: a state panel has no size or colour worth
+   choosing. `variant` says which state it is, `surface` whether it brings a
+   card with it. Only `error` paints anything, the same way only a toned tile
+   does (DDR-0034) — the axis exists because the copy and the announcement
+   differ, not because four states want four decorations.
+
+   There is deliberately no `.state-panel-panel`: that surface *is* the card's
+   (`default` at `lg`, the step DDR-0031 reserved for exactly this). */
+
 .state-panel {
   color: var(--muted);
 }
 
-.state-notice h2,
-.state-error h2 {
-  margin: 0 0 0.5rem;
-  font-size: 1.15rem;
+/* -- Variants: a boundary, and only where a state has one ------------------ */
+
+/* The read failed, so the panel carries the app's error boundary — the same
+   muted red as `.capture-status-error`, dark enough to read as a border rather
+   than a warning stripe. The other three states are the absence of this. */
+.state-panel-error {
+  border-color: #5a2b2b;
+}
+
+/* -- Surfaces: only the inline form declares one -------------------------- */
+
+/* Prose inside a surface that already exists: an empty chart under its card
+   title, an empty history list, the map's degraded frame. It owns no margins —
+   the container it sits in owns the spacing — and drops to the body size the
+   two superseded inline rules already used. */
+.state-panel-inline,
+.state-panel-inline p {
+  margin: 0;
+}
+
+.state-panel-inline {
+  font-size: var(--text-sm);
+}
+
+/* -- Parts: heading, hint, action, in that order -------------------------- */
+
+/* One heading for every state. The audit's drift is visible here: the notice
+   and error panels styled their `h2` and the empty ones did not, so "No
+   dividend income recorded" rendered a full UA `h2` beside a 1.15rem
+   "Not connected to Interactive Brokers". Both are `--text-md` now. */
+.state-panel-heading {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-md);
   color: var(--text);
 }
 
-.state-error {
-  border-color: #5a2b2b;
+/* What to do about it, tucked under the explanation: the gateway's re-login
+   URL, the env var that enables the map. Replaces the `.source-note` borrowed
+   by the not-responding panel and `.country-map-unavailable-hint`. */
+.state-panel-hint {
+  margin: var(--space-3) 0 0;
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
 }
 
 /* A state panel's action (Retry, Import statements…) is `variant="primary"` — the panel
@@ -877,12 +927,6 @@ html {
 }
 
 /* ---- Snapshot history (Story #19) ---------------------------------------- */
-
-.snapshot-empty {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.9rem;
-}
 
 .snapshot-list {
   list-style: none;
@@ -1291,11 +1335,10 @@ html {
   height: auto;
 }
 
-.chart-empty {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.9rem;
-}
+/* An empty chart is `<StatePanel surface="inline">` (Story #133): the rule that
+   used to live here was byte-identical to `.snapshot-empty`, which is the drift
+   Epic #125 exists to remove. A chart's empty state stays inline rather than
+   becoming a panel — it is reporting one card's contents, not the view's. */
 
 .chart-figure {
   margin: 0;
@@ -1664,8 +1707,9 @@ html {
   touch-action: none; /* pointer-drag pans instead of scrolling the page */
 }
 
-/* Degraded state: no token, or tiles unreachable. Sits where the basemap would be, reusing the
-   shared in-figure empty treatment rather than error styling — the view is still usable. */
+/* Degraded state: no token, or tiles unreachable. Sits where the basemap would be, carrying the
+   shared `StatePanel` presentation (`notice`, inline) rather than error styling — the view is
+   still usable. What is left here is the frame it draws in; the panel supplies the rest. */
 .country-map-unavailable {
   display: flex;
   flex-direction: column;
@@ -1678,11 +1722,6 @@ html {
   background: var(--surface-hover, var(--border));
   border: 1px solid var(--border);
   border-radius: 6px;
-}
-
-.country-map-unavailable-hint {
-  font-size: 0.82rem;
-  opacity: 0.85;
 }
 
 /* ---- Country marks (Story #122, DDR-0030) --------------------------------
