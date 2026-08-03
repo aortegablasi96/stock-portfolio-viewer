@@ -419,14 +419,12 @@ html {
   margin-bottom: 0;
 }
 
-/* The body is a scope, not decoration: the two overrides `.panel` used to
-   declare on its descendants hang off the body rather than the surface, which
-   is what keeps a card whose content is prose (a state panel) out of reach of
-   them. */
-.card-content .table-scroll {
-  border: none;
-  background: transparent;
-}
+/* The body is a scope, not decoration: the override `.panel` used to declare on
+   its descendants hangs off the body rather than the surface, which is what
+   keeps a card whose content is prose (a state panel) out of reach of it. The
+   second one it declared — undoing a table container's own border in here — is
+   gone: since Story #134 a table names its surface (`surface="card"`) instead
+   of drawing one and being talked out of it. */
 
 /* Explanatory line between a card title and its chart or table. */
 .card-content .source-note {
@@ -870,60 +868,181 @@ html {
   }
 }
 
-/* ---- Holdings table (Story #15) ------------------------------------------ */
+/* ---- DataTable primitive (Story #134, DDR-0039) --------------------------
+   One table, replacing the four rules the audit found for it: `.holdings-table`
+   and `.breakdown-table`, which each declared their own cell padding and header
+   treatment, and `.table-scroll` / `.table-scroll-rows`, which handed a scroll
+   container, a sticky header, a five-row cap and a scroll fade to some tables
+   and not others. The `.card-content .table-scroll` override goes with them —
+   a table now names its surface rather than drawing one and being undrawn. */
 
-.table-scroll {
+/* Placement and overflow only. Whether it draws anything is the surface's job,
+   which is why there is no `.data-table-scroll-inline`: a table inside a card
+   body is this rule and nothing more. */
+.data-table-scroll {
   overflow-x: auto;
+}
+
+/* The one table that stands on its own — the dashboard's holdings — brings the
+   surface with it. It is drawn here rather than by wrapping the table in a
+   `Card`, because a card carries padding and a table's rows have to reach its
+   edges. */
+.data-table-scroll-card {
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
 }
 
-.holdings-table {
+.data-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
 }
 
-.holdings-table th,
-.holdings-table td {
-  padding: 0.7rem 1rem;
+.data-table th,
+.data-table td {
+  /* Was a hand-picked 0.7rem; `--space-4` is the step it always meant (DDR-0031). */
+  padding: var(--space-4) var(--space-5);
   text-align: left;
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
 }
 
-.holdings-table thead th {
+/* Sticky costs nothing on an uncapped table — with no scrollable range there is
+   nothing to stick to — so it is declared once here rather than twice. */
+.data-table thead th {
   position: sticky;
   top: 0;
   background: var(--card);
   color: var(--muted);
   font-weight: 600;
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
-.holdings-table tbody tr:last-child th,
-.holdings-table tbody tr:last-child td {
+.data-table tbody tr:last-child th,
+.data-table tbody tr:last-child td {
   border-bottom: none;
 }
 
-.holdings-table .num {
+/* All three are scoped to the table on purpose. The base `th, td` rule above is
+   two selectors' worth of specificity, so an unscoped `.data-table-num` would
+   lose its `text-align` to it — which is exactly what `.holdings-table .num`
+   was doing all along, and the one thing that silently broke when these were
+   flattened into the primitive's namespace. */
+.data-table .data-table-num {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
 
-.holdings-table .symbol {
+.data-table .data-table-name {
   font-weight: 600;
   color: var(--text);
 }
 
-.holdings-table .description {
+.data-table .data-table-note {
   color: var(--muted);
   max-width: 22rem;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* A swatch inline with the row's name, tying an allocation row to its donut
+   segment. The one cell shape a column asks for by name. */
+.data-table-swatch {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* The sort control fills its header cell rather than sitting in it: the cell
+   already carries the padding, the sticky background and the uppercase label,
+   so a `.btn` in here would draw a second box inside that one (DDR-0032 is
+   about colour and border, and a header has neither).
+
+   Every inherited text property is restated rather than left to inherit: a
+   `<button>` is a replaced-ish form control and the UA stylesheet resets the
+   three that carry this header's whole treatment — `text-transform`,
+   `letter-spacing` and `text-align` — so without these a sortable header
+   renders in sentence case beside its uppercase neighbours. No focus rule,
+   though: the `:where()` base at the top of this file rings it (DDR-0031). */
+.data-table-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  text-align: inherit;
+  cursor: pointer;
+}
+
+.data-table-sort:hover {
+  color: var(--text);
+}
+
+.data-table-sort.is-sorted {
+  color: var(--accent);
+}
+
+/* Direction is the arrow's shape; the accent above is the second cue, not the
+   only one — the same rule as the tab bar's underline (DDR-0029) and the toggle
+   group's doubled stroke (DDR-0036). An unsorted column keeps its faint
+   double-headed arrow so the affordance is visible and the header's width does
+   not jump when the sort lands on it. */
+.data-table-sort-glyph {
+  opacity: 0.45;
+}
+
+.data-table-sort.is-sorted .data-table-sort-glyph {
+  opacity: 1;
+}
+
+/* Cap the body to five rows; the sticky header stays put as they scroll.
+   Measured against this stylesheet: header ≈ 41px, rows ≈ 44px — 18rem (288px)
+   shows the header + 5 full rows with roughly half of the 6th peeking, a clear
+   "scroll for more" cue. (17rem before Story #134 adopted the padding step.) */
+
+/* Length driving the bottom fade below; a registered property so it can be
+   interpolated by the scroll-driven animation (Story #67). */
+@property --rows-fade {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+
+.data-table-scroll-capped {
+  max-height: 18rem;
+  overflow-y: auto;
+  /* Modern, JS-free scroll affordance (Story #67). A soft fade at the bottom edge
+     signals "more rows below" and eases away as the last row scrolls into view —
+     driven by scroll position via a scroll-timeline, not script. It only shows
+     while the table actually overflows: with no scrollable range the timeline is
+     inactive, the animation drops out, and the base 0px keeps a short (≤5-row)
+     table crisp. The mask is alpha-only so it reads identically in any theme; the
+     slim scrollbar tracks the theme's border/muted colours (see :root). */
+  --rows-fade: 0px;
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - var(--rows-fade)), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - var(--rows-fade)), transparent);
+  animation: table-rows-fade linear both;
+  animation-timeline: scroll(self block);
+}
+
+/* Hold the fade in from the top of the scroll range, then retract it over the last
+   stretch so the final row lands crisp against the panel edge. */
+@keyframes table-rows-fade {
+  0%,
+  86% {
+    --rows-fade: 2.25rem;
+  }
+  100% {
+    --rows-fade: 0px;
+  }
 }
 
 /* ---- Snapshot history (Story #19) ---------------------------------------- */
@@ -1207,47 +1326,6 @@ html {
   font-variant-numeric: tabular-nums;
 }
 
-/* Cap a scrollable table to 5 rows; the sticky header stays put as the body scrolls.
-   Measured against this stylesheet: header ≈ 39.6px, rows ≈ 42.4px — 17rem (272px) shows
-   the header + 5 full rows with ~48% of the 6th peeking, a clear "scroll for more" cue. */
-
-/* Length driving the bottom fade below; a registered property so it can be
-   interpolated by the scroll-driven animation (Story #67). */
-@property --rows-fade {
-  syntax: '<length>';
-  inherits: false;
-  initial-value: 0px;
-}
-
-.table-scroll-rows {
-  max-height: 17rem;
-  overflow-y: auto;
-  /* Modern, JS-free scroll affordance (Story #67). A soft fade at the bottom edge
-     signals "more rows below" and eases away as the last row scrolls into view —
-     driven by scroll position via a scroll-timeline, not script. It only shows
-     while the table actually overflows: with no scrollable range the timeline is
-     inactive, the animation drops out, and the base 0px keeps a short (≤5-row)
-     table crisp. The mask is alpha-only so it reads identically in any theme; the
-     slim scrollbar tracks the theme's border/muted colours (see :root). */
-  --rows-fade: 0px;
-  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - var(--rows-fade)), transparent);
-  mask-image: linear-gradient(to bottom, #000 calc(100% - var(--rows-fade)), transparent);
-  animation: table-rows-fade linear both;
-  animation-timeline: scroll(self block);
-}
-
-/* Hold the fade in from the top of the scroll range, then retract it over the last
-   stretch so the final row lands crisp against the panel edge. */
-@keyframes table-rows-fade {
-  0%,
-  86% {
-    --rows-fade: 2.25rem;
-  }
-  100% {
-    --rows-fade: 0px;
-  }
-}
-
 /* Realized-by-symbol table (left) beside the best/worst highlights (right) — Story #50. */
 .realized-split {
   display: grid;
@@ -1303,19 +1381,14 @@ html {
   align-items: center;
 }
 
-.breakdown-table {
+/* Both halves are grid children that must be allowed to shrink. This was two
+   rules — one of them `.breakdown-table`, a whole class existing for a single
+   `min-width` — until Story #134 gave the table an owner. */
+.breakdown-split > * {
   min-width: 0;
-}
-
-/* The swatch sits inline with the slice label, tying the row to its donut segment. */
-.breakdown-table .symbol {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
 }
 
 .breakdown-chart {
-  min-width: 0;
   display: flex;
   justify-content: center;
 }

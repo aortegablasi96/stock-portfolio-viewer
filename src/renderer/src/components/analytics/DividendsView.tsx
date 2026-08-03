@@ -1,4 +1,10 @@
-import type { DividendEvent, UpcomingDividends, DividendResult } from '@shared/domain/dividends'
+import type {
+  DividendEvent,
+  DividendGroup,
+  UpcomingDividend,
+  UpcomingDividends,
+  DividendResult,
+} from '@shared/domain/dividends'
 import {
   formatCompanyName,
   formatCurrency,
@@ -21,6 +27,7 @@ import { useRangeSelection } from './useRangeSelection'
 import { Button } from '../ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card'
 import { StatePanel } from '../ui/StatePanel'
+import { DataTable, type DataColumn } from '../ui/DataTable'
 
 /**
  * Dividend & income tracking (Milestone M3, Stories #23 and #31). Shows gross income,
@@ -67,51 +74,102 @@ function Upcoming({
               <strong>{c(upcoming.totalNetBase)}</strong> net ({c(upcoming.totalGrossBase)} gross,{' '}
               {c(upcoming.totalWithholdingBase)} expected withholding).
             </p>
-            <div className="table-scroll">
-              <table className="holdings-table">
-                <thead>
-                  <tr>
-                    <th scope="col">Pay date</th>
-                    <th scope="col">Ex-date</th>
-                    <th scope="col">Ticker</th>
-                    <th scope="col" className="num">Quantity</th>
-                    <th scope="col" className="num">Per share</th>
-                    <th scope="col" className="num">Gross</th>
-                    <th scope="col" className="num">Withholding</th>
-                    <th scope="col" className="num">Net in {baseCurrency}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {upcoming.items.map((i) => (
-                    <tr key={`${i.symbol}-${i.payDate ?? 'na'}-${i.exDate ?? 'na'}`}>
-                      <td>{i.payDate != null ? formatDate(i.payDate) : '—'}</td>
-                      <td>{i.exDate != null ? formatDate(i.exDate) : '—'}</td>
-                      <th scope="row" className="symbol">
-                        {i.symbol || '—'}
-                        {i.description && (
-                          <span className="flex-import-file">
-                            {formatCompanyName(i.description)}
-                          </span>
-                        )}
-                      </th>
-                      <td className="num">{formatQuantity(i.quantity)}</td>
-                      <td className="num">
-                        {i.grossRate != null ? formatPerShare(i.grossRate, i.currency) : '—'}
-                      </td>
-                      <td className="num">{c(i.grossBase)}</td>
-                      <td className="num">{c(i.withholdingBase)}</td>
-                      <td className="num">{c(i.netBase)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <UpcomingTable items={upcoming.items} baseCurrency={baseCurrency} />
           </>
         )}
       </CardContent>
     </Card>
   )
 }
+
+/**
+ * The announced-but-unpaid rows. Pay date and ex-date sort on the epoch-ms number, not the
+ * formatted label, and a row IBKR has announced without one of them sorts to the bottom rather
+ * than under the em dash it renders.
+ */
+function UpcomingTable({
+  items,
+  baseCurrency,
+}: {
+  items: UpcomingDividend[]
+  baseCurrency: string
+}): React.JSX.Element {
+  const c = (v: number): string => formatCurrency(v, baseCurrency)
+
+  const columns: DataColumn<UpcomingDividend>[] = [
+    {
+      key: 'payDate',
+      header: 'Pay date',
+      cell: (i) => (i.payDate != null ? formatDate(i.payDate) : '—'),
+      sortValue: (i) => i.payDate,
+    },
+    {
+      key: 'exDate',
+      header: 'Ex-date',
+      cell: (i) => (i.exDate != null ? formatDate(i.exDate) : '—'),
+      sortValue: (i) => i.exDate,
+    },
+    {
+      key: 'symbol',
+      header: 'Ticker',
+      rowHeader: true,
+      cell: (i) => (
+        <>
+          {i.symbol || '—'}
+          {i.description && (
+            <span className="flex-import-file">{formatCompanyName(i.description)}</span>
+          )}
+        </>
+      ),
+      sortValue: (i) => i.symbol || null,
+    },
+    {
+      key: 'quantity',
+      header: 'Quantity',
+      numeric: true,
+      cell: (i) => formatQuantity(i.quantity),
+      sortValue: (i) => i.quantity,
+    },
+    {
+      key: 'perShare',
+      header: 'Per share',
+      numeric: true,
+      cell: (i) => (i.grossRate != null ? formatPerShare(i.grossRate, i.currency) : '—'),
+      sortValue: (i) => i.grossRate,
+    },
+    {
+      key: 'gross',
+      header: 'Gross',
+      numeric: true,
+      cell: (i) => c(i.grossBase),
+      sortValue: (i) => i.grossBase,
+    },
+    {
+      key: 'withholding',
+      header: 'Withholding',
+      numeric: true,
+      cell: (i) => c(i.withholdingBase),
+      sortValue: (i) => i.withholdingBase,
+    },
+    {
+      key: 'net',
+      header: `Net in ${baseCurrency}`,
+      numeric: true,
+      cell: (i) => c(i.netBase),
+      sortValue: (i) => i.netBase,
+    },
+  ]
+
+  return (
+    <DataTable
+      caption="Upcoming dividends"
+      columns={columns}
+      rows={items}
+      rowKey={(i) => `${i.symbol}-${i.payDate ?? 'na'}-${i.exDate ?? 'na'}`}
+    />
+  )
+}
+
 export function DividendsView(): React.JSX.Element {
   const { state, refreshing, loadedAt, reload } = useAnalytics<DividendResult>(
     window.api.getDividends,
@@ -213,38 +271,70 @@ export function DividendsView(): React.JSX.Element {
       <Card>
         <CardTitle>By Ticker</CardTitle>
         <CardContent>
-          <div className="table-scroll">
-            <table className="holdings-table">
-              <thead>
-                <tr>
-                  <th scope="col">Ticker</th>
-                  <th scope="col" className="num">Gross</th>
-                  <th scope="col" className="num">Withholding</th>
-                  <th scope="col" className="num">Net</th>
-                </tr>
-              </thead>
-              <tbody>
-                {r.bySymbol.map((s) => (
-                  <tr key={s.key}>
-                    <th scope="row" className="symbol">
-                      {s.label}
-                      {s.description && (
-                        <span className="flex-import-file">{formatCompanyName(s.description)}</span>
-                      )}
-                    </th>
-                    <td className="num">{c(s.grossBase)}</td>
-                    <td className="num">{c(s.withholdingBase)}</td>
-                    <td className="num">{c(s.netBase)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <BySymbolTable groups={r.bySymbol} baseCurrency={r.baseCurrency} />
         </CardContent>
       </Card>
 
       <Transactions events={r.events} baseCurrency={r.baseCurrency} />
     </div>
+  )
+}
+
+/** Dividend income totalled per instrument. Sorting is what answers "who pays me the most?". */
+function BySymbolTable({
+  groups,
+  baseCurrency,
+}: {
+  groups: DividendGroup[]
+  baseCurrency: string
+}): React.JSX.Element {
+  const c = (v: number): string => formatCurrency(v, baseCurrency)
+
+  const columns: DataColumn<DividendGroup>[] = [
+    {
+      key: 'symbol',
+      header: 'Ticker',
+      rowHeader: true,
+      cell: (s) => (
+        <>
+          {s.label}
+          {s.description && (
+            <span className="flex-import-file">{formatCompanyName(s.description)}</span>
+          )}
+        </>
+      ),
+      sortValue: (s) => s.label,
+    },
+    {
+      key: 'gross',
+      header: 'Gross',
+      numeric: true,
+      cell: (s) => c(s.grossBase),
+      sortValue: (s) => s.grossBase,
+    },
+    {
+      key: 'withholding',
+      header: 'Withholding',
+      numeric: true,
+      cell: (s) => c(s.withholdingBase),
+      sortValue: (s) => s.withholdingBase,
+    },
+    {
+      key: 'net',
+      header: 'Net',
+      numeric: true,
+      cell: (s) => c(s.netBase),
+      sortValue: (s) => s.netBase,
+    },
+  ]
+
+  return (
+    <DataTable
+      caption="Dividend income by ticker"
+      columns={columns}
+      rows={groups}
+      rowKey={(s) => s.key}
+    />
   )
 }
 
@@ -317,50 +407,82 @@ function Transactions({
               in the payment’s currency. A row shows “—” when the imported statements don’t reach
               back far enough to account for the position.
             </p>
-            <div className="table-scroll table-scroll-rows">
-              <table className="holdings-table">
-                <thead>
-                  <tr>
-                    <th scope="col">Date</th>
-                    <th scope="col">Ticker</th>
-                    <th scope="col">Type</th>
-                    <th scope="col" className="num">Shares</th>
-                    <th scope="col" className="num">Per share</th>
-                    <th scope="col" className="num">Amount</th>
-                    <th scope="col" className="num">In {baseCurrency}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((e, i) => (
-                    <tr key={`${e.symbol}-${e.date ?? 'na'}-${e.type}-${i}`}>
-                      <td>{e.date != null ? formatDate(e.date) : '—'}</td>
-                      <th scope="row" className="symbol">
-                        {e.symbol || '—'}
-                        {e.description && (
-                          <span className="flex-import-file">
-                            {formatCompanyName(e.description)}
-                          </span>
-                        )}
-                      </th>
-                      <td>{e.type}</td>
-                      <td className="num">
-                        {e.sharesHeld != null ? formatQuantity(e.sharesHeld) : '—'}
-                      </td>
-                      <td className="num">
-                        {e.perShareNative != null
-                          ? formatPerShare(e.perShareNative, e.currency)
-                          : '—'}
-                      </td>
-                      <td className="num">{formatCurrency(e.amountNative, e.currency)}</td>
-                      <td className="num">{c(e.amountBase)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <DataTable
+              caption="Dividend transactions"
+              columns={transactionColumns(baseCurrency, c)}
+              rows={rows}
+              rowKey={(e, i) => `${e.symbol}-${e.date ?? 'na'}-${e.type}-${i}`}
+              height="capped"
+            />
           </>
         )}
       </CardContent>
     </Card>
   )
+}
+
+/**
+ * The transaction columns. Sorting composes with the two filters above rather than replacing
+ * them (DDR-0017, DDR-0039): the period narrows the rows, the type chips narrow those, and the
+ * table reorders whatever survives — which is why the chips' "N of M shown" count is unaffected.
+ *
+ * Shares and per-share are reconstructed and can legitimately be absent for a payment the
+ * imported statements don't reach back far enough to account for; those rows sort to the bottom
+ * instead of reading as zero holdings.
+ */
+function transactionColumns(
+  baseCurrency: string,
+  c: (v: number) => string,
+): DataColumn<DividendEvent>[] {
+  return [
+    {
+      key: 'date',
+      header: 'Date',
+      cell: (e) => (e.date != null ? formatDate(e.date) : '—'),
+      sortValue: (e) => e.date,
+    },
+    {
+      key: 'symbol',
+      header: 'Ticker',
+      rowHeader: true,
+      cell: (e) => (
+        <>
+          {e.symbol || '—'}
+          {e.description && (
+            <span className="flex-import-file">{formatCompanyName(e.description)}</span>
+          )}
+        </>
+      ),
+      sortValue: (e) => e.symbol || null,
+    },
+    { key: 'type', header: 'Type', cell: (e) => e.type, sortValue: (e) => e.type },
+    {
+      key: 'shares',
+      header: 'Shares',
+      numeric: true,
+      cell: (e) => (e.sharesHeld != null ? formatQuantity(e.sharesHeld) : '—'),
+      sortValue: (e) => e.sharesHeld,
+    },
+    {
+      key: 'perShare',
+      header: 'Per share',
+      numeric: true,
+      cell: (e) => (e.perShareNative != null ? formatPerShare(e.perShareNative, e.currency) : '—'),
+      sortValue: (e) => e.perShareNative,
+    },
+    {
+      key: 'amount',
+      header: 'Amount',
+      numeric: true,
+      cell: (e) => formatCurrency(e.amountNative, e.currency),
+      sortValue: (e) => e.amountNative,
+    },
+    {
+      key: 'amountBase',
+      header: `In ${baseCurrency}`,
+      numeric: true,
+      cell: (e) => c(e.amountBase),
+      sortValue: (e) => e.amountBase,
+    },
+  ]
 }

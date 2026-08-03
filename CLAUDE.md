@@ -450,6 +450,30 @@ Canonical flows to copy when adding a feature:
   panel**: the figures stay on screen while they re-convert, which is DDR-0027's live-data half.
   `lib/statePanelVariants.test.ts` fails if a quiet variant acquires a rule, if `.state-panel-panel`
   appears, if the base starts drawing a surface, or if any of the five superseded selectors returns.
+- **There is one table, and adding a column means describing it rather than writing a `<td>`**
+  (Story #134, DDR-0039). `components/ui/DataTable.tsx` replaced the four rules twelve tables
+  shared — `.holdings-table` (worn by all twelve, named for the Portfolio dashboard),
+  `.table-scroll`, `.table-scroll-rows` and `.breakdown-table` — and closed the gap the audit
+  named: **no table sorted**. The axes are the *container's*, because the table itself has none:
+  **`surface`** (`inline` · `card`) and **`height`** (`auto` · `capped`). Six things to know.
+  `surface` is what retires the `.card-content .table-scroll` override — the old container drew a
+  card surface because the first table to exist stands alone, and eleven later ones relied on a
+  descendant selector to unpaint it; `card` is deliberately **not** a `Card` (a card carries
+  padding, and a table's rows must reach its edges). **Sorting is opt-in per column** — a column
+  with a `sortValue` gets a header button, one without keeps the plain header, which is why the
+  import receipt sorts nothing and the stored-statement list beside it sorts everything. It
+  **composes with the filters rather than replacing them** (DDR-0017): the view narrows the rows,
+  the table reorders what survives, so the "N of M shown" count is untouched. A **missing value
+  sorts last in both directions** — an unconvertible holding (DDR-0007), an undated trade, an
+  opening buy with no realized P&L; letting the direction move them would put "—" at the top of
+  every descending sort. Sort state is one `useState` and survives a tab switch for free, because
+  analytics tabs stay mounted (DDR-0027). And the **sort control is not a `Button`**: the header
+  cell already is the box, so it is a bare `font: inherit` button filling the cell, with direction
+  carried by the arrow's *shape* as well as the accent. `lib/tableSort.test.ts` pins the
+  comparator and the toggle; `lib/dataTableVariants.test.ts` fails if any of the five superseded
+  selectors reappears, if the bare container starts drawing a surface, if an axis value has no
+  rule, or if the sorted header loses its arrow. Two named visual changes: cell padding adopts
+  `--space-4` (+1.6px a row) and the five-row cap is re-measured to `18rem`.
 - **Never write a focus rule.** One ring — `--focus-ring` / `--focus-ring-offset`, always
   `--accent`, destructive controls included — is applied by a **zero-specificity `:where(...)`
   base rule** at the top of `app.css`, so an interactive element is ringed by default and can't
@@ -1002,7 +1026,7 @@ sorting and formatting are **extracted out of components into pure modules under
 `renderer/src/lib/`** (`format`, `pie`, `worldGeo`, `countryDonuts`, `gainLoss`, `tableFilter`,
 `column`, `dateRange`, `sectorMap`, `performanceRange`, `classifyProgress`, `dataVersion`,
 `tabKeyboard`, `buttonVariants`, `cardVariants`, `statTileVariants`, `fieldVariants`,
-`toggleGroupVariants`)
+`toggleGroupVariants`, `badgeVariants`, `statePanelVariants`, `tableSort`, `dataTableVariants`)
 precisely so they can be tested — follow
 that split when adding a component with real logic in it. `dataVersion` is the same move applied
 to state rather than maths: the cross-view staleness signal is a plain subscribable store a hook

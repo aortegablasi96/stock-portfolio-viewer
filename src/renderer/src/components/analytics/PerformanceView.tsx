@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { PerformanceResult } from '@shared/domain/performance'
+import type { NavPeriod, PerformanceResult } from '@shared/domain/performance'
 import {
   formatCurrency,
   formatDate,
@@ -13,6 +13,7 @@ import { useAnalytics } from './useAnalytics'
 import { Button } from '../ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card'
 import { StatePanel } from '../ui/StatePanel'
+import { DataTable, type DataColumn } from '../ui/DataTable'
 import { NeedsImport } from './NeedsImport'
 import { RangeFilter } from './RangeFilter'
 import { RefreshBar } from './RefreshBar'
@@ -163,40 +164,94 @@ export function PerformanceView(): React.JSX.Element {
       <Card>
         <CardTitle>Returns by period</CardTitle>
         <CardContent>
-          <div className="table-scroll">
-            <table className="holdings-table">
-              <thead>
-                <tr>
-                  <th scope="col">Period</th>
-                  <th scope="col" className="num">Start</th>
-                  <th scope="col" className="num">End</th>
-                  <th scope="col" className="num">TWR</th>
-                  <th scope="col" className="num">Market P&L</th>
-                  <th scope="col" className="num">Deposits</th>
-                  <th scope="col" className="num">Dividends</th>
-                  <th scope="col" className="num">Commissions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {r.periods.map((p) => (
-                  <tr key={`${p.fromDate}-${p.toDate}`}>
-                    <th scope="row" className="symbol">
-                      {formatDate(p.fromDate)} – {formatDate(p.toDate)}
-                    </th>
-                    <td className="num">{c(p.startingValue)}</td>
-                    <td className="num">{c(p.endingValue)}</td>
-                    <td className={toneClassName(toneOf(p.twr), 'num')}>{formatSignedPercent(p.twr)}</td>
-                    <td className={toneClassName(toneOf(p.mtm), 'num')}>{formatSignedCurrency(p.mtm, r.baseCurrency)}</td>
-                    <td className="num">{formatSignedCurrency(p.depositsWithdrawals, r.baseCurrency)}</td>
-                    <td className="num">{c(p.dividends)}</td>
-                    <td className="num">{c(p.commissions)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <PeriodsTable periods={r.periods} baseCurrency={r.baseCurrency} />
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+/**
+ * One row per statement period. The Period column sorts on `fromDate` rather than on the
+ * rendered "from – to" string: chronological order is what a date column means, and the
+ * formatted label would sort by whatever the locale puts first.
+ */
+function PeriodsTable({
+  periods,
+  baseCurrency,
+}: {
+  periods: NavPeriod[]
+  baseCurrency: string
+}): React.JSX.Element {
+  const c = (v: number): string => formatCurrency(v, baseCurrency)
+
+  const columns: DataColumn<NavPeriod>[] = [
+    {
+      key: 'period',
+      header: 'Period',
+      rowHeader: true,
+      cell: (p) => `${formatDate(p.fromDate)} – ${formatDate(p.toDate)}`,
+      sortValue: (p) => p.fromDate,
+    },
+    {
+      key: 'startingValue',
+      header: 'Start',
+      numeric: true,
+      cell: (p) => c(p.startingValue),
+      sortValue: (p) => p.startingValue,
+    },
+    {
+      key: 'endingValue',
+      header: 'End',
+      numeric: true,
+      cell: (p) => c(p.endingValue),
+      sortValue: (p) => p.endingValue,
+    },
+    {
+      key: 'twr',
+      header: 'TWR',
+      numeric: true,
+      cellClassName: (p) => toneClassName(toneOf(p.twr)),
+      cell: (p) => formatSignedPercent(p.twr),
+      sortValue: (p) => p.twr,
+    },
+    {
+      key: 'mtm',
+      header: 'Market P&L',
+      numeric: true,
+      cellClassName: (p) => toneClassName(toneOf(p.mtm)),
+      cell: (p) => formatSignedCurrency(p.mtm, baseCurrency),
+      sortValue: (p) => p.mtm,
+    },
+    {
+      key: 'deposits',
+      header: 'Deposits',
+      numeric: true,
+      cell: (p) => formatSignedCurrency(p.depositsWithdrawals, baseCurrency),
+      sortValue: (p) => p.depositsWithdrawals,
+    },
+    {
+      key: 'dividends',
+      header: 'Dividends',
+      numeric: true,
+      cell: (p) => c(p.dividends),
+      sortValue: (p) => p.dividends,
+    },
+    {
+      key: 'commissions',
+      header: 'Commissions',
+      numeric: true,
+      cell: (p) => c(p.commissions),
+      sortValue: (p) => p.commissions,
+    },
+  ]
+
+  return (
+    <DataTable
+      caption="Returns by period"
+      columns={columns}
+      rows={periods}
+      rowKey={(p) => `${p.fromDate}-${p.toDate}`}
+    />
   )
 }

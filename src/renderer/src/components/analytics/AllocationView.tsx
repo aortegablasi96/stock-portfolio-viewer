@@ -1,5 +1,10 @@
 import { useState } from 'react'
-import type { AllocationReport, AllocationResult, AllocationSlice } from '@shared/domain/allocation'
+import type {
+  AllocationPosition,
+  AllocationReport,
+  AllocationResult,
+  AllocationSlice,
+} from '@shared/domain/allocation'
 import { formatCurrency, formatDate, formatSignedCurrency } from '../../lib/format'
 import { SECTOR_SLOT_OFFSET } from '../../lib/pie'
 import { CountryMap, type MapColorMode } from '../charts/CountryMap'
@@ -14,6 +19,7 @@ import { Button } from '../ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card'
 import { StatePanel } from '../ui/StatePanel'
 import { ToggleGroup } from '../ui/ToggleGroup'
+import { DataTable, type DataColumn } from '../ui/DataTable'
 
 /**
  * Allocation analysis (Milestone M3, Stories #22, #30 and #48). Breaks the latest imported
@@ -169,41 +175,92 @@ export function AllocationView(): React.JSX.Element {
       <Card>
         <CardTitle>Positions</CardTitle>
         <CardContent>
-          <div className="table-scroll">
-            <table className="holdings-table">
-              <thead>
-                <tr>
-                  <th scope="col">Ticker</th>
-                  <th scope="col">Country</th>
-                  <th scope="col">Sector</th>
-                  <th scope="col" className="num">Market value</th>
-                  <th scope="col" className="num">Cost basis</th>
-                  <th scope="col" className="num">Unrealized P&L</th>
-                  <th scope="col" className="num">% of NAV</th>
-                </tr>
-              </thead>
-              <tbody>
-                {r.positions.map((p) => (
-                  <tr key={p.conid ?? p.symbol}>
-                    <th scope="row" className="symbol">
-                      {p.symbol}
-                      <span className="flex-import-file">{p.description}</span>
-                    </th>
-                    <td>{p.issuerCountry || '—'}</td>
-                    <td>{p.sector || '—'}</td>
-                    <td className="num">{c(p.marketValueBase)}</td>
-                    <td className="num">{c(p.costBasisBase)}</td>
-                    <td className={toneClassName(toneOf(p.unrealizedPnlBase), 'num')}>
-                      {formatSignedCurrency(p.unrealizedPnlBase, r.baseCurrency)}
-                    </td>
-                    <td className="num">{p.percentOfNav.toFixed(1)}%</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <PositionsTable positions={r.positions} baseCurrency={r.baseCurrency} />
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+/**
+ * The per-holding table below the map. It is where one company is read — the map is positioned
+ * by issuer country and is deliberately approximate (DDR-0030) — which is why every column
+ * sorts: "which position is losing me the most?" is answered here or nowhere.
+ *
+ * Country and sector hand the comparator `null` rather than the em dash they render, so an
+ * unclassified position sorts as the absence it is instead of alphabetising under "—".
+ */
+function PositionsTable({
+  positions,
+  baseCurrency,
+}: {
+  positions: AllocationPosition[]
+  baseCurrency: string
+}): React.JSX.Element {
+  const c = (v: number): string => formatCurrency(v, baseCurrency)
+
+  const columns: DataColumn<AllocationPosition>[] = [
+    {
+      key: 'symbol',
+      header: 'Ticker',
+      rowHeader: true,
+      cell: (p) => (
+        <>
+          {p.symbol}
+          <span className="flex-import-file">{p.description}</span>
+        </>
+      ),
+      sortValue: (p) => p.symbol,
+    },
+    {
+      key: 'country',
+      header: 'Country',
+      cell: (p) => p.issuerCountry || '—',
+      sortValue: (p) => p.issuerCountry || null,
+    },
+    {
+      key: 'sector',
+      header: 'Sector',
+      cell: (p) => p.sector || '—',
+      sortValue: (p) => p.sector || null,
+    },
+    {
+      key: 'marketValue',
+      header: 'Market value',
+      numeric: true,
+      cell: (p) => c(p.marketValueBase),
+      sortValue: (p) => p.marketValueBase,
+    },
+    {
+      key: 'costBasis',
+      header: 'Cost basis',
+      numeric: true,
+      cell: (p) => c(p.costBasisBase),
+      sortValue: (p) => p.costBasisBase,
+    },
+    {
+      key: 'unrealized',
+      header: 'Unrealized P&L',
+      numeric: true,
+      cellClassName: (p) => toneClassName(toneOf(p.unrealizedPnlBase)),
+      cell: (p) => formatSignedCurrency(p.unrealizedPnlBase, baseCurrency),
+      sortValue: (p) => p.unrealizedPnlBase,
+    },
+    {
+      key: 'percentOfNav',
+      header: '% of NAV',
+      numeric: true,
+      cell: (p) => `${p.percentOfNav.toFixed(1)}%`,
+      sortValue: (p) => p.percentOfNav,
+    },
+  ]
+
+  return (
+    <DataTable
+      caption="Positions"
+      columns={columns}
+      rows={positions}
+      rowKey={(p) => p.conid ?? p.symbol}
+    />
   )
 }

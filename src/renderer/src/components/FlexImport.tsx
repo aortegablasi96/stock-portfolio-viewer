@@ -7,6 +7,7 @@ import { Badge } from './ui/Badge'
 import { Button } from './ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card'
 import { StatePanel } from './ui/StatePanel'
+import { DataTable, type DataColumn } from './ui/DataTable'
 
 /**
  * Flex Query import panel (Milestone M3, Story #20). Lets the owner import IBKR
@@ -202,37 +203,66 @@ function StoredStatements({ store }: { store: FlexStatementStore | null }): Reac
               </p>
             )}
 
-            <div className="table-scroll">
-              <table className="holdings-table">
-                <thead>
-                  <tr>
-                    <th scope="col">Account</th>
-                    <th scope="col">Period covered</th>
-                    <th scope="col">Base</th>
-                    <th scope="col">Imported</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {store.statements.map((s) => (
-                    <tr key={s.id}>
-                      <th scope="row" className="symbol">
-                        {s.accountId}
-                        <span className="flex-import-file">{s.sourceFilename}</span>
-                      </th>
-                      <td className="description">
-                        {formatDate(s.fromDate)} – {formatDate(s.toDate)}
-                      </td>
-                      <td>{s.baseCurrency}</td>
-                      <td className="description">{formatDateTime(s.importedAt)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <StoredStatementsTable statements={store.statements} />
           </>
         )}
       </CardContent>
     </Card>
+  )
+}
+
+/**
+ * What the store holds (Story #108). Sorting is worth having here — the statements are imported
+ * in whatever order the owner picked the files, so "which period am I missing?" is a question of
+ * order — and Period covered sorts on `fromDate` rather than the rendered range.
+ */
+function StoredStatementsTable({
+  statements,
+}: {
+  statements: FlexStatementStore['statements']
+}): React.JSX.Element {
+  const columns: DataColumn<FlexStatementStore['statements'][number]>[] = [
+    {
+      key: 'account',
+      header: 'Account',
+      rowHeader: true,
+      cell: (s) => (
+        <>
+          {s.accountId}
+          <span className="flex-import-file">{s.sourceFilename}</span>
+        </>
+      ),
+      sortValue: (s) => s.accountId,
+    },
+    {
+      key: 'period',
+      header: 'Period covered',
+      className: 'data-table-note',
+      cell: (s) => `${formatDate(s.fromDate)} – ${formatDate(s.toDate)}`,
+      sortValue: (s) => s.fromDate,
+    },
+    {
+      key: 'base',
+      header: 'Base',
+      cell: (s) => s.baseCurrency,
+      sortValue: (s) => s.baseCurrency,
+    },
+    {
+      key: 'importedAt',
+      header: 'Imported',
+      className: 'data-table-note',
+      cell: (s) => formatDateTime(s.importedAt),
+      sortValue: (s) => s.importedAt,
+    },
+  ]
+
+  return (
+    <DataTable
+      caption="Stored statements"
+      columns={columns}
+      rows={statements}
+      rowKey={(s) => s.id}
+    />
   )
 }
 
@@ -247,73 +277,83 @@ function ImportSummary({ statements }: { statements: FlexStatementImport[] }): R
           : `Imported ${newlyImported.length} statement${newlyImported.length === 1 ? '' : 's'}.`}
       </p>
 
-      <div className="table-scroll">
-        <table className="holdings-table">
-          <thead>
-            <tr>
-              <th scope="col">Account</th>
-              <th scope="col">Period</th>
-              <th scope="col" className="num">
-                Trades
-              </th>
-              <th scope="col" className="num">
-                Cash
-              </th>
-              <th scope="col" className="num">
-                Positions
-              </th>
-              <th scope="col" className="num">
-                Lots
-              </th>
-              <th scope="col" className="num">
-                Securities
-              </th>
-              <th scope="col">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {statements.map((s, index) => (
-              <tr key={`${s.accountId}-${s.fromDate}-${s.toDate}-${index}`}>
-                <th scope="row" className="symbol">
-                  {s.accountId}
-                  <span className="flex-import-file">{s.filename}</span>
-                </th>
-                <td className="description">
-                  {formatDate(s.fromDate)} – {formatDate(s.toDate)}
-                </td>
-                <RecordCell count={s.records.trades} dim={s.alreadyImported} />
-                <RecordCell count={s.records.cashTransactions} dim={s.alreadyImported} />
-                <RecordCell count={s.records.openPositions} dim={s.alreadyImported} />
-                <RecordCell count={s.records.lots} dim={s.alreadyImported} />
-                <RecordCell count={s.records.securities} dim={s.alreadyImported} />
-                <td>
-                  {s.alreadyImported ? (
-                    <Badge>Already imported</Badge>
-                  ) : totalInserted(s) === 0 ? (
-                    <Badge>No new rows</Badge>
-                  ) : (
-                    <Badge variant="accent">Imported</Badge>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        caption="Import summary"
+        columns={summaryColumns}
+        rows={statements}
+        rowKey={(s, index) => `${s.accountId}-${s.fromDate}-${s.toDate}-${index}`}
+      />
     </div>
   )
 }
 
-function RecordCell({
+/** The five record sections a statement carries, in the order the import writes them. */
+const RECORD_SECTIONS = [
+  { key: 'trades', header: 'Trades' },
+  { key: 'cashTransactions', header: 'Cash' },
+  { key: 'openPositions', header: 'Positions' },
+  { key: 'lots', header: 'Lots' },
+  { key: 'securities', header: 'Securities' },
+] as const
+
+/**
+ * The import summary's columns. Deliberately **not sortable** (Story #134): this table is the
+ * receipt for one action, listing the files the owner just picked in the order they picked
+ * them. Sorting is opt-in per column precisely so a table with no question to answer doesn't
+ * grow controls that answer nothing. The stored-statement list above it is the one that sorts.
+ */
+const summaryColumns: DataColumn<FlexStatementImport>[] = [
+  {
+    key: 'account',
+    header: 'Account',
+    rowHeader: true,
+    cell: (s) => (
+      <>
+        {s.accountId}
+        <span className="flex-import-file">{s.filename}</span>
+      </>
+    ),
+  },
+  {
+    key: 'period',
+    header: 'Period',
+    className: 'data-table-note',
+    cell: (s) => `${formatDate(s.fromDate)} – ${formatDate(s.toDate)}`,
+  },
+  ...RECORD_SECTIONS.map(
+    (section): DataColumn<FlexStatementImport> => ({
+      key: section.key,
+      header: section.header,
+      numeric: true,
+      cellClassName: (s) => (s.alreadyImported ? 'flex-import-dim' : ''),
+      cell: (s) => <RecordCount count={s.records[section.key]} dim={s.alreadyImported} />,
+    }),
+  ),
+  {
+    key: 'status',
+    header: 'Status',
+    cell: (s) =>
+      s.alreadyImported ? (
+        <Badge>Already imported</Badge>
+      ) : totalInserted(s) === 0 ? (
+        <Badge>No new rows</Badge>
+      ) : (
+        <Badge variant="accent">Imported</Badge>
+      ),
+  },
+]
+
+/** A record count and its duplicate tally — the cell's contents; the cell itself is the table's. */
+function RecordCount({
   count,
   dim,
 }: {
   count: { inserted: number; skipped: number }
   dim: boolean
 }): React.JSX.Element {
-  if (dim) return <td className="num flex-import-dim">—</td>
+  if (dim) return <>—</>
   return (
-    <td className="num">
+    <>
       {count.inserted}
       {/* The space is outside the badge on purpose: a badge is an inline-block, and a
           block container strips the white space that starts its first line. */}
@@ -323,6 +363,6 @@ function RecordCell({
           <Badge variant="plain">(+{count.skipped} dup)</Badge>
         </>
       )}
-    </td>
+    </>
   )
 }
