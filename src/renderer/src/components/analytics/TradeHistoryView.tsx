@@ -23,6 +23,7 @@ import { useRangeSelection } from './useRangeSelection'
 import { Button } from '../ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card'
 import { StatePanel } from '../ui/StatePanel'
+import { DataTable, type DataColumn } from '../ui/DataTable'
 
 /**
  * Realized gains & trade history (Milestone M3, Story #24). Lists trades from the
@@ -82,31 +83,13 @@ export function TradeHistoryView(): React.JSX.Element {
             <StatePanel surface="inline">No closed positions with realized P&L yet.</StatePanel>
           ) : (
             <div className="realized-split">
-              <div className="table-scroll table-scroll-rows">
-                <table className="holdings-table">
-                  <thead>
-                    <tr>
-                      <th scope="col">Ticker</th>
-                      <th scope="col" className="num">Short-term</th>
-                      <th scope="col" className="num">Long-term</th>
-                      <th scope="col" className="num">Total realized</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {r.bySymbol.map((s) => (
-                      <tr key={s.conid ?? s.symbol}>
-                        <th scope="row" className="symbol">
-                          {s.symbol}
-                          <span className="flex-import-file">{s.description}</span>
-                        </th>
-                        <td className={toneClassName(toneOf(s.realizedShortTerm), 'num')}>{sc(s.realizedShortTerm)}</td>
-                        <td className={toneClassName(toneOf(s.realizedLongTerm), 'num')}>{sc(s.realizedLongTerm)}</td>
-                        <td className={toneClassName(toneOf(s.totalRealized), 'num')}>{sc(s.totalRealized)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <DataTable
+                caption="Realized gains by ticker"
+                columns={realizedColumns(sc)}
+                rows={r.bySymbol}
+                rowKey={(s) => s.conid ?? s.symbol}
+                height="capped"
+              />
               <RealizedHighlights bySymbol={r.bySymbol} sc={sc} />
             </div>
           )}
@@ -119,10 +102,59 @@ export function TradeHistoryView(): React.JSX.Element {
 }
 
 /**
+ * The per-instrument realized-P&L columns. The three figures are signed, so each cell wears its
+ * own tone (DDR-0034) — which is what `cellClassName` is for: the table places the class, the
+ * row decides what it is.
+ */
+function realizedColumns(sc: (v: number) => string): DataColumn<RealizedBySymbol>[] {
+  return [
+    {
+      key: 'symbol',
+      header: 'Ticker',
+      rowHeader: true,
+      cell: (s) => (
+        <>
+          {s.symbol}
+          <span className="flex-import-file">{s.description}</span>
+        </>
+      ),
+      sortValue: (s) => s.symbol,
+    },
+    {
+      key: 'shortTerm',
+      header: 'Short-term',
+      numeric: true,
+      cellClassName: (s) => toneClassName(toneOf(s.realizedShortTerm)),
+      cell: (s) => sc(s.realizedShortTerm),
+      sortValue: (s) => s.realizedShortTerm,
+    },
+    {
+      key: 'longTerm',
+      header: 'Long-term',
+      numeric: true,
+      cellClassName: (s) => toneClassName(toneOf(s.realizedLongTerm)),
+      cell: (s) => sc(s.realizedLongTerm),
+      sortValue: (s) => s.realizedLongTerm,
+    },
+    {
+      key: 'total',
+      header: 'Total realized',
+      numeric: true,
+      cellClassName: (s) => toneClassName(toneOf(s.totalRealized)),
+      cell: (s) => sc(s.totalRealized),
+      sortValue: (s) => s.totalRealized,
+    },
+  ]
+}
+
+/**
  * Best/worst standout symbols by realized P&L (Story #50), shown beside the capped
  * "Realized gains by symbol" table. `bySymbol` arrives sorted largest total first, so the
  * head is the best and the tail the worst; with a single symbol the two coincide and only
  * "Best" is shown to avoid a duplicate card.
+ *
+ * It reads the service's array, not the table's view of it (Story #134), so re-sorting the
+ * table by short-term gain does not silently redefine "best".
  */
 function RealizedHighlights({
   bySymbol,
@@ -228,43 +260,84 @@ function TradeHistory({
         {rows.length === 0 ? (
           <StatePanel surface="inline">No trades match these filters.</StatePanel>
         ) : (
-          <div className="table-scroll table-scroll-rows">
-            <table className="holdings-table">
-              <thead>
-                <tr>
-                  <th scope="col">Date</th>
-                  <th scope="col">Ticker</th>
-                  <th scope="col">Side</th>
-                  <th scope="col" className="num">Quantity</th>
-                  <th scope="col" className="num">Price</th>
-                  <th scope="col" className="num">Proceeds</th>
-                  <th scope="col" className="num">Commission</th>
-                  <th scope="col" className="num">Realized P&L</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((t) => (
-                  <tr key={t.tradeKey}>
-                    <td>{t.dateTime != null ? formatDateTime(t.dateTime) : '—'}</td>
-                    <th scope="row" className="symbol">
-                      {t.symbol}
-                      <span className="flex-import-file">{t.description}</span>
-                    </th>
-                    <td>{t.side}</td>
-                    <td className="num">{formatQuantity(t.quantity)}</td>
-                    <td className="num">{formatCurrency(t.tradePrice, t.currency)}</td>
-                    <td className="num">{formatCurrency(t.proceedsNative, t.currency)}</td>
-                    <td className="num">{formatCurrency(t.commissionNative, t.currency)}</td>
-                    <td className={toneClassName(toneOf(t.realizedBase), 'num')}>
-                      {t.realizedNative !== 0 ? sc(t.realizedBase) : '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            caption="Trade history"
+            columns={tradeColumns(sc)}
+            rows={rows}
+            rowKey={(t) => t.tradeKey}
+            height="capped"
+          />
         )}
       </CardContent>
     </Card>
   )
+}
+
+/**
+ * The trade columns. Sorting composes with the period and the type chips rather than replacing
+ * them (DDR-0017, DDR-0039) — the filters choose the rows, the table chooses the order — so the
+ * chips' "N of M shown" count is untouched by it.
+ *
+ * Realized P&L renders an em dash where a trade closed nothing, and hands the comparator `null`
+ * for it: an opening buy has no realized P&L, which is not the same as having realized zero and
+ * should not sit between the small gains and the small losses.
+ */
+function tradeColumns(sc: (v: number) => string): DataColumn<TradeRow>[] {
+  return [
+    {
+      key: 'date',
+      header: 'Date',
+      cell: (t) => (t.dateTime != null ? formatDateTime(t.dateTime) : '—'),
+      sortValue: (t) => t.dateTime,
+    },
+    {
+      key: 'symbol',
+      header: 'Ticker',
+      rowHeader: true,
+      cell: (t) => (
+        <>
+          {t.symbol}
+          <span className="flex-import-file">{t.description}</span>
+        </>
+      ),
+      sortValue: (t) => t.symbol,
+    },
+    { key: 'side', header: 'Side', cell: (t) => t.side, sortValue: (t) => t.side },
+    {
+      key: 'quantity',
+      header: 'Quantity',
+      numeric: true,
+      cell: (t) => formatQuantity(t.quantity),
+      sortValue: (t) => t.quantity,
+    },
+    {
+      key: 'price',
+      header: 'Price',
+      numeric: true,
+      cell: (t) => formatCurrency(t.tradePrice, t.currency),
+      sortValue: (t) => t.tradePrice,
+    },
+    {
+      key: 'proceeds',
+      header: 'Proceeds',
+      numeric: true,
+      cell: (t) => formatCurrency(t.proceedsNative, t.currency),
+      sortValue: (t) => t.proceedsNative,
+    },
+    {
+      key: 'commission',
+      header: 'Commission',
+      numeric: true,
+      cell: (t) => formatCurrency(t.commissionNative, t.currency),
+      sortValue: (t) => t.commissionNative,
+    },
+    {
+      key: 'realized',
+      header: 'Realized P&L',
+      numeric: true,
+      cellClassName: (t) => toneClassName(toneOf(t.realizedBase)),
+      cell: (t) => (t.realizedNative !== 0 ? sc(t.realizedBase) : '—'),
+      sortValue: (t) => (t.realizedNative !== 0 ? t.realizedBase : null),
+    },
+  ]
 }

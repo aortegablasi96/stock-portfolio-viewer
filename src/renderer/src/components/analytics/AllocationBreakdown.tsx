@@ -2,6 +2,7 @@ import type { AllocationSlice } from '@shared/domain/allocation'
 import { groupTail, sliceColorClasses, type PieDatum } from '../../lib/pie'
 import { PieChart } from '../charts/PieChart'
 import { StatePanel } from '../ui/StatePanel'
+import { DataTable, type DataColumn } from '../ui/DataTable'
 
 /**
  * One allocation breakdown (Milestone M3, Story #48): the composing slices as a table on
@@ -40,31 +41,49 @@ export function AllocationBreakdown({
     return <StatePanel surface="inline">{emptyMessage}</StatePanel>
   }
 
+  // The swatch is looked up by the slice's position in `items`, which is the order the donut
+  // paints and the order the palette was assigned in — so it has to survive a re-sort. Resolving
+  // it to a class per row here means the table can reorder freely and a slice keeps its colour.
+  const colorByKey = new Map(items.map((item, i) => [item.key, colors[i]]))
+
+  const columns: DataColumn<PieDatum>[] = [
+    {
+      key: 'label',
+      header: 'Slice',
+      rowHeader: true,
+      className: 'data-table-swatch',
+      cell: (item) => (
+        <>
+          <span className={`legend-swatch ${colorByKey.get(item.key)}`} aria-hidden="true" />
+          {item.label}
+        </>
+      ),
+      sortValue: (item) => item.label,
+    },
+    {
+      key: 'value',
+      header: 'Value',
+      numeric: true,
+      cell: (item) => formatValue(item.value),
+      sortValue: (item) => item.value,
+    },
+    {
+      key: 'percent',
+      header: '% of NAV',
+      numeric: true,
+      cell: (item) => `${item.percent.toFixed(1)}%`,
+      sortValue: (item) => item.percent,
+    },
+  ]
+
   return (
     <div className="breakdown-split">
-      <div className="table-scroll breakdown-table">
-        <table className="holdings-table">
-          <thead>
-            <tr>
-              <th scope="col">Slice</th>
-              <th scope="col" className="num">Value</th>
-              <th scope="col" className="num">% of NAV</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((item, i) => (
-              <tr key={item.key}>
-                <th scope="row" className="symbol">
-                  <span className={`legend-swatch ${colors[i]}`} aria-hidden="true" />
-                  {item.label}
-                </th>
-                <td className="num">{formatValue(item.value)}</td>
-                <td className="num">{item.percent.toFixed(1)}%</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        caption={ariaLabel}
+        columns={columns}
+        rows={items}
+        rowKey={(item) => item.key}
+      />
       <div className="breakdown-chart">
         <PieChart
           data={items}

@@ -1,6 +1,7 @@
 import type { AllocationSlice, Holding } from '@shared/domain/portfolio'
 import { formatCurrency, formatPercent, formatQuantity } from '../lib/format'
 import { Badge } from './ui/Badge'
+import { DataTable, type DataColumn } from './ui/DataTable'
 
 /**
  * The current-holdings table (Story #15; display currency added in Story #28).
@@ -13,6 +14,11 @@ import { Badge } from './ui/Badge'
  * native quote (DDR-0007). The Price column always stays in the instrument's native
  * currency — a quote is a native-currency fact. A position with no available FX rate
  * (`displayValue === null`) is shown in its native currency and marked.
+ *
+ * It is the one table in the app that stands outside a card, so it is the one that brings its
+ * own surface (Story #134). Market value sorts on the figure actually shown, so a position with
+ * no rate — the `displayValue === null` case above — is the missing value the comparator parks
+ * at the bottom rather than treating as zero.
  */
 export function HoldingsTable({
   holdings,
@@ -25,58 +31,73 @@ export function HoldingsTable({
 }): React.JSX.Element {
   const weightByConid = new Map(allocation.map((a) => [a.conid, a.weight]))
   const hasUnconverted = displayCurrency != null && holdings.some((h) => h.displayValue === null)
+  const valueOf = (h: Holding): number | null =>
+    displayCurrency != null ? (h.displayValue ?? null) : h.marketValue
+
+  const columns: DataColumn<Holding>[] = [
+    {
+      key: 'symbol',
+      header: 'Ticker',
+      rowHeader: true,
+      cell: (h) => h.symbol,
+      sortValue: (h) => h.symbol,
+    },
+    {
+      key: 'description',
+      header: 'Description',
+      className: 'data-table-note',
+      cell: (h) => h.description,
+      sortValue: (h) => h.description,
+    },
+    {
+      key: 'quantity',
+      header: 'Quantity',
+      numeric: true,
+      cell: (h) => formatQuantity(h.quantity),
+      sortValue: (h) => h.quantity,
+    },
+    {
+      key: 'price',
+      header: 'Price',
+      numeric: true,
+      cell: (h) => (h.marketPrice === null ? '—' : formatCurrency(h.marketPrice, h.currency)),
+      sortValue: (h) => h.marketPrice,
+    },
+    {
+      key: 'value',
+      header: `Market value${displayCurrency ? ` (${displayCurrency})` : ''}`,
+      numeric: true,
+      cell: (h) => <MarketValueCell holding={h} displayCurrency={displayCurrency} />,
+      sortValue: valueOf,
+    },
+    {
+      key: 'weight',
+      header: 'Weight',
+      numeric: true,
+      cell: (h) => {
+        const weight = weightByConid.get(h.conid)
+        return weight === undefined ? '—' : formatPercent(weight)
+      },
+      sortValue: (h) => weightByConid.get(h.conid) ?? null,
+    },
+  ]
 
   return (
-    <div className="table-scroll">
-      {hasUnconverted && (
-        <p className="table-notice" role="status">
-          Some positions have no available exchange rate and are shown in their native
-          currency (excluded from the {displayCurrency} total).
-        </p>
-      )}
-      <table className="holdings-table">
-        <caption className="sr-only">Current holdings</caption>
-        <thead>
-          <tr>
-            <th scope="col">Ticker</th>
-            <th scope="col">Description</th>
-            <th scope="col" className="num">
-              Quantity
-            </th>
-            <th scope="col" className="num">
-              Price
-            </th>
-            <th scope="col" className="num">
-              Market value{displayCurrency ? ` (${displayCurrency})` : ''}
-            </th>
-            <th scope="col" className="num">
-              Weight
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {holdings.map((h) => {
-            const weight = weightByConid.get(h.conid)
-            return (
-              <tr key={h.conid}>
-                <th scope="row" className="symbol">
-                  {h.symbol}
-                </th>
-                <td className="description">{h.description}</td>
-                <td className="num">{formatQuantity(h.quantity)}</td>
-                <td className="num">
-                  {h.marketPrice === null ? '—' : formatCurrency(h.marketPrice, h.currency)}
-                </td>
-                <td className="num">
-                  <MarketValueCell holding={h} displayCurrency={displayCurrency} />
-                </td>
-                <td className="num">{weight === undefined ? '—' : formatPercent(weight)}</td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      caption="Current holdings"
+      surface="card"
+      columns={columns}
+      rows={holdings}
+      rowKey={(h) => h.conid}
+      notice={
+        hasUnconverted && (
+          <p className="table-notice" role="status">
+            Some positions have no available exchange rate and are shown in their native
+            currency (excluded from the {displayCurrency} total).
+          </p>
+        )
+      }
+    />
   )
 }
 
