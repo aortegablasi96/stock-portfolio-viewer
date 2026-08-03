@@ -6,6 +6,7 @@ import { ConfirmAction } from './ConfirmAction'
 import { Badge } from './ui/Badge'
 import { Button } from './ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card'
+import { StatePanel } from './ui/StatePanel'
 
 /**
  * Flex Query import panel (Milestone M3, Story #20). Lets the owner import IBKR
@@ -145,9 +146,7 @@ export function FlexImport(): React.JSX.Element {
             )}
 
             {state.phase === 'canceled' && (
-              <p className="snapshot-empty" role="status">
-                Import canceled — no files were selected.
-              </p>
+              <StatePanel surface="inline">Import canceled — no files were selected.</StatePanel>
             )}
 
             {(state.phase === 'invalid' || state.phase === 'error') && (
@@ -182,12 +181,14 @@ function StoredStatements({ store }: { store: FlexStatementStore | null }): Reac
       <CardTitle id="flex-store-heading">Stored statements</CardTitle>
       <CardContent>
         {store === null ? (
-          <p className="snapshot-empty">Loading stored statements…</p>
+          <StatePanel variant="loading" surface="inline">
+            Loading stored statements…
+          </StatePanel>
         ) : store.statements.length === 0 ? (
-          <p className="snapshot-empty">
+          <StatePanel surface="inline">
             No statements imported yet. Import a Flex Query export above to build the history the
             analytics views read from.
-          </p>
+          </StatePanel>
         ) : (
           <>
             {store.coverage && (

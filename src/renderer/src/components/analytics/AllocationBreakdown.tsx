@@ -1,6 +1,7 @@
 import type { AllocationSlice } from '@shared/domain/allocation'
 import { groupTail, sliceColorClasses, type PieDatum } from '../../lib/pie'
 import { PieChart } from '../charts/PieChart'
+import { StatePanel } from '../ui/StatePanel'
 
 /**
  * One allocation breakdown (Milestone M3, Story #48): the composing slices as a table on
@@ -36,7 +37,7 @@ export function AllocationBreakdown({
   const colors = sliceColorClasses(items, colorOffset)
 
   if (items.length === 0) {
-    return <p className="chart-empty">{emptyMessage}</p>
+    return <StatePanel surface="inline">{emptyMessage}</StatePanel>
   }
 
   return (

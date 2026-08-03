@@ -428,6 +428,28 @@ Canonical flows to copy when adding a feature:
   `<td>`, not a label. `lib/badgeVariants.test.ts` fails if a badge acquires a pill, a background
   or a focus ring, if a variant or size has no rule, or if any of the five superseded selectors
   reappears.
+- **An empty, loading or failed region is a `StatePanel`, and only `error` paints** (Story #133,
+  DDR-0038). `components/ui/StatePanel.tsx` replaced the five presentations the audit found for the
+  four states the architecture already models as result variants: `.state-panel` / `.state-notice`
+  / `.state-error`, `NeedsImport`'s own panel, `.snapshot-empty`, `.chart-empty` (twelve call
+  sites) and the map's `.country-map-unavailable` — where `.snapshot-empty` and `.chart-empty` were
+  **byte-identical**, declared 550 lines apart. The axes are deliberately **not** the button's:
+  **`variant` is the state** (`loading | empty | notice | error`) and **`surface` is whether the
+  panel brings a card** (`panel` = a `Card` at `lg`, `inline` = prose inside a surface that already
+  exists). A size axis would have had one value, and a colour axis none. Five things to know. The
+  parts render in one fixed order — heading, explanation, hint, action — so the recovery action is
+  always last and always in the same place. **Three of the four variants declare no CSS at all**,
+  the same statement as the tile's neutral tone (DDR-0034): the axis exists because the copy and
+  the *announcement* differ, and `role` is derived — `error` is `alert`, everything else `status`,
+  so a disconnected gateway doesn't interrupt a screen reader on every launch. **The element is
+  derived too**: no heading → the panel *is* a `<p>`, which is what the superseded call sites
+  rendered and what keeps `.dashboard`'s spacing (DDR-0033). `not_connected` and `not_responding`
+  share the `notice` variant on purpose — they are one presentation, distinguished by the heading
+  and by the hint only the stalled one carries, because putting that in a colour would say less
+  than the sentence does (DDR-0022). And the Portfolio tab's **converting note is not a state
+  panel**: the figures stay on screen while they re-convert, which is DDR-0027's live-data half.
+  `lib/statePanelVariants.test.ts` fails if a quiet variant acquires a rule, if `.state-panel-panel`
+  appears, if the base starts drawing a surface, or if any of the five superseded selectors returns.
 - **Never write a focus rule.** One ring — `--focus-ring` / `--focus-ring-offset`, always
   `--accent`, destructive controls included — is applied by a **zero-specificity `:where(...)`
   base rule** at the top of `app.css`, so an interactive element is ringed by default and can't

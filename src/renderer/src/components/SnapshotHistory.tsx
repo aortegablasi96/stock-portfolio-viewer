@@ -2,6 +2,7 @@ import type { SnapshotSummary } from '@shared/domain/snapshot'
 import { formatCurrency, formatDateTime } from '../lib/format'
 import { Badge } from './ui/Badge'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card'
+import { StatePanel } from './ui/StatePanel'
 
 /**
  * Snapshot history list (Milestone M2, Story #19). Presentational: it renders the
@@ -29,10 +30,10 @@ export function SnapshotHistory({
       <Card aria-labelledby="snapshot-history-heading">
         <CardTitle id="snapshot-history-heading">History</CardTitle>
         <CardContent>
-          <p className="snapshot-empty">
+          <StatePanel surface="inline">
             No snapshots captured yet. One is captured automatically when you open the app while
             connected, or capture one now.
-          </p>
+          </StatePanel>
         </CardContent>
       </Card>
     )
