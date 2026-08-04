@@ -992,11 +992,13 @@ html {
 
 /* Direction is the arrow's shape; the accent above is the second cue, not the
    only one — the same rule as the tab bar's underline (DDR-0029) and the toggle
-   group's doubled stroke (DDR-0036). An unsorted column keeps its faint
-   double-headed arrow so the affordance is visible and the header's width does
-   not jump when the sort lands on it. */
+   group's doubled stroke (DDR-0036). An unsorted column keeps its double-headed
+   arrow so the affordance is visible and the header's width does not jump when
+   the sort lands on it. It is held back rather than hidden: 0.45 read as an
+   artefact against this theme's muted header ink, so it sits at 0.7 — quiet
+   beside the sorted column's full-opacity arrow, but legible on its own. */
 .data-table-sort-glyph {
-  opacity: 0.45;
+  opacity: 0.7;
 }
 
 .data-table-sort.is-sorted .data-table-sort-glyph {
