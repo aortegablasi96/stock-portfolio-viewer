@@ -75,3 +75,4 @@ Other options and why they were not chosen.
 - `0037` — One `Badge`: `variant` as boundary and ink, `size` as inline chip vs standalone label; never a pill, because `0036` spent that corner on "pressable" (extends `0036`)
 - `0038` — One `StatePanel`: `variant` as the state (loading/empty/notice/error), `surface` as "does it bring a card"; element and ARIA role derived, only `error` paints (extends `0037`)
 - `0039` — One `DataTable`: `surface`/`height` on the container (retiring the `.card-content` override), sorting opt-in per column, missing values last in both directions (extends `0038`)
+- `0040` — Allocation breakdown: table and donut link on hover; emphasis keyed on slice identity, muting rather than recolouring (extends `0039`)
