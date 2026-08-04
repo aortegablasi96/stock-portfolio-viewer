@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { AllocationSlice } from '@shared/domain/allocation'
 import { groupTail, sliceColorClasses, type PieDatum } from '../../lib/pie'
 import { PieChart } from '../charts/PieChart'
@@ -34,6 +35,13 @@ export function AllocationBreakdown({
   colorOffset?: number
   emptyMessage?: string
 }): React.JSX.Element {
+  // The slice the pointer or keyboard is on, shared by both halves (Story #147). It lives here
+  // rather than in either child because neither owns the pairing — the table and the donut are
+  // the same slice set rendered twice, and this is the one thing they have to agree about.
+  // `AllocationView` remounts this component per breakdown tab (`key={tab}`), so switching tabs
+  // clears it without anything having to reset it.
+  const [activeKey, setActiveKey] = useState<string | null>(null)
+
   const items = groupTail(toItems(slices))
   const colors = sliceColorClasses(items, colorOffset)
 
@@ -83,6 +91,8 @@ export function AllocationBreakdown({
         columns={columns}
         rows={items}
         rowKey={(item) => item.key}
+        activeRowKey={activeKey}
+        onRowActivate={(key) => setActiveKey(typeof key === 'string' ? key : null)}
       />
       <div className="breakdown-chart">
         <PieChart
@@ -91,6 +101,8 @@ export function AllocationBreakdown({
           ariaLabel={ariaLabel}
           showLegend={false}
           colorOffset={colorOffset}
+          activeKey={activeKey}
+          onSliceActivate={setActiveKey}
         />
       </div>
     </div>

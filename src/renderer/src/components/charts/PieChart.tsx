@@ -1,4 +1,5 @@
 import { groupTail, sliceColorClasses, toArcs, type PieDatum } from '../../lib/pie'
+import { sliceClassName, sliceEmphasis } from '../../lib/sliceHighlight'
 import { StatePanel } from '../ui/StatePanel'
 
 /**
@@ -24,6 +25,8 @@ export function PieChart({
   emptyMessage = 'Nothing to plot yet.',
   showLegend = true,
   colorOffset = 0,
+  activeKey = null,
+  onSliceActivate,
 }: {
   data: PieDatum[]
   formatValue: (v: number) => string
@@ -34,6 +37,11 @@ export function PieChart({
   showLegend?: boolean
   /** Palette slots to skip — `SECTOR_SLOT_OFFSET` for the sector breakdown (Story #122). */
   colorOffset?: number
+  /** The slice to emphasise — the table row under the pointer, where the two are linked
+   *  (Story #147). Everything else mutes; `null` is the whole chart at rest. */
+  activeKey?: string | null
+  /** Reports the slice the pointer is on, and `null` when it leaves (Story #147). */
+  onSliceActivate?: (key: string | null) => void
 }): React.JSX.Element {
   const arcs = toArcs(groupTail(data), SIZE / 2, SIZE / 2, R_OUTER, R_INNER)
 
@@ -53,7 +61,15 @@ export function PieChart({
         preserveAspectRatio="xMidYMid meet"
       >
         {arcs.map((arc, i) => (
-          <path key={arc.key} className={`pie-slice ${seriesClass[i]}`} d={arc.path}>
+          <path
+            key={arc.key}
+            className={sliceClassName(seriesClass[i] ?? '', sliceEmphasis(activeKey, arc.key))}
+            d={arc.path}
+            onMouseEnter={onSliceActivate ? () => onSliceActivate(arc.key) : undefined}
+            onMouseLeave={onSliceActivate ? () => onSliceActivate(null) : undefined}
+          >
+            {/* The native tooltip stays: it is what the donut says on its own, in the views
+                that render it without a table beside it. */}
             <title>{`${arc.label} — ${formatValue(arc.value)} (${arc.percent.toFixed(1)}% of NAV)`}</title>
           </path>
         ))}

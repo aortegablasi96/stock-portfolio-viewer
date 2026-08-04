@@ -474,6 +474,20 @@ Canonical flows to copy when adding a feature:
   selectors reappears, if the bare container starts drawing a surface, if an axis value has no
   rule, or if the sorted header loses its arrow. Two named visual changes: cell padding adopts
   `--space-4` (+1.6px a row) and the five-row cap is re-measured to `18rem`.
+- **The Allocation breakdown's table and donut are linked, and the link is keyed** (Story #147,
+  DDR-0040). They were always the same slice set rendered twice; hovering either half now
+  emphasises the matching slice in both, via one `activeKey` owned by `AllocationBreakdown`.
+  Four things to know. It is keyed on the slice's `key`, **never on position** — the table sorts
+  by any column (DDR-0039), so row order and arc order have no reason to agree, and a positional
+  link would light the wrong wedge exactly when a reader is reconciling the two. The emphasis
+  **never touches `fill`**: hue is identity here (DDR-0030, DDR-0021), so the active wedge keeps
+  its colour and gains a `--text` stroke while the rest drop to 0.35 opacity — and *muting the
+  others is what makes the active one read*, since a 7% wedge outlined among seven full-strength
+  neighbours is still a hunt. `DataTable` gained `activeRowKey` + `onRowActivate` for this, with
+  the keyed guarantee computed inside the primitive from the `rowKey` it already has; supplying
+  `onRowActivate` is also what makes rows focusable, so an ordinary table adds nothing to the tab
+  order. And `.data-table-row-active` is **neutral, not accent** — the row is pointed at, not
+  selected, and the accent already means "this column holds the sort".
 - **Never write a focus rule.** One ring — `--focus-ring` / `--focus-ring-offset`, always
   `--accent`, destructive controls included — is applied by a **zero-specificity `:where(...)`
   base rule** at the top of `app.css`, so an interactive element is ringed by default and can't
@@ -1026,7 +1040,8 @@ sorting and formatting are **extracted out of components into pure modules under
 `renderer/src/lib/`** (`format`, `pie`, `worldGeo`, `countryDonuts`, `gainLoss`, `tableFilter`,
 `column`, `dateRange`, `sectorMap`, `performanceRange`, `classifyProgress`, `dataVersion`,
 `tabKeyboard`, `buttonVariants`, `cardVariants`, `statTileVariants`, `fieldVariants`,
-`toggleGroupVariants`, `badgeVariants`, `statePanelVariants`, `tableSort`, `dataTableVariants`)
+`toggleGroupVariants`, `badgeVariants`, `statePanelVariants`, `tableSort`, `dataTableVariants`,
+`sliceHighlight`)
 precisely so they can be tested — follow
 that split when adding a component with real logic in it. `dataVersion` is the same move applied
 to state rather than maths: the cross-view staleness signal is a plain subscribable store a hook

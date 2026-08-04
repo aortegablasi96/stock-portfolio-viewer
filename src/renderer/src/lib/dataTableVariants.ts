@@ -98,6 +98,22 @@ export function dataTableCellKindClassName(kind: DataTableCellKind): string {
 }
 
 /**
+ * A row's class list. `active` is the row linked to something outside the table — the donut
+ * slice under the pointer, in the one view that pairs them (Story #147) — and it is the
+ * *absence* of a class at rest, the same shape as every other default in this family.
+ *
+ * Deliberately neutral rather than accent-tinted: the row is being pointed at, not selected,
+ * and a table that borrows the accent for a transient hover would be saying the same thing the
+ * sorted column header says.
+ */
+export function dataTableRowClassName(active: boolean, className?: string): string {
+  const parts: string[] = []
+  if (active) parts.push('data-table-row-active')
+  if (className) parts.push(className)
+  return parts.join(' ')
+}
+
+/**
  * Compose one cell's class list: the numeric treatment, then the column's own class, then
  * whatever the row contributes — which is how a signed figure wears its tone
  * (`toneClassName`, DDR-0034) without the table knowing what a tone is.

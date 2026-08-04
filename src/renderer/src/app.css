@@ -926,6 +926,15 @@ html {
   border-bottom: none;
 }
 
+/* The row linked to something outside the table — the donut slice under the pointer, in the
+   one view that pairs them (Story #147, DDR-0040). Neutral rather than accent-tinted: the row
+   is being pointed at, not selected, and the accent already means "this column holds the
+   sort" two rows above. */
+.data-table-row-active > th,
+.data-table-row-active > td {
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+}
+
 /* All three are scoped to the table on purpose. The base `th, td` rule above is
    two selectors' worth of specificity, so an unscoped `.data-table-num` would
    lose its `text-align` to it — which is exactly what `.holdings-table .num`
@@ -1665,6 +1674,29 @@ html {
 .pie-slice {
   stroke: var(--card);
   stroke-width: 2;
+  transition:
+    opacity 120ms ease,
+    stroke 120ms ease;
+}
+
+/* Linked emphasis (Story #147, DDR-0040). Neither state touches `fill`: hue *is* identity
+   here — one sector wears one colour everywhere, map included (DDR-0030) — so the active
+   wedge is outlined in the page's ink rather than recoloured, and the others step back.
+   Muting the rest is what makes the active one read; emphasising a wedge alone leaves it
+   competing with seven neighbours at full strength. */
+.pie-slice-active {
+  stroke: var(--text);
+}
+
+.pie-slice-muted {
+  opacity: 0.35;
+}
+
+/* The pointer is reading the pair, not selecting anything. */
+@media (prefers-reduced-motion: reduce) {
+  .pie-slice {
+    transition: none;
+  }
 }
 
 .pie-legend {

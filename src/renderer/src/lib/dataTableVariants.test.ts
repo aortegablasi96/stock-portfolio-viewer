@@ -9,6 +9,7 @@ import {
   dataTableCellClassName,
   dataTableCellKindClassName,
   dataTableHeightClassName,
+  dataTableRowClassName,
   dataTableScrollClassName,
   dataTableSurfaceClassName,
 } from './dataTableVariants'
@@ -119,6 +120,27 @@ describe('dataTableCellClassName', () => {
       expect(declaresRule(`.${className}`), kind).toBe(true)
       expect(CSS, kind).toMatch(new RegExp(`^\\.data-table \\.${className} \\{`, 'm'))
     }
+  })
+})
+
+/**
+ * A row linked to something outside the table (Story #147, DDR-0040) — the donut slice under
+ * the pointer, in the one view that pairs them.
+ */
+describe('dataTableRowClassName', () => {
+  it('gives an ordinary row no class, so a table that links nothing is unchanged', () => {
+    expect(dataTableRowClassName(false)).toBe('')
+    expect(dataTableRowClassName(false, undefined)).toBe('')
+  })
+
+  it('marks the linked row and keeps a caller’s class after it', () => {
+    expect(dataTableRowClassName(true)).toBe('data-table-row-active')
+    expect(dataTableRowClassName(true, 'extra')).toBe('data-table-row-active extra')
+    expect(dataTableRowClassName(false, 'extra')).toBe('extra')
+  })
+
+  it('is backed by a rule that tints the cells rather than the row box', () => {
+    expect(CSS).toMatch(/^\.data-table-row-active > th,\n\.data-table-row-active > td \{/m)
   })
 })
 

@@ -4,6 +4,7 @@ import {
   DEFAULT_DATA_TABLE_SURFACE,
   dataTableCellClassName,
   dataTableCellKindClassName,
+  dataTableRowClassName,
   dataTableScrollClassName,
   type DataTableHeight,
   type DataTableSurface,
@@ -82,6 +83,8 @@ export function DataTable<T>({
   rowKey,
   surface = DEFAULT_DATA_TABLE_SURFACE,
   height = DEFAULT_DATA_TABLE_HEIGHT,
+  activeRowKey = null,
+  onRowActivate,
   notice,
   className,
 }: {
@@ -93,6 +96,17 @@ export function DataTable<T>({
   rowKey: (row: T, index: number) => string | number
   surface?: DataTableSurface
   height?: DataTableHeight
+  /**
+   * The row linked to something outside the table — the donut slice under the pointer, in the
+   * one view that pairs them (Story #147). Keyed, never positional, so the link stays correct
+   * after the table is re-sorted.
+   */
+  activeRowKey?: string | number | null
+  /**
+   * Reports the row the pointer or keyboard focus is on, and `null` when it leaves. Supplying
+   * it is what makes rows focusable — the pairing must not be pointer-only.
+   */
+  onRowActivate?: (key: string | number | null) => void
   /** A line above the table, inside its container — the dashboard's unconverted-rows notice. */
   notice?: ReactNode
   /** Placement only: how the container sits in the layout around it (ADR-0008). */
@@ -126,13 +140,29 @@ export function DataTable<T>({
           </tr>
         </thead>
         <tbody>
-          {visible.map((row, index) => (
-            <tr key={rowKey(row, index)}>
-              {columns.map((column) => (
-                <BodyCell key={column.key} column={column} row={row} />
-              ))}
-            </tr>
-          ))}
+          {visible.map((row, index) => {
+            const key = rowKey(row, index)
+            // Rows become a tab stop only where the view links them to something else, so an
+            // ordinary table adds nothing to the tab order. `onFocus`/`onBlur` sit beside the
+            // pointer handlers rather than replacing them: the pairing has to be reachable
+            // without a mouse, and reading it is the whole point of the link.
+            const linked = onRowActivate !== undefined
+            return (
+              <tr
+                key={key}
+                className={dataTableRowClassName(key === activeRowKey) || undefined}
+                tabIndex={linked ? 0 : undefined}
+                onMouseEnter={linked ? () => onRowActivate(key) : undefined}
+                onMouseLeave={linked ? () => onRowActivate(null) : undefined}
+                onFocus={linked ? () => onRowActivate(key) : undefined}
+                onBlur={linked ? () => onRowActivate(null) : undefined}
+              >
+                {columns.map((column) => (
+                  <BodyCell key={column.key} column={column} row={row} />
+                ))}
+              </tr>
+            )
+          })}
         </tbody>
       </table>
     </div>
