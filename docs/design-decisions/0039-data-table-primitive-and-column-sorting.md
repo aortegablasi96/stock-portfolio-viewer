@@ -136,7 +136,7 @@ the real tablist out of `ToggleGroup` ([[0036-toggle-group-mode-axis-and-pressed
 
 Direction is carried by the **arrow's shape** as well as the accent the sorted header wears —
 [[0029-tab-shell-aria-pattern-and-keyboard-navigation]]'s "both cues are colour" rule applied to a
-header. An unsorted sortable column keeps a faint `↕`, so the affordance is discoverable without
+header. An unsorted sortable column keeps a held-back `↕`, so the affordance is discoverable without
 hovering and the header's width does not jump when the sort lands on it. `aria-sort` is on the
 cell, including `none` on the sortable columns that are not sorted — that is what tells a
 screen-reader user the control exists before they activate it.
