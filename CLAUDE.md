@@ -179,7 +179,15 @@ Canonical flows to copy when adding a feature:
   not the app's `--pos` / `--neg` green/red**, which fails CVD contrast where fill colour is the only
   channel and no number sits beside it. Don't "restore" them on the slices (DDR-0021) — but the popup
   *is* tinted `--pos` / `--neg` by the hovered subject's return, which is exactly the case DDR-0021
-  carved out: a figure sits two rows below the tint. Finally, a country under an 8px radius becomes a
+  carved out: a figure sits two rows below the tint. **That tint's strength is a bounded number, not
+  a taste** (DDR-0041): it shipped at 12%, which cleared every contrast bar and was reported as no
+  tint at all — 16 points on one channel. It is 26% now, and the ceiling is the popup's *muted* text
+  (`.map-popup-name`, `.map-popup-row dt` — 12.5px, so AA's 4.5:1), which the green hits at 30%;
+  `--text` never binds. Both tones carry the same percentage on purpose, since a stronger "up" than
+  "down" would encode degree on top of sign. `lib/mapPopupTint.test.ts` resolves the `color-mix()`
+  out of `app.css` and **recomputes** the contrast rather than asserting the literal, so it fails
+  both below 20% and below 4.5:1 — a class-name assertion would have passed at 12% and would pass
+  again at 60% with the labels unreadable. Finally, a country under an 8px radius becomes a
   **single disc** in its largest sector's hue (two donuts that small are two smudges), and note that
   an SVG `<g>` is only ever hit *through its children* — grouping slices and putting
   `pointer-events: auto` on the group catches nothing. All of this lives in `lib/countryDonuts`. See
@@ -1041,7 +1049,7 @@ sorting and formatting are **extracted out of components into pure modules under
 `column`, `dateRange`, `sectorMap`, `performanceRange`, `classifyProgress`, `dataVersion`,
 `tabKeyboard`, `buttonVariants`, `cardVariants`, `statTileVariants`, `fieldVariants`,
 `toggleGroupVariants`, `badgeVariants`, `statePanelVariants`, `tableSort`, `dataTableVariants`,
-`sliceHighlight`)
+`sliceHighlight`, `mapPopupTint`)
 precisely so they can be tested — follow
 that split when adding a component with real logic in it. `dataVersion` is the same move applied
 to state rather than maths: the cross-view staleness signal is a plain subscribable store a hook
