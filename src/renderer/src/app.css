@@ -1911,33 +1911,50 @@ html {
    overrides a third-party stylesheet. It is a deliberate, scoped exception: using `Popup` buys
    viewport-edge flipping for free, which is worth more than a handful of overrides.
 
-   Surface and tip colour both come from `--popup-surface`, so the return tint below is a single
-   variable override rather than eight anchor-specific rules. */
+   Edge and tip colour both come from `--popup-edge`, so the return tint below is a single
+   variable override rather than eight anchor-specific rules.
+
+   The tint is a **gradient banked into the top and bottom edges**, not a flat wash: `--popup-edge`
+   at both extremes, `--card` across the middle. The two inner stops sit at `--popup-pad-y`, which
+   is the content's own vertical padding — so the coloured band is exactly the gutter above the
+   first line and below the last, and every line of text sits on plain `--card` however many rows
+   the popup has. That is what pays for the strength: colour that never passes behind a glyph has
+   no contrast budget to spend, so the edges can be loud where a flat surface could not. Stops in
+   an absolute length rather than a percentage, deliberately — a percentage band would grow with
+   the popup and creep under the text of a six-row sector card. */
 .mapboxgl-popup-content {
-  padding: 0.6rem 0.7rem;
+  padding: var(--popup-pad-y) 0.7rem;
   color: var(--text);
-  background: var(--popup-surface, var(--card));
+  background: linear-gradient(
+    to bottom,
+    var(--popup-edge, var(--card)) 0,
+    var(--card) var(--popup-pad-y),
+    var(--card) calc(100% - var(--popup-pad-y)),
+    var(--popup-edge, var(--card)) 100%
+  );
   border: 1px solid var(--popup-border, var(--border));
   border-radius: 6px;
   box-shadow: 0 1px 2px rgb(0 0 0 / 0.12);
   font: inherit;
 }
 
-/* The tip is drawn as a bordered triangle; each anchor position colours a different edge. */
+/* The tip is drawn as a bordered triangle; each anchor position colours a different edge. It
+   takes `--popup-edge` rather than the middle colour because it attaches to whichever edge the
+   popup was flipped onto — the loud one. */
 .mapboxgl-popup-anchor-top .mapboxgl-popup-tip {
-  border-bottom-color: var(--popup-surface, var(--card));
+  border-bottom-color: var(--popup-edge, var(--card));
 }
 
 .mapboxgl-popup-anchor-bottom .mapboxgl-popup-tip {
-  border-top-color: var(--popup-surface, var(--card));
+  border-top-color: var(--popup-edge, var(--card));
 }
 
 .mapboxgl-popup-anchor-left .mapboxgl-popup-tip {
-  border-right-color: var(--popup-surface, var(--card));
+  border-right-color: var(--popup-edge, var(--card));
 }
 
 .mapboxgl-popup-anchor-right .mapboxgl-popup-tip {
-  border-left-color: var(--popup-surface, var(--card));
+  border-left-color: var(--popup-edge, var(--card));
 }
 
 /* Hover-driven and pointer-transparent: the popup must never sit between the cursor and the
@@ -1945,6 +1962,10 @@ html {
 .map-popup-shell {
   pointer-events: none;
   animation: map-popup-in 120ms ease-out;
+  /* One number for the padding and for where the gradient has to have finished. Declared here so
+     the two can't drift: if they did, the band would either stop short of the text or run under
+     it, and only the second is visible — as unreadable labels. */
+  --popup-pad-y: 0.6rem;
 }
 
 /* The return tint (Story #122, strengthened in Story #149): green when the hovered subject is up,
@@ -1957,24 +1978,25 @@ html {
    accompanies a figure printed in the popup two rows down, which is exactly the case DDR-0021
    carved out for the app's green/red.
 
-   **26%, and the ceiling is the popup's own muted text.** The first cut mixed to 12% to protect
-   that contrast, and protected it so thoroughly the tint was reported as absent: it moved `--card`
-   by 16 points on one channel, leaving the 45% border as the only part anyone could see. The
-   binding constraint is `.map-popup-name` / `.map-popup-row dt` at `--muted` — 12.5px, so WCAG AA
-   normal text, 4.5:1 — which the green reaches at 30%. 26% is that ceiling with headroom
-   (4.80:1 on the green surface, 5.41:1 on the red; `--text` stays above 9.9:1 on both), and it is
-   the number `mapPopupTint.test.ts` recomputes rather than trusts.
+   **50% at the edge, and it is the geometry that affords it, not a looser contrast bar.** The
+   first cut washed the whole surface at 12% to protect the popup's muted text, and protected it so
+   thoroughly the tint was reported as absent — 16 points on one channel, with the border the only
+   visible part. A flat wash tops out at 30%, where `--muted` (`.map-popup-name`,
+   `.map-popup-row dt` — 12.5px, so WCAG AA normal text) hits 4.5:1 exactly. Banking the colour
+   into the padding takes text off the tint entirely: every glyph sits on `--card` at its full
+   14.32:1 and 6.90:1, and the edge answers to nothing but taste. `mapPopupTint.test.ts` pins the
+   geometry that makes that true, not the colour that depends on it.
 
    Both tones carry the same percentage. They are not equally loud at it — `--pos` is the darker,
    more saturated of the two — but a tint that means "up" and a tint that means "down" reading at
    different strengths would say the directions differ in degree as well as in sign. */
 .map-popup-shell.map-popup-pos {
-  --popup-surface: color-mix(in srgb, var(--pos) 26%, var(--card));
+  --popup-edge: color-mix(in srgb, var(--pos) 50%, var(--card));
   --popup-border: color-mix(in srgb, var(--pos) 60%, var(--border));
 }
 
 .map-popup-shell.map-popup-neg {
-  --popup-surface: color-mix(in srgb, var(--neg) 26%, var(--card));
+  --popup-edge: color-mix(in srgb, var(--neg) 50%, var(--card));
   --popup-border: color-mix(in srgb, var(--neg) 60%, var(--border));
 }
 

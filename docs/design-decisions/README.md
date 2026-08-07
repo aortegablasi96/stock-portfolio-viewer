@@ -76,4 +76,4 @@ Other options and why they were not chosen.
 - `0038` — One `StatePanel`: `variant` as the state (loading/empty/notice/error), `surface` as "does it bring a card"; element and ARIA role derived, only `error` paints (extends `0037`)
 - `0039` — One `DataTable`: `surface`/`height` on the container (retiring the `.card-content` override), sorting opt-in per column, missing values last in both directions (extends `0038`)
 - `0040` — Allocation breakdown: table and donut link on hover; emphasis keyed on slice identity, muting rather than recolouring (extends `0039`)
-- `0041` — Map popup return tint: strength bounded by the popup's own muted text, floor and contrast bar recomputed by test (extends `0030`, `0021`)
+- `0041` — Map popup return tint: banked into the edges as a gradient whose band is the content padding, so colour never passes behind text (extends `0030`, `0021`)

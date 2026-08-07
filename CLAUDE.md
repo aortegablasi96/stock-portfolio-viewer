@@ -179,15 +179,23 @@ Canonical flows to copy when adding a feature:
   not the app's `--pos` / `--neg` green/red**, which fails CVD contrast where fill colour is the only
   channel and no number sits beside it. Don't "restore" them on the slices (DDR-0021) — but the popup
   *is* tinted `--pos` / `--neg` by the hovered subject's return, which is exactly the case DDR-0021
-  carved out: a figure sits two rows below the tint. **That tint's strength is a bounded number, not
-  a taste** (DDR-0041): it shipped at 12%, which cleared every contrast bar and was reported as no
-  tint at all — 16 points on one channel. It is 26% now, and the ceiling is the popup's *muted* text
-  (`.map-popup-name`, `.map-popup-row dt` — 12.5px, so AA's 4.5:1), which the green hits at 30%;
-  `--text` never binds. Both tones carry the same percentage on purpose, since a stronger "up" than
-  "down" would encode degree on top of sign. `lib/mapPopupTint.test.ts` resolves the `color-mix()`
-  out of `app.css` and **recomputes** the contrast rather than asserting the literal, so it fails
-  both below 20% and below 4.5:1 — a class-name assertion would have passed at 12% and would pass
-  again at 60% with the labels unreadable. Finally, a country under an 8px radius becomes a
+  carved out: a figure sits two rows below the tint. **That tint is banked into the popup's top and
+  bottom edges, and the geometry is what lets it be loud** (DDR-0041). It shipped as a flat 12% wash
+  and was reported as *absent* — 16 points on one channel, 1.15:1 against `--card`. A flat wash caps
+  at 30%, where the popup's `--muted` labels (12.5px, so AA's 4.5:1) hit the bar exactly; raising it
+  to 26% still wasn't enough colour. So the premise changed rather than the number: a
+  `linear-gradient` runs `--popup-edge` → `--card` → `--popup-edge`, with the two inner stops at
+  `--popup-pad-y`, **the content's own vertical padding**, so the coloured band is exactly the
+  gutter above the first line and below the last. No glyph is ever on the tint, the text keeps
+  `--card`'s full 14.32:1 / 6.90:1, and the edge is free at 50%. Three things to keep: the stops are
+  an **absolute length, not a percentage** (a percentage band creeps under the text of the taller
+  six-row sector popups only), the **tip takes `--popup-edge`** because Mapbox flips the popup onto
+  whichever edge is loud, and both tones carry the same percentage since a stronger "up" than "down"
+  would encode degree on top of sign. `lib/mapPopupTint.test.ts` pins the *geometry* — the stops are
+  the padding — rather than the colour that depends on it. Note what this does **not** fix: a losing
+  holding inside a winning country is aggregated away before the tint sees it, so a portfolio can
+  hold several losers and show exactly one red mark. That is granularity (DDR-0030), not colour.
+  Finally, a country under an 8px radius becomes a
   **single disc** in its largest sector's hue (two donuts that small are two smudges), and note that
   an SVG `<g>` is only ever hit *through its children* — grouping slices and putting
   `pointer-events: auto` on the group catches nothing. All of this lives in `lib/countryDonuts`. See

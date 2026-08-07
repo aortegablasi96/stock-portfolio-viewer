@@ -64,7 +64,7 @@ function contrast(a: Rgb, b: Rgb): number {
 }
 
 /** The two mix strengths a tone's rule declares, read straight out of the stylesheet. */
-function tintMix(tint: MapPopupTint): { surface: number; border: number; tone: string } {
+function tintMix(tint: MapPopupTint): { edge: number; border: number; tone: string } {
   const body = new RegExp(`\\.map-popup-shell\\.${tint} \\{([^}]*)\\}`).exec(CSS)?.[1]
   expect(body, `${tint} declares no rule`).toBeDefined()
   const read = (property: string): { percent: number; tone: string } => {
@@ -74,8 +74,13 @@ function tintMix(tint: MapPopupTint): { surface: number; border: number; tone: s
     expect(m, `${tint} does not mix --popup-${property} from a token`).not.toBeNull()
     return { tone: m![1]!, percent: Number(m![2]) }
   }
-  const surface = read('surface')
-  return { surface: surface.percent, border: read('border').percent, tone: surface.tone }
+  const edge = read('edge')
+  return { edge: edge.percent, border: read('border').percent, tone: edge.tone }
+}
+
+/** The body of the first rule whose selector is exactly this one. */
+function ruleBody(selector: string): string {
+  return new RegExp(`^\\${selector} \\{([^}]*)\\}`, 'm').exec(CSS)?.[1] ?? ''
 }
 
 /**
@@ -83,6 +88,12 @@ function tintMix(tint: MapPopupTint): { surface: number; border: number; tone: s
  * cleared every contrast bar and was reported as no tint at all.
  */
 const MIN_TINT_PERCENT = 20
+
+/**
+ * The same floor stated perceptually, as the edge's contrast against `--card`. The flat-wash era
+ * lived at 1.10–1.15 and read as untinted; the banked edges sit at 1.76 (red) and 2.22 (green).
+ */
+const MIN_EDGE_SEPARATION = 1.6
 
 /** WCAG AA for normal text. The popup's labels are 0.78rem — 12.5px — so this is the bar. */
 const MIN_CONTRAST = 4.5
@@ -121,22 +132,44 @@ describe('the stylesheet backs the tint', () => {
    * practically absent.
    */
   it.each(MAP_POPUP_TINTS)('%s is strong enough to be seen', (tint) => {
-    expect(tintMix(tint).surface).toBeGreaterThanOrEqual(MIN_TINT_PERCENT)
+    const { edge, tone } = tintMix(tint)
+    expect(edge).toBeGreaterThanOrEqual(MIN_TINT_PERCENT)
+    // The same claim in perceptual terms rather than as a raw percentage: the edge has to stand
+    // off `--card` far enough to register as colour. 12% resolved to 1.15 here.
+    expect(
+      contrast(mixSrgb(rgb(tone), rgb('--card'), edge), rgb('--card')),
+      `${tint} edge vs --card`,
+    ).toBeGreaterThanOrEqual(MIN_EDGE_SEPARATION)
   })
 
   /**
-   * The other end of the same number. `--muted` is the binding constraint, not `--text`: the
-   * company name and every row label are muted, and they are what a stronger tint erodes first.
+   * The invariant that lets the edge be loud: the gradient's two inner stops sit at
+   * `--popup-pad-y`, which is also the content's vertical padding. The coloured band is therefore
+   * exactly the gutter above the first line and below the last, and no glyph is ever on the tint.
+   *
+   * Pinned as *geometry* rather than as a contrast figure because that is what the strength now
+   * rests on. Take the middle stops off the padding and nothing fails visually at first — the
+   * colour just starts creeping under the text of the taller popups, which are the sector cards
+   * with six rows.
    */
-  it.each(MAP_POPUP_TINTS)('%s keeps the popup’s text legible on it', (tint) => {
-    const { surface, tone } = tintMix(tint)
-    const tinted = mixSrgb(rgb(tone), rgb('--card'), surface)
-    expect(contrast(rgb('--muted'), tinted), `${tint} vs --muted`).toBeGreaterThanOrEqual(
-      MIN_CONTRAST,
+  it('finishes the gradient before the text starts, at both ends', () => {
+    const content = ruleBody('.mapboxgl-popup-content')
+    expect(content, 'the content rule is missing').not.toBe('')
+    expect(content).toContain('padding: var(--popup-pad-y)')
+    expect(content).toMatch(
+      /background: linear-gradient\(\s*to bottom,\s*var\(--popup-edge, var\(--card\)\) 0,\s*var\(--card\) var\(--popup-pad-y\),\s*var\(--card\) calc\(100% - var\(--popup-pad-y\)\),\s*var\(--popup-edge, var\(--card\)\) 100%\s*\)/,
     )
-    expect(contrast(rgb('--text'), tinted), `${tint} vs --text`).toBeGreaterThanOrEqual(
-      MIN_CONTRAST,
-    )
+    expect(ruleBody('.map-popup-shell')).toMatch(/--popup-pad-y: [\d.]+rem;/)
+  })
+
+  /**
+   * Because the text sits on `--card` and not on the tint, this is the contrast that has to hold —
+   * and it is the *untinted* one. It guards a token retune rather than the tint: nudge `--card` or
+   * `--muted` and the popup's labels fall below AA with nothing about the tint having changed.
+   */
+  it('keeps the popup’s text legible on the surface it actually sits on', () => {
+    expect(contrast(rgb('--muted'), rgb('--card')), '--muted').toBeGreaterThanOrEqual(MIN_CONTRAST)
+    expect(contrast(rgb('--text'), rgb('--card')), '--text').toBeGreaterThanOrEqual(MIN_CONTRAST)
   })
 
   /**
@@ -146,28 +179,34 @@ describe('the stylesheet backs the tint', () => {
    */
   it('gives both directions the same strength', () => {
     const [pos, neg] = MAP_POPUP_TINTS.map(tintMix)
-    expect(pos!.surface).toBe(neg!.surface)
+    expect(pos!.edge).toBe(neg!.edge)
     expect(pos!.border).toBe(neg!.border)
   })
 
-  /** The border reinforces the surface, so it stays the louder of the two. */
-  it.each(MAP_POPUP_TINTS)('%s draws a border at least as strong as its surface', (tint) => {
-    const { surface, border } = tintMix(tint)
-    expect(border).toBeGreaterThan(surface)
+  /** The border frames the whole popup, including the middle, so it stays the louder of the two. */
+  it.each(MAP_POPUP_TINTS)('%s draws a border at least as strong as its edge', (tint) => {
+    const { edge, border } = tintMix(tint)
+    expect(border).toBeGreaterThanOrEqual(edge)
   })
 
   /**
-   * One indirection, not eight anchor-specific rules: the body and all four tip edges read
-   * `--popup-surface`, so a tone override is a single pair of declarations and the popup can never
-   * end up a tinted box with a `--card` arrow.
+   * One indirection, not eight anchor-specific rules: the gradient's extremes and all four tip
+   * edges read `--popup-edge`, so a tone override is a single pair of declarations. The tip takes
+   * the *edge* colour rather than the middle because it attaches to whichever edge Mapbox flipped
+   * the popup onto — the loud one — and a `--card` arrow on a coloured edge would read as a seam.
    */
-  it('routes the body and every tip edge through --popup-surface', () => {
-    expect(CSS).toMatch(/^\.mapboxgl-popup-content \{[^}]*background: var\(--popup-surface,/m)
+  it('routes the gradient’s extremes and every tip edge through --popup-edge', () => {
     const tips = [...CSS.matchAll(/\.mapboxgl-popup-anchor-\w+ \.mapboxgl-popup-tip \{([^}]*)\}/g)]
     expect(tips.length).toBeGreaterThanOrEqual(4)
     for (const [, body] of tips) {
-      expect(body).toContain('var(--popup-surface,')
+      expect(body).toContain('var(--popup-edge,')
     }
+  })
+
+  /** The untinted popup is the same geometry with the fallback colour, so it renders flat. */
+  it('falls back to a flat --card popup when there is no tint', () => {
+    const content = ruleBody('.mapboxgl-popup-content')
+    expect(content.match(/var\(--popup-edge, var\(--card\)\)/g)?.length).toBe(2)
   })
 
   /** The marks keep the diverging scale: this story is the popup only (DDR-0021, DDR-0030). */

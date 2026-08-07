@@ -1,97 +1,117 @@
-# 0041. The map popup's return tint is bounded by its own muted text, and the bound is recomputed by test
+# 0041. The map popup's return tint is banked into its edges, so the colour never passes behind text
 
 - **Status:** Accepted
 - **Date:** 2026-08-07
 
 ## Context
 
-The Allocation map's hover popup has carried a return tint since Story #122: the surface and
-border take `--pos` when the hovered country or sector is up and `--neg` when it is down. That is
-the one place on the map the app's green and red are allowed, and
-[[0021-allocation-map-gain-loss-scale]] carves the case out explicitly — the tint accompanies a
-Return figure printed two rows below it, so it is not fill-colour-as-the-only-channel and does not
-need to clear CVD contrast unaided the way the marks' red ↔ gray ↔ blue scale does.
+The Allocation map's hover popup has carried a return tint since Story #122: it takes `--pos` when
+the hovered country or sector is up and `--neg` when it is down. That is the one place on the map
+the app's green and red are allowed, and [[0021-allocation-map-gain-loss-scale]] carves the case
+out explicitly — the tint accompanies a Return figure printed inside the popup, so it is not
+fill-colour-as-the-only-channel and does not need to clear CVD contrast unaided the way the marks'
+red ↔ gray ↔ blue scale does.
 
-It was mixed at **12%** to protect the popup's text contrast, and it protected it into
-invisibility. Against `--card` (`#171a21`) a 12% `--pos` mix resolves to `rgb(22, 42, 30)` — 16
-points on the green channel and nothing on the other two. The owner reported the feature as
-missing, not as weak, and the first diagnosis pass went looking for a wiring fault: the class
-toggle, the `color-mix()` support, the Mapbox class list, the cascade against `mapbox-gl.css`,
-whether cost basis was reaching `returnPercent` at all. All of it was correct. The only part that
-could be seen was the 45% border, one pixel wide.
+It shipped as a **flat wash at 12%**, and was reported as missing rather than weak. Against
+`--card` (`#171a21`) a 12% `--pos` mix resolves to `rgb(22, 42, 30)` — sixteen points on the green
+channel and nothing on the other two, a contrast of 1.15:1 against the untinted surface. The
+diagnosis pass went looking for a wiring fault first: the class toggle, `color-mix()` support, the
+Mapbox class list, the cascade against `mapbox-gl.css`, whether cost basis was reaching
+`returnPercent` at all. All of it was correct.
 
-Two things about that are worth recording, because neither is visible in a diff. The failure was a
-single number. And the number had a *reason* — the muted text — which made it look deliberate and
-therefore unquestionable to everyone who read the rule afterwards, including the comment that
-explained it.
+12% was not arbitrary. It was protecting the popup's own muted text — `.map-popup-name` and every
+`.map-popup-row dt` render at `--muted` (`#9aa4b2`) and 0.78rem, which is 12.5px and therefore WCAG
+AA normal text at 4.5:1. That is a real constraint, and it caps a flat wash at **30%**:
+
+| flat wash | surface | `--text` | `--muted` |
+| --- | --- | --- | --- |
+| 12% | `rgb(22, 42, 30)` | 12.48:1 | 6.02:1 |
+| 26% | `rgb(20, 62, 28)` | 9.95:1 | 4.80:1 |
+| 30% | `rgb(20, 67, 27)` | 9.34:1 | **4.50:1** |
+
+An intermediate revision of this story shipped 26% — the ceiling with headroom. It was still not
+enough colour, which is the useful finding: **the constraint was not the number, it was the
+premise that the tint is a surface.**
 
 ## Decision
 
-**The tint mixes at 26%, and the ceiling that produced it is enforced by test rather than by
-comment.**
+**The tint is a gradient banked into the popup's top and bottom edges — `--popup-edge` at both
+extremes, `--card` across the middle — and the two inner stops sit at the content's own vertical
+padding.**
 
-### The binding constraint is `--muted`, not `--text`
+```css
+background: linear-gradient(
+  to bottom,
+  var(--popup-edge, var(--card)) 0,
+  var(--card) var(--popup-pad-y),
+  var(--card) calc(100% - var(--popup-pad-y)),
+  var(--popup-edge, var(--card)) 100%
+);
+```
 
-The popup's company name (`.map-popup-name`) and every row label (`.map-popup-row dt`) render at
-`--muted` (`#9aa4b2`) and 0.78rem — 12.5px, which is WCAG AA normal text and so needs 4.5:1. That
-is the first thing a stronger tint erodes; `--text` has roughly twice the headroom and never
-binds. Resolved against the green surface:
+### The geometry is what buys the strength
 
-| mix | surface | `--text` | `--muted` |
-| --- | --- | --- | --- |
-| 12% (was) | `rgb(22, 42, 30)` | 12.48:1 | 6.02:1 |
-| 26% (is) | `rgb(20, 62, 28)` | 9.95:1 | 4.80:1 |
-| 30% | `rgb(20, 67, 27)` | 9.34:1 | 4.50:1 |
+The coloured band is exactly the gutter above the first line and below the last. No glyph is ever
+on the tint: every line of text sits on plain `--card`, at its full 14.32:1 for `--text` and 6.90:1
+for `--muted`, whatever the tint is doing. Colour that never passes behind a glyph has no contrast
+budget to spend, so the edge is free to be loud — **50%**, resolving to `rgb(17, 95, 22)` and
+`rgb(115, 43, 46)`, roughly double the separation from `--card` that the flat 26% managed.
 
-30% is the exact bar. 26% is the bar with headroom, and it more than doubles the channel shift
-that made the tint invisible. The red tone is looser at every step (5.41:1 at 26%) and does not
-bind either.
+### The stops are an absolute length, not a percentage
+
+`--popup-pad-y` is declared once on `.map-popup-shell` and used both as the content's padding and
+as the gradient's inner stops, so the two cannot drift. A percentage band would look identical on
+the four-row country popup it was tuned against and creep under the text of the six-row sector
+popup — the failure would appear only on the taller cards, which are also the more informative
+ones.
+
+### The tip takes the edge colour, not the middle
+
+Mapbox flips the popup above or below the mark to keep it in frame, so the tip attaches to
+whichever edge is loud. A `--card` arrow on a coloured edge would read as a seam.
 
 ### Both tones carry the same percentage
 
-`--pos` is the darker and more saturated of the two, so the two tints do not read as equally loud
-at 26%. Evening that out by tuning them apart was rejected: a tint meaning "up" and a tint meaning
-"down" that differ in strength would encode a difference in *degree* on top of the difference in
-sign, and the popup already prints the magnitude.
+`--pos` is the darker and more saturated of the two, so they are not equally loud at 50%. Evening
+that out by tuning them apart was rejected: a tint meaning "up" and a tint meaning "down" that
+differ in strength would encode a difference in *degree* on top of the difference in sign, and the
+popup already prints the magnitude.
 
-### The border stays louder than the surface
+### Flat and unknown share the untinted popup
 
-60% against `--border`, up from 45%. The surface carries the meaning; the border is what makes a
-small popup read as tinted at all rather than as a slightly odd shade. The test pins the ordering
-(`border > surface`) rather than the values, because the *relationship* is the decision.
-
-### Flat and unknown share the untinted surface
-
-`mapPopupTintClassName` returns `null` for both a return of exactly zero and one that cannot be
+`mapPopupTintClassName` returns `null` both for a return of exactly zero and for one that cannot be
 computed for want of a cost basis. Colour cannot separate those two, so it is not asked to — the
-Return row prints `—` for the second. Strengthening the tint makes this *more* important, not
-less: the untinted surface is now conspicuous by contrast, and it has to keep meaning "no
-direction stated" rather than "flat".
+Return row prints `—` for the second. A stronger tint makes this *more* important, not less: an
+untinted popup is now conspicuous, and it has to keep meaning "no direction stated".
 
-### The number is recomputed, not asserted
+### What the test pins is the geometry
 
-`lib/mapPopupTint.test.ts` reads the `color-mix()` declarations out of `app.css`, resolves them in
-sRGB the way the browser will, and computes WCAG contrast against the two text tokens. It fails in
-**both** directions — below 20% (the "arithmetically present, practically absent" floor, which is
-the lesson from 12%) and below 4.5:1 on either tone.
+`lib/mapPopupTint.test.ts` asserts the gradient's inner stops are `--popup-pad-y` and that the same
+variable is the padding — the invariant the strength rests on — plus a floor on the edge's
+separation from `--card` (1.6:1; the flat-wash era sat at 1.10–1.15) and AA for `--muted` and
+`--text` against `--card`, which is the surface they actually sit on. It resolves the `color-mix()`
+declarations out of `app.css` and computes contrast rather than asserting literals, so retuning
+`--card`, `--muted`, `--pos` or `--neg` fails here instead of quietly dropping the popup below AA.
 
-This is the same instinct as the ESLint layer boundaries, the CSP's omitted telemetry origin and
-the zero-specificity focus ring ([[0031-design-token-scales]]): the invariant is
-enforced by something that cannot be talked out of it. A class-name assertion would have passed at
-12% and would pass again at 60% with the labels unreadable. The extraction of
-`mapPopupTintClassName` out of `CountryMap` exists to give that test a home — Vitest is Node-only
-([[0029-tab-shell-aria-pattern-and-keyboard-navigation]]), so a rule about a component's colours can only be pinned from
-`lib/`.
+Same instinct as the ESLint layer boundaries, the CSP's omitted telemetry origin and the
+zero-specificity focus ring ([[0031-design-token-scales]]): the invariant is enforced by something
+that cannot be talked out of it. The extraction of `mapPopupTintClassName` out of `CountryMap`
+exists to give that test a home — Vitest is Node-only
+([[0029-tab-shell-aria-pattern-and-keyboard-navigation]]), so a rule about a component's colours
+can only be pinned from `lib/`.
 
 ## Consequences
 
-- The tint is legible, and the two ways it can be wrong now both fail CI.
-- The floor and the contrast bar are constants in the test, so moving either is a deliberate edit
-  with a diff, not a nudge to a value in a stylesheet.
-- If `--card`, `--muted`, `--pos` or `--neg` are ever retuned, this test fails rather than the
-  popup quietly falling below AA — the contrast is derived from the tokens, not copied from them.
+- The tint is visible, and it got there without spending any of the text's contrast.
+- The band's width is tied to the padding by construction, so a future padding change carries the
+  gradient with it.
 - The marks are untouched. The map's own return scale stays red ↔ gray ↔ blue
   ([[0021-allocation-map-gain-loss-scale]], [[0030-allocation-map-country-donut-pairs]]), and this
   decision does not reopen it.
 - Nothing here applies to `.stat-positive` / `.stat-negative`
   ([[0034-stat-tile-primitive-tone-axis]]), which colour *text* rather than a surface behind text.
+- **This does not make a losing holding visible on the map.** The popup's subject is a country or a
+  sector-within-country ([[0030-allocation-map-country-donut-pairs]] retired per-holding marks), so
+  a loss inside a winning parent is aggregated away before the tint sees it — a portfolio can have
+  several losing positions and exactly one red mark. Making individual losers findable is a
+  granularity question, not a colour one, and is not settled here.
