@@ -157,9 +157,27 @@ describe('the stylesheet backs the tint', () => {
     expect(content, 'the content rule is missing').not.toBe('')
     expect(content).toContain('padding: var(--popup-pad-y)')
     expect(content).toMatch(
-      /background: linear-gradient\(\s*to bottom,\s*var\(--popup-edge, var\(--card\)\) 0,\s*var\(--card\) var\(--popup-pad-y\),\s*var\(--card\) calc\(100% - var\(--popup-pad-y\)\),\s*var\(--popup-edge, var\(--card\)\) 100%\s*\)/,
+      /background: linear-gradient\(\s*to bottom,\s*var\(--popup-edge, var\(--card\)\) 0,\s*var\(--popup-edge, var\(--card\)\) var\(--popup-edge-hold\),\s*var\(--card\) var\(--popup-pad-y\),\s*var\(--card\) calc\(100% - var\(--popup-pad-y\)\),\s*var\(--popup-edge, var\(--card\)\) calc\(100% - var\(--popup-edge-hold\)\),\s*var\(--popup-edge, var\(--card\)\) 100%\s*\)/,
     )
-    expect(ruleBody('.map-popup-shell')).toMatch(/--popup-pad-y: [\d.]+rem;/)
+  })
+
+  /**
+   * The flat-held part of the band is what makes it read as a band rather than a hairline — a ramp
+   * that starts fading at the first pixel spends most of its width already halfway to `--card`.
+   * It has to stay strictly inside the gutter: at `--popup-edge-hold` the tint is still at full
+   * strength, so if that ever reached `--popup-pad-y` the first line of text would sit on it.
+   */
+  it('holds the colour flat across part of the gutter, and only part', () => {
+    const shell = ruleBody('.map-popup-shell')
+    const rem = (name: string): number => {
+      const m = new RegExp(`${name}: ([\\d.]+)rem;`).exec(shell)
+      expect(m, `${name} is not declared on .map-popup-shell in rem`).not.toBeNull()
+      return Number(m![1])
+    }
+    const pad = rem('--popup-pad-y')
+    const hold = rem('--popup-edge-hold')
+    expect(hold, 'the hold has to leave room for the fade').toBeLessThan(pad)
+    expect(hold, 'a band with no flat part is the hairline this replaced').toBeGreaterThan(0)
   })
 
   /**
@@ -203,10 +221,20 @@ describe('the stylesheet backs the tint', () => {
     }
   })
 
-  /** The untinted popup is the same geometry with the fallback colour, so it renders flat. */
+  /**
+   * The untinted popup is the same geometry with the fallback colour, so it collapses to a flat
+   * `--card` surface. Every reference has to carry the fallback — one bare `var(--popup-edge)`
+   * would resolve to nothing on an untinted popup and drop that stop to transparent, showing the
+   * basemap through the popup's own edge.
+   */
   it('falls back to a flat --card popup when there is no tint', () => {
     const content = ruleBody('.mapboxgl-popup-content')
-    expect(content.match(/var\(--popup-edge, var\(--card\)\)/g)?.length).toBe(2)
+    // Every mention of the colour (`--popup-edge-hold` is a length, not a colour, so it is out)
+    // has to be the full form with the fallback.
+    const mentions = (content.match(/--popup-edge\b(?!-)/g) ?? []).length
+    const withFallback = (content.match(/var\(--popup-edge, var\(--card\)\)/g) ?? []).length
+    expect(mentions, 'the gradient references no edge colour').toBeGreaterThan(0)
+    expect(withFallback, 'an edge stop with no --card fallback').toBe(mentions)
   })
 
   /** The marks keep the diverging scale: this story is the popup only (DDR-0021, DDR-0030). */

@@ -187,11 +187,14 @@ Canonical flows to copy when adding a feature:
   `linear-gradient` runs `--popup-edge` → `--card` → `--popup-edge`, with the two inner stops at
   `--popup-pad-y`, **the content's own vertical padding**, so the coloured band is exactly the
   gutter above the first line and below the last. No glyph is ever on the tint, the text keeps
-  `--card`'s full 14.32:1 / 6.90:1, and the edge is free at 50%. Three things to keep: the stops are
+  `--card`'s full 14.32:1 / 6.90:1, and the edge is free at 50%. Four things to keep: the stops are
   an **absolute length, not a percentage** (a percentage band creeps under the text of the taller
-  six-row sector popups only), the **tip takes `--popup-edge`** because Mapbox flips the popup onto
-  whichever edge is loud, and both tones carry the same percentage since a stronger "up" than "down"
-  would encode degree on top of sign. `lib/mapPopupTint.test.ts` pins the *geometry* — the stops are
+  six-row sector popups only); `--popup-edge-hold` **holds the colour flat across half the gutter**
+  before the fade starts, and must stay strictly below `--popup-pad-y` or the first line lands on
+  undiluted `--pos` — a ramp starting at pixel zero was tried and read as a hairline, which is also
+  why the gutter is a deep 1.1rem; the **tip takes `--popup-edge`** because Mapbox flips the popup
+  onto whichever edge is loud; and both tones carry the same percentage since a stronger "up" than
+  "down" would encode degree on top of sign. `lib/mapPopupTint.test.ts` pins the *geometry* — the stops are
   the padding — rather than the colour that depends on it. Note what this does **not** fix: a losing
   holding inside a winning country is aggregated away before the tint sees it, so a portfolio can
   hold several losers and show exactly one red mark. That is granularity (DDR-0030), not colour.

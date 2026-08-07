@@ -43,8 +43,10 @@ padding.**
 background: linear-gradient(
   to bottom,
   var(--popup-edge, var(--card)) 0,
+  var(--popup-edge, var(--card)) var(--popup-edge-hold),
   var(--card) var(--popup-pad-y),
   var(--card) calc(100% - var(--popup-pad-y)),
+  var(--popup-edge, var(--card)) calc(100% - var(--popup-edge-hold)),
   var(--popup-edge, var(--card)) 100%
 );
 ```
@@ -56,6 +58,22 @@ on the tint: every line of text sits on plain `--card`, at its full 14.32:1 for 
 for `--muted`, whatever the tint is doing. Colour that never passes behind a glyph has no contrast
 budget to spend, so the edge is free to be loud — **50%**, resolving to `rgb(17, 95, 22)` and
 `rgb(115, 43, 46)`, roughly double the separation from `--card` that the flat 26% managed.
+
+### The gutter is the canvas, and the colour is held flat across half of it
+
+The first cut of this gradient rode the popup's existing 0.6rem padding and started fading at the
+very first pixel. It was still reported as barely visible, and the arithmetic says why: a 9.6px
+ramp is only ~5px before it is halfway to `--card`, so the tint had no area at full strength
+anywhere.
+
+Two changes, and the second is the one that mattered. `--popup-pad-y` goes to **1.1rem** — a deeper
+gutter than a popup this dense would otherwise want, accepted because the gutter *is* the area the
+tint is allowed to use. And `--popup-edge-hold` (**0.55rem**) holds the edge colour flat before the
+fade begins, so half the band is solid colour rather than a ramp through it. Widening alone would
+have produced a wider hairline.
+
+`--popup-edge-hold` must stay strictly below `--popup-pad-y`: at the hold stop the tint is still at
+full strength, so if the two ever met, the first line of text would sit on undiluted `--pos`.
 
 ### The stops are an absolute length, not a percentage
 
@@ -86,8 +104,9 @@ untinted popup is now conspicuous, and it has to keep meaning "no direction stat
 
 ### What the test pins is the geometry
 
-`lib/mapPopupTint.test.ts` asserts the gradient's inner stops are `--popup-pad-y` and that the same
-variable is the padding — the invariant the strength rests on — plus a floor on the edge's
+`lib/mapPopupTint.test.ts` asserts the gradient's inner stops are `--popup-pad-y`, that the same
+variable is the padding, and that `--popup-edge-hold` sits strictly inside it — the invariant the
+strength rests on — plus a floor on the edge's
 separation from `--card` (1.6:1; the flat-wash era sat at 1.10–1.15) and AA for `--muted` and
 `--text` against `--card`, which is the surface they actually sit on. It resolves the `color-mix()`
 declarations out of `app.css` and computes contrast rather than asserting literals, so retuning
