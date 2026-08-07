@@ -12,6 +12,7 @@ import {
   type DonutSlice,
 } from '../../lib/countryDonuts'
 import { DIVERGING_CLASSES, RETURN_BOUND } from '../../lib/gainLoss'
+import { MAP_POPUP_TINTS, mapPopupTintClassName } from '../../lib/mapPopupTint'
 import { toneClassName, toneOf } from '../../lib/statTileVariants'
 import { Button } from '../ui/Button'
 import { StatePanel } from '../ui/StatePanel'
@@ -181,14 +182,6 @@ function createPopupContent(
 
   return root
 }
-
-/** The popup's tint class for a return — green up, red down, untinted when flat or unknown. */
-function tintClassFor(returnPercent: number | null): string | null {
-  if (returnPercent === null || returnPercent === 0) return null
-  return returnPercent > 0 ? 'map-popup-pos' : 'map-popup-neg'
-}
-
-const TINT_CLASSES = ['map-popup-pos', 'map-popup-neg']
 
 /** The return the popup's tint reflects — whichever subject is hovered. */
 function returnOf(subject: Subject): number | null {
@@ -420,8 +413,8 @@ export function CountryMap({
     if (!map || !popup) return
 
     const { country } = subject
-    const tint = tintClassFor(returnOf(subject))
-    TINT_CLASSES.forEach((c) => {
+    const tint = mapPopupTintClassName(returnOf(subject))
+    MAP_POPUP_TINTS.forEach((c) => {
       if (c !== tint) popup.removeClassName(c)
     })
     if (tint) popup.addClassName(tint)
