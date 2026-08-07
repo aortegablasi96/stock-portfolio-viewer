@@ -24,13 +24,19 @@ tables, a widened content measure with charts sized by aspect ratio, and the All
 rebuild onto a Mapbox basemap with per-holding bubbles and a gain/loss colour mode).
 
 **Further refinement lives in milestone `M4 — Analytics refinement`, split across area-scoped
-Epics** so no single Epic grows unbounded again. Open as of 2026-07-31: **#98 Allocation map**,
+Epics** so no single Epic grows unbounded again. Open as of 2026-08-07: **#98 Allocation map**,
 **#99 Analytics views polish** (the four analytics views + the live Portfolio dashboard), **#102
 Gateway & data reliability**, and **#125 Shared UI primitives & visual consistency** (stories
-#126–#134). **#100 App shell & layout** (window chrome, tab shell, page layout) is closed as
+#126–#134 delivered; **reopened 2026-08-07** for #151–#154). **#100 App shell & layout** (window
+chrome, tab shell, page layout) is closed as
 delivered — its shared-control scope was superseded by #125. An Epic closes when its stories
 close; new refinement opens a new Epic under the current milestone rather than reopening a
-delivered one. **Read the backlog before assuming a view is final** — a
+delivered one — with **one narrow exception**, added 2026-08-07: an Epic may reopen when its own
+stated problem is provably unfinished, meaning its acceptance criteria under-scoped the finding
+in its Summary, so the new stories close the *original* scope rather than adding refinement.
+That requires a dated note on the Epic naming which criterion under-scoped which finding.
+#125 is the precedent and `docs/github-issues.md` holds the rule. **Read the backlog before
+assuming a view is final** — a
 view you are told is "done" has usually been reworked several times. The Stack and Commands
 sections below are **live**. Still **not built**: AI features, multi-broker support, benchmark
 comparison, and tax reporting — those are later milestones.
@@ -332,8 +338,14 @@ Canonical flows to copy when adding a feature:
   doesn't grow with the type scale, and `--text-2xs..2xl` + `--leading-tight|normal`. Two things
   are deliberately *off* the scale: chart and map SVG label sizes, which scale from a `viewBox`
   rather than the page (DDR-0018), and the sub-6px radii, which are chart geometry. The scale is
-  declared but **only partly adopted** — each story in #125 converts the rules it extracts, so
-  until the Epic closes both conventions coexist on purpose. The named collision to know:
+  declared but **only partly adopted** — each story in #125 converted just the rules it
+  extracted, so the scale reached the primitives and stopped. Round 1 closed with **~97
+  hand-picked spacing, radius and type values still in `app.css`** (dashboard layout, snapshot
+  history, Flex import, title bar, analytics views; the ~28 in the country map are the DDR-0031
+  exemption). Nothing currently fails when a new rule adds another — `designTokens.test.ts`
+  guards the shape of the scales, not their use. #151 lands that guard with a frozen baseline
+  and #152 works the baseline down; until #152, both conventions coexist. The named collision
+  to know:
   `--text-xl` is **1.4rem, not 1.5rem**, because `.stat-row` packs tiles into `minmax(11rem, 1fr)`
   columns where the bigger figure risks wrapping.
 - **There is one button, and adding one means naming a role, not writing CSS** (Story #127,

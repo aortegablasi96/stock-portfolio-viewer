@@ -33,6 +33,25 @@ across four refinement rounds before being closed and split into #98 (Allocation
 (Analytics views polish) and #100 (App shell & layout). Closed stories stay in the milestone
 that delivered them; they are not re-filed.
 
+### The one exception
+
+**An Epic may be reopened when its own stated problem is provably unfinished** — where the
+Epic's Summary named a problem its acceptance criteria turned out to under-scope, so the gap is
+the *original* scope rather than new refinement. The test is whether the new stories close the
+problem the Epic was filed to solve. Anything else — a fresh round of polish on a delivered
+area, a new audit, a follow-up idea — opens a new Epic.
+
+Reopening requires appending a dated note to the Epic saying **which criterion under-scoped
+which finding**, so the judgement is on the record and not re-litigated later.
+
+Epic #125 is the precedent, and shows how narrow the exception is. Its audit found "no spacing,
+radius or type scale — every value is hand-picked at the call site". Its acceptance criterion
+was written as "no *primitive* hard-codes a value the token scale can express", and every story
+met it. The Epic closed with ~97 hand-picked values still in `app.css` and no guard against the
+next one: the criteria were satisfied and the finding was not. Epic #4 remains the
+counter-example — four rounds of genuinely new refinement, which is the failure this rule
+exists to prevent.
+
 ## Labels
 
 Do not invent labels outside this list.
