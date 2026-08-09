@@ -339,12 +339,27 @@ Canonical flows to copy when adding a feature:
   are deliberately *off* the scale: chart and map SVG label sizes, which scale from a `viewBox`
   rather than the page (DDR-0018), and the sub-6px radii, which are chart geometry. The scale is
   declared but **only partly adopted** — each story in #125 converted just the rules it
-  extracted, so the scale reached the primitives and stopped. Round 1 closed with **~97
-  hand-picked spacing, radius and type values still in `app.css`** (dashboard layout, snapshot
-  history, Flex import, title bar, analytics views; the ~28 in the country map are the DDR-0031
-  exemption). Nothing currently fails when a new rule adds another — `designTokens.test.ts`
-  guards the shape of the scales, not their use. #151 lands that guard with a frozen baseline
-  and #152 works the baseline down; until #152, both conventions coexist. The named collision
+  extracted, so the scale reached the primitives and stopped. Round 1 closed with **110
+  hand-picked spacing, radius and type declarations still in `app.css`**, of which 102 are
+  convertible; #152 works that number down. The primitives themselves are clean — a test asserts
+  that **zero** raw values sit inside a primitive selector — so every one of the 102 is
+  view-level.
+- **That gap is now held by a ratchet, and the exemption list is enumerated by hand** (Story
+  #151, DDR-0042). `lib/tokenAdoption.ts` carries two lists — `BASELINE` (may only shrink) and
+  `EXEMPTIONS` (permanent, each with a reason) — and `tokenAdoption.test.ts` fails three ways: a
+  raw value in neither list, a baseline entry that stopped matching, and an exemption that
+  stopped matching. The second is what makes it a ratchet rather than a suppression file; without
+  it, converting a value silently leaves a dead entry and #152's progress is invisible. The
+  scanner (`lib/cssDeclarations.ts`) is text-based, not `postcss` — comments are **blanked in
+  place** so line numbers survive, because `app.css` quotes lengths in prose and a line scan
+  reports those as violations. Declarations are keyed on `brace stack + property`
+  (`@media (…) >> .snapshot-item | gap`), never line numbers, which #152 shifts every commit;
+  measured, 110 declarations give 110 unique keys. **Do not derive the exemptions from a rule** —
+  two were tried and both leaked. A selector prefix wrongly exempted 30 (`.chart-legend` is a
+  `<figcaption>`, `.pie-legend-item` an `<li>`, `.map-scale` a `<span>` — page-scale HTML sitting
+  beside a chart), and a sub-6px radius rule wrongly exempted the tab bar's 1px underline. Only
+  8 things are exempt: three SVG `<text>` label sizes, four sub-6px chart-geometry radii, and
+  `.sr-only`'s `margin: -1px`. The named collision
   to know:
   `--text-xl` is **1.4rem, not 1.5rem**, because `.stat-row` packs tiles into `minmax(11rem, 1fr)`
   columns where the bigger figure risks wrapping.
@@ -1072,7 +1087,7 @@ sorting and formatting are **extracted out of components into pure modules under
 `column`, `dateRange`, `sectorMap`, `performanceRange`, `classifyProgress`, `dataVersion`,
 `tabKeyboard`, `buttonVariants`, `cardVariants`, `statTileVariants`, `fieldVariants`,
 `toggleGroupVariants`, `badgeVariants`, `statePanelVariants`, `tableSort`, `dataTableVariants`,
-`sliceHighlight`, `mapPopupTint`)
+`sliceHighlight`, `mapPopupTint`, `cssDeclarations`, `tokenAdoption`)
 precisely so they can be tested — follow
 that split when adding a component with real logic in it. `dataVersion` is the same move applied
 to state rather than maths: the cross-view staleness signal is a plain subscribable store a hook
