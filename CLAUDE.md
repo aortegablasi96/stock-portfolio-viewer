@@ -338,12 +338,15 @@ Canonical flows to copy when adding a feature:
   doesn't grow with the type scale, and `--text-2xs..2xl` + `--leading-tight|normal`. Two things
   are deliberately *off* the scale: chart and map SVG label sizes, which scale from a `viewBox`
   rather than the page (DDR-0018), and the sub-6px radii, which are chart geometry. The scale is
-  declared but **only partly adopted** — each story in #125 converted just the rules it
-  extracted, so the scale reached the primitives and stopped. Round 1 closed with **110
-  hand-picked spacing, radius and type declarations still in `app.css`**, of which 102 are
-  convertible; #152 works that number down. The primitives themselves are clean — a test asserts
-  that **zero** raw values sit inside a primitive selector — so every one of the 102 is
-  view-level.
+  now **fully adopted** (Story #152): every spacing, radius and type value in `app.css` is a
+  token, bar eleven recorded exemptions. Round 1 reached the primitives and stopped, leaving 110
+  hand-picked declarations; #152 converted 102 of them and #151's guard keeps the number at zero.
+  Three conversions are worth knowing because they are not "nearest step": a negative margin is
+  `calc(-1 * var(--space-4))` (asking for the nearest step against a positive-only scale is
+  meaningless); `.mapboxgl-popup-content` converted its **horizontal** padding only, since
+  `--popup-pad-y` is the tint geometry DDR-0041 pins; and `0.78rem`/`0.82rem`/`0.85rem` — three
+  values doing one job across 20 declarations — all collapsed to `--text-xs`, the tie at
+  `0.85rem` broken semantically rather than arithmetically.
 - **That gap is now held by a ratchet, and the exemption list is enumerated by hand** (Story
   #151, DDR-0042). `lib/tokenAdoption.ts` carries two lists — `BASELINE` (may only shrink) and
   `EXEMPTIONS` (permanent, each with a reason) — and `tokenAdoption.test.ts` fails three ways: a
@@ -358,8 +361,11 @@ Canonical flows to copy when adding a feature:
   two were tried and both leaked. A selector prefix wrongly exempted 30 (`.chart-legend` is a
   `<figcaption>`, `.pie-legend-item` an `<li>`, `.map-scale` a `<span>` — page-scale HTML sitting
   beside a chart), and a sub-6px radius rule wrongly exempted the tab bar's 1px underline. Only
-  8 things are exempt: three SVG `<text>` label sizes, four sub-6px chart-geometry radii, and
-  `.sr-only`'s `margin: -1px`. The named collision
+  **eleven** things are exempt: three SVG `<text>` label sizes, four sub-6px chart-geometry radii,
+  `.sr-only`'s `margin: -1px`, and three sub-4px hairlines added by #152 — the spacing counterpart
+  of the sub-6px radii, since `--space-1` is 4px and snapping a 1.6px popup gap up to it is a 2.5×
+  change. **`BASELINE` is empty and must stay empty**: re-baselining to get a build green is the
+  suppression file the ratchet was built to avoid. The named collision
   to know:
   `--text-xl` is **1.4rem, not 1.5rem**, because `.stat-row` packs tiles into `minmax(11rem, 1fr)`
   columns where the bigger figure risks wrapping.
