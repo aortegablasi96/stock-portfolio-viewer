@@ -107,6 +107,53 @@
   --focus-ring: var(--focus-ring-width) solid var(--focus-ring-color);
   --focus-ring-offset: 2px;
   --focus-ring-offset-inset: -2px;
+
+  /* ---- Motion (Story #154, DDR-0044) --------------------------------------
+     Two durations and two easings, replacing four values hand-picked at four
+     call sites. Every `transition` and `animation` in this file draws from
+     them — which is also how reduced motion is honoured; see the media query
+     immediately below.
+
+     The durations split by what the reader is watching, not by how much time
+     the author felt like spending:
+       `fast` — feedback on something the pointer is already on. It has to keep
+                up with a pointer sweeping across eight wedges or forty map
+                marks, so it is the shorter of the two.
+       `base` — something arriving, or a value moving under its own steam: the
+                map popup's entry, the classification progress bar.
+
+     The easings split the same way. `--ease-out` is anything the reader
+     watches settle. `--ease-linear` is for a width that *reports a number* —
+     easing the progress bar would say the classification sped up and slowed
+     down, which is a claim about the data. */
+  --duration-fast: 90ms;
+  --duration-base: 120ms;
+  --ease-out: ease-out;
+  --ease-linear: linear;
+}
+
+/* Reduced motion, honoured by redefining the scale rather than by naming the
+   things that move (Story #154, DDR-0044).
+
+   Every animated rule in this file takes its duration from a token above, so
+   zeroing the tokens here stops all of them at once — including the ones added
+   after this comment was written, which is the half a list of selectors always
+   gets wrong. It is the same move as the `:where()` focus ring below: forgetting
+   produces the correct result. `designTokens.test.ts` fails if a rule declares a
+   raw duration, because that is the only way to escape this block.
+
+   Only durations are zeroed. An easing with no time to run is already inert, and
+   leaving `--ease-*` alone keeps the reduced-motion delta to one axis.
+
+   The one animation this cannot reach is the capped table's scroll-driven fade,
+   which has no duration to zero — it is a function of scroll position, not of
+   time. Recorded as an exemption in `lib/motionTokens.ts` rather than left
+   silent. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 0ms;
+    --duration-base: 0ms;
+  }
 }
 
 /* The focus ring as a base rule rather than a class, so an interactive element
@@ -1040,7 +1087,7 @@ html {
   --rows-fade: 0px;
   -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - var(--rows-fade)), transparent);
   mask-image: linear-gradient(to bottom, #000 calc(100% - var(--rows-fade)), transparent);
-  animation: table-rows-fade linear both;
+  animation: table-rows-fade var(--ease-linear) both;
   animation-timeline: scroll(self block);
 }
 
@@ -1675,8 +1722,8 @@ html {
   stroke: var(--card);
   stroke-width: 2;
   transition:
-    opacity 120ms ease,
-    stroke 120ms ease;
+    opacity var(--duration-fast) var(--ease-out),
+    stroke var(--duration-fast) var(--ease-out);
 }
 
 /* Linked emphasis (Story #147, DDR-0040). Neither state touches `fill`: hue *is* identity
@@ -1690,13 +1737,6 @@ html {
 
 .pie-slice-muted {
   opacity: 0.35;
-}
-
-/* The pointer is reading the pair, not selecting anything. */
-@media (prefers-reduced-motion: reduce) {
-  .pie-slice {
-    transition: none;
-  }
 }
 
 .pie-legend {
@@ -1864,7 +1904,7 @@ html {
   cursor: pointer;
   stroke: var(--card);
   stroke-width: 0.75;
-  transition: opacity 90ms ease-out;
+  transition: opacity var(--duration-fast) var(--ease-out);
 }
 
 /* The remainder of the left donut: the portfolio held *elsewhere*. Muted, because it is the
@@ -1971,7 +2011,7 @@ html {
    wedge that opened it, or moving onto it would read as a mouseleave and close it. */
 .map-popup-shell {
   pointer-events: none;
-  animation: map-popup-in 120ms ease-out;
+  animation: map-popup-in var(--duration-base) var(--ease-out);
   /* One number for the padding and for where the gradient has to have finished. Declared here so
      the two can't drift: if they did, the band would either stop short of the text or run under
      it, and only the second is visible — as unreadable labels.
@@ -2183,7 +2223,7 @@ html {
   display: block;
   block-size: 100%;
   background: var(--accent);
-  transition: inline-size 120ms linear;
+  transition: inline-size var(--duration-base) var(--ease-linear);
 }
 
 .bar-list {

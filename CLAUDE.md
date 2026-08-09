@@ -369,6 +369,27 @@ Canonical flows to copy when adding a feature:
   to know:
   `--text-xl` is **1.4rem, not 1.5rem**, because `.stat-row` packs tiles into `minmax(11rem, 1fr)`
   columns where the bigger figure risks wrapping.
+- **Motion is two durations and two easings, and reduced motion is honoured by zeroing the
+  durations rather than by listing what moves** (Story #154, DDR-0044). `--duration-fast` (90ms,
+  feedback on something the pointer is already on) · `--duration-base` (120ms, something arriving or
+  a value moving under its own steam) · `--ease-out` · `--ease-linear` (for a width that *reports a
+  number* — easing `.classify-progress-bar` would claim the classification sped up). One
+  `@media (prefers-reduced-motion: reduce) { :root { --duration-*: 0ms } }` therefore covers every
+  animation including ones added later, which is the half a selector list always gets wrong: the old
+  block named `.pie-slice`, three animations were added after it, and none was added to it. Five
+  things to know. **Source order is the whole mechanism** — same specificity, no media-query bonus —
+  so the block sits directly under `:root` and `designTokens.test.ts` fails if it moves. **A raw
+  duration is the only way out of the reduced-motion rule**, which is why one guard
+  (`lib/motionTokens.ts`) satisfies both of the story's criteria; a shorthand carrying *no* time
+  fails too, since `0s` is a value nobody chose and equally unreachable. Only durations are zeroed —
+  an easing with no time to run is already inert. **The scroll-driven table fade is the one
+  exemption, structurally**: `animation-timeline: scroll(self block)` means it has no duration to
+  zero, it cannot play without the reader's own scroll, it translates nothing, and it is the "more
+  rows below" affordance — so removing it would take a cue from the reader who asked for less
+  motion. The blanket `*{animation-duration:0.01ms!important}` reset was rejected for reaching
+  exactly that fade on a guess. And `.pie-slice` moved 120ms → 90ms: the donut's hover emphasis and
+  the map's are one decision made twice, and a linked emphasis (DDR-0040) must track a sweeping
+  pointer. Mapbox's own camera animation is **not** covered — it is the library's, not `app.css`'s.
 - **There is one button, and adding one means naming a role, not writing CSS** (Story #127,
   DDR-0032). `components/ui/Button.tsx` replaced the eight families the audit found —
   `.capture-button`, `.danger-button`, `.ghost-button`, `.retry-button`, `.view-refresh`,
@@ -1111,7 +1132,8 @@ sorting and formatting are **extracted out of components into pure modules under
 `column`, `dateRange`, `sectorMap`, `performanceRange`, `classifyProgress`, `dataVersion`,
 `tabKeyboard`, `buttonVariants`, `cardVariants`, `statTileVariants`, `fieldVariants`,
 `toggleGroupVariants`, `badgeVariants`, `statePanelVariants`, `tableSort`, `dataTableVariants`,
-`sliceHighlight`, `mapPopupTint`, `cssDeclarations`, `tokenAdoption`, `analyticsShell`)
+`sliceHighlight`, `mapPopupTint`, `cssDeclarations`, `tokenAdoption`, `motionTokens`,
+`analyticsShell`)
 precisely so they can be tested — follow
 that split when adding a component with real logic in it. `dataVersion` is the same move applied
 to state rather than maths: the cross-view staleness signal is a plain subscribable store a hook

@@ -79,3 +79,4 @@ Other options and why they were not chosen.
 - `0041` — Map popup return tint: banked into the edges as a gradient whose band is the content padding, so colour never passes behind text (extends `0030`, `0021`)
 - `0042` — Token adoption held by a ratchet: `BASELINE` may only shrink and a dead entry fails; exemptions enumerated by hand, because two mechanical rules leaked. Amended by #152, which emptied the baseline and exempted three sub-4px hairlines (extends `0031`)
 - `0043` — One `AnalyticsShell` for the four analytics views: a render prop over the report, `subject` as the axis, branch mapping and state wording in a pure module (extends `0038`, `0027`)
+- `0044` — Two durations, two easings; reduced motion honoured by redefining the tokens to `0ms` rather than listing what moves, so a raw duration is the only way out (extends `0031`)
