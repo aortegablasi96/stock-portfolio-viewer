@@ -124,7 +124,13 @@ describe('the stylesheet backs the emphasis', () => {
     expect(row).not.toContain('--accent')
   })
 
+  /**
+   * Still true, by a different mechanism since Story #154. The emphasis used to name itself in
+   * the stylesheet's one reduced-motion block; now it takes its duration from `--duration-fast`,
+   * and that token is what the block zeroes (DDR-0044). The emphasis itself is untouched — the
+   * stroke and the muting are information, and only the fade between them is motion.
+   */
   it('drops the transition for readers who ask for less motion', () => {
-    expect(CSS).toMatch(/@media \(prefers-reduced-motion: reduce\) \{\n {2}\.pie-slice \{/)
+    expect(ruleBody('.pie-slice')).toMatch(/transition:[^;]*var\(--duration-fast\)/)
   })
 })

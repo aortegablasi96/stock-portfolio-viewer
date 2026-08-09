@@ -1,6 +1,9 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
+import { scanDeclarations, stripComments } from './cssDeclarations'
+import { EXEMPTIONS, findMotionDeclarations, findViolations } from './motionTokens'
+
 /**
  * The design-token contract (Story #126, DDR-0031).
  *
@@ -137,6 +140,83 @@ describe('focus ring', () => {
     expect(CSS).toMatch(
       /:where\(a\[href], button, input, select, textarea, summary, \[tabindex]\):focus-visible/,
     )
+  })
+})
+
+/**
+ * Motion (Story #154, DDR-0044).
+ *
+ * The scale and the accessibility guarantee are one thing here, so they are tested together.
+ * Reduced motion is honoured by redefining `--duration-*` to `0ms` rather than by listing the
+ * selectors that move, which means a rule is inside the reduced-motion rule's reach exactly when
+ * it draws its duration from the scale — and a hard-coded duration is the only way out.
+ */
+describe('motion scale', () => {
+  /** A duration token's value in ms. */
+  function ms(name: string): number {
+    const value = token(name)
+    const match = /^(\d*\.?\d+)(ms|s)$/.exec(value)
+    expect(match, `${name} is "${value}", not a plain time`).not.toBeNull()
+    return match![2] === 's' ? Number(match![1]) * 1000 : Number(match![1])
+  }
+
+  /** The `--duration-*` tokens declared in `:root`, in source order. */
+  function durationTokens(): string[] {
+    return [...rootBlock().matchAll(/^\s*(--duration-[a-z]+):/gm)].map((m) => m[1]!)
+  }
+
+  it('declares two ascending durations and the two easings', () => {
+    expect(durationTokens()).toEqual(['--duration-fast', '--duration-base'])
+    expect(ms('--duration-fast')).toBeLessThan(ms('--duration-base'))
+    expect(ms('--duration-fast')).toBeGreaterThan(0)
+    expect(token('--ease-out')).toBe('ease-out')
+    expect(token('--ease-linear')).toBe('linear')
+  })
+
+  it('keeps every step short enough to read as feedback rather than as an event', () => {
+    for (const name of durationTokens()) expect(ms(name), name).toBeLessThanOrEqual(200)
+  })
+
+  it('draws every transition and animation from the scale', () => {
+    // Not a smoke test: this is also the reduced-motion guarantee. A raw duration here is a rule
+    // that keeps animating for a reader who asked it not to.
+    const violations = findViolations(CSS).map((d) => `${d.key} (line ${d.line}) — ${d.value}`)
+    expect(violations).toEqual([])
+    // And the guard is looking at something: the stylesheet really does declare motion.
+    expect(findMotionDeclarations(CSS).length).toBeGreaterThan(4)
+  })
+
+  it('reaches every animation from one reduced-motion rule', () => {
+    const blocks = stripComments(CSS).match(/@media \(prefers-reduced-motion: reduce\)/g) ?? []
+    expect(blocks, 'reduced motion is one rule, not one per animation').toHaveLength(1)
+
+    const inside = scanDeclarations(CSS).filter((d) =>
+      d.context.startsWith('@media (prefers-reduced-motion: reduce)'),
+    )
+    expect([...new Set(inside.map((d) => d.context))]).toEqual([
+      '@media (prefers-reduced-motion: reduce) >> :root',
+    ])
+    // Every duration the scale declares is zeroed, and nothing else is touched — an easing with
+    // no time to run is already inert.
+    expect(inside.map((d) => d.property)).toEqual(durationTokens())
+    expect([...new Set(inside.map((d) => d.value))]).toEqual(['0ms'])
+  })
+
+  it('declares the override after the scale, which is the only reason it wins', () => {
+    // Same specificity, no media-query bonus: source order is the whole mechanism.
+    expect(CSS.indexOf('@media (prefers-reduced-motion: reduce)')).toBeGreaterThan(
+      CSS.indexOf(':root {'),
+    )
+  })
+
+  it('keeps the one exemption honest', () => {
+    // The ratchet half of `tokenAdoption.ts`, applied to a list of one: an exemption that stopped
+    // matching is a decision that has quietly expired.
+    const declarations = new Map(findMotionDeclarations(CSS).map((d) => [d.key, d.value]))
+    for (const exemption of EXEMPTIONS) {
+      expect(declarations.get(exemption.key), exemption.key).toBe(exemption.value)
+      expect(exemption.reason.length, `${exemption.key} has no reason`).toBeGreaterThan(40)
+    }
   })
 })
 
