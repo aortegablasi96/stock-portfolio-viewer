@@ -24,12 +24,13 @@ tables, a widened content measure with charts sized by aspect ratio, and the All
 rebuild onto a Mapbox basemap with per-holding bubbles and a gain/loss colour mode).
 
 **Further refinement lives in milestone `M4 — Analytics refinement`, split across area-scoped
-Epics** so no single Epic grows unbounded again. Open as of 2026-08-07: **#98 Allocation map**,
-**#99 Analytics views polish** (the four analytics views + the live Portfolio dashboard), **#102
-Gateway & data reliability**, and **#125 Shared UI primitives & visual consistency** (stories
-#126–#134 delivered; **reopened 2026-08-07** for #151–#154). **#100 App shell & layout** (window
-chrome, tab shell, page layout) is closed as
-delivered — its shared-control scope was superseded by #125. An Epic closes when its stories
+Epics** so no single Epic grows unbounded again. Open as of 2026-08-09: **#98 Allocation map**,
+**#99 Analytics views polish** (the four analytics views + the live Portfolio dashboard), and
+**#102 Gateway & data reliability**. Two are closed as delivered: **#125 Shared UI primitives &
+visual consistency** (Round 1 #126–#134, then **reopened 2026-08-07** for Round 2 #151–#154 and
+**closed 2026-08-09** — the primitives, the token ratchet, the analytics shell and the motion
+scale), and **#100 App shell & layout** (window chrome, tab shell, page layout), whose
+shared-control scope was superseded by #125. An Epic closes when its stories
 close; new refinement opens a new Epic under the current milestone rather than reopening a
 delivered one — with **one narrow exception**, added 2026-08-07: an Epic may reopen when its own
 stated problem is provably unfinished, meaning its acceptance criteria under-scoped the finding
