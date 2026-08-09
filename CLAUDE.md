@@ -526,6 +526,24 @@ Canonical flows to copy when adding a feature:
   selectors reappears, if the bare container starts drawing a surface, if an axis value has no
   rule, or if the sorted header loses its arrow. Two named visual changes: cell padding adopts
   `--space-4` (+1.6px a row) and the five-row cap is re-measured to `18rem`.
+- **An analytics view is a subject noun and a function of its report** (Story #153, DDR-0043).
+  `components/analytics/AnalyticsShell.tsx` owns the four-branch guard all four views had spelled
+  out byte-for-byte — loading, error + Retry, `NeedsImport`, then the `.analytics-view` wrapper and
+  the `RefreshBar` — so a fifth view inherits it instead of restating it. Five things to know. The
+  children are a **function of the report, not elements**: three of the four states have no report,
+  so a `ReactNode` shell would force every view to guard *again* before computing the body it hands
+  in. `subject` and `refreshLabel` are two axes because they disagree exactly once — Trades loads
+  "trade history" and refreshes "trades and realized gains" — and `refreshLabel` defaults to
+  `subject` for the other three. **The shell holds no state whatsoever**, which is what keeps
+  DDR-0027 intact: range selection, chart tab, type chips and map colour mode all stay in the view
+  *above* it, so `loading` still means the first load and a returning tab still shows what it
+  showed. `DividendsView`'s "no dividend income recorded" path is an early return **inside** the
+  render prop — it is a state of the report, not of the read, and it still renders the upcoming
+  panel; its private second copy of the wrapper and refresh bar was the drift the story names. And
+  the `<Report>` type argument is written **explicitly** at all four call sites, because inferring
+  it out of a union member is where TypeScript is weakest. `lib/analyticsShell.ts` holds the branch
+  mapping and the wording (the typographic apostrophe in "Couldn’t" is pinned); its test also reads
+  the four views as text and fails if one re-declares the guard, the wrapper or the bar.
 - **The Allocation breakdown's table and donut are linked, and the link is keyed** (Story #147,
   DDR-0040). They were always the same slice set rendered twice; hovering either half now
   emphasises the matching slice in both, via one `activeKey` owned by `AllocationBreakdown`.
@@ -1093,7 +1111,7 @@ sorting and formatting are **extracted out of components into pure modules under
 `column`, `dateRange`, `sectorMap`, `performanceRange`, `classifyProgress`, `dataVersion`,
 `tabKeyboard`, `buttonVariants`, `cardVariants`, `statTileVariants`, `fieldVariants`,
 `toggleGroupVariants`, `badgeVariants`, `statePanelVariants`, `tableSort`, `dataTableVariants`,
-`sliceHighlight`, `mapPopupTint`, `cssDeclarations`, `tokenAdoption`)
+`sliceHighlight`, `mapPopupTint`, `cssDeclarations`, `tokenAdoption`, `analyticsShell`)
 precisely so they can be tested — follow
 that split when adding a component with real logic in it. `dataVersion` is the same move applied
 to state rather than maths: the cross-view staleness signal is a plain subscribable store a hook

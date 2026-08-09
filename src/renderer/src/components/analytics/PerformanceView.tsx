@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { NavPeriod, PerformanceResult } from '@shared/domain/performance'
+import type { NavPeriod, PerformanceReport, PerformanceResult } from '@shared/domain/performance'
 import {
   formatCurrency,
   formatDate,
@@ -10,13 +10,10 @@ import { boundsFor } from '../../lib/dateRange'
 import { seriesExtent, sliceSeries, windowStats } from '../../lib/performanceRange'
 import { LineChart } from '../charts/LineChart'
 import { useAnalytics } from './useAnalytics'
-import { Button } from '../ui/Button'
+import { AnalyticsShell } from './AnalyticsShell'
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card'
-import { StatePanel } from '../ui/StatePanel'
 import { DataTable, type DataColumn } from '../ui/DataTable'
-import { NeedsImport } from './NeedsImport'
 import { RangeFilter } from './RangeFilter'
-import { RefreshBar } from './RefreshBar'
 import { StatRow, StatTile } from '../ui/StatTile'
 import { ToggleGroup } from '../ui/ToggleGroup'
 import { toneClassName, toneOf } from '../../lib/statTileVariants'
@@ -45,129 +42,107 @@ type ChartTab = (typeof CHART_TABS)[number]['id']
  * used to perform by accident.
  */
 export function PerformanceView(): React.JSX.Element {
-  const { state, refreshing, loadedAt, reload } = useAnalytics<PerformanceResult>(
-    window.api.getPerformance,
-  )
+  const analytics = useAnalytics<PerformanceResult>(window.api.getPerformance)
   const [chartTab, setChartTab] = useState<ChartTab>('value')
   const { range, setRange, custom, editCustom } = useRangeSelection()
 
-  if (state.phase === 'loading') {
-    return <StatePanel variant="loading">Loading performance…</StatePanel>
-  }
-  if (state.phase === 'error') {
-    return (
-      <StatePanel
-        variant="error"
-        heading="Couldn’t load performance"
-        action={
-          <Button variant="primary" disabled={refreshing} onClick={() => void reload()}>
-            {refreshing ? 'Retrying…' : 'Retry'}
-          </Button>
-        }
-      >
-        {state.message}
-      </StatePanel>
-    )
-  }
-  if (state.result.status === 'needs_import') {
-    return <NeedsImport />
-  }
-
-  const r = state.result.report
-  const c = (v: number): string => formatCurrency(v, r.baseCurrency)
-
-  const extent = seriesExtent(r.valueSeries)
-  const customBounds = custom ?? extent ?? { from: 0, to: 0 }
-  const bounds = extent ? boundsFor(range, extent, customBounds) : null
-
-  const valueSeries = bounds ? sliceSeries(r.valueSeries, bounds) : r.valueSeries
-  const returnSeries = bounds ? sliceSeries(r.returnSeries, bounds) : r.returnSeries
-  const stats = bounds
-    ? windowStats(r.valueSeries, r.returnSeries, bounds)
-    : { endValue: r.endingValue, changeAbs: 0, changePct: null, twr: r.cumulativeTwr }
-
-  const periodLabel = range === 'all' ? 'Full history' : 'Selected period'
-
+  // The range selection and chart tab stay above the shell: they are the view's own state, and
+  // the shell holds none, so they survive a tab switch exactly as they did (DDR-0027).
   return (
-    <div className="analytics-view">
-      <RefreshBar
-        label="performance"
-        loadedAt={loadedAt}
-        refreshing={refreshing}
-        onRefresh={() => void reload()}
-      />
+    <AnalyticsShell<PerformanceReport> subject="performance" analytics={analytics}>
+      {(r) => {
+        const c = (v: number): string => formatCurrency(v, r.baseCurrency)
 
-      <RangeFilter
-        label="Performance time range"
-        range={range}
-        onSelect={setRange}
-        extent={extent}
-        custom={customBounds}
-        onEditCustom={(edge, value) => editCustom(edge, value, customBounds)}
-      />
+        const extent = seriesExtent(r.valueSeries)
+        const customBounds = custom ?? extent ?? { from: 0, to: 0 }
+        const bounds = extent ? boundsFor(range, extent, customBounds) : null
 
-      <StatRow>
-        <StatTile label="Portfolio value" value={c(stats.endValue)} hint="At period end" />
-        <StatTile
-          label="Value change"
-          value={formatSignedCurrency(stats.changeAbs, r.baseCurrency)}
-          hint={periodLabel}
-          tone={toneOf(stats.changeAbs)}
-        />
-        <StatTile
-          label="Value change %"
-          value={stats.changePct === null ? '—' : formatSignedPercent(stats.changePct)}
-          hint={periodLabel}
-          tone={stats.changePct === null ? 'neutral' : toneOf(stats.changePct)}
-        />
-        <StatTile
-          label="Time-weighted return"
-          value={formatSignedPercent(stats.twr)}
-          hint={range === 'all' ? 'Chain-linked across periods' : 'Over selected period'}
-          tone={toneOf(stats.twr)}
-        />
-      </StatRow>
+        const valueSeries = bounds ? sliceSeries(r.valueSeries, bounds) : r.valueSeries
+        const returnSeries = bounds ? sliceSeries(r.returnSeries, bounds) : r.returnSeries
+        const stats = bounds
+          ? windowStats(r.valueSeries, r.returnSeries, bounds)
+          : { endValue: r.endingValue, changeAbs: 0, changePct: null, twr: r.cumulativeTwr }
 
-      <Card>
-        <CardHeader>
-          <CardTitle id="perf-chart-title">
-            {chartTab === 'value' ? 'Portfolio value over time' : 'Performance change over time'}
-          </CardTitle>
-          <ToggleGroup
-            label="Performance chart"
-            options={CHART_TABS}
-            value={chartTab}
-            onSelect={setChartTab}
-          />
-        </CardHeader>
-        <CardContent>
-          {chartTab === 'value' ? (
-            <LineChart
-              key="value"
-              points={valueSeries}
-              formatValue={c}
-              formatDate={formatDate}
-              ariaLabel="Portfolio value over time"
+        const periodLabel = range === 'all' ? 'Full history' : 'Selected period'
+
+        return (
+          <>
+            <RangeFilter
+              label="Performance time range"
+              range={range}
+              onSelect={setRange}
+              extent={extent}
+              custom={customBounds}
+              onEditCustom={(edge, value) => editCustom(edge, value, customBounds)}
             />
-          ) : (
-            <LineChart
-              key="return"
-              points={returnSeries}
-              formatValue={formatSignedPercent}
-              formatDate={formatDate}
-              ariaLabel="Cumulative time-weighted return over time"
-            />
-          )}
-        </CardContent>
-      </Card>
 
-      <Card>
-        <CardTitle>Returns by period</CardTitle>
-        <CardContent>
-          <PeriodsTable periods={r.periods} baseCurrency={r.baseCurrency} />
-        </CardContent>
-      </Card>
-    </div>
+            <StatRow>
+              <StatTile label="Portfolio value" value={c(stats.endValue)} hint="At period end" />
+              <StatTile
+                label="Value change"
+                value={formatSignedCurrency(stats.changeAbs, r.baseCurrency)}
+                hint={periodLabel}
+                tone={toneOf(stats.changeAbs)}
+              />
+              <StatTile
+                label="Value change %"
+                value={stats.changePct === null ? '—' : formatSignedPercent(stats.changePct)}
+                hint={periodLabel}
+                tone={stats.changePct === null ? 'neutral' : toneOf(stats.changePct)}
+              />
+              <StatTile
+                label="Time-weighted return"
+                value={formatSignedPercent(stats.twr)}
+                hint={range === 'all' ? 'Chain-linked across periods' : 'Over selected period'}
+                tone={toneOf(stats.twr)}
+              />
+            </StatRow>
+
+            <Card>
+              <CardHeader>
+                <CardTitle id="perf-chart-title">
+                  {chartTab === 'value'
+                    ? 'Portfolio value over time'
+                    : 'Performance change over time'}
+                </CardTitle>
+                <ToggleGroup
+                  label="Performance chart"
+                  options={CHART_TABS}
+                  value={chartTab}
+                  onSelect={setChartTab}
+                />
+              </CardHeader>
+              <CardContent>
+                {chartTab === 'value' ? (
+                  <LineChart
+                    key="value"
+                    points={valueSeries}
+                    formatValue={c}
+                    formatDate={formatDate}
+                    ariaLabel="Portfolio value over time"
+                  />
+                ) : (
+                  <LineChart
+                    key="return"
+                    points={returnSeries}
+                    formatValue={formatSignedPercent}
+                    formatDate={formatDate}
+                    ariaLabel="Cumulative time-weighted return over time"
+                  />
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardTitle>Returns by period</CardTitle>
+              <CardContent>
+                <PeriodsTable periods={r.periods} baseCurrency={r.baseCurrency} />
+              </CardContent>
+            </Card>
+          </>
+        )
+      }}
+    </AnalyticsShell>
   )
 }
 

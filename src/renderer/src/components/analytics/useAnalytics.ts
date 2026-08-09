@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { flexDataVersion } from '../../lib/dataVersion'
+import type { AnalyticsLoad, AnalyticsState } from '../../lib/analyticsShell'
 
 /**
  * Shared loading wrapper for the M3 analytics views (Stories #21–#24). Each view
  * fetches a discriminated result (`ok` / `needs_import`) over `window.api`; this hook
  * adds the `loading` and `error` phases around it so every view handles the same four
- * states without duplicating the boilerplate. The `ok` / `needs_import` branch is left
- * to the view, which switches on `result.status`.
+ * states without duplicating the boilerplate. Rendering those four is `AnalyticsShell`'s
+ * job (Story #153) — this hook produces the state, the shell reads it.
  *
  * Story #109 makes a re-read non-destructive. `loading` is now the *first* load only: once
  * a report has arrived, a reload keeps it on screen and reports itself through `refreshing`
@@ -15,20 +16,14 @@ import { flexDataVersion } from '../../lib/dataVersion'
  * `reload()` (the `RefreshBar` and the error panel's retry), and a bump of the shared
  * `flexDataVersion`, which is how a view that has been sitting mounted-but-hidden since its
  * last visit learns that the store underneath it changed (see `lib/dataVersion`).
+ *
+ * The phases and the return shape are declared in `lib/analyticsShell` rather than here, because
+ * the shell that renders them is what has to be unit-testable under Node (Story #153). The hook's
+ * behaviour is unchanged by that move.
  */
-export type AnalyticsState<R> =
-  | { phase: 'loading' }
-  | { phase: 'loaded'; result: R }
-  | { phase: 'error'; message: string }
+export type { AnalyticsLoad, AnalyticsState } from '../../lib/analyticsShell'
 
-export function useAnalytics<R>(fetcher: () => Promise<R>): {
-  state: AnalyticsState<R>
-  /** A re-read is in flight over data that is already on screen (never the first load). */
-  refreshing: boolean
-  /** When the report on screen was read, or `null` before the first one arrives. */
-  loadedAt: number | null
-  reload: () => Promise<void>
-} {
+export function useAnalytics<R>(fetcher: () => Promise<R>): AnalyticsLoad<R> {
   const version = useSyncExternalStore(flexDataVersion.subscribe, flexDataVersion.get)
   const [state, setState] = useState<AnalyticsState<R>>({ phase: 'loading' })
   const [refreshing, setRefreshing] = useState(false)
