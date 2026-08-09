@@ -1,5 +1,6 @@
 import type {
   RealizedBySymbol,
+  RealizedGainsReport,
   RealizedGainsResult,
   TradeRow,
 } from '@shared/domain/realizedGains'
@@ -13,14 +14,12 @@ import { datedExtent, filterByRange, windowFor } from '../../lib/dateRange'
 import { distinctTypes, filterByTypes } from '../../lib/tableFilter'
 import { useTypeSelection } from './useTypeSelection'
 import { useAnalytics } from './useAnalytics'
-import { NeedsImport } from './NeedsImport'
+import { AnalyticsShell } from './AnalyticsShell'
 import { RangeFilter } from './RangeFilter'
-import { RefreshBar } from './RefreshBar'
 import { StatRow, StatTile } from '../ui/StatTile'
 import { statPartClassName, toneClassName, toneOf } from '../../lib/statTileVariants'
 import { TypeFilter } from './TypeFilter'
 import { useRangeSelection } from './useRangeSelection'
-import { Button } from '../ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card'
 import { StatePanel } from '../ui/StatePanel'
 import { DataTable, type DataColumn } from '../ui/DataTable'
@@ -31,73 +30,55 @@ import { DataTable, type DataColumn } from '../ui/DataTable'
  * split and totals — in the base currency, plus total unrealized P&L for context.
  */
 export function TradeHistoryView(): React.JSX.Element {
-  const { state, refreshing, loadedAt, reload } = useAnalytics<RealizedGainsResult>(
-    window.api.getRealizedGains,
-  )
+  const analytics = useAnalytics<RealizedGainsResult>(window.api.getRealizedGains)
 
-  if (state.phase === 'loading') {
-    return <StatePanel variant="loading">Loading trade history…</StatePanel>
-  }
-  if (state.phase === 'error') {
-    return (
-      <StatePanel
-        variant="error"
-        heading="Couldn’t load trade history"
-        action={
-          <Button variant="primary" disabled={refreshing} onClick={() => void reload()}>
-            {refreshing ? 'Retrying…' : 'Retry'}
-          </Button>
-        }
-      >
-        {state.message}
-      </StatePanel>
-    )
-  }
-  if (state.result.status === 'needs_import') {
-    return <NeedsImport />
-  }
-
-  const r = state.result.report
-  const sc = (v: number): string => formatSignedCurrency(v, r.baseCurrency)
-
+  // The subject and the refresh label differ here, and only here: the view loads "trade history"
+  // while the bar refreshes "trades and realized gains", which is what the page actually holds.
   return (
-    <div className="analytics-view">
-      <RefreshBar
-        label="trades and realized gains"
-        loadedAt={loadedAt}
-        refreshing={refreshing}
-        onRefresh={() => void reload()}
-      />
+    <AnalyticsShell<RealizedGainsReport>
+      subject="trade history"
+      refreshLabel="trades and realized gains"
+      analytics={analytics}
+    >
+      {(r) => {
+        const sc = (v: number): string => formatSignedCurrency(v, r.baseCurrency)
 
-      <StatRow>
-        <StatTile label="Realized P&L" value={sc(r.totalRealized)} tone={toneOf(r.totalRealized)} />
-        <StatTile label="Short-term" value={sc(r.totalRealizedShortTerm)} tone={toneOf(r.totalRealizedShortTerm)} />
-        <StatTile label="Long-term" value={sc(r.totalRealizedLongTerm)} tone={toneOf(r.totalRealizedLongTerm)} />
-        <StatTile label="Unrealized P&L" value={sc(r.totalUnrealized)} tone={toneOf(r.totalUnrealized)} />
-      </StatRow>
+        return (
+          <>
+            <StatRow>
+              <StatTile label="Realized P&L" value={sc(r.totalRealized)} tone={toneOf(r.totalRealized)} />
+              <StatTile label="Short-term" value={sc(r.totalRealizedShortTerm)} tone={toneOf(r.totalRealizedShortTerm)} />
+              <StatTile label="Long-term" value={sc(r.totalRealizedLongTerm)} tone={toneOf(r.totalRealizedLongTerm)} />
+              <StatTile label="Unrealized P&L" value={sc(r.totalUnrealized)} tone={toneOf(r.totalUnrealized)} />
+            </StatRow>
 
-      <Card>
-        <CardTitle>Realized gains by Ticker</CardTitle>
-        <CardContent>
-          {r.bySymbol.length === 0 ? (
-            <StatePanel surface="inline">No closed positions with realized P&L yet.</StatePanel>
-          ) : (
-            <div className="realized-split">
-              <DataTable
-                caption="Realized gains by ticker"
-                columns={realizedColumns(sc)}
-                rows={r.bySymbol}
-                rowKey={(s) => s.conid ?? s.symbol}
-                height="capped"
-              />
-              <RealizedHighlights bySymbol={r.bySymbol} sc={sc} />
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            <Card>
+              <CardTitle>Realized gains by Ticker</CardTitle>
+              <CardContent>
+                {r.bySymbol.length === 0 ? (
+                  <StatePanel surface="inline">
+                    No closed positions with realized P&L yet.
+                  </StatePanel>
+                ) : (
+                  <div className="realized-split">
+                    <DataTable
+                      caption="Realized gains by ticker"
+                      columns={realizedColumns(sc)}
+                      rows={r.bySymbol}
+                      rowKey={(s) => s.conid ?? s.symbol}
+                      height="capped"
+                    />
+                    <RealizedHighlights bySymbol={r.bySymbol} sc={sc} />
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
-      <TradeHistory trades={r.trades} baseCurrency={r.baseCurrency} />
-    </div>
+            <TradeHistory trades={r.trades} baseCurrency={r.baseCurrency} />
+          </>
+        )
+      }}
+    </AnalyticsShell>
   )
 }
 

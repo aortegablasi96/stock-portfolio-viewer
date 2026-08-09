@@ -10,14 +10,11 @@ import { SECTOR_SLOT_OFFSET } from '../../lib/pie'
 import { CountryMap, type MapColorMode } from '../charts/CountryMap'
 import { AllocationBreakdown } from './AllocationBreakdown'
 import { useAnalytics } from './useAnalytics'
+import { AnalyticsShell } from './AnalyticsShell'
 import { ClassifySectors } from './ClassifySectors'
-import { NeedsImport } from './NeedsImport'
-import { RefreshBar } from './RefreshBar'
 import { StatRow, StatTile } from '../ui/StatTile'
 import { toneClassName, toneOf } from '../../lib/statTileVariants'
-import { Button } from '../ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card'
-import { StatePanel } from '../ui/StatePanel'
 import { ToggleGroup } from '../ui/ToggleGroup'
 import { DataTable, type DataColumn } from '../ui/DataTable'
 
@@ -64,121 +61,100 @@ function slicesFor(report: AllocationReport, tab: BreakdownTab): AllocationSlice
 }
 
 export function AllocationView(): React.JSX.Element {
-  const { state, refreshing, loadedAt, reload } = useAnalytics<AllocationResult>(
-    window.api.getAllocation,
-  )
+  const analytics = useAnalytics<AllocationResult>(window.api.getAllocation)
   const [tab, setTab] = useState<BreakdownTab>('assetClass')
   const [colorMode, setColorMode] = useState<MapColorMode>('sector')
 
-  if (state.phase === 'loading') {
-    return <StatePanel variant="loading">Loading allocation…</StatePanel>
-  }
-  if (state.phase === 'error') {
-    return (
-      <StatePanel
-        variant="error"
-        heading="Couldn’t load allocation"
-        action={
-          <Button variant="primary" disabled={refreshing} onClick={() => void reload()}>
-            {refreshing ? 'Retrying…' : 'Retry'}
-          </Button>
-        }
-      >
-        {state.message}
-      </StatePanel>
-    )
-  }
-  if (state.result.status === 'needs_import') {
-    return <NeedsImport />
-  }
-
-  const r = state.result.report
-  const c = (v: number): string => formatCurrency(v, r.baseCurrency)
-  const top = r.positions[0]
-  const activeTab = BREAKDOWN_TABS.find((t) => t.id === tab)!
-
+  // The breakdown tab and the map's colour mode stay above the shell: they are the view's own
+  // state, and the shell holds none, so they survive a tab switch exactly as they did (DDR-0027).
   return (
-    <div className="analytics-view">
-      <RefreshBar
-        label="allocation"
-        loadedAt={loadedAt}
-        refreshing={refreshing}
-        onRefresh={() => void reload()}
-      />
+    <AnalyticsShell<AllocationReport> subject="allocation" analytics={analytics}>
+      {(r) => {
+        const c = (v: number): string => formatCurrency(v, r.baseCurrency)
+        const top = r.positions[0]
+        const activeTab = BREAKDOWN_TABS.find((t) => t.id === tab)!
 
-      <StatRow>
-        <StatTile label="Invested value" value={c(r.totalMarketValueBase)} hint={r.reportDate ? `As of ${formatDate(r.reportDate)}` : undefined} />
-        <StatTile label="Positions" value={String(r.positions.length)} />
-        {top && <StatTile label="Largest holding" value={top.symbol} hint={`${top.percentOfNav.toFixed(1)}% of NAV`} />}
-      </StatRow>
+        return (
+          <>
+            <StatRow>
+              <StatTile label="Invested value" value={c(r.totalMarketValueBase)} hint={r.reportDate ? `As of ${formatDate(r.reportDate)}` : undefined} />
+              <StatTile label="Positions" value={String(r.positions.length)} />
+              {top && <StatTile label="Largest holding" value={top.symbol} hint={`${top.percentOfNav.toFixed(1)}% of NAV`} />}
+            </StatRow>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>By geography &amp; sector (world map)</CardTitle>
-          <ToggleGroup
-            label="Map colour"
-            options={COLOR_MODES}
-            value={colorMode}
-            onSelect={setColorMode}
-          />
-        </CardHeader>
-        <CardContent>
-          <CountryMap
-            positions={r.positions}
-            bySector={r.bySector}
-            formatValue={c}
-            formatSigned={(v) => formatSignedCurrency(v, r.baseCurrency)}
-            colorMode={colorMode}
-            // The map's marks are hover-only — they carry no text a screen reader can reach, and
-            // keyboard operation is a separate story (#93). The map no longer draws individual
-            // holdings at all (DDR-0030), so this label states what it totals and points at the
-            // Positions table below, which is where one company's figures are read.
-            ariaLabel={`World map of ${r.positions.length} holdings totalling ${c(
-              r.totalMarketValueBase,
-            )}, drawn as a pair of radial charts per issuer country — the country's weight in the portfolio, and one ring per sector — coloured by ${
-              colorMode === 'sector' ? 'sector' : 'unrealized return'
-            }. Every holding is listed individually in the Positions table below.`}
-          />
-        </CardContent>
-      </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>By geography &amp; sector (world map)</CardTitle>
+                <ToggleGroup
+                  label="Map colour"
+                  options={COLOR_MODES}
+                  value={colorMode}
+                  onSelect={setColorMode}
+                />
+              </CardHeader>
+              <CardContent>
+                <CountryMap
+                  positions={r.positions}
+                  bySector={r.bySector}
+                  formatValue={c}
+                  formatSigned={(v) => formatSignedCurrency(v, r.baseCurrency)}
+                  colorMode={colorMode}
+                  // The map's marks are hover-only — they carry no text a screen reader can reach,
+                  // and keyboard operation is a separate story (#93). The map no longer draws
+                  // individual holdings at all (DDR-0030), so this label states what it totals and
+                  // points at the Positions table below, where one company's figures are read.
+                  ariaLabel={`World map of ${r.positions.length} holdings totalling ${c(
+                    r.totalMarketValueBase,
+                  )}, drawn as a pair of radial charts per issuer country — the country's weight in the portfolio, and one ring per sector — coloured by ${
+                    colorMode === 'sector' ? 'sector' : 'unrealized return'
+                  }. Every holding is listed individually in the Positions table below.`}
+                />
+              </CardContent>
+            </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle id="allocation-breakdown-title">{activeTab.title}</CardTitle>
-          <ToggleGroup
-            label="Allocation breakdown"
-            // `title` here is the card's heading, not a tooltip — the shape a `ToggleOption`
-            // would otherwise pick up structurally and hang off every button.
-            options={BREAKDOWN_TABS.map(({ id, label }) => ({ id, label }))}
-            value={tab}
-            onSelect={setTab}
-          />
-        </CardHeader>
-        <CardContent>
-          <AllocationBreakdown
-            key={tab}
-            slices={slicesFor(r, tab)}
-            formatValue={c}
-            ariaLabel={`Allocation ${activeTab.title.toLowerCase()}`}
-            // Sectors skip the palette's blue, which the map reserves for a country's weight. The
-            // skip has to apply here too, or a sector would wear one hue on the map and another in
-            // its own donut (Story #122).
-            colorOffset={tab === 'sector' ? SECTOR_SLOT_OFFSET : 0}
-            emptyMessage={tab === 'sector' ? 'No sector data yet.' : 'Nothing to plot yet.'}
-          />
-          {tab === 'sector' && r.unclassifiedCount > 0 && (
-            <ClassifySectors unclassifiedCount={r.unclassifiedCount} onClassified={() => void reload()} />
-          )}
-        </CardContent>
-      </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle id="allocation-breakdown-title">{activeTab.title}</CardTitle>
+                <ToggleGroup
+                  label="Allocation breakdown"
+                  // `title` here is the card's heading, not a tooltip — the shape a `ToggleOption`
+                  // would otherwise pick up structurally and hang off every button.
+                  options={BREAKDOWN_TABS.map(({ id, label }) => ({ id, label }))}
+                  value={tab}
+                  onSelect={setTab}
+                />
+              </CardHeader>
+              <CardContent>
+                <AllocationBreakdown
+                  key={tab}
+                  slices={slicesFor(r, tab)}
+                  formatValue={c}
+                  ariaLabel={`Allocation ${activeTab.title.toLowerCase()}`}
+                  // Sectors skip the palette's blue, which the map reserves for a country's weight.
+                  // The skip has to apply here too, or a sector would wear one hue on the map and
+                  // another in its own donut (Story #122).
+                  colorOffset={tab === 'sector' ? SECTOR_SLOT_OFFSET : 0}
+                  emptyMessage={tab === 'sector' ? 'No sector data yet.' : 'Nothing to plot yet.'}
+                />
+                {tab === 'sector' && r.unclassifiedCount > 0 && (
+                  <ClassifySectors
+                    unclassifiedCount={r.unclassifiedCount}
+                    onClassified={() => void analytics.reload()}
+                  />
+                )}
+              </CardContent>
+            </Card>
 
-      <Card>
-        <CardTitle>Positions</CardTitle>
-        <CardContent>
-          <PositionsTable positions={r.positions} baseCurrency={r.baseCurrency} />
-        </CardContent>
-      </Card>
-    </div>
+            <Card>
+              <CardTitle>Positions</CardTitle>
+              <CardContent>
+                <PositionsTable positions={r.positions} baseCurrency={r.baseCurrency} />
+              </CardContent>
+            </Card>
+          </>
+        )
+      }}
+    </AnalyticsShell>
   )
 }
 

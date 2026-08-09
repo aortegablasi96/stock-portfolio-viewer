@@ -1,6 +1,7 @@
 import type {
   DividendEvent,
   DividendGroup,
+  DividendReport,
   UpcomingDividend,
   UpcomingDividends,
   DividendResult,
@@ -18,13 +19,11 @@ import { distinctTypes, filterByTypes } from '../../lib/tableFilter'
 import { useTypeSelection } from './useTypeSelection'
 import { ColumnChart, type StackedColumn } from '../charts/ColumnChart'
 import { useAnalytics } from './useAnalytics'
-import { NeedsImport } from './NeedsImport'
+import { AnalyticsShell } from './AnalyticsShell'
 import { RangeFilter } from './RangeFilter'
-import { RefreshBar } from './RefreshBar'
 import { StatRow, StatTile } from '../ui/StatTile'
 import { TypeFilter } from './TypeFilter'
 import { useRangeSelection } from './useRangeSelection'
-import { Button } from '../ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card'
 import { StatePanel } from '../ui/StatePanel'
 import { DataTable, type DataColumn } from '../ui/DataTable'
@@ -171,112 +170,83 @@ function UpcomingTable({
 }
 
 export function DividendsView(): React.JSX.Element {
-  const { state, refreshing, loadedAt, reload } = useAnalytics<DividendResult>(
-    window.api.getDividends,
-  )
-
-  if (state.phase === 'loading') {
-    return <StatePanel variant="loading">Loading dividends…</StatePanel>
-  }
-  if (state.phase === 'error') {
-    return (
-      <StatePanel
-        variant="error"
-        heading="Couldn’t load dividends"
-        action={
-          <Button variant="primary" disabled={refreshing} onClick={() => void reload()}>
-            {refreshing ? 'Retrying…' : 'Retry'}
-          </Button>
-        }
-      >
-        {state.message}
-      </StatePanel>
-    )
-  }
-  if (state.result.status === 'needs_import') {
-    return <NeedsImport />
-  }
-
-  const r = state.result.report
-  const c = (v: number): string => formatCurrency(v, r.baseCurrency)
-
-  // Announced dividends can exist before any has ever been paid, so the "no income yet"
-  // state still renders the upcoming panel rather than replacing the whole view.
-  if (r.events.length === 0) {
-    return (
-      <div className="analytics-view">
-        <RefreshBar
-          label="dividends"
-          loadedAt={loadedAt}
-          refreshing={refreshing}
-          onRefresh={() => void reload()}
-        />
-        <StatePanel variant="empty" heading="No dividend income recorded">
-          The imported statements contain no dividend or payment-in-lieu transactions.
-        </StatePanel>
-        <Upcoming upcoming={r.upcoming} baseCurrency={r.baseCurrency} />
-      </div>
-    )
-  }
-
-  const columns: StackedColumn[] = r.byMonth.map((m) => ({
-    key: m.key,
-    label: formatMonth(m.key),
-    lower: m.netBase,
-    upper: m.withholdingBase,
-  }))
+  const analytics = useAnalytics<DividendResult>(window.api.getDividends)
 
   return (
-    <div className="analytics-view">
-      <RefreshBar
-        label="dividends"
-        loadedAt={loadedAt}
-        refreshing={refreshing}
-        onRefresh={() => void reload()}
-      />
+    <AnalyticsShell<DividendReport> subject="dividends" analytics={analytics}>
+      {(r) => {
+        const c = (v: number): string => formatCurrency(v, r.baseCurrency)
 
-      <StatRow>
-        <StatTile label="Gross income" value={c(r.totalGrossBase)} />
-        <StatTile label="Withholding tax" value={c(r.totalWithholdingBase)} hint="Withheld at source" />
-        <StatTile
-          label="Net income"
-          value={c(r.totalNetBase)}
-          hint="Actually received"
-          tone="positive"
-        />
-      </StatRow>
+        // Announced dividends can exist before any has ever been paid, so the "no income yet"
+        // state still renders the upcoming panel rather than replacing the whole view. It is a
+        // fifth state of the *report*, not of the read, which is why it composes inside the shell
+        // rather than beside it — before Story #153 this path restated the wrapper and the
+        // refresh bar, and was the drift starting.
+        if (r.events.length === 0) {
+          return (
+            <>
+              <StatePanel variant="empty" heading="No dividend income recorded">
+                The imported statements contain no dividend or payment-in-lieu transactions.
+              </StatePanel>
+              <Upcoming upcoming={r.upcoming} baseCurrency={r.baseCurrency} />
+            </>
+          )
+        }
 
-      <Upcoming upcoming={r.upcoming} baseCurrency={r.baseCurrency} />
+        const columns: StackedColumn[] = r.byMonth.map((m) => ({
+          key: m.key,
+          label: formatMonth(m.key),
+          lower: m.netBase,
+          upper: m.withholdingBase,
+        }))
 
-      <Card>
-        <CardTitle>Income over time</CardTitle>
-        <CardContent>
-          <p className="source-note">
-            Each column is the month’s net income received, with the tax withheld at source
-            stacked on top — so the solid segment is what reached the account and the full height
-            is gross. A month where withholding outweighs the dividends dips below the zero line
-            as a net loss.
-          </p>
-          <ColumnChart
-            columns={columns}
-            formatValue={c}
-            lowerLabel="Net received"
-            upperLabel="Withholding tax"
-            totalLabel="Gross"
-            ariaLabel="Net dividend income by month, with withholding tax stacked to gross"
-          />
-        </CardContent>
-      </Card>
+        return (
+          <>
+            <StatRow>
+              <StatTile label="Gross income" value={c(r.totalGrossBase)} />
+              <StatTile label="Withholding tax" value={c(r.totalWithholdingBase)} hint="Withheld at source" />
+              <StatTile
+                label="Net income"
+                value={c(r.totalNetBase)}
+                hint="Actually received"
+                tone="positive"
+              />
+            </StatRow>
 
-      <Card>
-        <CardTitle>By Ticker</CardTitle>
-        <CardContent>
-          <BySymbolTable groups={r.bySymbol} baseCurrency={r.baseCurrency} />
-        </CardContent>
-      </Card>
+            <Upcoming upcoming={r.upcoming} baseCurrency={r.baseCurrency} />
 
-      <Transactions events={r.events} baseCurrency={r.baseCurrency} />
-    </div>
+            <Card>
+              <CardTitle>Income over time</CardTitle>
+              <CardContent>
+                <p className="source-note">
+                  Each column is the month’s net income received, with the tax withheld at source
+                  stacked on top — so the solid segment is what reached the account and the full
+                  height is gross. A month where withholding outweighs the dividends dips below
+                  the zero line as a net loss.
+                </p>
+                <ColumnChart
+                  columns={columns}
+                  formatValue={c}
+                  lowerLabel="Net received"
+                  upperLabel="Withholding tax"
+                  totalLabel="Gross"
+                  ariaLabel="Net dividend income by month, with withholding tax stacked to gross"
+                />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardTitle>By Ticker</CardTitle>
+              <CardContent>
+                <BySymbolTable groups={r.bySymbol} baseCurrency={r.baseCurrency} />
+              </CardContent>
+            </Card>
+
+            <Transactions events={r.events} baseCurrency={r.baseCurrency} />
+          </>
+        )
+      }}
+    </AnalyticsShell>
   )
 }
 
