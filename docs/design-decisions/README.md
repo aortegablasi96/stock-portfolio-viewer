@@ -77,3 +77,4 @@ Other options and why they were not chosen.
 - `0039` — One `DataTable`: `surface`/`height` on the container (retiring the `.card-content` override), sorting opt-in per column, missing values last in both directions (extends `0038`)
 - `0040` — Allocation breakdown: table and donut link on hover; emphasis keyed on slice identity, muting rather than recolouring (extends `0039`)
 - `0041` — Map popup return tint: banked into the edges as a gradient whose band is the content padding, so colour never passes behind text (extends `0030`, `0021`)
+- `0042` — Token adoption held by a ratchet: `BASELINE` may only shrink and a dead entry fails; exemptions enumerated by hand, because two mechanical rules leaked (extends `0031`)
