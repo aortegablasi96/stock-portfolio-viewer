@@ -155,7 +155,7 @@ html {
   background-color: var(--border);
   background-clip: padding-box;
   border: 3px solid transparent;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
 }
 
 ::-webkit-scrollbar-thumb:hover {
@@ -167,8 +167,8 @@ html {
 }
 
 .eyebrow {
-  margin: 0 0 0.35rem;
-  font-size: 0.8rem;
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-xs);
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--accent);
@@ -646,25 +646,25 @@ html {
   padding: var(--content-pad);
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: var(--space-7);
 }
 
 .dashboard-header {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 1rem;
+  gap: var(--space-5);
   flex-wrap: wrap;
 }
 
 .dashboard-header h1 {
   margin: 0;
-  font-size: 1.9rem;
+  font-size: var(--text-2xl);
 }
 
 .source-note {
   margin: 0;
-  font-size: 0.85rem;
+  font-size: var(--text-xs);
   color: var(--muted);
 }
 
@@ -672,12 +672,12 @@ html {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 0.5rem;
+  gap: var(--space-3);
 }
 
 .table-notice {
-  margin: 0 0 0.75rem;
-  font-size: 0.8rem;
+  margin: 0 0 var(--space-4);
+  font-size: var(--text-xs);
   color: var(--muted);
 }
 
@@ -686,8 +686,8 @@ html {
    It borrowed `.state-panel` for its muted ink until Story #133 gave that class an
    owner; the two lines it always had of its own are now all of it. */
 .converting-note {
-  padding: 0.6rem 0.9rem;
-  font-size: 0.85rem;
+  padding: var(--space-3) var(--space-5);
+  font-size: var(--text-xs);
   color: var(--muted);
 }
 
@@ -695,12 +695,12 @@ html {
 
 .capture-status {
   margin: 0;
-  padding: 0.6rem 0.9rem;
-  font-size: 0.85rem;
+  padding: var(--space-3) var(--space-5);
+  font-size: var(--text-xs);
   color: var(--muted);
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
 }
 
 /* ---- Destructive actions + inline confirm (Story #43) -------------------- */
@@ -713,13 +713,13 @@ html {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 0.6rem;
+  gap: var(--space-3);
   max-width: 26rem;
 }
 
 .confirm-warning {
   margin: 0;
-  font-size: 0.82rem;
+  font-size: var(--text-xs);
   line-height: 1.4;
   color: var(--muted);
   text-align: right;
@@ -729,7 +729,7 @@ html {
 
 .confirm-buttons {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--space-3);
 }
 
 .capture-status-error {
@@ -814,7 +814,7 @@ html {
 .dashboard-columns {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 20rem;
-  gap: 1.5rem;
+  gap: var(--space-7);
   align-items: start;
 }
 
@@ -830,14 +830,14 @@ html {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
+  gap: var(--space-4);
 }
 
 .allocation-head {
   display: flex;
   justify-content: space-between;
-  font-size: 0.85rem;
-  margin-bottom: 0.35rem;
+  font-size: var(--text-xs);
+  margin-bottom: var(--space-2);
 }
 
 .allocation-symbol {
@@ -852,14 +852,14 @@ html {
 .allocation-track {
   height: 8px;
   background: rgba(76, 141, 255, 0.12);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   overflow: hidden;
 }
 
 .allocation-bar {
   height: 100%;
   background: var(--accent);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
 }
 
 @media (max-width: 720px) {
@@ -1070,8 +1070,8 @@ html {
   display: grid;
   grid-template-columns: 1fr auto auto;
   align-items: baseline;
-  gap: 1rem;
-  padding: 0.7rem 0;
+  gap: var(--space-5);
+  padding: var(--space-4) 0;
   border-bottom: 1px solid var(--border);
 }
 
@@ -1081,7 +1081,7 @@ html {
 
 .snapshot-time {
   color: var(--text);
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
 }
 
 .snapshot-value {
@@ -1091,7 +1091,7 @@ html {
 
 .snapshot-count {
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: var(--text-xs);
   min-width: 6rem;
   text-align: right;
 }
@@ -1113,14 +1113,14 @@ html {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 0.6rem;
+  gap: var(--space-3);
 }
 
 .flex-import-intro {
-  margin: 0.35rem 0 0;
+  margin: var(--space-2) 0 0;
   max-width: 42rem;
   color: var(--muted);
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
   text-transform: none;
   letter-spacing: normal;
 }
@@ -1128,14 +1128,14 @@ html {
 .flex-import-summary {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--space-5);
 }
 
 .flex-import-file {
   display: block;
   margin-top: 0.15rem;
   font-weight: 400;
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
   color: var(--muted);
 }
 
@@ -1151,9 +1151,9 @@ html {
 /* The span the imported history covers, above the per-statement rows. The dates carry
    the emphasis — they are what tells the owner whether the newest statement is stale. */
 .flex-store-coverage {
-  margin: 0 0 1rem;
+  margin: 0 0 var(--space-5);
   color: var(--muted);
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
 }
 
 .flex-store-coverage strong {
@@ -1184,11 +1184,11 @@ html {
   display: flex;
   align-items: center;
   min-width: 0;
-  padding-left: 1rem;
+  padding-left: var(--space-5);
 }
 
 .titlebar-title {
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   letter-spacing: 0.02em;
   color: var(--muted);
@@ -1232,8 +1232,8 @@ html {
   z-index: 10;
   display: flex;
   align-items: center;
-  gap: 1.5rem;
-  padding: 0.75rem var(--content-pad);
+  gap: var(--space-7);
+  padding: var(--space-4) var(--content-pad);
   background: rgba(15, 17, 21, 0.85);
   backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--border);
@@ -1247,20 +1247,20 @@ html {
   max-width: calc(var(--content-max) - 2 * var(--content-pad));
   margin: 0 auto;
   display: flex;
-  gap: 0.25rem;
+  gap: var(--space-1);
   flex-wrap: wrap;
 }
 
 .app-tab {
   position: relative;
-  padding: 0.4rem 0.9rem;
+  padding: var(--space-2) var(--space-5);
   font: inherit;
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--muted);
   background: transparent;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   cursor: pointer;
 }
 
@@ -1316,7 +1316,7 @@ html {
 .analytics-view {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: var(--space-7);
 }
 
 /* Freshness line + explicit refresh, above the view's own controls (Story #109). Right-aligned
@@ -1326,13 +1326,13 @@ html {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 0.75rem;
-  margin-bottom: -0.75rem;
+  gap: var(--space-4);
+  margin-bottom: calc(-1 * var(--space-4));
 }
 
 .view-updated {
   margin: 0;
-  font-size: 0.8rem;
+  font-size: var(--text-xs);
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
@@ -1341,14 +1341,14 @@ html {
 .realized-split {
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(13rem, 1fr);
-  gap: 1.5rem;
+  gap: var(--space-7);
   align-items: start;
 }
 
 .highlights {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--space-5);
 }
 
 /* The highlight card's label was a byte-identical third copy of `.stat-label`
@@ -1379,7 +1379,7 @@ html {
 .breakdown-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
-  gap: 1.5rem;
+  gap: var(--space-7);
   /* Panels size to their own legend rather than stretching to the tallest in the row. */
   align-items: start;
 }
@@ -1388,7 +1388,7 @@ html {
 .breakdown-split {
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
-  gap: 1.5rem;
+  gap: var(--space-7);
   align-items: center;
 }
 
@@ -1570,14 +1570,14 @@ html {
 .range-bar {
   display: flex;
   align-items: center;
-  gap: 1rem 1.5rem;
+  gap: var(--space-5) var(--space-7);
   flex-wrap: wrap;
 }
 
 .range-custom {
   display: flex;
   align-items: center;
-  gap: 0.75rem 1rem;
+  gap: var(--space-4) var(--space-5);
   flex-wrap: wrap;
 }
 
@@ -1596,16 +1596,16 @@ html {
 
 .chart-legend {
   display: flex;
-  gap: 1.25rem;
-  margin-top: 0.75rem;
-  font-size: 0.82rem;
+  gap: var(--space-6);
+  margin-top: var(--space-4);
+  font-size: var(--text-xs);
   color: var(--muted);
 }
 
 .legend-item {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: var(--space-2);
 }
 
 .legend-swatch {
@@ -1661,7 +1661,7 @@ html {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.25rem;
+  gap: var(--space-1);
 }
 
 .pie {
@@ -1702,7 +1702,7 @@ html {
 .pie-legend {
   display: block;
   width: 100%;
-  margin-top: 0.5rem;
+  margin-top: var(--space-3);
 }
 
 .pie-legend-list {
@@ -1711,14 +1711,14 @@ html {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: var(--space-2);
 }
 
 .pie-legend-item {
   display: flex;
   align-items: baseline;
-  gap: 0.5rem;
-  font-size: 0.82rem;
+  gap: var(--space-3);
+  font-size: var(--text-xs);
 }
 
 .pie-legend-item .legend-swatch {
@@ -1782,7 +1782,7 @@ html {
 .country-map-figure {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--space-3);
 }
 
 /* Positioning context for the zoom controls overlaid on the map (Story #70).
@@ -1809,7 +1809,7 @@ html {
   width: 100%;
   height: 100%;
   display: block;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   overflow: hidden;
   touch-action: none; /* pointer-drag pans instead of scrolling the page */
 }
@@ -1822,13 +1822,13 @@ html {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.35rem;
+  gap: var(--space-2);
   height: 100%;
-  padding: 1rem;
+  padding: var(--space-5);
   text-align: center;
   background: var(--surface-hover, var(--border));
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
 }
 
 /* ---- Country marks (Story #122, DDR-0030) --------------------------------
@@ -1896,7 +1896,7 @@ html {
   right: 0.5rem;
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: var(--space-1);
 }
 
 /* The +/−/reset controls are `variant="surface" size="icon"` (Story #127). Only the reset
@@ -1931,7 +1931,7 @@ html {
    real area, and the fade only starts once it has been seen. Both stops stay inside the gutter,
    so the invariant is untouched. */
 .mapboxgl-popup-content {
-  padding: var(--popup-pad-y) 0.7rem;
+  padding: var(--popup-pad-y) var(--space-4);
   color: var(--text);
   background: linear-gradient(
     to bottom,
@@ -1943,7 +1943,7 @@ html {
     var(--popup-edge, var(--card)) 100%
   );
   border: 1px solid var(--popup-border, var(--border));
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   box-shadow: 0 1px 2px rgb(0 0 0 / 0.12);
   font: inherit;
 }
@@ -2027,14 +2027,14 @@ html {
    sector and country depths keep the shape and swap the identity lines (Story #122). */
 .map-popup-title {
   margin: 0;
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
 .map-popup-name {
   margin: 0.1rem 0 0;
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
   color: var(--muted);
   /* Company names come from the broker and are not length-bounded. */
   display: -webkit-box;
@@ -2046,26 +2046,26 @@ html {
 .map-popup-meta {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  margin: 0.35rem 0 0;
-  font-size: 0.78rem;
+  gap: var(--space-2);
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-xs);
   color: var(--muted);
 }
 
 .map-popup-rows {
   display: grid;
   gap: 0.15rem;
-  margin: 0.5rem 0 0;
-  padding-top: 0.5rem;
+  margin: var(--space-3) 0 0;
+  padding-top: var(--space-3);
   border-top: 1px solid var(--border);
-  font-size: 0.82rem;
+  font-size: var(--text-xs);
 }
 
 .map-popup-row {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 1rem;
+  gap: var(--space-5);
 }
 
 .map-popup-row dt {
@@ -2080,7 +2080,7 @@ html {
 
 .country-map-legend {
   flex-wrap: wrap;
-  gap: 0.4rem 1.25rem;
+  gap: var(--space-2) var(--space-6);
   align-items: center;
   justify-content: center;
 }
@@ -2091,7 +2091,7 @@ html {
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: 0.35rem 0.9rem;
+  gap: var(--space-2) var(--space-5);
   list-style: none;
   margin: 0;
   padding: 0;
@@ -2100,8 +2100,8 @@ html {
 .country-map-sector {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  font-size: 0.85rem;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
 }
 
 /* Gain/loss legend (Story #95): the seven scale steps between their labelled bounds. Sits in the
@@ -2110,8 +2110,8 @@ html {
 .map-scale {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 0.85rem;
+  gap: var(--space-3);
+  font-size: var(--text-xs);
 }
 
 .map-scale-end {
@@ -2141,7 +2141,7 @@ html {
   flex-basis: 100%;
   text-align: center;
   color: var(--muted);
-  font-size: 0.82rem;
+  font-size: var(--text-xs);
 }
 
 .country-map-unknown {
@@ -2150,14 +2150,14 @@ html {
 }
 
 .classify-prompt {
-  margin-top: 1rem;
-  padding-top: 1rem;
+  margin-top: var(--space-5);
+  padding-top: var(--space-5);
   border-top: 1px solid var(--border);
 }
 
 .classify-note {
-  margin: 0 0 0.75rem;
-  font-size: 0.82rem;
+  margin: 0 0 var(--space-4);
+  font-size: var(--text-xs);
   color: var(--muted);
 }
 
@@ -2172,9 +2172,9 @@ html {
  * element's own progressbar role, not from this styling.
  */
 .classify-progress {
-  margin: 0.6rem 0 0;
+  margin: var(--space-3) 0 0;
   block-size: 4px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--border);
   overflow: hidden;
 }
@@ -2192,15 +2192,15 @@ html {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
+  gap: var(--space-4);
 }
 
 .bar-list-head {
   display: flex;
   justify-content: space-between;
-  gap: 1rem;
-  font-size: 0.85rem;
-  margin-bottom: 0.35rem;
+  gap: var(--space-5);
+  font-size: var(--text-xs);
+  margin-bottom: var(--space-2);
 }
 
 .bar-list-label {
@@ -2214,19 +2214,19 @@ html {
 }
 
 .bar-list-pct {
-  margin-left: 0.5rem;
+  margin-left: var(--space-3);
   color: var(--text);
 }
 
 .bar-track {
   height: 8px;
   background: rgba(57, 135, 229, 0.14);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   overflow: hidden;
 }
 
 .bar-fill {
   height: 100%;
   background: var(--series-1);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
 }

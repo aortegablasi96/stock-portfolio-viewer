@@ -145,6 +145,53 @@ test may take the stylesheet as its subject.
 Rejected. It scatters the exemption record across 2,232 lines, makes "how many are left" an
 unanswerable question, and puts the decision to exempt at the point of least review.
 
+## Amendment — Story #152 (2026-08-09)
+
+#152 converted all 102 baseline entries and emptied the list. Two decisions were taken during
+that conversion that belong here, because both are about what the scale can and cannot express.
+
+### Three sub-4px hairlines join the exemptions
+
+`--space-1` is 4px, and three rules sat below it: `.map-popup-name { margin: 0.1rem 0 0 }`
+(1.6px), `.map-popup-rows { gap: 0.15rem }` and `.flex-import-file { margin-top: 0.15rem }` (2.4px
+each). Snapping them to `--space-1` is a **2.5×** and **1.7×** change inside dense components —
+including a hover popup [[0041-map-popup-return-tint-strength]] had already tuned.
+
+This is the spacing counterpart of the sub-6px radii: **below the scale's smallest step is off the
+scale**, not "not yet converted". Exemptions now number 11.
+
+Rejected: adding a 2px `--space-0`. Three call sites do not justify widening a scale, and
+[[0031-design-token-scales]] already spends its one irregularity on the 6px half-step.
+
+### Three near-identical type sizes collapse to `--text-xs`
+
+Twenty declarations used `0.78rem`, `0.82rem` or `0.85rem` for the same job — notes, hints and
+small labels. That trio *is* the drift Epic #125 exists to remove: three values, no distinction,
+each defensible alone. All twenty are now `--text-xs`, moving 0.32–0.8px per glyph.
+
+`0.85rem` (13.6px) is an exact tie between `--text-xs` (12.8) and `--text-sm` (14.4), so the
+tie-break is semantic. DDR-0031 documents `--text-xs` as "uppercase labels, hints, dense controls"
+and `--text-sm` as "body text, table cells, panel titles"; all eight call sites are the former,
+and `--text-xs` keeps them subordinate to body text, which is what they are.
+
+### Two conversions worth naming
+
+`.view-toolbar { margin-bottom: -0.75rem }` became `calc(-1 * var(--space-4))` — exact, no pixel
+moves. A naive "nearest step" reading would have moved it by 16px, because the question is
+meaningless against a positive-only scale.
+
+`.mapboxgl-popup-content { padding: var(--popup-pad-y) 0.7rem }` converted its **horizontal** half
+only. `--popup-pad-y` is load-bearing: DDR-0041 makes the tint band exactly the content's vertical
+padding, and `mapPopupTint.test.ts` pins that geometry.
+
+### Verified by pixel diff, since no test can see a layout shift
+
+All five views screenshotted before and after at 1440×960. Every image is the same size — no
+layout blowout. The four analytics tabs differ only within y:15–191 (title bar and tab bar
+chrome); Portfolio differs across the page at 5.0% of pixels, which is text re-antialiased after
+1–3px shifts, with structure unchanged. The one deliberate layout change is `.app-tab`, ~3px wider
+per tab.
+
 ## References
 
 - [[0031-design-token-scales]] — the scale this enforces

@@ -189,10 +189,10 @@ describe('app.css token adoption', () => {
 
   it('holds the two lists at their reviewed size', () => {
     // Not a target to chase: it makes an unreviewed bulk change to either list visible in a diff.
-    // BASELINE falls to 0 over #152; EXEMPTIONS only moves with a recorded reason.
+    // #152 emptied BASELINE, so it stays at 0; EXEMPTIONS only moves with a recorded reason.
     expect({ baseline: BASELINE.length, exemptions: EXEMPTIONS.length }).toEqual({
-      baseline: 102,
-      exemptions: 8,
+      baseline: 0,
+      exemptions: 11,
     })
   })
 
