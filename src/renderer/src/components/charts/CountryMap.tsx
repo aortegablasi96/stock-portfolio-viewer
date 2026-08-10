@@ -309,8 +309,21 @@ export function CountryMap({
       // the control language stays the design system's (DDR-0019). Attribution stays on — it is
       // required by Mapbox's terms and is not ours to hide.
       attributionControl: true,
+      // Mapbox's canvas is focusable by default and its keyboard handler pans with the arrow
+      // keys. Both are switched off (#164): DDR-0030 already decided this map is approximate and
+      // supplementary, positioned by issuer country rather than by company, and that **the
+      // Positions table is where one company is read**. A keyboard affordance that pans a
+      // graphic whose marks carry no individually reachable detail would invite an exploration
+      // the marks cannot reward — and the marks are deliberately inert too (see the markers
+      // below). What stays focusable inside the container is the attribution control, which is
+      // real interactive content; that is why the container is a `group` and not an `img`.
+      keyboard: false,
     })
     mapRef.current = map
+
+    // `keyboard: false` stops the handler; the canvas is still in the tab order until its
+    // tabindex is cleared, and it is the canvas that makes `role="img"` a lie.
+    map.getCanvas().setAttribute('tabindex', '-1')
 
     // One popup for the whole map, moved and re-filled as the cursor crosses bars.
     const popup = new mapboxgl.Popup({
@@ -382,6 +395,14 @@ export function CountryMap({
     const created = countries.map((c) => {
       const el = document.createElement('div')
       el.className = 'country-marker'
+      // Set *before* the Marker is constructed, and deliberately not `'0'`: Mapbox only assigns
+      // its own `tabindex="0"` when the element does not already carry one
+      // (`this._originalTabIndex || setAttribute(...)`), so pre-setting it is how a custom marker
+      // opts out (#164). A mark reveals its detail on hover, through a popup no keyboard could
+      // dismiss or read; putting six of them in the tab order would add stops that announce a
+      // country name and offer nothing. The Positions table is the keyboard-reachable way to
+      // read a holding (DDR-0030).
+      el.setAttribute('tabindex', '-1')
       const marker = new mapboxgl.Marker({ element: el, anchor: 'center' })
         .setLngLat([c.lon, c.lat])
         .addTo(map)
@@ -462,7 +483,15 @@ export function CountryMap({
           </StatePanel>
         ) : (
           <>
-            <div ref={containerRef} className="country-map" role="img" aria-label={ariaLabel} />
+            {/* `role="group"`, not `role="img"` (#164). An image promises an atomic graphic with
+                nothing to explore inside it, and this container cannot keep that promise: Mapbox
+                mounts its attribution control here — a button and four links that are required by
+                Mapbox's terms, are genuinely interactive, and must stay reachable. Declaring
+                `img` over them was the contradiction axe reported as `nested-interactive`: a
+                screen reader was told not to look inside a subtree a keyboard could still enter.
+                The *graphics* are made inert instead (the canvas and every marker carry
+                `tabindex="-1"`), so what remains focusable in here is exactly what should be. */}
+            <div ref={containerRef} className="country-map" role="group" aria-label={ariaLabel} />
             {hosts.map(({ code, el }) => {
               const country = byCode.get(code)
               return country
