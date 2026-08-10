@@ -592,6 +592,29 @@ Canonical flows to copy when adding a feature:
   `onRowActivate` is also what makes rows focusable, so an ordinary table adds nothing to the tab
   order. And `.data-table-row-active` is **neutral, not accent** — the row is pointed at, not
   selected, and the accent already means "this column holds the sort".
+- **The loss tone is two tokens, and picking the wrong one is silent** (Story #163, DDR-0046).
+  `--neg` `#d03b3b` measured **3.62:1** on `--card` while `--pos` measured 5.19:1 — so every
+  negative money figure in the app was less legible than every positive one, in `StatTile`, twelve
+  `DataTable`s and the realized-gains highlight. It could not be lightened, because `--neg` is
+  **both text and a fill under white text**: the value that fixes `.stat-negative` (`#e56c6c`)
+  drops `.btn-danger:hover` to 3.14:1. So the tone split. **`--neg` is fills only** — five sites:
+  `.btn-danger:hover`, `.chart-bar-loss`, `.chart-bar-upper`, `.legend-swatch-upper` and the map
+  popup's `color-mix` tint (DDR-0041) — and keeps the CVD validation of DDR-0021/0030 untouched.
+  **`--neg-text` `#e56c6c` is text only**, at exactly two sites: `.btn-danger` and
+  `.stat-negative`. Same shape for the accent: `--accent-strong` `#1360e7` fills `.btn-primary`
+  alone, while `--accent` stays the focus ring, the active-tab bar and the sort arrow. Four things
+  to know. **The hover is the binding measurement** — `.btn-primary:hover` applies
+  `brightness(1.08)`, which lightens its own fill and *lowers* contrast against a white label
+  (5.45:1 → 4.81:1); axe tests resting state only and never saw it, so `lib/contrast.ts` models
+  the filter. `#e56c6c` was picked to sit beside `--pos`'s 5.19/5.63 rather than scrape 4.5,
+  because the finding was **asymmetry**, not a number. `contrast.test.ts` pins the *split* as well
+  as the thresholds — a fill adopting `--neg-text`, or a text rule going back to `--neg`, fails
+  even though both would still pass the ratios. And it lists `.stat-positive`, which passes: a
+  guard listing only what once failed would have missed this finding too. The pairing list is
+  **enumerated by hand** — resolving a colour against its inherited background needs a layout
+  engine, which Node-only Vitest does not have. Known and deliberately open: the tab panels sit
+  outside a landmark (axe `region`, best-practice), because `.tab-panel` wraps the view's `<main>`
+  and unpicking that means restructuring DDR-0029 across every view.
 - **Never write a focus rule.** One ring — `--focus-ring` / `--focus-ring-offset`, always
   `--accent`, destructive controls included — is applied by a **zero-specificity `:where(...)`
   base rule** at the top of `app.css`, so an interactive element is ringed by default and can't
@@ -1145,7 +1168,7 @@ sorting and formatting are **extracted out of components into pure modules under
 `column`, `dateRange`, `sectorMap`, `performanceRange`, `classifyProgress`, `dataVersion`,
 `tabKeyboard`, `buttonVariants`, `cardVariants`, `statTileVariants`, `fieldVariants`,
 `toggleGroupVariants`, `badgeVariants`, `statePanelVariants`, `tableSort`, `dataTableVariants`,
-`sliceHighlight`, `mapPopupTint`, `cssDeclarations`, `tokenAdoption`, `motionTokens`,
+`sliceHighlight`, `mapPopupTint`, `cssDeclarations`, `tokenAdoption`, `motionTokens`, `contrast`,
 `analyticsShell`)
 precisely so they can be tested — follow
 that split when adding a component with real logic in it. `dataVersion` is the same move applied

@@ -10,6 +10,11 @@ import { Button } from './ui/Button'
  *
  * Drag vs. no-drag is expressed with CSS `-webkit-app-region` (see app.css): the bar drags,
  * the controls do not, so they stay clickable and keyboard-focusable.
+ *
+ * The root is a `<header>` rather than a `<div>` (Story #163): with no OS chrome, this bar is
+ * the app's banner, and as a `<div>` it left the app name as the one piece of page content
+ * outside any landmark. It is a landmark for the same reason the window controls are real
+ * buttons — the shell is app code, so it owes the same semantics OS chrome would have supplied.
  */
 export function TitleBar(): React.JSX.Element {
   const [isMaximized, setIsMaximized] = useState(false)
@@ -22,7 +27,7 @@ export function TitleBar(): React.JSX.Element {
   }, [])
 
   return (
-    <div className="titlebar">
+    <header className="titlebar">
       <div className="titlebar-drag">
         <span className="titlebar-title">Stock Portfolio Viewer</span>
       </div>
@@ -56,7 +61,7 @@ export function TitleBar(): React.JSX.Element {
           <CloseIcon />
         </Button>
       </div>
-    </div>
+    </header>
   )
 }
 

@@ -81,3 +81,4 @@ Other options and why they were not chosen.
 - `0043` — One `AnalyticsShell` for the four analytics views: a render prop over the report, `subject` as the axis, branch mapping and state wording in a pure module (extends `0038`, `0027`)
 - `0044` — Two durations, two easings; reduced motion honoured by redefining the tokens to `0ms` rather than listing what moves, so a raw duration is the only way out (extends `0031`)
 - `0045` — Allocation map: one view, coloured by sector; the gain/loss mode and the `--diverge-*` scale withdrawn, the popup's return tint kept (supersedes `0021`, whose `--pos`/`--neg` rule still governs)
+- `0046` — Contrast: the loss tone splits (`--neg` for fills, `--neg-text` for text) and `--accent-strong` fills the primary button, so neither validated palette moves; guarded by a Node test that measures hover states too (extends `0021`, `0034`, `0032`)

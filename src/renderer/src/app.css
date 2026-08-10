@@ -6,6 +6,13 @@
   --text: #e6e9ef;
   --muted: #9aa4b2;
   --accent: #4c8dff;
+  /* The accent as a *filled button's* background (Story #163). White on --accent is 3.20:1,
+     below AA's 4.5:1, and .btn-primary:hover applies brightness(1.08) — which lightens the fill
+     and lowers it further, so the hover is the binding measurement, not the resting state.
+     Same hue as --accent (218°) so the button still reads as the accent family: 5.45:1 at rest,
+     4.81:1 hovered. Deliberately NOT used by the focus ring, the active-tab bar or the sort
+     arrow — those keep --accent, which is unchanged. */
+  --accent-strong: #1360e7;
   /* Chart palette — dark-mode steps from the validated data-viz reference palette.
      Slots 1–8 are the categorical set, in the order that clears the CVD, normal-vision
      and contrast gates against the panel surface (validated 2026-07-23, all checks pass).
@@ -21,8 +28,16 @@
   /* Residual slices ("Other", unknown/unclassified) — neutral, so hue always means a
      real category. 4.8:1 against the panel surface. */
   --series-neutral: #898781;
-  --pos: #0ca30c; /* good — realized/unrealized gain */
-  --neg: #d03b3b; /* critical — realized/unrealized loss */
+  --pos: #0ca30c; /* good — realized/unrealized gain. 5.19:1 on --card, 5.63:1 on --bg */
+  --neg: #d03b3b; /* critical — realized/unrealized loss. FILLS ONLY: see --neg-text */
+  /* The loss tone as *text* (Story #163). --neg is 3.62:1 on --card and 3.93:1 on --bg, both
+     below AA's 4.5:1, so every negative figure was less legible than every positive one. It
+     cannot simply be lightened: --neg is also a fill under white text (.btn-danger:hover) and
+     white on this value is 3.14:1. So the tone splits — --neg keeps its CVD-validated value
+     (DDR-0021, DDR-0030) and all five fill uses; --neg-text carries the two text uses.
+     5.53:1 on --card, 6.01:1 on --bg — matching --pos's headroom rather than scraping 4.5,
+     because the finding was that the two tones were unbalanced. */
+  --neg-text: #e56c6c;
   --chart-grid: #2c2c2a;
   --chart-axis: #898781;
   /* The one measure the whole shell shares (Story #76): the content column's outer width,
@@ -295,8 +310,8 @@ html {
 
 .btn-primary {
   color: #ffffff;
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
 }
 
 .btn-primary:hover:not(:disabled) {
@@ -316,7 +331,7 @@ html {
 /* The severity lives in the red label and the red hover fill — not in the
    focus ring, which is the shared accent one like everything else (DDR-0031). */
 .btn-danger {
-  color: var(--neg);
+  color: var(--neg-text);
   border-color: var(--border);
 }
 
@@ -522,7 +537,7 @@ html {
 }
 
 .stat-negative {
-  color: var(--neg);
+  color: var(--neg-text);
 }
 
 /* Filter chips and a row count beside a card title. */

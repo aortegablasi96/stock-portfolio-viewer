@@ -108,9 +108,15 @@ describe('the stylesheet backs every declared part and tone', () => {
     expect(declaresRule('.stat-neutral')).toBe(false)
   })
 
-  it('colours the tones with --pos / --neg, the DDR-0021 carve-out', () => {
+  it('colours the tones with --pos / --neg-text, the DDR-0021 carve-out', () => {
+    // The negative tone reads `--neg-text`, not `--neg`, since Story #163. `--neg` measured
+    // 3.62:1 on `--card` — below AA — while `--pos` passed at 5.19:1, so every loss was less
+    // legible than every gain. It could not simply be lightened: `--neg` is also a fill under
+    // white text (`.btn-danger:hover`), so the tone split instead. `--neg` keeps its
+    // CVD-validated value and all five fill uses; `--neg-text` carries the two text uses.
+    // The thresholds themselves live in `contrast.test.ts`.
     expect(ruleBody('.stat-positive')).toContain('color: var(--pos)')
-    expect(ruleBody('.stat-negative')).toContain('color: var(--neg)')
+    expect(ruleBody('.stat-negative')).toContain('color: var(--neg-text)')
   })
 
   it('keeps figures on tabular numerals, so a column of them lines up', () => {
