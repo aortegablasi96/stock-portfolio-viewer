@@ -239,6 +239,19 @@ describe('colour tokens (unchanged by Epic #125)', () => {
     expect(token(name)).toBe(value)
   })
 
+  /**
+   * The two tones added by Story #163. They exist because `--neg` and white-on-`--accent` failed
+   * AA, and they are pinned here for the same reason the palette above is: the values are
+   * measured, so moving one is a measurement invalidated. `contrast.test.ts` enforces the
+   * thresholds; this pins that the split itself survives.
+   */
+  it('carries a text-safe loss tone and a filled-button accent, distinct from the originals', () => {
+    expect(token('--neg-text')).toBe('#e56c6c')
+    expect(token('--accent-strong')).toBe('#1360e7')
+    expect(token('--neg-text')).not.toBe(token('--neg'))
+    expect(token('--accent-strong')).not.toBe(token('--accent'))
+  })
+
   it('keeps the eight-slot categorical palette and its neutral residual', () => {
     expect(
       [1, 2, 3, 4, 5, 6, 7, 8].map((slot) => token(`--series-${slot}`)),
