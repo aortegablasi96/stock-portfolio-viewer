@@ -1,6 +1,7 @@
 # 0021. Allocation map: the gain/loss colour scale
 
-- **Status:** Accepted
+- **Status:** Superseded by 0045 (the colour mode is withdrawn — but the reasoning below that
+  governs where `--pos` / `--neg` may be spent **still applies**, and 0045 depends on it)
 - **Date:** 2026-07-26
 
 ## Context

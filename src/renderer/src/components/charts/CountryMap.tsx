@@ -11,7 +11,6 @@ import {
   type CountryDonuts,
   type DonutSlice,
 } from '../../lib/countryDonuts'
-import { DIVERGING_CLASSES, RETURN_BOUND } from '../../lib/gainLoss'
 import { MAP_POPUP_TINTS, mapPopupTintClassName } from '../../lib/mapPopupTint'
 import { toneClassName, toneOf } from '../../lib/statTileVariants'
 import { Button } from '../ui/Button'
@@ -93,9 +92,6 @@ const ZOOM_EPSILON = 0.01
 const POPUP_GAP_PX = 6
 
 type MapStatus = 'pending' | 'ready' | 'no-token' | 'unavailable'
-
-/** What the marks' colour encodes. Sector is the default; the owner switches (Story #95). */
-export type MapColorMode = 'sector' | 'gainLoss'
 
 /**
  * What the cursor is over: one sector's slice, or the country — from the weight donut, which
@@ -198,20 +194,17 @@ function returnOf(subject: Subject): number | null {
  */
 function CountryMark({
   country,
-  colorMode,
   onEnter,
   onLeave,
 }: {
   country: CountryDonuts
-  colorMode: MapColorMode
   onEnter: (subject: Subject) => void
   onLeave: () => void
 }): React.JSX.Element {
   const { r, cx, dot } = country
   // The pair spans both donuts plus the gap between them; height is one donut.
   const halfWidth = dot ? r : cx + r
-  const fillOf = (slice: DonutSlice): string =>
-    colorMode === 'sector' ? slice.colorClass : slice.gainLossClass
+  const fillOf = (slice: DonutSlice): string => slice.colorClass
 
   return (
     <svg
@@ -224,9 +217,7 @@ function CountryMark({
     >
       {dot ? (
         <circle
-          className={`country-mark-dot ${
-            colorMode === 'sector' ? country.colorClass : country.gainLossClass
-          }`}
+          className={`country-mark-dot ${country.colorClass}`}
           r={r}
           onMouseEnter={() => onEnter({ kind: 'country', country })}
         />
@@ -264,7 +255,6 @@ export function CountryMap({
   bySector,
   formatValue,
   formatSigned,
-  colorMode,
   ariaLabel,
   emptyMessage = 'No country data to map yet.',
 }: {
@@ -272,7 +262,6 @@ export function CountryMap({
   bySector: AllocationSlice[]
   formatValue: (v: number) => string
   formatSigned: (v: number) => string
-  colorMode: MapColorMode
   ariaLabel: string
   emptyMessage?: string
 }): React.JSX.Element {
@@ -478,12 +467,7 @@ export function CountryMap({
               const country = byCode.get(code)
               return country
                 ? createPortal(
-                    <CountryMark
-                      country={country}
-                      colorMode={colorMode}
-                      onEnter={showPopup}
-                      onLeave={hidePopup}
-                    />,
+                    <CountryMark country={country} onEnter={showPopup} onLeave={hidePopup} />,
                     el,
                     code,
                   )
@@ -525,39 +509,24 @@ export function CountryMap({
         )}
       </div>
       <figcaption className="chart-legend country-map-legend">
-        {colorMode === 'sector' ? (
-          <ul className="country-map-sectors" aria-label="Sector colours">
-            <li className="country-map-sector">
-              {/* The gauge's blue is the one hue on the mark that is not a sector, so the legend
-                  has to name it or the left chart is unexplained. */}
-              <span className="legend-swatch pie-series-1" aria-hidden="true" />
-              Country weight
+        <ul className="country-map-sectors" aria-label="Sector colours">
+          <li className="country-map-sector">
+            {/* The gauge's blue is the one hue on the mark that is not a sector, so the legend
+                has to name it or the left chart is unexplained. */}
+            <span className="legend-swatch pie-series-1" aria-hidden="true" />
+            Country weight
+          </li>
+          {legend.map((s) => (
+            <li key={s.key} className="country-map-sector">
+              <span className={`legend-swatch ${s.colorClass}`} aria-hidden="true" />
+              {s.label}
             </li>
-            {legend.map((s) => (
-              <li key={s.key} className="country-map-sector">
-                <span className={`legend-swatch ${s.colorClass}`} aria-hidden="true" />
-                {s.label}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <div
-            className="map-scale"
-            aria-label={`Unrealized return scale, minus ${RETURN_BOUND} percent to plus ${RETURN_BOUND} percent`}
-          >
-            <span className="map-scale-end">−{RETURN_BOUND}%</span>
-            <span className="map-scale-swatches" aria-hidden="true">
-              {DIVERGING_CLASSES.map((c) => (
-                <span key={c} className={`legend-swatch ${c}`} />
-              ))}
-            </span>
-            <span className="map-scale-end">+{RETURN_BOUND}%</span>
-          </div>
-        )}
+          ))}
+        </ul>
         <span className="country-map-pan-hint">
-          {colorMode === 'sector'
-            ? 'Each country: left donut = its weight in the portfolio (share of NAV), right donut = one slice per sector · size ∝ country value · positioned by issuer country · scroll to zoom · drag to pan'
-            : `Colour = unrealized return on cost · left donut for the country, right per sector · beyond ±${RETURN_BOUND}% saturates · gray means flat or unknown`}
+          Each country: left donut = its weight in the portfolio (share of NAV), right donut = one
+          slice per sector · size ∝ country value · positioned by issuer country · scroll to zoom ·
+          drag to pan
         </span>
         {unknown.count > 0 && (
           <span

@@ -29,7 +29,7 @@
 import type { AllocationPosition } from '@shared/domain/allocation'
 import type { SectorPalette } from './sectorMap'
 import { arcPath, fullRingPath } from './pie'
-import { divergingClass, returnPercent } from './gainLoss'
+import { returnPercent } from './gainLoss'
 import { centroidFor } from './worldGeo'
 
 /** Radius of each donut in the smallest country's pair. Also the hit-target floor for a disc. */
@@ -77,8 +77,6 @@ export interface DonutSlice {
   label: string
   /** Categorical colour class. Blue for the country's weight, the shared palette for a sector. */
   colorClass: string
-  /** Gain/loss-mode colour class, on the diverging return-on-cost scale (DDR-0021). */
-  gainLossClass: string
   returnPercent: number | null
   marketValueBase: number
   unrealizedPnlBase: number
@@ -112,7 +110,6 @@ export interface CountryDonuts {
   dot: boolean
   /** Colour class for the disc when `dot` — the country's largest sector, which the legend explains. */
   colorClass: string
-  gainLossClass: string
   returnPercent: number | null
   marketValueBase: number
   unrealizedPnlBase: number
@@ -244,7 +241,6 @@ function layOut(
       key: seed.key,
       label: seed.label,
       colorClass: seed.colorClass,
-      gainLossClass: divergingClass(pct),
       returnPercent: pct,
       marketValueBase: seed.totals.marketValueBase,
       unrealizedPnlBase: seed.totals.unrealizedPnlBase,
@@ -382,7 +378,6 @@ export function countryDonuts(
       // A disc has one fill and must choose: the country's largest sector, the hue the legend
       // explains. Deliberately not the weight blue, which would say nothing about what is held.
       colorClass: sectors[0]?.colorClass ?? 'pie-series-neutral',
-      gainLossClass: divergingClass(countryReturn),
       returnPercent: countryReturn,
       marketValueBase: totals.marketValueBase,
       unrealizedPnlBase: totals.unrealizedPnlBase,

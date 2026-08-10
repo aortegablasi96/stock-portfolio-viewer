@@ -7,7 +7,7 @@ import type {
 } from '@shared/domain/allocation'
 import { formatCurrency, formatDate, formatSignedCurrency } from '../../lib/format'
 import { SECTOR_SLOT_OFFSET } from '../../lib/pie'
-import { CountryMap, type MapColorMode } from '../charts/CountryMap'
+import { CountryMap } from '../charts/CountryMap'
 import { AllocationBreakdown } from './AllocationBreakdown'
 import { useAnalytics } from './useAnalytics'
 import { AnalyticsShell } from './AnalyticsShell'
@@ -37,16 +37,6 @@ const BREAKDOWN_TABS = [
 ] as const
 type BreakdownTab = (typeof BREAKDOWN_TABS)[number]['id']
 
-/**
- * What the map's marks encode with colour (Story #95). Sector is the default — the map opens the
- * way it always has, and gain/loss is something the owner asks for. Deliberately not persisted:
- * the question "where am I losing money?" is one you ask, not a mode you live in.
- */
-const COLOR_MODES = [
-  { id: 'sector', label: 'Sector' },
-  { id: 'gainLoss', label: 'Gain/loss' },
-] as const satisfies readonly { id: MapColorMode; label: string }[]
-
 function slicesFor(report: AllocationReport, tab: BreakdownTab): AllocationSlice[] {
   switch (tab) {
     case 'assetClass':
@@ -63,10 +53,9 @@ function slicesFor(report: AllocationReport, tab: BreakdownTab): AllocationSlice
 export function AllocationView(): React.JSX.Element {
   const analytics = useAnalytics<AllocationResult>(window.api.getAllocation)
   const [tab, setTab] = useState<BreakdownTab>('assetClass')
-  const [colorMode, setColorMode] = useState<MapColorMode>('sector')
 
-  // The breakdown tab and the map's colour mode stay above the shell: they are the view's own
-  // state, and the shell holds none, so they survive a tab switch exactly as they did (DDR-0027).
+  // The breakdown tab stays above the shell: it is the view's own state, and the shell holds
+  // none, so it survives a tab switch exactly as it did (DDR-0027).
   return (
     <AnalyticsShell<AllocationReport> subject="allocation" analytics={analytics}>
       {(r) => {
@@ -85,12 +74,6 @@ export function AllocationView(): React.JSX.Element {
             <Card>
               <CardHeader>
                 <CardTitle>By geography &amp; sector (world map)</CardTitle>
-                <ToggleGroup
-                  label="Map colour"
-                  options={COLOR_MODES}
-                  value={colorMode}
-                  onSelect={setColorMode}
-                />
               </CardHeader>
               <CardContent>
                 <CountryMap
@@ -98,16 +81,13 @@ export function AllocationView(): React.JSX.Element {
                   bySector={r.bySector}
                   formatValue={c}
                   formatSigned={(v) => formatSignedCurrency(v, r.baseCurrency)}
-                  colorMode={colorMode}
                   // The map's marks are hover-only — they carry no text a screen reader can reach,
                   // and keyboard operation is a separate story (#93). The map no longer draws
                   // individual holdings at all (DDR-0030), so this label states what it totals and
                   // points at the Positions table below, where one company's figures are read.
                   ariaLabel={`World map of ${r.positions.length} holdings totalling ${c(
                     r.totalMarketValueBase,
-                  )}, drawn as a pair of radial charts per issuer country — the country's weight in the portfolio, and one ring per sector — coloured by ${
-                    colorMode === 'sector' ? 'sector' : 'unrealized return'
-                  }. Every holding is listed individually in the Positions table below.`}
+                  )}, drawn as a pair of radial charts per issuer country — the country's weight in the portfolio, and one ring per sector — coloured by sector. Every holding is listed individually in the Positions table below.`}
                 />
               </CardContent>
             </Card>

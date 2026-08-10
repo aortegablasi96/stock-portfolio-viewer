@@ -56,7 +56,7 @@ Other options and why they were not chosen.
 - `0018` — One shared content measure for the shell; charts sized by aspect ratio
 - `0019` — Allocation map: Mapbox basemap with an SVG bubble overlay (supersedes `0014`) *(superseded by 0020 on the overlay; basemap decisions still apply)*
 - `0020` — Allocation map: one canvas circle per holding, with a hover popup (supersedes `0019`) *(superseded by 0030 on the unit, spread, canvas layer and per-holding granularity; approximation and a11y stance still apply)*
-- `0021` — Allocation map: the gain/loss colour scale (red↔gray↔blue, fixed ±25%; extends `0020`)
+- `0021` — Allocation map: the gain/loss colour scale (red↔gray↔blue, fixed ±25%; extends `0020`) *(superseded by `0045`; its `--pos`/`--neg` rule still applies)*
 - `0022` — Bounded gateway requests; a stalled gateway as its own `not_responding` state (extends `0002`)
 - `0023` — Classification refresh: resumable (persist before reporting) and progress-reporting (extends `0009`)
 - `0024` — Gateway reads coalesced in the repository behind a short freshness window; FX fetched concurrently (extends `0022`)
@@ -80,3 +80,4 @@ Other options and why they were not chosen.
 - `0042` — Token adoption held by a ratchet: `BASELINE` may only shrink and a dead entry fails; exemptions enumerated by hand, because two mechanical rules leaked. Amended by #152, which emptied the baseline and exempted three sub-4px hairlines (extends `0031`)
 - `0043` — One `AnalyticsShell` for the four analytics views: a render prop over the report, `subject` as the axis, branch mapping and state wording in a pure module (extends `0038`, `0027`)
 - `0044` — Two durations, two easings; reduced motion honoured by redefining the tokens to `0ms` rather than listing what moves, so a raw duration is the only way out (extends `0031`)
+- `0045` — Allocation map: one view, coloured by sector; the gain/loss mode and the `--diverge-*` scale withdrawn, the popup's return tint kept (supersedes `0021`, whose `--pos`/`--neg` rule still governs)

@@ -190,9 +190,10 @@ describe('app.css token adoption', () => {
   it('holds the two lists at their reviewed size', () => {
     // Not a target to chase: it makes an unreviewed bulk change to either list visible in a diff.
     // #152 emptied BASELINE, so it stays at 0; EXEMPTIONS only moves with a recorded reason.
+    // 11 → 9 in #160, when the diverging legend's two end caps left with the gain/loss mode.
     expect({ baseline: BASELINE.length, exemptions: EXEMPTIONS.length }).toEqual({
       baseline: 0,
-      exemptions: 11,
+      exemptions: 9,
     })
   })
 
