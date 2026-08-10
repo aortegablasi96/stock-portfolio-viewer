@@ -592,6 +592,23 @@ Canonical flows to copy when adding a feature:
   `onRowActivate` is also what makes rows focusable, so an ordinary table adds nothing to the tab
   order. And `.data-table-row-active` is **neutral, not accent** — the row is pointed at, not
   selected, and the accent already means "this column holds the sort".
+- **The Allocation map is a `group`, not an `img`, and its graphics are deliberately inert**
+  (#164, DDR-0047). The container declared `role="img"` — one atomic graphic, nothing inside worth
+  exploring — while Mapbox mounted a focusable canvas, six markers and an **attribution control**
+  inside it, which axe reported as `nested-interactive`. Making the subtree inert and keeping the
+  promise was tried first and **cannot work**: `attributionControl: true` is required by Mapbox's
+  terms and its button and four links are real interactive content that must stay reachable, so a
+  container holding them can never be an image. Hence `role="group"` (which permits focusable
+  descendants) keeping its `aria-label`, plus `keyboard: false`, the canvas at `tabindex="-1"`,
+  and **every marker host at `tabindex="-1"` set *before* the `Marker` is constructed** — Mapbox
+  assigns its own `tabindex="0"` only when the element doesn't already carry one, so setting it
+  afterwards is silently undone. That follows DDR-0030 rather than reversing it: a mark reveals
+  its detail through a hover popup no keyboard can open, and the Positions table is where one
+  company is read. The zoom buttons are **siblings** in their own labelled group, so they are
+  untouched — don't move them inside. `lib/mapAccessibility.test.ts` guards all of it and
+  **strips comments before matching**, which is load-bearing: the component explains itself in
+  prose, and deleting the real `keyboard: false` left the assertion green off the commentary alone
+  (the same trap DDR-0042 records for `app.css`).
 - **The loss tone is two tokens, and picking the wrong one is silent** (Story #163, DDR-0046).
   `--neg` `#d03b3b` measured **3.62:1** on `--card` while `--pos` measured 5.19:1 — so every
   negative money figure in the app was less legible than every positive one, in `StatTile`, twelve
