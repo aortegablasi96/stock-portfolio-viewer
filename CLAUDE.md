@@ -396,7 +396,13 @@ Canonical flows to copy when adding a feature:
   motion. The blanket `*{animation-duration:0.01ms!important}` reset was rejected for reaching
   exactly that fade on a guess. And `.pie-slice` moved 120ms → 90ms: the donut's hover emphasis and
   the map's are one decision made twice, and a linked emphasis (DDR-0040) must track a sweeping
-  pointer. Mapbox's own camera animation is **not** covered — it is the library's, not `app.css`'s.
+  pointer. Mapbox's own camera animation is **not covered by the token override** — it is the
+  library's, not `app.css`'s — but it *is* already honoured, and the DDR's original claim that this
+  was "a real remaining gap" was corrected on 2026-08-10 as false. `mapbox-gl` 3.27's
+  `respectPrefersReducedMotion` defaults to `true`, `easeTo` zeroes its duration under it, `flyTo`
+  degrades to `easeTo`, and `CountryMap.tsx`'s single camera call passes no `essential: true`. Do
+  not file a story for it. What genuinely does not exist is a *guard*: an opt-out added at a call
+  site would pass every test, since `motionTokens.ts` reads `app.css` and this lives in a `.tsx`.
 - **There is one button, and adding one means naming a role, not writing CSS** (Story #127,
   DDR-0032). `components/ui/Button.tsx` replaced the eight families the audit found —
   `.capture-button`, `.danger-button`, `.ghost-button`, `.retry-button`, `.view-refresh`,

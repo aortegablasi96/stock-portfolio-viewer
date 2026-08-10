@@ -129,9 +129,23 @@ moment it grows a duration the exemption stops applying and it fails like any ot
 ### What this does not reach
 
 Mapbox GL's own camera animation (`flyTo`, the zoom controls' eased zoom) is the library's, is not
-styled by `app.css`, and is out of this story's scope. It is a real remaining gap for a
-motion-sensitive reader on the Allocation map, and the honest place for it is a story against Epic
-#98, not a token.
+styled by `app.css`, and is therefore outside the token override's reach.
+
+> **Correction, 2026-08-10.** As first written, this section went on to call that "a real remaining
+> gap for a motion-sensitive reader on the Allocation map" and pointed at a story against Epic #98.
+> **That was wrong, and no such story should be filed.** Verified against `mapbox-gl` 3.27.0:
+> `Map` takes `respectPrefersReducedMotion`, which **defaults to `true`**; the internal predicate is
+> `this._respectPrefersReducedMotion && prefersReducedMotion && !(options && options.essential)`;
+> under it `easeTo` sets `duration = 0`, `flyTo` degrades to `easeTo`, and pan inertia returns
+> early. `CountryMap.tsx` makes exactly one camera call — `map.easeTo({ zoom: … })` for the zoom
+> buttons — and passes neither `essential: true` nor `respectPrefersReducedMotion: false`. So the
+> camera is already honoured; the library covers what the stylesheet cannot.
+
+The residual is therefore narrow and worth stating precisely: this is coverage the app **inherits
+rather than enforces**. A future call site could opt out with `essential: true` and nothing in the
+suite would notice, because `motionTokens.ts` reads `app.css` and this behaviour lives in a `.tsx`
+call site. That is a guard that does not exist, not a gap in the experience — a distinction worth
+keeping, since the two call for very different work.
 
 ## Consequences
 
