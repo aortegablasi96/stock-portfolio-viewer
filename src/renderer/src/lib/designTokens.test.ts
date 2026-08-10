@@ -246,17 +246,15 @@ describe('colour tokens (unchanged by Epic #125)', () => {
     expect(token('--series-neutral')).toBe('#898781')
   })
 
-  it('keeps the seven-step diverging scale, neutral at the midpoint', () => {
-    expect([1, 2, 3, 4, 5, 6, 7].map((step) => token(`--diverge-${step}`))).toEqual([
-      '#d03b3b',
-      '#bc5d55',
-      '#a5746b',
-      '#898781',
-      '#6f849f',
-      '#5180bb',
-      '#2a78d6',
-    ])
-    expect(token('--diverge-4')).toBe(token('--series-neutral'))
+  /**
+   * The diverging scale is gone (Story #160): it existed for the Allocation map's gain/loss
+   * colour mode and had no other consumer, so withdrawing the mode retired the scale. Pinned as
+   * an absence, because a palette that reappears without the CVD validation DDR-0021 recorded
+   * would look like a restoration and be a new, unvalidated decision.
+   */
+  it('declares no diverging scale, which left with the map’s gain/loss mode', () => {
+    expect(rootBlock()).not.toMatch(/--diverge-/)
+    expect(CSS).not.toMatch(/\.map-diverge-/)
   })
 
   it('keeps the shared content measure (DDR-0018)', () => {

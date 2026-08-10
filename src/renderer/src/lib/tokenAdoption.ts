@@ -31,8 +31,13 @@
  *
  * **Story #152 converted all 102 and emptied the baseline**, adding three sub-4px hairlines to the
  * exemptions — the spacing counterpart of the sub-6px radii, since `--space-1` is 4px and snapping
- * a 1.6px gap up to it is a 2.5× change inside a popup DDR-0041 had already tuned. Eleven
- * exemptions now, and the guard is absolute for everything else.
+ * a 1.6px gap up to it is a 2.5× change inside a popup DDR-0041 had already tuned. The guard is
+ * absolute for everything else.
+ *
+ * **Story #160 removed two of the eleven**, the diverging legend's end caps, when the map's
+ * gain/loss colour mode was withdrawn and its rules left the stylesheet. Worth noting as the
+ * ratchet's second half doing its job unprompted: nothing in that story went looking for this
+ * list, and "an exemption that stopped matching also fails" is what sent someone to it. Nine now.
  */
 import { scanDeclarations, type CssDeclaration } from './cssDeclarations'
 
@@ -203,16 +208,6 @@ export const EXEMPTIONS: readonly ExemptEntry[] = [
     key: '.legend-swatch | border-radius',
     value: '3px',
     reason: 'Chart geometry: 3px is below --radius-sm (6px).',
-  },
-  {
-    key: '.map-scale-swatches .legend-swatch:first-child | border-radius',
-    value: '3px 0 0 3px',
-    reason: 'Chart geometry: the diverging scale’s end cap, below --radius-sm.',
-  },
-  {
-    key: '.map-scale-swatches .legend-swatch:last-child | border-radius',
-    value: '0 3px 3px 0',
-    reason: 'Chart geometry: the diverging scale’s end cap, below --radius-sm.',
   },
   {
     key: '.map-popup-name | margin',

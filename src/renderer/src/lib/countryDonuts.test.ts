@@ -348,9 +348,8 @@ describe('countryDonuts', () => {
       [position({ issuerCountry: 'US', costBasisBase: 0, unrealizedPnlBase: 0 })],
       techPalette(),
     ).countries[0]!
+    // Null rather than 0%, so the popup can state "—" instead of asserting the holding is flat.
     expect(us.returnPercent).toBeNull()
-    // The neutral step means 'flat or unknown' — which is why the popup states the figure.
-    expect(us.gainLossClass).toBe('map-diverge-4')
   })
 
   it('has nothing to draw for an empty portfolio', () => {

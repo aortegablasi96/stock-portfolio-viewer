@@ -237,12 +237,25 @@ describe('the stylesheet backs the tint', () => {
     expect(withFallback, 'an edge stop with no --card fallback').toBe(mentions)
   })
 
-  /** The marks keep the diverging scale: this story is the popup only (DDR-0021, DDR-0030). */
-  it('leaves the map’s own return scale alone', () => {
+  /**
+   * The tint stays on the popup and never reaches a mark.
+   *
+   * This assertion used to read "the marks keep the diverging scale", pinning `.map-diverge-1`
+   * beside it. #160 withdrew the gain/loss mode and the scale went with it, but the half that
+   * mattered is unchanged and is now the whole of it: DDR-0021 permits `--pos` / `--neg` here
+   * *because a figure sits two rows below the tint*, and a wedge has no figure beside it. So the
+   * tint may not paint `fill`, and no mark rule may reach for the return colours.
+   */
+  it('keeps the return colours off the marks', () => {
     for (const tint of MAP_POPUP_TINTS) {
       const body = new RegExp(`\\.map-popup-shell\\.${tint} \\{([^}]*)\\}`).exec(CSS)?.[1] ?? ''
       expect(body).not.toContain('fill')
     }
-    expect(CSS).toMatch(/^\.map-diverge-1 \{/m)
+
+    const markRules = [...CSS.matchAll(/^\.country-mark[\w-]* \{([^}]*)\}/gm)].map((m) => m[1] ?? '')
+    expect(markRules.length).toBeGreaterThan(0)
+    for (const body of markRules) {
+      expect(body).not.toMatch(/--pos|--neg/)
+    }
   })
 })

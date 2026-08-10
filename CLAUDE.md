@@ -181,12 +181,18 @@ Canonical flows to copy when adding a feature:
   DDR-0020's per-holding granularity; the Positions table is where one company is read, and the
   `aria-label` says so. **The 2% slice floor applies to sectors only** — applying it to the weight
   donut would overstate every small country, which is the one thing a proportion chart must not do.
-  Two colour modes ride behind a toggle: the sector palette, and unrealized **return on cost** (not
-  absolute P&L — size already encodes that). That second scale is **red ↔ gray ↔ blue, deliberately
-  not the app's `--pos` / `--neg` green/red**, which fails CVD contrast where fill colour is the only
-  channel and no number sits beside it. Don't "restore" them on the slices (DDR-0021) — but the popup
-  *is* tinted `--pos` / `--neg` by the hovered subject's return, which is exactly the case DDR-0021
-  carved out: a figure sits two rows below the tint. **That tint is banked into the popup's top and
+  **The map has one view, coloured by sector** (DDR-0045, superseding DDR-0021). It had a second —
+  unrealized return on cost, on a red ↔ gray ↔ blue diverging scale — withdrawn on the owner's ask
+  in Story #160, which also retired `--diverge-1..7` and `.map-diverge-*` entirely, since the mode
+  was their only consumer; `designTokens.test.ts` now pins that **absence**. Two things survive it
+  and matter more than the mode did. DDR-0021 stays **Superseded-but-applicable** because it is
+  where the app records *when* `--pos` / `--neg` may be spent: never as the only channel on a mark
+  (green/red measures ΔE 4.1 under deuteranopia against the basemap, below the 6.0 floor), freely
+  where a figure accompanies the colour. So don't "simplify" the map by painting wedges green and
+  red — a temptation that got *stronger* once the map stopped showing return at all, which is why
+  `mapPopupTint.test.ts` fails if any `.country-mark*` rule references those tokens. And the popup
+  *is* still tinted `--pos` / `--neg` by the hovered subject's return, which is exactly the case
+  DDR-0021 carved out: a figure sits two rows below the tint. **That tint is banked into the popup's top and
   bottom edges, and the geometry is what lets it be loud** (DDR-0041). It shipped as a flat 12% wash
   and was reported as *absent* — 16 points on one channel, 1.15:1 against `--card`. A flat wash caps
   at 30%, where the popup's `--muted` labels (12.5px, so AA's 4.5:1) hit the bar exactly; raising it
@@ -330,7 +336,7 @@ Canonical flows to copy when adding a feature:
   `CardContent` composition — for primitives built under `renderer/src/components/ui/` and styled
   by the existing CSS custom properties. That decision is now recorded as **ADR-0008**, so it is
   overridden by a superseding ADR, not by a pull request. The CVD-safe palettes stay untouched
-  (DDR-0021, DDR-0030).
+  (DDR-0030; the map's diverging scale was retired with its colour mode, DDR-0045).
 - **`app.css` has a full token scale now, and a rule uses a step rather than a raw length**
   (Story #126, DDR-0031): `--space-1..8` (a 4px grid with one deliberate 6px half-step at
   `--space-2`, where the app's dense controls actually sit), the composite `--control-pad-*` /
@@ -1139,10 +1145,11 @@ precisely so they can be tested — follow
 that split when adding a component with real logic in it. `dataVersion` is the same move applied
 to state rather than maths: the cross-view staleness signal is a plain subscribable store a hook
 reads with `useSyncExternalStore`, so the part worth testing is testable without a renderer. The
-map is the sharpest case: `countryDonuts` and `gainLoss` emit palette *classes* rather than values,
-and every slice path, share normalization and disc threshold falls out of that — the whole
-of the map's geometry and colour scale is testable under Node while the component keeps only the
-parts that need a DOM (DDR-0030). Pure repository helpers that touch no data source
+map is the sharpest case: `countryDonuts` emits palette *classes* rather than values, and every
+slice path, share normalization and disc threshold falls out of that — the whole
+of the map's geometry and colour is testable under Node while the component keeps only the
+parts that need a DOM (DDR-0030). `gainLoss` is what remains of the withdrawn gain/loss scale: one
+function, `returnPercent`, for the popup's return row (DDR-0045). Pure repository helpers that touch no data source
 (`flexStatementParser`, `snapshotMapping`, `fifoSummary`) are unit-tested the same way.
 
 Every completed feature should include:

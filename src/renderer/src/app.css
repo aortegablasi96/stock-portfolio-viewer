@@ -23,20 +23,6 @@
   --series-neutral: #898781;
   --pos: #0ca30c; /* good — realized/unrealized gain */
   --neg: #d03b3b; /* critical — realized/unrealized loss */
-  /* Diverging scale for the Allocation map's gain/loss mode (Story #95). Deliberately NOT
-     --pos/--neg: on the map, fill colour is the only channel — no number sits beside a circle —
-     and green↔red measures ΔE 4.1 under deuteranopia, below the 6.0 floor, so a red-green
-     colourblind reader would see one flat colour across the whole map. Red↔blue measures 23.8.
-     --pos/--neg keep their role wherever a figure accompanies them, this map's popup included.
-     Steps interpolated in Oklab through a neutral gray middle; all seven clear 3:1 against the
-     light basemap (validated 2026-07-26). Lightness peaks at the middle and falls to both poles. */
-  --diverge-1: #d03b3b; /* ≤ −16.7% */
-  --diverge-2: #bc5d55;
-  --diverge-3: #a5746b;
-  --diverge-4: #898781; /* flat, or return unknown — never a hue at the midpoint */
-  --diverge-5: #6f849f;
-  --diverge-6: #5180bb;
-  --diverge-7: #2a78d6; /* ≥ +16.7% */
   --chart-grid: #2c2c2a;
   --chart-axis: #898781;
   /* The one measure the whole shell shares (Story #76): the content column's outer width,
@@ -1661,39 +1647,6 @@ html {
   border-radius: 3px;
 }
 
-/* Gain/loss scale (Story #95) — same shape as every other legend swatch. Each class carries `fill`
-   as well as `background`, exactly as `pie-series-*` does: since #122 the map's marks are SVG, so
-   one of these classes on a `<path>` paints the wedge and the same class on a `<span>` paints its
-   legend swatch, from the one variable (DDR-0030). */
-.map-diverge-1 {
-  fill: var(--diverge-1);
-  background: var(--diverge-1);
-}
-.map-diverge-2 {
-  fill: var(--diverge-2);
-  background: var(--diverge-2);
-}
-.map-diverge-3 {
-  fill: var(--diverge-3);
-  background: var(--diverge-3);
-}
-.map-diverge-4 {
-  fill: var(--diverge-4);
-  background: var(--diverge-4);
-}
-.map-diverge-5 {
-  fill: var(--diverge-5);
-  background: var(--diverge-5);
-}
-.map-diverge-6 {
-  fill: var(--diverge-6);
-  background: var(--diverge-6);
-}
-.map-diverge-7 {
-  fill: var(--diverge-7);
-  background: var(--diverge-7);
-}
-
 .legend-swatch-lower {
   background: var(--series-1);
 }
@@ -2142,39 +2095,6 @@ html {
   align-items: center;
   gap: var(--space-2);
   font-size: var(--text-xs);
-}
-
-/* Gain/loss legend (Story #95): the seven scale steps between their labelled bounds. Sits in the
-   same figcaption slot the sector swatch list occupies in Sector mode, so the caption keeps its
-   height and the map doesn't shift when the mode changes. */
-.map-scale {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  font-size: var(--text-xs);
-}
-
-.map-scale-end {
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-}
-
-/* Butted together, so the steps read as one continuous scale rather than seven categories. */
-.map-scale-swatches {
-  display: flex;
-}
-
-.map-scale-swatches .legend-swatch {
-  width: 22px;
-  border-radius: 0;
-}
-
-.map-scale-swatches .legend-swatch:first-child {
-  border-radius: 3px 0 0 3px;
-}
-
-.map-scale-swatches .legend-swatch:last-child {
-  border-radius: 0 3px 3px 0;
 }
 
 .country-map-pan-hint {
