@@ -1301,6 +1301,9 @@ html {
 
 .app-tab {
   position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
   padding: var(--space-2) var(--space-5);
   font: inherit;
   font-size: var(--text-sm);
@@ -1310,6 +1313,19 @@ html {
   border: none;
   border-radius: var(--radius-md);
   cursor: pointer;
+}
+
+/* Each tab's icon (Story #168) — a second channel beside the label, never a replacement.
+   Sized in `em`, so it tracks the tab's own `--text-sm` instead of pinning a height of its
+   own: the type scale is already the token that decides how big this row is, and an icon
+   picked in px would be the one thing in the strip that didn't move with it (DDR-0031).
+   `flex-shrink: 0` because the strip wraps at narrow widths, and a squashed glyph reads as a
+   different shape rather than as a smaller one. It is drawn in `currentColor`, so it follows
+   the tab through muted → text → accent with no colour of its own. */
+.app-tab-icon {
+  width: 1em;
+  height: 1em;
+  flex-shrink: 0;
 }
 
 .app-tab:hover {

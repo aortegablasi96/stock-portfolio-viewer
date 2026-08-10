@@ -238,7 +238,25 @@ Canonical flows to copy when adding a feature:
   in `renderer/src/lib/tabKeyboard.ts` because nothing inside a component is testable under
   Vitest's Node environment, and the attributes and focus moves are pinned by
   `e2e/tab-navigation.spec.ts`. The active tab carries a 2px bar under its label as well as the
-  accent colour: accent-on-pill is two cues but both are colour. Don't drop the bar.
+  accent colour: accent-on-pill is two cues but both are colour. Don't drop the bar. **Each tab
+  also carries an icon, and it is a second channel rather than a name** (Story #168, DDR-0048).
+  The five glyphs live in `components/TabIcons.tsx` — not at the bottom of `App.tsx`, where
+  seventy lines of path data would sit between a reader and the invariants above — and every one
+  renders through a private `Glyph` wrapper, so the module declares **exactly one `<svg>`** and a
+  sixth icon inherits `aria-hidden`, `focusable="false"` and `stroke="currentColor"` by
+  construction rather than by remembering. Three things follow. The label stays a **bare text
+  node** beside the icon, which is why `e2e/tab-navigation.spec.ts` passes unmodified: an SVG
+  contributes no text node, so the tabs still read exactly their five names. `currentColor` is the
+  whole colour decision — the glyph follows the tab through `--muted` → `--text` → `--accent` and
+  adds **no pairing** for `lib/contrast.ts` to cover (DDR-0046), so a literal hex or a palette
+  token in an icon is a colour nothing measures. And the size is **`1em`, not a step**: an icon
+  sitting *in* a line of page text must track `--text-sm`, which is the mirror of DDR-0018's rule
+  that an SVG `<text>` label scaling from a `viewBox` must stay *off* the page scale.
+  `lib/tokenAdoption.ts` guards neither `width` nor `height`, so `lib/tabIcons.test.ts` is the
+  only thing that catches a px icon — it strips comments first, the trap DDR-0042 and DDR-0047
+  both record. Icons stop at the tablist: the analytics sub-tabs, the breakdown strip and the
+  `RangeFilter` presets are `ToggleGroup`s, not tabs (DDR-0036), and giving them icons is a
+  separate judgement.
 - **Fire-and-forget command + state event:** the `window:*` channels show the *other* IPC
   shape — `ipcRenderer.send` / `ipcMain.on` with no payload and no Zod (there is nothing to
   validate), plus one `invoke` query (`window:isMaximized`) and one main→renderer event
