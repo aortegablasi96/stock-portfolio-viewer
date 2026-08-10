@@ -6,6 +6,13 @@ import { PerformanceView } from './components/analytics/PerformanceView'
 import { AllocationView } from './components/analytics/AllocationView'
 import { DividendsView } from './components/analytics/DividendsView'
 import { TradeHistoryView } from './components/analytics/TradeHistoryView'
+import {
+  AllocationIcon,
+  DividendsIcon,
+  PerformanceIcon,
+  PortfolioIcon,
+  TradesIcon,
+} from './components/TabIcons'
 import { nextTabIndex } from './lib/tabKeyboard'
 
 /**
@@ -28,15 +35,19 @@ import { nextTabIndex } from './lib/tabKeyboard'
  * The bar implements the full WAI-ARIA tabs pattern (Story #111, DDR-0029): every panel is a
  * `tabpanel` tied to its tab both ways, arrow keys move between tabs and activate as they go,
  * and a roving `tabindex` keeps the whole tablist a single stop in the Tab order.
+ *
+ * Each tab also carries an icon (Story #168). It is a *second* channel: the label stays, and the
+ * glyph is `aria-hidden`, so nothing about the pattern above — or about what a screen reader is
+ * told — changes. See `components/TabIcons.tsx`.
  */
 type Tab = 'portfolio' | 'performance' | 'allocation' | 'dividends' | 'trades'
 
-const TABS: { id: Tab; label: string }[] = [
-  { id: 'portfolio', label: 'Portfolio' },
-  { id: 'performance', label: 'Performance' },
-  { id: 'allocation', label: 'Allocation' },
-  { id: 'dividends', label: 'Dividends' },
-  { id: 'trades', label: 'Trades' },
+const TABS: { id: Tab; label: string; icon: () => React.JSX.Element }[] = [
+  { id: 'portfolio', label: 'Portfolio', icon: PortfolioIcon },
+  { id: 'performance', label: 'Performance', icon: PerformanceIcon },
+  { id: 'allocation', label: 'Allocation', icon: AllocationIcon },
+  { id: 'dividends', label: 'Dividends', icon: DividendsIcon },
+  { id: 'trades', label: 'Trades', icon: TradesIcon },
 ]
 
 /** The two halves of each tab/panel pair, so `aria-controls` and `aria-labelledby` can't drift. */
@@ -123,6 +134,7 @@ export function App(): React.JSX.Element {
         <div className="app-tabs" role="tablist" aria-label="Views" onKeyDown={onTabKeyDown}>
           {TABS.map((t) => {
             const isActive = tab === t.id
+            const Icon = t.icon
             return (
               <button
                 key={t.id}
@@ -144,6 +156,9 @@ export function App(): React.JSX.Element {
                 className={`app-tab ${isActive ? 'app-tab-active' : ''}`}
                 onClick={() => select(t.id)}
               >
+                {/* Icon first, label second — and the label is a bare text node so the tab's
+                    `textContent` stays exactly its name. */}
+                <Icon />
                 {t.label}
               </button>
             )
