@@ -7,7 +7,7 @@ import {
   formatSignedPercent,
 } from '../../lib/format'
 import { boundsFor } from '../../lib/dateRange'
-import { seriesExtent, sliceSeries, windowStats } from '../../lib/performanceRange'
+import { rebaseSeries, seriesExtent, sliceSeries, windowStats } from '../../lib/performanceRange'
 import { LineChart } from '../charts/LineChart'
 import { useAnalytics } from './useAnalytics'
 import { AnalyticsShell } from './AnalyticsShell'
@@ -37,6 +37,10 @@ type ChartTab = (typeof CHART_TABS)[number]['id']
  * ranges is instant and never refetches. The per-period returns table stays whole-history
  * (table filters are out of scope for this story).
  *
+ * The return curve is *rebased* to the window rather than merely sliced (Story #169): it opens
+ * at 0% and closes on the Time-weighted return tile, because a 1M heading over an
+ * inception-to-date baseline left the reader doing the subtraction the tile had already done.
+ *
  * The view stays mounted once visited (Story #109), so the range selection and chart tab below
  * survive a trip to another tab; the `RefreshBar` gives the re-read that leaving and returning
  * used to perform by accident.
@@ -58,12 +62,26 @@ export function PerformanceView(): React.JSX.Element {
         const bounds = extent ? boundsFor(range, extent, customBounds) : null
 
         const valueSeries = bounds ? sliceSeries(r.valueSeries, bounds) : r.valueSeries
-        const returnSeries = bounds ? sliceSeries(r.returnSeries, bounds) : r.returnSeries
+        // The value chart is sliced; the return chart is sliced *and rebased* to open at 0%, so
+        // it ends exactly on the Time-weighted return tile beside it (Story #169). The value
+        // series is deliberately left alone — rebasing a value curve is a different decision.
+        const returnSeries = bounds ? rebaseSeries(r.returnSeries, bounds) : r.returnSeries
         const stats = bounds
           ? windowStats(r.valueSeries, r.returnSeries, bounds)
           : { endValue: r.endingValue, changeAbs: 0, changePct: null, twr: r.cumulativeTwr }
 
         const periodLabel = range === 'all' ? 'Full history' : 'Selected period'
+        // Rebasing is invisible on an axis, so the title and the chart's accessible name both
+        // say which baseline the curve is drawn from. Full history is the identity case: it
+        // already opens at 0%, and its wording is unchanged.
+        const returnChartTitle =
+          range === 'all'
+            ? 'Performance change over time'
+            : 'Performance change over the selected period'
+        const returnChartLabel =
+          range === 'all'
+            ? 'Cumulative time-weighted return over time, from 0% at the start of the history'
+            : 'Time-weighted return over the selected period, from 0% at the start of the period'
 
         return (
           <>
@@ -101,9 +119,7 @@ export function PerformanceView(): React.JSX.Element {
             <Card>
               <CardHeader>
                 <CardTitle id="perf-chart-title">
-                  {chartTab === 'value'
-                    ? 'Portfolio value over time'
-                    : 'Performance change over time'}
+                  {chartTab === 'value' ? 'Portfolio value over time' : returnChartTitle}
                 </CardTitle>
                 <ToggleGroup
                   label="Performance chart"
@@ -127,7 +143,7 @@ export function PerformanceView(): React.JSX.Element {
                     points={returnSeries}
                     formatValue={formatSignedPercent}
                     formatDate={formatDate}
-                    ariaLabel="Cumulative time-weighted return over time"
+                    ariaLabel={returnChartLabel}
                   />
                 )}
               </CardContent>
