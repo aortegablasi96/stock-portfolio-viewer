@@ -21,6 +21,10 @@ import type { Bounds } from './dateRange'
  * the rebased curve cannot drift apart: the curve's final point is this function applied to the
  * same two endpoints the tile reads (Story #169).
  *
+ * Exported for `dailyReturns`, which rebases each point onto the one before it (Story #170) — the
+ * same operation with a different base, and the same reason to have one definition of it: a
+ * private copy would be free to disagree about the two degenerate bases below.
+ *
  * A base of exactly 0% short-circuits to the value itself. That is not just an optimisation —
  * it keeps "Full history" an exact identity rather than one float round-trip away from it.
  *
@@ -30,7 +34,7 @@ import type { Bounds } from './dateRange'
  * open, and equal to the chain-link in the only shape a wiped-out account can actually take
  * (a series that stays at −100%, since without a deposit there is nothing left to grow).
  */
-function chainLink(cumulativePct: number, basePct: number): number {
+export function chainLink(cumulativePct: number, basePct: number): number {
   if (basePct === 0) return cumulativePct
   const baseGrowth = 1 + basePct / 100
   if (baseGrowth === 0) return cumulativePct - basePct

@@ -1649,7 +1649,16 @@ html {
   fill: var(--series-1);
 }
 
-/* A below-zero net month is a loss, so its bar takes the loss colour (Story #49 refinement). */
+/* An up day in the daily-return chart (Story #170). `--pos` / `--neg` are correct here for the
+   same reason they are on `.chart-bar-loss` and not on the map: the bar's side of the zero
+   baseline already states the sign, so colour is the second channel rather than the only one
+   (DDR-0021). The fill tokens, not `--neg-text` — these are areas, not glyphs (DDR-0046). */
+.chart-bar-gain {
+  fill: var(--pos);
+}
+
+/* A below-zero net month is a loss, so its bar takes the loss colour (Story #49 refinement).
+   Worn on its own by the daily-return chart's down days, where there is no lower/upper stack. */
 .chart-bar-loss {
   fill: var(--neg);
 }
