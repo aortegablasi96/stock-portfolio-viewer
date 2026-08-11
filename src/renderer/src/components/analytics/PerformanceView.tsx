@@ -7,7 +7,9 @@ import {
   formatSignedPercent,
 } from '../../lib/format'
 import { boundsFor } from '../../lib/dateRange'
+import { dailyReturns } from '../../lib/dailyReturns'
 import { rebaseSeries, seriesExtent, sliceSeries, windowStats } from '../../lib/performanceRange'
+import { BarChart } from '../charts/BarChart'
 import { LineChart } from '../charts/LineChart'
 import { useAnalytics } from './useAnalytics'
 import { AnalyticsShell } from './AnalyticsShell'
@@ -19,10 +21,15 @@ import { ToggleGroup } from '../ui/ToggleGroup'
 import { toneClassName, toneOf } from '../../lib/statTileVariants'
 import { useRangeSelection } from './useRangeSelection'
 
-/** The two switchable Performance charts (Story #45). */
+/**
+ * The switchable Performance charts (Story #45; the daily bar chart joined them in Story #170).
+ * Story #172 retires this switcher for a 2×2 grid, so the labels are written to work as card
+ * titles rather than only as chips.
+ */
 const CHART_TABS = [
   { id: 'value', label: 'Portfolio value over time' },
   { id: 'return', label: 'Performance change over time' },
+  { id: 'daily', label: 'Daily return' },
 ] as const
 type ChartTab = (typeof CHART_TABS)[number]['id']
 
@@ -40,6 +47,10 @@ type ChartTab = (typeof CHART_TABS)[number]['id']
  * The return curve is *rebased* to the window rather than merely sliced (Story #169): it opens
  * at 0% and closes on the Time-weighted return tile, because a 1M heading over an
  * inception-to-date baseline left the reader doing the subtraction the tile had already done.
+ *
+ * A third chart (Story #170) breaks that cumulative curve back into its individual days, because
+ * neither line answers "what does a normal day look like?" — a curve that rises 40% over a year
+ * looks the same whether it climbed in steady steps or in a dozen violent swings.
  *
  * The view stays mounted once visited (Story #109), so the range selection and chart tab below
  * survive a trip to another tab; the `RefreshBar` gives the re-read that leaving and returning
@@ -83,6 +94,26 @@ export function PerformanceView(): React.JSX.Element {
             ? 'Cumulative time-weighted return over time, from 0% at the start of the history'
             : 'Time-weighted return over the selected period, from 0% at the start of the period'
 
+        // Daily returns come off the *unwindowed* curve so the window's opening bar is measured
+        // against the trading day that really preceded it, not against the synthetic point
+        // `sliceSeries` anchors at the edge (Story #170). Rebasing is irrelevant here — the base
+        // cancels out of consecutive ratios, so these bars agree with the rebased curve either way.
+        const dailyPoints = dailyReturns(r.returnSeries, bounds ?? undefined)
+        // Named from the bars actually drawn, not from the selected bounds: the window's first
+        // *point* carries no bar when it opens the history, so a label reading off `bounds` would
+        // promise a day the chart does not show — and disagree with its own axis labels.
+        const dailyChartLabel =
+          dailyPoints.length === 0
+            ? 'Daily return for each trading day'
+            : `Daily return for each of ${dailyPoints.length} trading days, ${formatDate(dailyPoints[0]!.date)} to ${formatDate(dailyPoints[dailyPoints.length - 1]!.date)}`
+
+        const chartTitle =
+          chartTab === 'value'
+            ? 'Portfolio value over time'
+            : chartTab === 'return'
+              ? returnChartTitle
+              : 'Daily return'
+
         return (
           <>
             <RangeFilter
@@ -118,9 +149,7 @@ export function PerformanceView(): React.JSX.Element {
 
             <Card>
               <CardHeader>
-                <CardTitle id="perf-chart-title">
-                  {chartTab === 'value' ? 'Portfolio value over time' : returnChartTitle}
-                </CardTitle>
+                <CardTitle id="perf-chart-title">{chartTitle}</CardTitle>
                 <ToggleGroup
                   label="Performance chart"
                   options={CHART_TABS}
@@ -129,7 +158,7 @@ export function PerformanceView(): React.JSX.Element {
                 />
               </CardHeader>
               <CardContent>
-                {chartTab === 'value' ? (
+                {chartTab === 'value' && (
                   <LineChart
                     key="value"
                     points={valueSeries}
@@ -137,7 +166,8 @@ export function PerformanceView(): React.JSX.Element {
                     formatDate={formatDate}
                     ariaLabel="Portfolio value over time"
                   />
-                ) : (
+                )}
+                {chartTab === 'return' && (
                   <LineChart
                     key="return"
                     points={returnSeries}
@@ -145,6 +175,26 @@ export function PerformanceView(): React.JSX.Element {
                     formatDate={formatDate}
                     ariaLabel={returnChartLabel}
                   />
+                )}
+                {chartTab === 'daily' && (
+                  <>
+                    <p className="source-note">
+                      Each bar is one trading day’s time-weighted return, chain-linked from the
+                      cumulative return curve rather than differenced from portfolio value — so a
+                      deposit or withdrawal never shows up as a gain. Inside a statement period the
+                      day-to-day shape is apportioned by each day’s share of the period’s
+                      mark-to-market result; the period’s own endpoints are the returns IBKR
+                      reports, so the boundaries are exact and the days between them are modelled.
+                    </p>
+                    <BarChart
+                      key="daily"
+                      points={dailyPoints}
+                      formatValue={formatSignedPercent}
+                      formatDate={formatDate}
+                      ariaLabel={dailyChartLabel}
+                      emptyMessage="Not enough data points to plot daily returns yet."
+                    />
+                  </>
                 )}
               </CardContent>
             </Card>

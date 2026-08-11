@@ -153,7 +153,16 @@ Canonical flows to copy when adding a feature:
   dependency-free inline SVG (`components/charts/`) — including the allocation donuts and the
   performance view's cumulative **TWR** curve, chosen over a value curve so deposits and
   withdrawals don't move it (DDR-0013). They are sized by **aspect ratio** (the `viewBox`), never
-  a pixel width, because they scale to a shared `--content-max` column (DDR-0018). The
+  a pixel width, because they scale to a shared `--content-max` column (DDR-0018). The Performance
+  view's **daily-return bars** are that same rule under density (DDR-0049): the ratio is fixed and
+  the *bars* thin with the series, because aggregating days into weeks would destroy the volatility
+  the chart exists to show. Two traps — the returns are **chain-linked** from the cumulative TWR
+  series (`lib/dailyReturns`, reusing `performanceRange`'s exported `chainLink`), never differenced
+  from `valueSeries`, or a deposit draws as a spectacular day; and the maths takes the
+  **unwindowed** curve, so the window's opening bar measures against the day that really preceded
+  it rather than against the synthetic point `sliceSeries` anchors at the edge. `BarChart` is its
+  own component rather than a `ColumnChart` flag — that one stacks two series, legends them, and
+  labels every column, which at 191 trading days is a 45:1 strip under 191 overlapping labels. The
   **Allocation map is the one scoped exception**: a Mapbox GL JS basemap (ADR-0007) carrying, per
   issuer country, **two donuts side by side** — left, the country's weight in the portfolio (its
   share of NAV in blue against a muted remainder, on an **absolute 0–100% scale**); right, one
@@ -992,7 +1001,7 @@ Vitest picks up every `src/**/*.test.ts` and runs it in a **Node** environment (
 so no test may render a React component. This shapes the renderer: chart maths, filtering,
 sorting and formatting are **extracted out of components into pure modules under
 `renderer/src/lib/`** (`format`, `pie`, `worldGeo`, `countryDonuts`, `gainLoss`, `tableFilter`,
-`column`, `dateRange`, `sectorMap`, `performanceRange`, `classifyProgress`, `dataVersion`,
+`column`, `dateRange`, `sectorMap`, `performanceRange`, `dailyReturns`, `classifyProgress`, `dataVersion`,
 `tabKeyboard`, `buttonVariants`, `cardVariants`, `statTileVariants`, `fieldVariants`,
 `toggleGroupVariants`, `badgeVariants`, `statePanelVariants`, `tableSort`, `dataTableVariants`,
 `sliceHighlight`, `mapPopupTint`, `cssDeclarations`, `tokenAdoption`, `motionTokens`, `contrast`,
