@@ -24,23 +24,20 @@ tables, a widened content measure with charts sized by aspect ratio, and the All
 rebuild onto a Mapbox basemap with per-holding bubbles and a gain/loss colour mode).
 
 **Further refinement lives in milestone `M4 — Analytics refinement`, split across area-scoped
-Epics** so no single Epic grows unbounded again. Open as of 2026-08-09: **#98 Allocation map**,
-**#99 Analytics views polish** (the four analytics views + the live Portfolio dashboard), and
-**#102 Gateway & data reliability**. Two are closed as delivered: **#125 Shared UI primitives &
-visual consistency** (Round 1 #126–#134, then **reopened 2026-08-07** for Round 2 #151–#154 and
-**closed 2026-08-09** — the primitives, the token ratchet, the analytics shell and the motion
-scale), and **#100 App shell & layout** (window chrome, tab shell, page layout), whose
-shared-control scope was superseded by #125. An Epic closes when its stories
-close; new refinement opens a new Epic under the current milestone rather than reopening a
+Epics** so no single Epic grows unbounded again. **Which Epics are open is not recorded here** —
+the backlog is the source of milestones, and a roster in this file goes stale the day an Epic
+closes. Read it (`gh issue list --state open --label epic`; see *Current Priority* below for the
+rest of the queries). What is stable is the **lifecycle rule**: an Epic closes when its stories
+close, and new refinement opens a *new* Epic under the current milestone rather than reopening a
 delivered one — with **one narrow exception**, added 2026-08-07: an Epic may reopen when its own
 stated problem is provably unfinished, meaning its acceptance criteria under-scoped the finding
 in its Summary, so the new stories close the *original* scope rather than adding refinement.
 That requires a dated note on the Epic naming which criterion under-scoped which finding.
-#125 is the precedent and `docs/github-issues.md` holds the rule. **Read the backlog before
-assuming a view is final** — a
-view you are told is "done" has usually been reworked several times. The Stack and Commands
-sections below are **live**. Still **not built**: AI features, multi-broker support, benchmark
-comparison, and tax reporting — those are later milestones.
+Epic #125 (Shared UI primitives, reopened 2026-08-07 for Round 2 and closed 2026-08-09) is the
+precedent and `docs/github-issues.md` holds the rule. **Read the backlog before assuming a view
+is final** — a view you are told is "done" has usually been reworked several times. The Stack and
+Commands sections below are **live**. Still **not built**: AI features, multi-broker support,
+benchmark comparison, and tax reporting — those are later milestones.
 
 Live domains exist end-to-end as reference patterns:
 
@@ -121,7 +118,7 @@ src/
                  components/ui/ (shared primitives, Epic #125) +
                  lib/ — pure, unit-tested helpers extracted out of components)
   services/      pure business logic — primary unit-test target (system/, meta/, window/,
-                 portfolio/, snapshots/, flex/, analytics/, dividends/)
+                 portfolio/, snapshots/, flex/, analytics/, dividends/, classification/)
   repositories/  the ONLY layer that touches a data source: SQLite (meta/, snapshots/,
                  flex/), the IBKR gateway (portfolio/portfolioRepository.ts + ibkrGateway.ts),
                  or both (classification/)
@@ -158,64 +155,53 @@ Canonical flows to copy when adding a feature:
   withdrawals don't move it (DDR-0013). They are sized by **aspect ratio** (the `viewBox`), never
   a pixel width, because they scale to a shared `--content-max` column (DDR-0018). The
   **Allocation map is the one scoped exception**: a Mapbox GL JS basemap (ADR-0007) carrying, per
-  issuer country, **two donuts side by side** — the left the country's weight in the portfolio (its
-  share of NAV in blue against a muted remainder, on an **absolute 0–100% scale**), the right one
-  slice per sector — with the pair's area proportional to the country's market value and anchored to
-  ISO-3166 alpha-2 centroids, which makes the map deliberately *approximate*, positioned by issuer
-  country rather than by company (DDR-0030, superseding DDR-0020 on the unit, the spiral spread, the
-  canvas layer and per-holding granularity). Six things to know before touching it. The marks are
-  **SVG carried by `mapboxgl.Marker`, not painted into the canvas** — a circle layer paints one flat
-  fill per feature, so donut slices have no canvas equivalent. Colour therefore needs no
-  `getComputedStyle`: a palette class on a `<path>` *is* the fill, so `.map-diverge-*` carries `fill`
-  as well as `background` and a colour-mode switch is an ordinary re-render, not `setPaintProperty`.
-  **The split into two charts is what makes the colour work, and three earlier forms failed on
-  exactly that** — a nested sunburst forced every holding to wear its sector's hue and rendered as
-  one solid block; a holdings donut needed eight distinguishable hues on a 40px mark. Here each chart
-  has one job and the colours that job needs exist: the left shows one number, the right shows
-  sectors, which already have a palette. **`pie-series-1` — the palette's only blue — is reserved for
-  the country weight, so the *sector* dimension starts at slot 2** (`SECTOR_SLOT_OFFSET` in
-  `lib/pie`), applied everywhere a sector appears (map, map legend, Sector donut, its table) because
-  the invariant is one sector/one hue *everywhere*. Only sectors pay it: asset class, currency and
-  country keep all eight slots. Don't put a new chart using slot 1 next to sectors, and don't
-  un-reserve the blue — widen the palette instead. **Holdings are not on the map at all** — that retires
-  DDR-0020's per-holding granularity; the Positions table is where one company is read, and the
-  `aria-label` says so. **The 2% slice floor applies to sectors only** — applying it to the weight
-  donut would overstate every small country, which is the one thing a proportion chart must not do.
-  **The map has one view, coloured by sector** (DDR-0045, superseding DDR-0021). It had a second —
-  unrealized return on cost, on a red ↔ gray ↔ blue diverging scale — withdrawn on the owner's ask
-  in Story #160, which also retired `--diverge-1..7` and `.map-diverge-*` entirely, since the mode
-  was their only consumer; `designTokens.test.ts` now pins that **absence**. Two things survive it
-  and matter more than the mode did. DDR-0021 stays **Superseded-but-applicable** because it is
-  where the app records *when* `--pos` / `--neg` may be spent: never as the only channel on a mark
-  (green/red measures ΔE 4.1 under deuteranopia against the basemap, below the 6.0 floor), freely
-  where a figure accompanies the colour. So don't "simplify" the map by painting wedges green and
-  red — a temptation that got *stronger* once the map stopped showing return at all, which is why
-  `mapPopupTint.test.ts` fails if any `.country-mark*` rule references those tokens. And the popup
-  *is* still tinted `--pos` / `--neg` by the hovered subject's return, which is exactly the case
-  DDR-0021 carved out: a figure sits two rows below the tint. **That tint is banked into the popup's top and
-  bottom edges, and the geometry is what lets it be loud** (DDR-0041). It shipped as a flat 12% wash
-  and was reported as *absent* — 16 points on one channel, 1.15:1 against `--card`. A flat wash caps
-  at 30%, where the popup's `--muted` labels (12.5px, so AA's 4.5:1) hit the bar exactly; raising it
-  to 26% still wasn't enough colour. So the premise changed rather than the number: a
-  `linear-gradient` runs `--popup-edge` → `--card` → `--popup-edge`, with the two inner stops at
-  `--popup-pad-y`, **the content's own vertical padding**, so the coloured band is exactly the
-  gutter above the first line and below the last. No glyph is ever on the tint, the text keeps
-  `--card`'s full 14.32:1 / 6.90:1, and the edge is free at 50%. Four things to keep: the stops are
-  an **absolute length, not a percentage** (a percentage band creeps under the text of the taller
-  six-row sector popups only); `--popup-edge-hold` **holds the colour flat across half the gutter**
-  before the fade starts, and must stay strictly below `--popup-pad-y` or the first line lands on
-  undiluted `--pos` — a ramp starting at pixel zero was tried and read as a hairline, which is also
-  why the gutter is a deep 1.1rem; the **tip takes `--popup-edge`** because Mapbox flips the popup
-  onto whichever edge is loud; and both tones carry the same percentage since a stronger "up" than
-  "down" would encode degree on top of sign. `lib/mapPopupTint.test.ts` pins the *geometry* — the stops are
-  the padding — rather than the colour that depends on it. Note what this does **not** fix: a losing
-  holding inside a winning country is aggregated away before the tint sees it, so a portfolio can
-  hold several losers and show exactly one red mark. That is granularity (DDR-0030), not colour.
-  Finally, a country under an 8px radius becomes a
-  **single disc** in its largest sector's hue (two donuts that small are two smudges), and note that
-  an SVG `<g>` is only ever hit *through its children* — grouping slices and putting
-  `pointer-events: auto` on the group catches nothing. All of this lives in `lib/countryDonuts`. See
-  DDR-0005, DDR-0006.
+  issuer country, **two donuts side by side** — left, the country's weight in the portfolio (its
+  share of NAV in blue against a muted remainder, on an **absolute 0–100% scale**); right, one
+  slice per sector — with the pair's area proportional to the country's market value and anchored
+  to ISO-3166 alpha-2 centroids, which makes the map deliberately *approximate*: positioned by
+  issuer country, not by company (DDR-0030, superseding DDR-0020). All of its geometry and colour
+  lives in `lib/countryDonuts`, testable under Node because it emits palette *classes* rather than
+  values. Six things to know before touching it.
+
+  - The marks are **SVG carried by `mapboxgl.Marker`, not painted into the canvas** — a circle
+    layer paints one flat fill per feature, so donut slices have no canvas equivalent. A palette
+    class on a `<path>` *is* the fill, so colour needs no `getComputedStyle` and a colour change is
+    an ordinary re-render, not `setPaintProperty`. A country under an **8px radius collapses to a
+    single disc** in its largest sector's hue, and an SVG `<g>` is only ever hit *through its
+    children* — grouping slices and putting `pointer-events: auto` on the group catches nothing.
+  - **`pie-series-1` — the palette's only blue — is reserved for the country weight, so the
+    *sector* dimension starts at slot 2** (`SECTOR_SLOT_OFFSET` in `lib/pie`), applied everywhere a
+    sector appears (map, legend, Sector donut, its table), because the invariant is one sector/one
+    hue *everywhere*. Only sectors pay it; asset class, currency and country keep all eight slots.
+    Don't place a new chart using slot 1 beside sectors, and don't un-reserve the blue — widen the
+    palette instead.
+  - **Holdings are not on the map at all**, which retires DDR-0020's per-holding granularity: the
+    Positions table is where one company is read, and the `aria-label` says so. A losing holding
+    inside a winning country is aggregated away before anything colours it, so a portfolio can hold
+    several losers and show one red mark — that is granularity, not colour.
+  - **The 2% slice floor applies to sectors only** — applying it to the weight donut would
+    overstate every small country, the one thing a proportion chart must not do.
+  - **One view, coloured by sector** (DDR-0045). The gain/loss mode was withdrawn in Story #160,
+    taking `--diverge-1..7` and `.map-diverge-*` with it; `designTokens.test.ts` pins that
+    **absence**. Don't "simplify" the map by painting wedges green and red — DDR-0021 stays
+    *Superseded-but-applicable* as the record of when `--pos` / `--neg` may be spent (never as the
+    only channel on a mark, since green/red measures ΔE 4.1 under deuteranopia against the basemap;
+    freely where a figure accompanies the colour), and `mapPopupTint.test.ts` fails if any
+    `.country-mark*` rule references those tokens. The **popup** is the carved-out case: it *is*
+    tinted by the hovered subject's return, with a figure two rows below the tint.
+  - **That tint is banked into the popup's top and bottom edges, and the geometry is what lets it
+    be loud** (DDR-0041): a `linear-gradient` `--popup-edge` → `--card` → `--popup-edge` whose two
+    inner stops sit at `--popup-pad-y`, the content's own vertical padding, so the coloured band is
+    exactly the gutter above the first line and below the last and no glyph is ever on it. Four
+    things to keep — the stops are an **absolute length, not a percentage** (a percentage band
+    creeps under the text of the taller six-row sector popups); `--popup-edge-hold` must stay
+    **strictly below** `--popup-pad-y`, or the first line lands on undiluted `--pos`; the **tip
+    takes `--popup-edge`**, because Mapbox flips the popup onto whichever edge is loud; and both
+    tones carry the same percentage, since a stronger "up" than "down" would encode degree on top
+    of sign. `lib/mapPopupTint.test.ts` pins the *geometry* — the stops are the padding — rather
+    than the colour that depends on it.
+
+  See DDR-0005, DDR-0006.
 - **A view that outlives its tab:** an analytics tab mounts on **first visit and then stays
   mounted**, hidden rather than unmounted, so returning to it keeps both the report and every
   bit of view-local state (time range, type chips, chart tab, map colour mode) — nothing is
@@ -286,22 +272,18 @@ Canonical flows to copy when adding a feature:
   `nodeIntegration: false`. Keep it that way; reach the main process only over IPC. The window
   also runs **frameless** (`frame: false`) with an in-app `TitleBar` supplying minimize /
   maximize / close — window chrome is app code, not OS chrome (DDR-0011).
-- **So is the window's size, position and maximized state** (DDR-0028): with no OS frame there
-  is no OS behaviour restoring anything. `windowStateService` keeps one JSON value under the
-  `app_meta` key `window_state` via `metaRepository` — metadata that is overwritten, not
-  history, so no new table and no migration. Three traps live here. The service may not import
-  `electron`, so `main` passes display geometry **in** as plain rectangles and the off-screen
-  recovery stays a pure, unit-tested function. What is persisted is **`getNormalBounds()`**,
-  never the maximized bounds — a maximized window must remember the size it restores *to*, and
-  a **minimized** one is skipped entirely because it reports neither useful bounds nor (on
-  Windows) its maximized state. And a restored rectangle is re-applied with **`setBounds()`,
-  not the constructor**: only `setBounds` is the inverse of `getNormalBounds()`, since Windows
-  adds its invisible resize border to a frameless window — round-trip through the constructor
-  instead and the window grows a couple of pixels *every launch*. `e2e/window-state.spec.ts`
-  opens the app three times specifically to pin that down. Reachability is judged on the 40px
-  **title bar**, not the window's area: a body covering the screen with its bar above the top
-  edge cannot be dragged. A reachable position is left exactly as the owner left it, including
-  one straddling two displays.
+- **So is the window's size, position and maximized state** (DDR-0028): with no OS frame,
+  nothing restores it for you. `windowStateService` keeps one overwritten JSON value under the
+  `app_meta` key `window_state` — metadata, not history, so no new table. Three traps: the
+  service may not import `electron`, so `main` passes display geometry **in** as plain
+  rectangles and the off-screen recovery stays a pure function; what is persisted is
+  **`getNormalBounds()`**, never the maximized bounds (a **minimized** window is skipped
+  entirely — it reports neither useful bounds nor, on Windows, its maximized state); and a
+  restored rectangle is re-applied with **`setBounds()`, not the constructor**, because only
+  `setBounds` inverts `getNormalBounds()` past the invisible resize border Windows adds to a
+  frameless window — a constructor round-trip grows the window a few pixels *every launch*.
+  `e2e/window-state.spec.ts` opens the app three times to pin that. Reachability is judged on
+  the 40px **title bar**, not the window's area.
 - **Exactly one instance runs at a time.** `main/index.ts` requests
   `app.requestSingleInstanceLock()` at **module load**, before any `whenReady` work is
   registered, so the losing process quits without running migrations, capturing a snapshot, or
@@ -346,310 +328,117 @@ Canonical flows to copy when adding a feature:
   enabled — as a *reference* for the component API, not as a dependency to install. Do not run
   `shadcn add`, and do not propose adopting the package again without new reasons: it would pull
   Tailwind v4 + PostCSS into the renderer build plus `radix-ui`, `cva`, `clsx`, `tailwind-merge`
-  and `lucide-react`; ~40% of the 1,880-line `renderer/src/app.css` is chart/donut/map styling
-  shadcn has no equivalent for (so the app would run two styling systems); Radix Tabs would
-  displace `lib/tabKeyboard.ts`, which exists precisely because Vitest is Node-only (DDR-0029);
-  and DDR-0012 already rules out the modal components carrying much of shadcn's value. What *is*
-  adopted is the API shape — a `variant`/`size` prop contract and `Card`/`CardHeader`/
-  `CardContent` composition — for primitives built under `renderer/src/components/ui/` and styled
-  by the existing CSS custom properties. That decision is now recorded as **ADR-0008**, so it is
-  overridden by a superseding ADR, not by a pull request. The CVD-safe palettes stay untouched
-  (DDR-0030; the map's diverging scale was retired with its colour mode, DDR-0045).
-- **`app.css` has a full token scale now, and a rule uses a step rather than a raw length**
-  (Story #126, DDR-0031): `--space-1..8` (a 4px grid with one deliberate 6px half-step at
-  `--space-2`, where the app's dense controls actually sit), the composite `--control-pad-*` /
-  `--surface-pad-*` in `sm|md|lg` (the same vocabulary as the primitives' `size` prop, so the CSS
-  and the component API agree by construction), `--radius-sm|md|lg|pill` in **px** so a corner
-  doesn't grow with the type scale, and `--text-2xs..2xl` + `--leading-tight|normal`. Two things
-  are deliberately *off* the scale: chart and map SVG label sizes, which scale from a `viewBox`
-  rather than the page (DDR-0018), and the sub-6px radii, which are chart geometry. The scale is
-  now **fully adopted** (Story #152): every spacing, radius and type value in `app.css` is a
-  token, bar eleven recorded exemptions. Round 1 reached the primitives and stopped, leaving 110
-  hand-picked declarations; #152 converted 102 of them and #151's guard keeps the number at zero.
-  Three conversions are worth knowing because they are not "nearest step": a negative margin is
-  `calc(-1 * var(--space-4))` (asking for the nearest step against a positive-only scale is
-  meaningless); `.mapboxgl-popup-content` converted its **horizontal** padding only, since
-  `--popup-pad-y` is the tint geometry DDR-0041 pins; and `0.78rem`/`0.82rem`/`0.85rem` — three
-  values doing one job across 20 declarations — all collapsed to `--text-xs`, the tie at
-  `0.85rem` broken semantically rather than arithmetically.
-- **That gap is now held by a ratchet, and the exemption list is enumerated by hand** (Story
-  #151, DDR-0042). `lib/tokenAdoption.ts` carries two lists — `BASELINE` (may only shrink) and
-  `EXEMPTIONS` (permanent, each with a reason) — and `tokenAdoption.test.ts` fails three ways: a
-  raw value in neither list, a baseline entry that stopped matching, and an exemption that
-  stopped matching. The second is what makes it a ratchet rather than a suppression file; without
-  it, converting a value silently leaves a dead entry and #152's progress is invisible. The
-  scanner (`lib/cssDeclarations.ts`) is text-based, not `postcss` — comments are **blanked in
-  place** so line numbers survive, because `app.css` quotes lengths in prose and a line scan
-  reports those as violations. Declarations are keyed on `brace stack + property`
-  (`@media (…) >> .snapshot-item | gap`), never line numbers, which #152 shifts every commit;
-  measured, 110 declarations give 110 unique keys. **Do not derive the exemptions from a rule** —
-  two were tried and both leaked. A selector prefix wrongly exempted 30 (`.chart-legend` is a
-  `<figcaption>`, `.pie-legend-item` an `<li>`, `.map-scale` a `<span>` — page-scale HTML sitting
-  beside a chart), and a sub-6px radius rule wrongly exempted the tab bar's 1px underline. Only
-  **eleven** things are exempt: three SVG `<text>` label sizes, four sub-6px chart-geometry radii,
-  `.sr-only`'s `margin: -1px`, and three sub-4px hairlines added by #152 — the spacing counterpart
-  of the sub-6px radii, since `--space-1` is 4px and snapping a 1.6px popup gap up to it is a 2.5×
-  change. **`BASELINE` is empty and must stay empty**: re-baselining to get a build green is the
-  suppression file the ratchet was built to avoid. The named collision
-  to know:
-  `--text-xl` is **1.4rem, not 1.5rem**, because `.stat-row` packs tiles into `minmax(11rem, 1fr)`
-  columns where the bigger figure risks wrapping.
-- **Motion is two durations and two easings, and reduced motion is honoured by zeroing the
-  durations rather than by listing what moves** (Story #154, DDR-0044). `--duration-fast` (90ms,
-  feedback on something the pointer is already on) · `--duration-base` (120ms, something arriving or
-  a value moving under its own steam) · `--ease-out` · `--ease-linear` (for a width that *reports a
-  number* — easing `.classify-progress-bar` would claim the classification sped up). One
-  `@media (prefers-reduced-motion: reduce) { :root { --duration-*: 0ms } }` therefore covers every
-  animation including ones added later, which is the half a selector list always gets wrong: the old
-  block named `.pie-slice`, three animations were added after it, and none was added to it. Five
-  things to know. **Source order is the whole mechanism** — same specificity, no media-query bonus —
-  so the block sits directly under `:root` and `designTokens.test.ts` fails if it moves. **A raw
-  duration is the only way out of the reduced-motion rule**, which is why one guard
-  (`lib/motionTokens.ts`) satisfies both of the story's criteria; a shorthand carrying *no* time
-  fails too, since `0s` is a value nobody chose and equally unreachable. Only durations are zeroed —
-  an easing with no time to run is already inert. **The scroll-driven table fade is the one
-  exemption, structurally**: `animation-timeline: scroll(self block)` means it has no duration to
-  zero, it cannot play without the reader's own scroll, it translates nothing, and it is the "more
-  rows below" affordance — so removing it would take a cue from the reader who asked for less
-  motion. The blanket `*{animation-duration:0.01ms!important}` reset was rejected for reaching
-  exactly that fade on a guess. And `.pie-slice` moved 120ms → 90ms: the donut's hover emphasis and
-  the map's are one decision made twice, and a linked emphasis (DDR-0040) must track a sweeping
-  pointer. Mapbox's own camera animation is **not covered by the token override** — it is the
-  library's, not `app.css`'s — but it *is* already honoured, and the DDR's original claim that this
-  was "a real remaining gap" was corrected on 2026-08-10 as false. `mapbox-gl` 3.27's
-  `respectPrefersReducedMotion` defaults to `true`, `easeTo` zeroes its duration under it, `flyTo`
-  degrades to `easeTo`, and `CountryMap.tsx`'s single camera call passes no `essential: true`. Do
-  not file a story for it. What genuinely does not exist is a *guard*: an opt-out added at a call
-  site would pass every test, since `motionTokens.ts` reads `app.css` and this lives in a `.tsx`.
-- **There is one button, and adding one means naming a role, not writing CSS** (Story #127,
-  DDR-0032). `components/ui/Button.tsx` replaced the eight families the audit found —
-  `.capture-button`, `.danger-button`, `.ghost-button`, `.retry-button`, `.view-refresh`,
-  `.type-filter-clear`, `.titlebar-button`, `.map-zoom-btn` — with `variant` ×
-  `size`. **Variants carry colour and border only**: `outline` (default) · `primary` (filled
-  accent — the one action a panel offers) · `secondary` (bordered but quieter: Cancel, Refresh) ·
-  `danger` · `ghost` (**borderless**, window chrome) · `link` · `surface` (its own `--card` fill and
-  shadow, because it floats over the Mapbox basemap and a transparent button on arbitrary tiles is
-  unreadable). Note `ghost` changed meaning: the old `.ghost-button` had a border and is now
-  `secondary`. **Sizes carry padding and type only** — `sm|md|lg` are the `--control-pad-*` steps,
-  while `icon` is a *shape*, a square with no text box, which is why the two icon buttons differ by
-  variant rather than sharing one. Four things to know before touching it. `type` defaults to
-  `"button"`, so no caller can ship a submit button by omission. **No variant declares a focus ring
-  or its own `:disabled`** — both fall through to the shared rules, and
-  `lib/buttonVariants.test.ts` fails if one tries, if a union member has no rule in `app.css`, or
-  if any of the eight superseded selectors reappears. `className` is appended for **placement, not
-  restyling** (`.titlebar-controls .btn`, `.map-zoom-reset`); a `className` carrying colour rebuilds
-  the problem one view at a time. And `.btn` declares **no `line-height`** on purpose: `font:
-  inherit` leaves it `normal`, which is what all eight families used, and "adopting"
-  `--leading-tight` here takes ~3px off every button and lifts the whole Portfolio page, since
-  `.dashboard-header` is `align-items: flex-end` over the actions column.
-- **There is one card surface too, on the same two axes** (Story #128, DDR-0033).
-  `components/ui/Card.tsx` (`Card` / `CardHeader` / `CardTitle` / `CardContent`) replaced
-  `.state-panel`, `.panel`, `.allocation`, `.snapshot-history` and `.highlight-card`. **Variants
-  carry the surface colour**: `default` (`--card`) · `nested` (`--bg`). **Sizes carry the padding**
-  and *are* the `--surface-pad-*` steps — `sm` nested, `md` panel, `lg` state panel — so the API and
-  the CSS can't drift; a test fails if a size stops resolving to its step. Five things to know.
-  `.highlight-card`'s `--bg` was **kept, not normalised**: that card sits inside a panel, where
-  `--card` on `--card` is a border with nothing behind it. **`CardContent` is a scope, not
-  decoration** — the two rules `.panel` declared on its descendants (a `.table-scroll` filling the
-  body drops its border; a `.source-note` lede sits tighter) now hang off `.card-content`, which is
-  what keeps a state panel's prose out of their reach; scoping them to `.card` would give the *not
-  responding* panel a negative top margin it was never written for. **`as` is a prop** because the
-  superseded surfaces weren't one element — the one-line loading states are a `<p>` whose UA margins
-  space `.dashboard`'s flex column. **One heading treatment, sentence case**, because
-  uppercase-with-tracking is this app's *label* treatment for a single figure (`.stat-label` and
-  friends) and spending it on section headings loses the distinction. And `.state-panel` survives
-  shrunken to `color: var(--muted)` — only the surface moved; Story #133's `StatePanel` folds the
-  rest, so `className="state-panel state-error"` is transitional, not the pattern.
-- **A headline figure is a `StatTile`, and it has no surface rule of its own** (Story #129,
-  DDR-0034). `components/ui/StatTile.tsx` (`StatTile` + `StatRow`) replaced the same component
-  written twice — the dashboard's `.balance-tile` and the analytics views' `.stat-tile`, whose
-  labels were byte-identical and whose values disagreed only on `1.5rem` vs `1.4rem` (`--text-xl`,
-  1.4rem, wins). The two tile rules collapse to **none**: a tile *is* a `Card` at `default`/`md`,
-  so the surface is the card's and only the three lines and the tone remain. Four things to know.
-  The tile's axis is **`tone`, not `variant`/`size`** — a headline figure is always a panel-level
-  tile, so those two axes would each have one value. **Neutral is the absence of a tone**:
-  `toneClassName('neutral')` returns `''` and there is deliberately no `.stat-neutral` rule, which
-  is what lets one helper serve a tile, a table cell, the realized-gains highlight and the map
-  popup, each keeping the ink it inherits. `.stat-positive` / `.stat-negative` keep their names
-  because those three non-tile callers wear them — they are the app's tone semantic, not the
-  tile's internals, and they stay `--pos` / `--neg` (the case DDR-0021 carves out, since a figure
-  sits beside the colour). And `.stat-row` is `auto-fit` over `minmax(11rem, 1fr)` for both
-  callers, which is why the balances row needs no breakpoint of its own any more.
-  `lib/statTileVariants.test.ts` fails if a `.stat-*` rule starts declaring a surface again, if a
-  part or tone has no rule, or if `.stat-neutral` acquires one.
-- **A labelled control is a `Field`, and it owns the `id`** (Story #130, DDR-0035).
-  `components/ui/Field.tsx` + `Select.tsx` + `DateInput.tsx` replaced `.field-inline`,
-  `.select-control` and the `.range-custom` date override — one class that styled both form
-  controls while the two call sites *labelled* them differently (`<label htmlFor>` + `id` vs a
-  `<label>` wrapping a bare `<span>`), which is the only reason
-  `.range-custom .field-inline span` existed. Four things to know. **`Field` generates the id
-  with `useId()` and takes no `id` prop**, because analytics tabs stay mounted (DDR-0027) — all
-  three views carrying a `RangeFilter` can be in the document at once, and a defaulted id would
-  appear three times, silently pointing every label at the first control and leaving the rest
-  unnamed. The control is passed as **a function of that id** (`{(id) => <Select id={id} …/>}`)
-  so a call site can't receive it and forget to apply it. **The control has no `size` axis** —
-  both call sites are the same dense box, so `kind` (`select | date`) is the only one, carrying
-  cursor and `color-scheme` only; everything else is the shared `.control`. And its hover and
-  disabled rules **are** `.btn-outline`'s and `.btn`'s, compared body-for-body by
-  `lib/fieldVariants.test.ts`, which also fails if a `.control`/`.field` rule declares `outline`
-  or if any of the three superseded selectors reappears. `DateInput` fixes `type` rather than
-  defaulting it: a different type would strip the meaning from the `min`/`max` bounds that keep
-  the picker inside the imported history (DDR-0017).
-- **A group of related choices is a `ToggleGroup`, and it is never a tablist** (Story #131,
-  DDR-0036). `components/ui/ToggleGroup.tsx` replaced `.chart-tab` — the class the audit called
-  "a control invented twice", which was in fact invented **five** times: the Performance chart
-  switcher, the Allocation map's colour toggle and its breakdown strip, the `RangeFilter`
-  presets and the `TypeFilter` chips. Four things to know. Its axis is **`mode`
-  (`single | multiple`), and the mode is *worn*** — a single-select item keeps `--radius-md`, a
-  multi-select item is `--radius-pill` — because the Dividends and Trade history views stack
-  both kinds one above the other and until this story they were indistinguishable; `.toggle-item`
-  declares no corner at all, so neither mode is the other's silent default. **The three
-  `role="tablist"` call sites were corrected, not completed**: they declared `role="tab"` +
-  `aria-selected` with no roving `tabindex`, no arrow keys and no `role="tabpanel"` — a promise
-  the app keeps only in `lib/tabKeyboard.ts` (DDR-0029) — and they aren't tabs anyway, they
-  switch what one card draws, which is `aria-pressed`. `.app-tab` stays out; it is a real
-  tablist. The active item carries a **doubled stroke** (`box-shadow: inset 0 0 0 1px`) as well
-  as the accent, DDR-0029's "both cues are colour" rule applied to a bordered box, and
-  `lib/toggleGroupVariants.test.ts` fails if that goes, if a mode has no rule, if a `.toggle-*`
-  rule declares `outline`, or if any of the superseded selectors reappears. Watch the option
-  shape: `ToggleOption.title` is a **tooltip**, and `BREAKDOWN_TABS.title` already meant the
-  card's heading — `AllocationView` strips it at the call site.
-- **A small label is a `Badge`, and it is never a pill** (Story #132, DDR-0037).
-  `components/ui/Badge.tsx` replaced the four rules that rendered the same idea — `.native-chip`,
-  `.flex-import-badge` / `-new`, `.card-count` and `.flex-import-dup` — on the button's two axes:
-  **`variant` carries the boundary and the ink** (`neutral` · `accent` · `plain`), **`size`
-  carries the type and the box padding**. Four things to know. The pill is *spoken for*: #131 gave
-  that corner a meaning one story earlier — a multi-select toggle item, "any number of these can
-  be pressed" (DDR-0036) — so `.flex-import-badge`'s 999px becomes `--radius-sm`, the story's one
-  deliberate visual change. **`size` is structural, not a taste for a smaller box**: a badge is an
-  `inline-block`, and an inline-block with vertical padding grows the line box around it, so `sm`
-  (the chip *inside* a run of text) carries none — 4px there adds ~7px to every holdings row.
-  `plain` is the badge with **no boundary, and therefore no box padding**, declared doubled
-  (`.badge.badge-plain`) so it beats the size's padding by specificity rather than source order.
-  And badges carry **no background**: the fill `.native-chip` declared was painting the `--card`
-  surface it already stood on. `role="status"` stays at the count's call site — it is a fact about
-  that one figure, not about badges — and `.flex-import-dim` stays a rule because it colours a
-  `<td>`, not a label. `lib/badgeVariants.test.ts` fails if a badge acquires a pill, a background
-  or a focus ring, if a variant or size has no rule, or if any of the five superseded selectors
-  reappears.
-- **An empty, loading or failed region is a `StatePanel`, and only `error` paints** (Story #133,
-  DDR-0038). `components/ui/StatePanel.tsx` replaced the five presentations the audit found for the
-  four states the architecture already models as result variants: `.state-panel` / `.state-notice`
-  / `.state-error`, `NeedsImport`'s own panel, `.snapshot-empty`, `.chart-empty` (twelve call
-  sites) and the map's `.country-map-unavailable` — where `.snapshot-empty` and `.chart-empty` were
-  **byte-identical**, declared 550 lines apart. The axes are deliberately **not** the button's:
-  **`variant` is the state** (`loading | empty | notice | error`) and **`surface` is whether the
-  panel brings a card** (`panel` = a `Card` at `lg`, `inline` = prose inside a surface that already
-  exists). A size axis would have had one value, and a colour axis none. Five things to know. The
-  parts render in one fixed order — heading, explanation, hint, action — so the recovery action is
-  always last and always in the same place. **Three of the four variants declare no CSS at all**,
-  the same statement as the tile's neutral tone (DDR-0034): the axis exists because the copy and
-  the *announcement* differ, and `role` is derived — `error` is `alert`, everything else `status`,
-  so a disconnected gateway doesn't interrupt a screen reader on every launch. **The element is
-  derived too**: no heading → the panel *is* a `<p>`, which is what the superseded call sites
-  rendered and what keeps `.dashboard`'s spacing (DDR-0033). `not_connected` and `not_responding`
-  share the `notice` variant on purpose — they are one presentation, distinguished by the heading
-  and by the hint only the stalled one carries, because putting that in a colour would say less
-  than the sentence does (DDR-0022). And the Portfolio tab's **converting note is not a state
-  panel**: the figures stay on screen while they re-convert, which is DDR-0027's live-data half.
-  `lib/statePanelVariants.test.ts` fails if a quiet variant acquires a rule, if `.state-panel-panel`
-  appears, if the base starts drawing a surface, or if any of the five superseded selectors returns.
-- **There is one table, and adding a column means describing it rather than writing a `<td>`**
-  (Story #134, DDR-0039). `components/ui/DataTable.tsx` replaced the four rules twelve tables
-  shared — `.holdings-table` (worn by all twelve, named for the Portfolio dashboard),
-  `.table-scroll`, `.table-scroll-rows` and `.breakdown-table` — and closed the gap the audit
-  named: **no table sorted**. The axes are the *container's*, because the table itself has none:
-  **`surface`** (`inline` · `card`) and **`height`** (`auto` · `capped`). Six things to know.
-  `surface` is what retires the `.card-content .table-scroll` override — the old container drew a
-  card surface because the first table to exist stands alone, and eleven later ones relied on a
-  descendant selector to unpaint it; `card` is deliberately **not** a `Card` (a card carries
-  padding, and a table's rows must reach its edges). **Sorting is opt-in per column** — a column
-  with a `sortValue` gets a header button, one without keeps the plain header, which is why the
-  import receipt sorts nothing and the stored-statement list beside it sorts everything. It
-  **composes with the filters rather than replacing them** (DDR-0017): the view narrows the rows,
-  the table reorders what survives, so the "N of M shown" count is untouched. A **missing value
-  sorts last in both directions** — an unconvertible holding (DDR-0007), an undated trade, an
-  opening buy with no realized P&L; letting the direction move them would put "—" at the top of
-  every descending sort. Sort state is one `useState` and survives a tab switch for free, because
-  analytics tabs stay mounted (DDR-0027). And the **sort control is not a `Button`**: the header
-  cell already is the box, so it is a bare `font: inherit` button filling the cell, with direction
-  carried by the arrow's *shape* as well as the accent. `lib/tableSort.test.ts` pins the
-  comparator and the toggle; `lib/dataTableVariants.test.ts` fails if any of the five superseded
-  selectors reappears, if the bare container starts drawing a surface, if an axis value has no
-  rule, or if the sorted header loses its arrow. Two named visual changes: cell padding adopts
-  `--space-4` (+1.6px a row) and the five-row cap is re-measured to `18rem`.
-- **An analytics view is a subject noun and a function of its report** (Story #153, DDR-0043).
+  and `lucide-react`; a large share of the 2,200-line `renderer/src/app.css` is chart/donut/map
+  styling shadcn has no equivalent for (so the app would run two styling systems); Radix Tabs
+  would displace `lib/tabKeyboard.ts`, which exists precisely because Vitest is Node-only
+  (DDR-0029); and DDR-0012 already rules out the modal components carrying much of shadcn's
+  value. What *is* adopted is the API shape — a `variant`/`size` prop contract and
+  `Card`/`CardHeader`/`CardContent` composition — for primitives under
+  `renderer/src/components/ui/` styled by the existing CSS custom properties. Recorded as
+  **ADR-0008**, so it is overridden by a superseding ADR, not by a pull request. The CVD-safe
+  palettes stay untouched (DDR-0030).
+- **`app.css` has a full token scale, and a rule uses a step rather than a raw length**
+  (DDR-0031): `--space-1..8` (a 4px grid with a deliberate 6px half-step at `--space-2`, where
+  the app's dense controls sit), composite `--control-pad-*` / `--surface-pad-*` in `sm|md|lg`
+  (the same vocabulary as the primitives' `size` prop, so CSS and component API agree by
+  construction), `--radius-sm|md|lg|pill` in **px** so a corner doesn't grow with the type
+  scale, and `--text-2xs..2xl` + `--leading-tight|normal`. Deliberately *off* the scale: chart
+  and map SVG label sizes, which scale from a `viewBox` rather than the page (DDR-0018), and
+  sub-6px radii, which are chart geometry. One collision to know — `--text-xl` is **1.4rem, not
+  1.5rem**, because `.stat-row` packs tiles into `minmax(11rem, 1fr)` columns where a bigger
+  figure wraps.
+- **Adoption is held by a ratchet; don't re-baseline it** (DDR-0042). `lib/tokenAdoption.ts`
+  carries `BASELINE` (may only shrink — currently **empty, and must stay empty**) and
+  `EXEMPTIONS` (permanent, eleven entries, each with a reason). `tokenAdoption.test.ts` fails
+  three ways: a raw value in neither list, a *baseline* entry that stopped matching, and an
+  *exemption* that stopped matching — the second is what makes it a ratchet rather than a
+  suppression file. Two traps: the scanner (`lib/cssDeclarations.ts`) is text-based and
+  **blanks comments in place** so line numbers survive, because `app.css` quotes lengths in
+  prose; and **the exemptions are enumerated by hand, never derived from a rule** — a selector
+  prefix and a "sub-6px radius" rule were both tried and both leaked.
+- **Motion is two durations and two easings, and reduced motion zeroes the durations rather
+  than listing what moves** (DDR-0044). `--duration-fast` (90ms, feedback on something the
+  pointer is already on) · `--duration-base` (120ms, something arriving or a value moving under
+  its own steam) · `--ease-out` · `--ease-linear` (for a width that *reports a number* — easing
+  `.classify-progress-bar` would claim the classification sped up). One
+  `@media (prefers-reduced-motion: reduce) { :root { --duration-*: 0ms } }` covers animations
+  added later too, which a selector list never does. Three things to keep: **source order is the
+  mechanism** (same specificity, no media-query bonus), so the block sits directly under
+  `:root` and `designTokens.test.ts` fails if it moves; a **raw duration is the only way out**,
+  which `lib/motionTokens.ts` guards; and the scroll-driven table fade is the one structural
+  exemption (`animation-timeline: scroll(self block)` has no duration to zero and is the "more
+  rows below" affordance), which is why the blanket `*{animation-duration:0.01ms!important}`
+  reset was rejected. Mapbox's own camera is already honoured —
+  `respectPrefersReducedMotion` defaults true and `CountryMap.tsx` passes no `essential: true`
+  — so **don't file a story for it**; what's missing is only a guard, since `motionTokens.ts`
+  reads `app.css` and a call-site opt-out lives in a `.tsx`.
+- **The renderer has one of each control, and adding a variant means naming a role rather than
+  writing CSS** (Epic #125, Stories #127–#134). Each primitive under `components/ui/` replaced
+  several hand-rolled class families, and each has a guard test in `lib/*Variants.test.ts` that
+  fails the same three ways: a superseded selector reappears, an axis value has no rule in
+  `app.css`, or the primitive re-declares something the shared rules own (a focus ring,
+  `:disabled`, `outline`). **Read the DDR before changing an axis** — each one records call
+  sites and rejected alternatives this table can only name.
+
+| Primitive | Axes | The rule that isn't obvious |
+| --- | --- | --- |
+| `Button` (DDR-0032) | `variant` = colour + border (`outline` default · `primary` · `secondary` · `danger` · `ghost` **borderless** · `link` · `surface`) × `size` (`sm\|md\|lg` are the `--control-pad-*` steps; `icon` is a *shape*) | `ghost` changed meaning — the old `.ghost-button` had a border and is now `secondary`. `type` defaults to `"button"`. `className` is appended for **placement, not colour**. `.btn` declares no `line-height` on purpose. |
+| `Card` / `CardHeader` / `CardTitle` / `CardContent` (DDR-0033) | `variant` = surface colour (`default` `--card` · `nested` `--bg`) × `size` = the `--surface-pad-*` steps | `CardContent` is a **scope**: the rules `.panel` declared on its descendants hang off `.card-content`, not `.card`, which keeps a state panel's prose out of their reach. `as` is a prop, because the superseded surfaces weren't one element. |
+| `StatTile` / `StatRow` (DDR-0034) | `tone` only — a headline figure is always a panel-level tile, so `variant`/`size` would each have one value | A tile **is** a `Card`, so it declares no surface of its own. **Neutral is the absence of a rule** (`toneClassName('neutral')` returns `''`); `.stat-positive` / `.stat-negative` are the app's tone semantic, worn by a table cell and the map popup too. |
+| `Field` + `Select` + `DateInput` (DDR-0035) | `kind` (`select \| date`) only — both call sites are the same dense box | **`Field` generates the id with `useId()` and takes no `id` prop**: analytics tabs stay mounted (DDR-0027), so all three `RangeFilter`s can be in the document at once and a fixed id would name only the first. The control is passed as a function of that id. |
+| `ToggleGroup` (DDR-0036) | `mode` (`single \| multiple`), and the mode is **worn** — `--radius-md` vs `--radius-pill` | **Never a tablist**: `aria-pressed`, not `role="tab"` — only `.app-tab` is a real tablist (DDR-0029). The active item carries a doubled stroke (`box-shadow: inset 0 0 0 1px`) as well as the accent. `ToggleOption.title` is a tooltip. |
+| `Badge` (DDR-0037) | `variant` = boundary + ink (`neutral` · `accent` · `plain`) × `size` = type + box padding | **Never a pill** — that corner means multi-select (DDR-0036) — and **never a background**. `sm` carries no vertical padding: an inline-block with it grows every holdings row by ~7px. |
+| `StatePanel` (DDR-0038) | `variant` = the state (`loading \| empty \| notice \| error`) × `surface` (`panel` = a `Card` at `lg` · `inline`) | Only `error` paints; the other three declare no CSS — the axis exists because the copy and the *announcement* differ. `role` is derived (`error` → `alert`, else `status`); no heading → the panel **is** a `<p>`. Parts render in a fixed order, recovery action last. |
+| `DataTable` (DDR-0039) | the *container's* axes: `surface` (`inline \| card`) × `height` (`auto \| capped`) | Sorting is **opt-in per column** (a `sortValue` gets a header button). A **missing value sorts last in both directions**. It composes with the view's filters rather than replacing them, so the "N of M shown" count is untouched. The sort control is not a `Button` — the header cell already is the box. |
+
+- **An analytics view is a subject noun and a function of its report** (DDR-0043).
   `components/analytics/AnalyticsShell.tsx` owns the four-branch guard all four views had spelled
-  out byte-for-byte — loading, error + Retry, `NeedsImport`, then the `.analytics-view` wrapper and
-  the `RefreshBar` — so a fifth view inherits it instead of restating it. Five things to know. The
-  children are a **function of the report, not elements**: three of the four states have no report,
-  so a `ReactNode` shell would force every view to guard *again* before computing the body it hands
-  in. `subject` and `refreshLabel` are two axes because they disagree exactly once — Trades loads
-  "trade history" and refreshes "trades and realized gains" — and `refreshLabel` defaults to
-  `subject` for the other three. **The shell holds no state whatsoever**, which is what keeps
-  DDR-0027 intact: range selection, chart tab, type chips and map colour mode all stay in the view
-  *above* it, so `loading` still means the first load and a returning tab still shows what it
-  showed. `DividendsView`'s "no dividend income recorded" path is an early return **inside** the
-  render prop — it is a state of the report, not of the read, and it still renders the upcoming
-  panel; its private second copy of the wrapper and refresh bar was the drift the story names. And
-  the `<Report>` type argument is written **explicitly** at all four call sites, because inferring
-  it out of a union member is where TypeScript is weakest. `lib/analyticsShell.ts` holds the branch
-  mapping and the wording (the typographic apostrophe in "Couldn’t" is pinned); its test also reads
-  the four views as text and fails if one re-declares the guard, the wrapper or the bar.
-- **The Allocation breakdown's table and donut are linked, and the link is keyed** (Story #147,
-  DDR-0040). They were always the same slice set rendered twice; hovering either half now
-  emphasises the matching slice in both, via one `activeKey` owned by `AllocationBreakdown`.
-  Four things to know. It is keyed on the slice's `key`, **never on position** — the table sorts
-  by any column (DDR-0039), so row order and arc order have no reason to agree, and a positional
-  link would light the wrong wedge exactly when a reader is reconciling the two. The emphasis
-  **never touches `fill`**: hue is identity here (DDR-0030, DDR-0021), so the active wedge keeps
-  its colour and gains a `--text` stroke while the rest drop to 0.35 opacity — and *muting the
-  others is what makes the active one read*, since a 7% wedge outlined among seven full-strength
-  neighbours is still a hunt. `DataTable` gained `activeRowKey` + `onRowActivate` for this, with
-  the keyed guarantee computed inside the primitive from the `rowKey` it already has; supplying
-  `onRowActivate` is also what makes rows focusable, so an ordinary table adds nothing to the tab
-  order. And `.data-table-row-active` is **neutral, not accent** — the row is pointed at, not
-  selected, and the accent already means "this column holds the sort".
+  out byte-for-byte — loading, error + Retry, `NeedsImport`, then the `.analytics-view` wrapper
+  and the `RefreshBar`. Three things to know. The children are a **function of the report, not
+  elements**: three of the four states have no report, so a `ReactNode` shell would force every
+  view to guard *again*. **The shell holds no state whatsoever**, which is what keeps DDR-0027
+  intact — range selection, chart tab, type chips and map colour mode stay in the view *above*
+  it, so `loading` still means the first load. And the `<Report>` type argument is written
+  **explicitly** at all four call sites, because inferring it out of a union member is where
+  TypeScript is weakest. `lib/analyticsShell.ts` holds the branch mapping and the wording; its
+  test reads the four views as text and fails if one re-declares the guard, the wrapper or the bar.
+- **The Allocation breakdown's table and donut are linked, and the link is keyed on the slice's
+  `key`, never on position** (DDR-0040) — the table sorts by any column (DDR-0039), so row order
+  and arc order have no reason to agree. The emphasis **never touches `fill`** (hue is identity,
+  DDR-0030): the active wedge keeps its colour and gains a `--text` stroke while the rest drop to
+  0.35 opacity — muting the others is what makes the active one read. `DataTable` carries
+  `activeRowKey` + `onRowActivate` for this, and supplying `onRowActivate` is also what makes rows
+  focusable, so an ordinary table adds nothing to the tab order. `.data-table-row-active` is
+  **neutral, not accent** — the row is pointed at, not selected, and the accent already means
+  "this column holds the sort".
 - **The Allocation map is a `group`, not an `img`, and its graphics are deliberately inert**
-  (#164, DDR-0047). The container declared `role="img"` — one atomic graphic, nothing inside worth
-  exploring — while Mapbox mounted a focusable canvas, six markers and an **attribution control**
-  inside it, which axe reported as `nested-interactive`. Making the subtree inert and keeping the
-  promise was tried first and **cannot work**: `attributionControl: true` is required by Mapbox's
-  terms and its button and four links are real interactive content that must stay reachable, so a
-  container holding them can never be an image. Hence `role="group"` (which permits focusable
-  descendants) keeping its `aria-label`, plus `keyboard: false`, the canvas at `tabindex="-1"`,
-  and **every marker host at `tabindex="-1"` set *before* the `Marker` is constructed** — Mapbox
-  assigns its own `tabindex="0"` only when the element doesn't already carry one, so setting it
-  afterwards is silently undone. That follows DDR-0030 rather than reversing it: a mark reveals
-  its detail through a hover popup no keyboard can open, and the Positions table is where one
-  company is read. The zoom buttons are **siblings** in their own labelled group, so they are
-  untouched — don't move them inside. `lib/mapAccessibility.test.ts` guards all of it and
-  **strips comments before matching**, which is load-bearing: the component explains itself in
-  prose, and deleting the real `keyboard: false` left the assertion green off the commentary alone
-  (the same trap DDR-0042 records for `app.css`).
-- **The loss tone is two tokens, and picking the wrong one is silent** (Story #163, DDR-0046).
-  `--neg` `#d03b3b` measured **3.62:1** on `--card` while `--pos` measured 5.19:1 — so every
-  negative money figure in the app was less legible than every positive one, in `StatTile`, twelve
-  `DataTable`s and the realized-gains highlight. It could not be lightened, because `--neg` is
-  **both text and a fill under white text**: the value that fixes `.stat-negative` (`#e56c6c`)
-  drops `.btn-danger:hover` to 3.14:1. So the tone split. **`--neg` is fills only** — five sites:
-  `.btn-danger:hover`, `.chart-bar-loss`, `.chart-bar-upper`, `.legend-swatch-upper` and the map
-  popup's `color-mix` tint (DDR-0041) — and keeps the CVD validation of DDR-0021/0030 untouched.
-  **`--neg-text` `#e56c6c` is text only**, at exactly two sites: `.btn-danger` and
-  `.stat-negative`. Same shape for the accent: `--accent-strong` `#1360e7` fills `.btn-primary`
-  alone, while `--accent` stays the focus ring, the active-tab bar and the sort arrow. Four things
-  to know. **The hover is the binding measurement** — `.btn-primary:hover` applies
-  `brightness(1.08)`, which lightens its own fill and *lowers* contrast against a white label
-  (5.45:1 → 4.81:1); axe tests resting state only and never saw it, so `lib/contrast.ts` models
-  the filter. `#e56c6c` was picked to sit beside `--pos`'s 5.19/5.63 rather than scrape 4.5,
-  because the finding was **asymmetry**, not a number. `contrast.test.ts` pins the *split* as well
-  as the thresholds — a fill adopting `--neg-text`, or a text rule going back to `--neg`, fails
-  even though both would still pass the ratios. And it lists `.stat-positive`, which passes: a
-  guard listing only what once failed would have missed this finding too. The pairing list is
-  **enumerated by hand** — resolving a colour against its inherited background needs a layout
-  engine, which Node-only Vitest does not have. Known and deliberately open: the tab panels sit
-  outside a landmark (axe `region`, best-practice), because `.tab-panel` wraps the view's `<main>`
-  and unpicking that means restructuring DDR-0029 across every view.
+  (DDR-0047). `role="img"` over a subtree holding a focusable canvas, six markers and Mapbox's
+  **attribution control** is what axe reported as `nested-interactive`; making the subtree inert
+  **cannot work**, because `attributionControl: true` is required by Mapbox's terms and its links
+  must stay reachable. Hence `role="group"` keeping its `aria-label`, `keyboard: false`, the
+  canvas at `tabindex="-1"`, and **every marker host at `tabindex="-1"` set *before* the `Marker`
+  is constructed** — Mapbox assigns its own `tabindex="0"` only when the element doesn't already
+  carry one, so setting it afterwards is silently undone. The zoom buttons are **siblings** in
+  their own labelled group; don't move them inside. `lib/mapAccessibility.test.ts` guards this and
+  **strips comments before matching** — the component explains itself in prose, and deleting the
+  real `keyboard: false` left the assertion green off the commentary alone (the trap DDR-0042
+  also records for `app.css`).
+- **The loss tone is two tokens, and picking the wrong one is silent** (DDR-0046). `--neg` is a
+  **fill only** (`.btn-danger:hover`, `.chart-bar-loss`, `.chart-bar-upper`,
+  `.legend-swatch-upper`, the map popup's tint) and `--neg-text` `#e56c6c` is **text only**
+  (`.btn-danger`, `.stat-negative`), because `--neg` `#d03b3b` measured 3.62:1 on `--card` as text
+  while the value that fixes that drops `.btn-danger:hover` under white to 3.14:1. Same shape for
+  the accent: `--accent-strong` fills `.btn-primary` alone, while `--accent` stays the focus ring,
+  the active-tab bar and the sort arrow. Three things to know. **The hover is the binding
+  measurement** — `.btn-primary:hover` applies `brightness(1.08)`, which *lowers* contrast against
+  a white label (5.45:1 → 4.81:1) where axe tests resting state only, so `lib/contrast.ts` models
+  the filter. `contrast.test.ts` pins the **split** as well as the ratios: a fill adopting
+  `--neg-text`, or a text rule going back to `--neg`, fails even though both still pass. And the
+  pairing list is **enumerated by hand** (resolving a colour against its inherited background
+  needs a layout engine, which Node-only Vitest lacks), so it lists passing pairs too — a guard
+  listing only what once failed would have missed this finding. Known and deliberately open: the
+  tab panels sit outside a landmark (axe `region`, best-practice), because `.tab-panel` wraps the
+  view's `<main>` and unpicking that means restructuring DDR-0029 across every view.
 - **Never write a focus rule.** One ring — `--focus-ring` / `--focus-ring-offset`, always
   `--accent`, destructive controls included — is applied by a **zero-specificity `:where(...)`
   base rule** at the top of `app.css`, so an interactive element is ringed by default and can't
@@ -824,6 +613,9 @@ npm run test:e2e       # build (electron-vite → out/), then Playwright launche
 # Run a single unit test:
 npx vitest run src/services/meta/metaService.test.ts
 npx vitest run -t "generates and persists"   # by test-name substring
+
+# Run a single e2e spec (Playwright launches out/, so build first — test:e2e always rebuilds):
+npm run build && npx playwright test e2e/tab-navigation.spec.ts
 
 npm run db:generate    # drizzle-kit generate — emit SQL migration from schema.ts changes
 npm run db:migrate      # drizzle-kit migrate — apply to ./local.dev.db (dev tooling only; override with DATABASE_URL)
