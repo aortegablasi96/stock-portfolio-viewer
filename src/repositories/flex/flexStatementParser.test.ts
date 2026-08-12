@@ -10,8 +10,24 @@ import type { FlexStatement } from '@shared/domain/flex'
 // is skipped in a clean checkout — the inline FIXTURE above provides deterministic
 // coverage everywhere.
 const FLEX_DIR = join(process.cwd(), 'docs', 'flex-queries')
-const REAL_FILES = ['portfolio-analyst-2026.xml', 'portfolio-analyst-2025.xml']
-const hasRealExports = REAL_FILES.every((f) => existsSync(join(FLEX_DIR, f)))
+
+/**
+ * Resolve a year's export. `portfolio-analyst-<year>.xml` is the canonical name, but IBKR's
+ * export dialog produces `portfolio-analyst - <year>.xml`, and dropping a freshly downloaded
+ * file in under that name is the obvious thing to do. Story #171: it had happened, so
+ * `hasRealExports` was false and this whole block skipped silently — a skipped test and a
+ * passing one look identical in a green run. The files are renamed; accepting both spellings
+ * is what stops it recurring the next time the owner re-exports.
+ */
+function realExport(year: number): string | undefined {
+  return [`portfolio-analyst-${year}.xml`, `portfolio-analyst - ${year}.xml`]
+    .map((f) => join(FLEX_DIR, f))
+    .find((p) => existsSync(p))
+}
+
+const REAL_2026 = realExport(2026)
+const REAL_2025 = realExport(2025)
+const hasRealExports = REAL_2026 !== undefined && REAL_2025 !== undefined
 
 /** Parse and return the first statement, asserting one exists (narrows away `undefined`). */
 function parseOne(xml: string): FlexStatement {
@@ -57,6 +73,11 @@ const FIXTURE = `<?xml version="1.0" encoding="UTF-8"?>
 <OpenDividendAccrual currency="CAD" fxRateToBase="0.61945" assetCategory="STK" symbol="GSY" description="GOEASY LTD" conid="206663850" isin="CA3803551074" exDate="20260810" payDate="20260901" quantity="50" tax="-2.25" fee="0" grossRate="0.30" grossAmount="15" netAmount="12.75" code="" />
 <OpenDividendAccrual currency="CAD" fxRateToBase="0.61945" assetCategory="STK" symbol="MMY" description="MONUMENT MINING LTD" conid="45090384" isin="CA61531Y1051" exDate="20260815" payDate="" quantity="100" tax="" fee="" grossRate="" grossAmount="8" netAmount="8" code="" />
 </OpenDividendAccruals>
+<EquitySummaryInBase>
+<EquitySummaryByReportDateInBase currency="EUR" reportDate="20260101" cash="100" stock="900" dividendAccruals="5" interestAccruals="0" brokerFeesAccrualsComponent="0" total="1005" />
+<EquitySummaryByReportDateInBase currency="EUR" reportDate="20260102" cash="-50" stock="1200" total="1150" />
+<EquitySummaryByReportDateInBase currency="EUR" reportDate="20260105" cash="0" stock="0" />
+</EquitySummaryInBase>
 </FlexStatement>
 </FlexStatements>
 </FlexQueryResponse>`
@@ -157,42 +178,138 @@ describe('parseFlexStatements', () => {
     expect(parseOne(withoutAccruals).openDividendAccruals).toEqual([])
   })
 
+  it('parses the daily equity summary, defaulting omitted categories to zero', () => {
+    const { equitySummaries } = parseOne(FIXTURE)
+    expect(equitySummaries).toHaveLength(3)
+    const [first, margin] = equitySummaries
+
+    expect(first?.currency).toBe('EUR')
+    expect(first?.reportDate).toBe(Date.UTC(2026, 0, 1))
+    expect(first?.cash).toBe(100)
+    expect(first?.stock).toBe(900)
+    expect(first?.dividendAccruals).toBe(5)
+    expect(first?.total).toBe(1005)
+    // No `options` attribute at all — an asset class the query does not select is 0, not null.
+    // This is the shape of every real export here, so it is the case that must not throw.
+    expect(first?.options).toBe(0)
+
+    // Cash goes negative on margin, and stays negative rather than clamping.
+    expect(margin?.cash).toBe(-50)
+    expect(margin?.total).toBe(1150)
+  })
+
+  it('falls back to the sum of the components when `total` is omitted', () => {
+    // Deselecting Total must not fail an import the other four views depend on.
+    const noTotal = FIXTURE.replace('cash="-50" stock="1200" total="1150"', 'cash="-50" stock="1200"')
+    expect(parseOne(noTotal).equitySummaries[1]?.total).toBe(1150)
+  })
+
+  it('treats a statement without the optional equity summary section as having none', () => {
+    const without = FIXTURE.replace(/<EquitySummaryInBase>[\s\S]*<\/EquitySummaryInBase>/, '')
+    expect(parseOne(without).equitySummaries).toEqual([])
+  })
+
   it('rejects a file that is not a Flex Query statement', () => {
     expect(() => parseFlexStatements('<html><body>nope</body></html>')).toThrow(ValidationError)
     expect(() => parseFlexStatements('not xml at all <<<')).toThrow(ValidationError)
   })
 
+  /**
+   * Ground-truth pass over the owner's real Portfolio Analyst exports.
+   *
+   * These files are gitignored and **re-exported periodically**, so every row count in here
+   * used to drift the moment the owner refreshed them. That never surfaced, because the
+   * filename this block looked for had a hyphen where the real files have a space — the
+   * `skipIf` swallowed it, and a skipped test reads exactly like a passing one. Un-skipping it
+   * for Story #171 found the counts stale by nine trades and one dividend accrual.
+   *
+   * So the assertions below are deliberately **invariants rather than inventory**: identities
+   * that hold for any export of this account (attribute mapping, cross-section agreement,
+   * ordering, sign) plus lower bounds that catch a section vanishing. Pinning `trades` at
+   * exactly 66 was only ever asserting that the file had not been regenerated, which is not a
+   * property of the parser.
+   */
   it.skipIf(!hasRealExports)('parses the real Portfolio Analyst exports under docs/flex-queries', () => {
-    const dir = FLEX_DIR
-    const stmt = parseOne(readFileSync(join(dir, 'portfolio-analyst-2026.xml'), 'utf8'))
-    expect(stmt.accountId).toBe('U18846869')
-    expect(stmt.baseCurrency).toBe('EUR')
-    expect(stmt.trades).toHaveLength(66)
-    expect(stmt.lots).toHaveLength(15)
-    expect(stmt.cashTransactions).toHaveLength(21)
-    expect(stmt.openPositions).toHaveLength(8)
-    expect(stmt.securities).toHaveLength(11)
-    expect(stmt.performanceSummaries).toHaveLength(16)
-    expect(stmt.priorPeriodPositions).toHaveLength(865)
+    const stmt2026 = parseOne(readFileSync(REAL_2026 as string, 'utf8'))
+    const stmt2025 = parseOne(readFileSync(REAL_2025 as string, 'utf8'))
 
-    // Pins the OpenDividendAccrual attribute mapping against a real IBKR export rather
-    // than the published field list (the open risk recorded in DDR-0010). Note IBKR
-    // reports `tax` as a positive magnitude here — the service still derives withholding
-    // as gross − net, which agrees: 4.24 − 3.6 = 0.64.
-    expect(stmt.openDividendAccruals).toHaveLength(1)
-    const accrual = stmt.openDividendAccruals[0]
-    expect(accrual?.symbol).toBe('VBNK')
-    expect(accrual?.conid).toBe(514478839)
-    expect(accrual?.exDate).toBe(Date.UTC(2026, 6, 10))
-    expect(accrual?.payDate).toBe(Date.UTC(2026, 6, 31))
-    expect(accrual?.quantity).toBe(240)
-    expect(accrual?.grossAmount).toBe(4.24)
-    expect(accrual?.netAmount).toBe(3.6)
-    expect(accrual?.fxRateToBase).toBe(0.87628)
+    expect(stmt2026.accountId).toBe('U18846869')
+    expect(stmt2026.baseCurrency).toBe('EUR')
 
-    const stmt2025 = parseOne(readFileSync(join(dir, 'portfolio-analyst-2025.xml'), 'utf8'))
-    expect(stmt2025.trades).toHaveLength(186)
-    expect(stmt2025.cashTransactions).toHaveLength(41)
-    expect(stmt2025.priorPeriodPositions).toHaveLength(1124)
+    for (const stmt of [stmt2026, stmt2025]) {
+      // Every section the query selects is present and non-trivial. A section quietly
+      // dropping to zero is the failure worth catching; its exact size is not.
+      expect(stmt.trades.length).toBeGreaterThan(50)
+      expect(stmt.lots.length).toBeGreaterThan(10)
+      expect(stmt.cashTransactions.length).toBeGreaterThan(20)
+      expect(stmt.openPositions.length).toBeGreaterThan(0)
+      expect(stmt.securities.length).toBeGreaterThan(0)
+      expect(stmt.performanceSummaries.length).toBeGreaterThan(0)
+      expect(stmt.priorPeriodPositions.length).toBeGreaterThan(500)
+
+      // Dates coerce to epoch-ms UTC midnight, never to a raw YYYYMMDD integer.
+      for (const p of stmt.priorPeriodPositions.slice(0, 50)) {
+        expect(p.date % 86_400_000).toBe(0)
+        expect(p.date).toBeGreaterThan(Date.UTC(2020, 0, 1))
+      }
+    }
+
+    // Pins the OpenDividendAccrual attribute mapping against a real IBKR export rather than
+    // the published field list (the open risk recorded in DDR-0010). Read from whichever
+    // statement carries one — it is an as-of balance, so which export holds it moves.
+    const accruals = [...stmt2026.openDividendAccruals, ...stmt2025.openDividendAccruals]
+    expect(accruals.length).toBeGreaterThan(0)
+    for (const accrual of accruals) {
+      expect(accrual.symbol).not.toBe('')
+      expect(accrual.conid).toBeTypeOf('number')
+      expect(accrual.exDate).not.toBeNull()
+      expect(accrual.quantity).toBeGreaterThan(0)
+      expect(accrual.fxRateToBase).toBeGreaterThan(0)
+      // IBKR reports `tax` as a positive magnitude here, so the service derives withholding
+      // as gross − net instead of trusting its sign — which requires net ≤ gross.
+      expect(accrual.grossAmount).toBeGreaterThan(0)
+      expect(accrual.netAmount).toBeLessThanOrEqual(accrual.grossAmount)
+    }
+
+    // The daily equity series (Story #171), held to the same standard. The last row is the
+    // number the whole valueSeries swap rests on: it equals `ChangeInNAV.endingValue`
+    // exactly, so moving the curve onto this series leaves the headline figures where they
+    // were. That identity is what makes the swap safe, and it is not obvious from the docs.
+    for (const stmt of [stmt2026, stmt2025]) {
+      const daily = stmt.equitySummaries
+      expect(daily.length).toBeGreaterThan(150)
+
+      const last = daily[daily.length - 1]
+      if (!last) throw new Error('expected a daily equity summary series')
+      expect(last.currency).toBe('EUR')
+      expect(stmt.navChange?.endingValue).toBeCloseTo(last.total, 6)
+      expect(last.reportDate).toBe(stmt.toDate)
+
+      // Components sum to the total across every day, for the categories this query selects.
+      // This is the invariant the composition chart's sum-to-100% guarantee inherits.
+      for (const day of daily) {
+        expect(
+          day.cash +
+            day.stock +
+            day.options +
+            day.dividendAccruals +
+            day.interestAccruals +
+            day.brokerFeesAccruals,
+        ).toBeCloseTo(day.total, 6)
+        // The account holds no options, so the query omits the attribute entirely.
+        expect(day.options).toBe(0)
+      }
+
+      // Strictly ascending report dates — the series is a time series, and the composition
+      // and value curves both index into it positionally.
+      for (let i = 1; i < daily.length; i++) {
+        expect(daily[i]!.reportDate).toBeGreaterThan(daily[i - 1]!.reportDate)
+      }
+    }
+
+    // The 2025 series opens the day *before* its statement period, at zero NAV — the real
+    // zero-total day the composition maths has to survive, not a hypothetical one.
+    expect(stmt2025.equitySummaries[0]?.total).toBe(0)
+    expect(stmt2025.equitySummaries[0]?.reportDate).toBeLessThan(stmt2025.fromDate)
   })
 })

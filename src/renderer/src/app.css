@@ -1667,6 +1667,21 @@ html {
   fill: var(--neg);
 }
 
+/* A composition band (Story #171, DDR-0050). The fill comes from the `.pie-series-*` class the
+   band carries, exactly as a donut slice does — one asset class, one hue, shared with the
+   legend swatch beside it.
+
+   Deliberately **no separating stroke**, unlike `.pie-slice`. A donut's slices meet at radial
+   edges and need delimiting; a stacked band is delimited by the colour change itself, and its
+   identity has three other channels — its position in the stack, its legend entry, and the
+   hover readout that names it and reads out its share. A stroke thick enough to see is also
+   thicker than a 0.1% band, so on this portfolio (~99.9% stocks) it painted the card colour
+   straight over the cash and accrual slivers it was meant to separate: the thin bands read as
+   dark specks rather than as their own hue. Verified on screen before it was removed. */
+.stack-band {
+  stroke: none;
+}
+
 .chart-legend {
   display: flex;
   gap: var(--space-6);

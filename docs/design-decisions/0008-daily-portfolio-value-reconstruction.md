@@ -1,6 +1,10 @@
 # 0008. Performance view: daily portfolio-value reconstruction from Flex MTM history
 
-- **Status:** Accepted
+- **Status:** Superseded by [[0050-daily-nav-from-equity-summary]] — still applicable as the
+  fallback path (2026-08-12). IBKR's `EquitySummaryInBase` section turned out to carry a genuine
+  daily NAV, so the curve no longer needs reconstructing; the reconstruction below is retained
+  for statements imported without that section, and its anchoring philosophy still governs
+  `returnSeries`, which `0050` leaves untouched.
 - **Date:** 2026-07-22
 
 ## Context
