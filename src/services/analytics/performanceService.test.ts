@@ -6,6 +6,7 @@ import { parseFlexStatements } from '@repositories/flex/flexStatementParser'
 import {
   flexReadRepository,
   type ContributionRow,
+  type DailyEquityRow,
   type FifoSummaryRow,
   type NavPeriodRow,
 } from '@repositories/flex/flexReadRepository'
@@ -19,6 +20,7 @@ vi.mock('@repositories/flex/flexReadRepository', () => ({
     getFifoSummaries: vi.fn(),
     getDailyMtm: vi.fn(),
     getContributionCashFlows: vi.fn(),
+    getDailyEquitySummaries: vi.fn(),
   },
 }))
 
@@ -75,7 +77,26 @@ beforeEach(() => {
   // Default: no daily MTM / contribution data → periods fall back to their endpoints.
   repo.getDailyMtm.mockReturnValue([])
   repo.getContributionCashFlows.mockReturnValue([])
+  // Default: the optional EquitySummaryInBase section was never imported, so the value curve
+  // takes the DDR-0008 reconstruction path the cases below were written against (DDR-0050).
+  repo.getDailyEquitySummaries.mockReturnValue([])
 })
+
+/** A daily equity-summary row, defaulting the categories this account does not hold. */
+function equityDay(overrides: Partial<DailyEquityRow>): DailyEquityRow {
+  return {
+    statementToDate: Date.UTC(2026, 11, 31),
+    reportDate: 0,
+    cash: 0,
+    stock: 0,
+    options: 0,
+    dividendAccruals: 0,
+    interestAccruals: 0,
+    brokerFeesAccruals: 0,
+    total: 0,
+    ...overrides,
+  }
+}
 
 describe('performanceService.getPerformance', () => {
   it('returns needs_import when nothing has been imported', () => {
@@ -339,6 +360,176 @@ describe('performanceService.getPerformance', () => {
     expect(result.report.cumulativeTwr).toBe(0)
   })
 
+  it('takes the value series from the daily equity summaries when they exist (#171)', () => {
+    repo.hasStatements.mockReturnValue(true)
+    // Periods whose reconstruction would give a *different* answer, so the assertion below
+    // can only pass if the daily NAV won rather than the DDR-0008 interpolation.
+    repo.getNavPeriods.mockReturnValue([
+      navPeriod({
+        fromDate: day(2026, 1, 1),
+        toDate: day(2026, 1, 3),
+        startingValue: 100,
+        endingValue: 130,
+      }),
+    ])
+    repo.getFifoSummaries.mockReturnValue([])
+    repo.getDailyEquitySummaries.mockReturnValue([
+      equityDay({ reportDate: day(2026, 1, 1), stock: 90, cash: 10, total: 100 }),
+      equityDay({ reportDate: day(2026, 1, 2), stock: 105, cash: 10, total: 115 }),
+      equityDay({ reportDate: day(2026, 1, 3), stock: 120, cash: 10, total: 130 }),
+    ])
+
+    const result = performanceService.getPerformance()
+    if (result.status !== 'ok') throw new Error('expected ok')
+    expect(result.report.valueSeries).toEqual([
+      { date: day(2026, 1, 1), value: 100 },
+      { date: day(2026, 1, 2), value: 115 },
+      { date: day(2026, 1, 3), value: 130 },
+    ])
+  })
+
+  it('keeps one row per report date when statements overlap, preferring the latest (#171)', () => {
+    const older = Date.UTC(2026, 5, 30)
+    const newer = Date.UTC(2026, 11, 31)
+    repo.hasStatements.mockReturnValue(true)
+    repo.getNavPeriods.mockReturnValue([navPeriod({})])
+    repo.getFifoSummaries.mockReturnValue([])
+    // The same calendar day arrives from two overlapping statements. Rows come ordered by
+    // report date then statement end date ascending, as the repository guarantees.
+    repo.getDailyEquitySummaries.mockReturnValue([
+      equityDay({ statementToDate: older, reportDate: day(2026, 1, 2), stock: 10, total: 10 }),
+      equityDay({ statementToDate: newer, reportDate: day(2026, 1, 2), stock: 99, total: 99 }),
+      equityDay({ statementToDate: newer, reportDate: day(2026, 1, 3), stock: 50, total: 50 }),
+    ])
+
+    const result = performanceService.getPerformance()
+    if (result.status !== 'ok') throw new Error('expected ok')
+    // One point per day, and the restated value — not two points on one date, and not 10.
+    expect(result.report.valueSeries).toEqual([
+      { date: day(2026, 1, 2), value: 99 },
+      { date: day(2026, 1, 3), value: 50 },
+    ])
+    expect(result.report.compositionSeries.points).toHaveLength(2)
+  })
+
+  it('emits composition bands only for asset classes the account actually holds (#171)', () => {
+    repo.hasStatements.mockReturnValue(true)
+    repo.getNavPeriods.mockReturnValue([navPeriod({})])
+    repo.getFifoSummaries.mockReturnValue([])
+    repo.getDailyEquitySummaries.mockReturnValue([
+      equityDay({ reportDate: day(2026, 1, 1), stock: 900, cash: 100, dividendAccruals: 5, total: 1005 }),
+      equityDay({ reportDate: day(2026, 1, 2), stock: 950, cash: 50, dividendAccruals: 5, total: 1005 }),
+    ])
+
+    const result = performanceService.getPerformance()
+    if (result.status !== 'ok') throw new Error('expected ok')
+    const { bands, points } = result.report.compositionSeries
+    // No options band — the account has never held one, so a flat zero row is not offered.
+    // Stacking order is bottom-first, and stock is the base of the stack.
+    expect(bands.map((b) => b.key)).toEqual(['stock', 'cash', 'accruals'])
+    expect(points[0]?.values).toEqual([900, 100, 5])
+    expect(points[0]?.total).toBe(1005)
+  })
+
+  it('folds the three accrual components into one band (#171)', () => {
+    repo.hasStatements.mockReturnValue(true)
+    repo.getNavPeriods.mockReturnValue([navPeriod({})])
+    repo.getFifoSummaries.mockReturnValue([])
+    repo.getDailyEquitySummaries.mockReturnValue([
+      equityDay({
+        reportDate: day(2026, 1, 1),
+        stock: 1000,
+        dividendAccruals: 5,
+        interestAccruals: 3,
+        brokerFeesAccruals: -2,
+        total: 1006,
+      }),
+    ])
+
+    const result = performanceService.getPerformance()
+    if (result.status !== 'ok') throw new Error('expected ok')
+    const { bands, points } = result.report.compositionSeries
+    expect(bands.map((b) => b.key)).toEqual(['stock', 'accruals'])
+    // 5 + 3 − 2, signed: a negative fee accrual reduces the band rather than being dropped.
+    expect(points[0]?.values).toEqual([1000, 6])
+  })
+
+  it('surfaces NAV the parsed components do not account for as an "other" band (#171)', () => {
+    repo.hasStatements.mockReturnValue(true)
+    repo.getNavPeriods.mockReturnValue([navPeriod({})])
+    repo.getFifoSummaries.mockReturnValue([])
+    // An owner who starts holding bonds gets a category inside IBKR's `total` that this
+    // parser does not read. It must appear as a residual, never be redistributed (DDR-0015).
+    repo.getDailyEquitySummaries.mockReturnValue([
+      equityDay({ reportDate: day(2026, 1, 1), stock: 800, cash: 100, total: 1000 }),
+    ])
+
+    const result = performanceService.getPerformance()
+    if (result.status !== 'ok') throw new Error('expected ok')
+    const { bands, points } = result.report.compositionSeries
+    expect(bands.map((b) => b.key)).toEqual(['stock', 'cash', 'other'])
+    expect(points[0]?.values).toEqual([800, 100, 100])
+  })
+
+  it('does not invent an "other" band from floating-point residue (#171)', () => {
+    repo.hasStatements.mockReturnValue(true)
+    repo.getNavPeriods.mockReturnValue([navPeriod({})])
+    repo.getFifoSummaries.mockReturnValue([])
+    // Real IBKR figures: the components sum to the total only to within float precision.
+    repo.getDailyEquitySummaries.mockReturnValue([
+      equityDay({
+        reportDate: day(2026, 1, 1),
+        cash: 40.185955492,
+        stock: 38420.766223,
+        dividendAccruals: 50.0301716,
+        total: 38510.982350092,
+      }),
+    ])
+
+    const result = performanceService.getPerformance()
+    if (result.status !== 'ok') throw new Error('expected ok')
+    expect(result.report.compositionSeries.bands.map((b) => b.key)).toEqual([
+      'stock',
+      'cash',
+      'accruals',
+    ])
+  })
+
+  it('keeps a negative cash band signed rather than clamping it (#171)', () => {
+    repo.hasStatements.mockReturnValue(true)
+    repo.getNavPeriods.mockReturnValue([navPeriod({})])
+    repo.getFifoSummaries.mockReturnValue([])
+    // Buying on margin: stock exceeds NAV and cash is negative.
+    repo.getDailyEquitySummaries.mockReturnValue([
+      equityDay({ reportDate: day(2026, 1, 1), stock: 45_000, cash: -5000, total: 40_000 }),
+    ])
+
+    const result = performanceService.getPerformance()
+    if (result.status !== 'ok') throw new Error('expected ok')
+    const { bands, points } = result.report.compositionSeries
+    expect(bands.map((b) => b.key)).toEqual(['stock', 'cash'])
+    expect(points[0]?.values).toEqual([45_000, -5000])
+    // The signed values still reconcile to NAV, which is what the chart's 100% depends on.
+    expect(points[0]?.values.reduce((a, b) => a + b, 0)).toBe(points[0]?.total)
+  })
+
+  it('leaves the composition series empty when the optional section was never imported (#171)', () => {
+    repo.hasStatements.mockReturnValue(true)
+    repo.getNavPeriods.mockReturnValue([
+      navPeriod({ fromDate: 1, toDate: 2, startingValue: 100, endingValue: 110 }),
+    ])
+    repo.getFifoSummaries.mockReturnValue([])
+
+    const result = performanceService.getPerformance()
+    if (result.status !== 'ok') throw new Error('expected ok')
+    expect(result.report.compositionSeries).toEqual({ bands: [], points: [] })
+    // …and the rest of the report is unaffected: the value curve falls back to DDR-0008.
+    expect(result.report.valueSeries).toEqual([
+      { date: 1, value: 100 },
+      { date: 2, value: 110 },
+    ])
+  })
+
   // End-to-end reconstruction over the real Portfolio Analyst exports (git-ignored, so
   // skipped in a clean checkout — the synthetic cases above are the portable coverage).
   const FLEX_DIR = join(process.cwd(), 'docs', 'flex-queries')
@@ -372,6 +563,10 @@ describe('performanceService.getPerformance', () => {
           .map((c) => ({ dateTime: c.dateTime, fxRateToBase: c.fxRateToBase, amount: c.amount })),
       ),
     )
+    // Deliberately left empty: this case exercises the DDR-0008 *reconstruction*, which the
+    // real exports would otherwise bypass now that they carry a daily NAV. The authoritative
+    // path gets its own real-export case below.
+    repo.getDailyEquitySummaries.mockReturnValue([])
 
     const result = performanceService.getPerformance()
     if (result.status !== 'ok') throw new Error('expected ok')
@@ -398,6 +593,51 @@ describe('performanceService.getPerformance', () => {
     }
     expect(valAt(rs, 0)).toBeCloseTo(0, 6)
     expect(valAt(rs, rs.length - 1)).toBeCloseTo(result.report.cumulativeTwr, 6)
+  })
+
+  it.skipIf(!hasRealExports)('builds the authoritative curve and composition from the real exports (#171)', () => {
+    const statements = REAL_FILES.flatMap((f) =>
+      parseFlexStatements(readFileSync(join(FLEX_DIR, f), 'utf8')),
+    ).sort((a, b) => a.fromDate - b.fromDate)
+
+    repo.hasStatements.mockReturnValue(true)
+    repo.getNavPeriods.mockReturnValue(
+      statements.flatMap((s) => (s.navChange ? [{ ...s.navChange }] : [])),
+    )
+    repo.getFifoSummaries.mockReturnValue([])
+    // Ordered as the repository guarantees: report date, then owning statement's end date.
+    repo.getDailyEquitySummaries.mockReturnValue(
+      statements
+        .flatMap((s) => s.equitySummaries.map((e) => ({ ...e, statementToDate: s.toDate })))
+        .sort((a, b) => a.reportDate - b.reportDate || a.statementToDate - b.statementToDate),
+    )
+
+    const result = performanceService.getPerformance()
+    if (result.status !== 'ok') throw new Error('expected ok')
+
+    // The two exports overlap, so de-duping is what keeps the curve single-valued per day.
+    const s = result.report.valueSeries
+    expect(s.length).toBeGreaterThan(250)
+    for (let i = 1; i < s.length; i++) {
+      expect(valAt2(s, i - 1, 'date')).toBeLessThan(valAt2(s, i, 'date'))
+    }
+    // Ends exactly on the authoritative ChangeInNAV figure — the identity the swap rests on.
+    expect(valAt(s, s.length - 1)).toBeCloseTo(result.report.endingValue, 6)
+
+    const { bands, points } = result.report.compositionSeries
+    // This account holds stocks and cash and accrues dividends; it has never held options.
+    expect(bands.map((b) => b.key)).toEqual(['stock', 'cash', 'accruals'])
+    expect(points).toHaveLength(s.length)
+
+    // The invariant the chart's sum-to-100% guarantee rests on, over every real day.
+    for (const p of points) {
+      expect(p.values.reduce((a, b) => a + b, 0)).toBeCloseTo(p.total, 6)
+    }
+    // …and the composition's totals are the value curve, point for point.
+    points.forEach((p, i) => {
+      expect(p.date).toBe(valAt2(s, i, 'date'))
+      expect(p.total).toBeCloseTo(valAt(s, i), 10)
+    })
   })
 })
 

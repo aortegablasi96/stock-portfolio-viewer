@@ -3,6 +3,7 @@ import { and, eq } from 'drizzle-orm'
 import { getDb } from '@db/client'
 import {
   flexCashTransactions,
+  flexEquitySummaries,
   flexFifoSummaries,
   flexLots,
   flexNavChanges,
@@ -54,6 +55,7 @@ function alreadyImported(statement: FlexStatement, filename: string): FlexStatem
       performanceSummaries: nil,
       securities: nil,
       openDividendAccruals: nil,
+      equitySummaries: nil,
     },
   }
 }
@@ -142,6 +144,11 @@ export const flexRepository = {
           .values(statement.openDividendAccruals.map((a) => ({ statementId: sid, ...a })))
           .run()
       }
+      if (statement.equitySummaries.length > 0) {
+        tx.insert(flexEquitySummaries)
+          .values(statement.equitySummaries.map((e) => ({ statementId: sid, ...e })))
+          .run()
+      }
 
       // Event rows: de-duped globally by unique key so overlapping statements merge.
       let tradesInserted = 0
@@ -193,6 +200,10 @@ export const flexRepository = {
           openDividendAccruals: count(
             statement.openDividendAccruals.length,
             statement.openDividendAccruals.length,
+          ),
+          equitySummaries: count(
+            statement.equitySummaries.length,
+            statement.equitySummaries.length,
           ),
         },
       }

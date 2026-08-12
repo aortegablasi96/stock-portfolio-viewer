@@ -43,6 +43,13 @@
       "when": 1784811429451,
       "tag": "0005_orange_vector",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1786533012320,
+      "tag": "0006_secret_shriek",
+      "breakpoints": true
     }
   ]
 }

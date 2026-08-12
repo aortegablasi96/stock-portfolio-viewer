@@ -36,11 +36,59 @@ export const valuePointSchema = z.object({
 })
 export type ValuePoint = z.infer<typeof valuePointSchema>
 
+/**
+ * One band of the portfolio-composition chart — an asset class, or the residual buckets
+ * below (Story #171, DDR-0050). Bands are emitted in **stacking order, bottom first**, and
+ * only when they carry a non-zero value somewhere in the history: an account that has never
+ * held options gets no options band rather than a flat zero one no legend entry can explain.
+ */
+export const compositionBandSchema = z.object({
+  /** Stable identity — drives the palette slot, so a band keeps its hue as others appear. */
+  key: z.enum(['stock', 'options', 'cash', 'accruals', 'other']),
+  label: z.string(),
+})
+export type CompositionBand = z.infer<typeof compositionBandSchema>
+
+/**
+ * One report date's NAV split across the bands. `values` is index-aligned with the series'
+ * `bands` and is in base currency; `total` is IBKR's own NAV for the day.
+ *
+ * Values are **signed**: cash goes negative on margin, and a negative band is drawn below the
+ * zero line rather than clamped, because a 100%-stacked chart that hides a short position is
+ * lying about the shape it exists to show. Proportions are deliberately *not* computed here —
+ * that is stacking geometry, and it lives in `renderer/src/lib/composition.ts` where it can be
+ * unit-tested against the degenerate cases (zero NAV, negative bands) as pure maths.
+ */
+export const compositionPointSchema = z.object({
+  date: z.number().int(),
+  total: z.number(),
+  values: z.array(z.number()),
+})
+export type CompositionPoint = z.infer<typeof compositionPointSchema>
+
+/**
+ * Portfolio composition over time (Story #171). Empty `points` when the optional
+ * `EquitySummaryInBase` Flex section was never exported — the chart then renders its own
+ * empty state and the rest of the report is unaffected, the same degradation Story #31 gave
+ * the optional dividend-accruals section.
+ */
+export const compositionSeriesSchema = z.object({
+  bands: z.array(compositionBandSchema),
+  points: z.array(compositionPointSchema),
+})
+export type CompositionSeries = z.infer<typeof compositionSeriesSchema>
+
 /** The assembled performance report the Performance view renders. */
 export const performanceReportSchema = z.object({
   baseCurrency: z.string(),
-  /** Portfolio value over time, oldest → newest (period endpoints). */
+  /**
+   * Portfolio value over time, oldest → newest. IBKR's own daily NAV
+   * (`EquitySummaryByReportDateInBase`) when that section has been imported, falling back to
+   * the day-by-day reconstruction of DDR-0008 when it has not (Story #171, DDR-0050).
+   */
   valueSeries: z.array(valuePointSchema),
+  /** How that NAV was split across asset classes on each of those days (Story #171). */
+  compositionSeries: compositionSeriesSchema,
   /**
    * Cumulative time-weighted return over time, as a percentage (Story #45). Each point's
    * `value` is the chain-linked TWR since the start of the imported history — contribution-

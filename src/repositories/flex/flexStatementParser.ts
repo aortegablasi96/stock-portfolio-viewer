@@ -2,6 +2,7 @@ import { XMLParser } from 'fast-xml-parser'
 import { ValidationError } from '@shared/errors'
 import type {
   FlexCashTransaction,
+  FlexEquitySummary,
   FlexLot,
   FlexNavChange,
   FlexOpenDividendAccrual,
@@ -37,6 +38,7 @@ const ARRAY_TAGS = new Set([
   'FIFOPerformanceSummaryUnderlying',
   'SecurityInfo',
   'OpenDividendAccrual',
+  'EquitySummaryByReportDateInBase',
 ])
 
 const parser = new XMLParser({
@@ -307,6 +309,44 @@ function toOpenDividendAccrual(raw: Raw): FlexOpenDividendAccrual {
   }
 }
 
+/**
+ * One report date's NAV breakdown (`EquitySummaryByReportDateInBase`) — the daily equity
+ * series (Story #171). Every component defaults to 0: the Flex query selects categories per
+ * asset class held, so an account with no options exports no `options` attribute rather than
+ * `options="0"`, and an absent category genuinely *is* zero.
+ *
+ * `total` is the one figure that is not a component, so it is read rather than assumed — but
+ * it falls back to the sum of the components rather than being required. Deselecting it would
+ * otherwise fail an import the Allocation, Dividends and Trades views also depend on, and the
+ * failure would be a `ValidationError` naming a field the owner had every right to omit.
+ * Where both are present IBKR's own total wins, because it accounts for categories this parser
+ * does not read.
+ */
+function toEquitySummary(raw: Raw): FlexEquitySummary {
+  const num = (key: string): number => optNum(raw, key) ?? 0
+
+  const cash = num('cash')
+  const stock = num('stock')
+  const options = num('options')
+  const dividendAccruals = num('dividendAccruals')
+  const interestAccruals = num('interestAccruals')
+  const brokerFeesAccruals = num('brokerFeesAccrualsComponent')
+
+  return {
+    currency: str(raw.currency),
+    reportDate: parseDate(raw, 'reportDate') ?? 0,
+    cash,
+    stock,
+    options,
+    dividendAccruals,
+    interestAccruals,
+    brokerFeesAccruals,
+    total:
+      optNum(raw, 'total') ??
+      cash + stock + options + dividendAccruals + interestAccruals + brokerFeesAccruals,
+  }
+}
+
 function toStatement(raw: Raw): FlexStatement {
   const accountId = str(raw.accountId).trim()
   if (accountId === '') {
@@ -338,6 +378,12 @@ function toStatement(raw: Raw): FlexStatement {
     // query, in which case this stays an empty list and the view says so (DDR-0010).
     openDividendAccruals: rows(raw.OpenDividendAccruals, 'OpenDividendAccrual').map(
       toOpenDividendAccrual,
+    ),
+    // Also optional (Story #171). Absent when "Net Asset Value (NAV) in Base" is not selected
+    // on the query, in which case the Performance view falls back to reconstructing its value
+    // curve and simply has no composition chart to draw (DDR-0050).
+    equitySummaries: rows(raw.EquitySummaryInBase, 'EquitySummaryByReportDateInBase').map(
+      toEquitySummary,
     ),
   }
 }

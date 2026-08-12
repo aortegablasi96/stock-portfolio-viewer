@@ -213,6 +213,50 @@ export const flexPriorPeriodPositions = sqliteTable(
 export type FlexPriorPeriodPositionRow = typeof flexPriorPeriodPositions.$inferSelect
 export type NewFlexPriorPeriodPositionRow = typeof flexPriorPeriodPositions.$inferInsert
 
+/**
+ * One report date's NAV by category, in base currency (`EquitySummaryByReportDateInBase`) —
+ * the daily equity series behind the Performance view's value curve and its composition chart
+ * (Story #171; DDR-0050). Statement-scoped like the other as-of rows: fresh insert per
+ * statement, cascade-deleted, no global de-dupe.
+ *
+ * Statement-scoped but **daily**, which is a combination no other `flex_*` table has, and the
+ * one thing to know before reading it: two overlapping statements each carry a row for the
+ * same `report_date`, so a read across the whole history returns that day twice. De-duping is
+ * the caller's job and the rule is "the statement that ends latest wins" — the same shape as
+ * the FIFO summaries' as-of half (Bug #103). Hence `idx_flex_equity_summaries_report_date`,
+ * which that grouping reads, rather than a unique index: uniqueness here would reject a
+ * legitimate overlapping import.
+ *
+ * No `fx_rate_to_base` column, unlike every other monetary table here — IBKR reports this
+ * section in base currency already.
+ */
+export const flexEquitySummaries = sqliteTable(
+  'flex_equity_summaries',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    statementId: integer('statement_id')
+      .notNull()
+      .references(() => flexStatements.id, { onDelete: 'cascade' }),
+    currency: text('currency').notNull(),
+    /** Report date — epoch ms, UTC midnight. */
+    reportDate: integer('report_date').notNull(),
+    cash: real('cash').notNull(),
+    stock: real('stock').notNull(),
+    options: real('options').notNull(),
+    dividendAccruals: real('dividend_accruals').notNull(),
+    interestAccruals: real('interest_accruals').notNull(),
+    brokerFeesAccruals: real('broker_fees_accruals').notNull(),
+    total: real('total').notNull(),
+  },
+  (t) => ({
+    byStatement: index('idx_flex_equity_summaries_statement_id').on(t.statementId),
+    byReportDate: index('idx_flex_equity_summaries_report_date').on(t.reportDate),
+  }),
+)
+
+export type FlexEquitySummaryRow = typeof flexEquitySummaries.$inferSelect
+export type NewFlexEquitySummaryRow = typeof flexEquitySummaries.$inferInsert
+
 /** Executed trades (`Trade`). De-duped globally by `trade_key` (DDR-0004). */
 export const flexTrades = sqliteTable(
   'flex_trades',

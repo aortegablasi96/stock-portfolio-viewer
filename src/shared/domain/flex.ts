@@ -191,6 +191,44 @@ export const flexOpenDividendAccrualSchema = z.object({
 })
 export type FlexOpenDividendAccrual = z.infer<typeof flexOpenDividendAccrualSchema>
 
+/**
+ * One report date's NAV broken down by category, in base currency
+ * (`EquitySummaryByReportDateInBase`) — the daily equity series behind the Performance view's
+ * value curve and its composition chart (Story #171). Section 13 of the field reference.
+ *
+ * The **only** Flex section that carries a genuine daily NAV: `ChangeInNAV` is one row per
+ * statement and `PriorPeriodPosition` carries no quantity, so before this both a daily value
+ * and a daily composition had to be reconstructed (DDR-0008) or could not be built at all.
+ * Already in base currency, so unlike every other row shape here it carries no `fxRateToBase`
+ * — there is nothing left to convert (DDR-0005 still applies, it just has no work to do).
+ *
+ * An **optional** section, and every component is optional within it: the Flex query selects
+ * categories per asset class held, so an account with no options exports no `options`
+ * attribute at all. Missing components are 0 rather than an error — the same treatment
+ * `OpenDividendAccrual`'s `tax`/`fee` get, and for the same reason. `total` is IBKR's own
+ * grand total when present, falling back to the sum of the components: deselecting *it*
+ * must not fail an import that four other views depend on.
+ *
+ * Consumers must not assume the components sum to `total` — a category the query does not
+ * select is real NAV that is missing from the parts but present in the whole. The gap is a
+ * residual to be surfaced, never redistributed (the DDR-0015 lesson).
+ */
+export const flexEquitySummarySchema = z.object({
+  /** Base currency these figures are already expressed in. */
+  currency: z.string(),
+  /** The report date — epoch ms, UTC midnight. The daily time-series key. */
+  reportDate: z.number().int(),
+  cash: z.number(),
+  stock: z.number(),
+  options: z.number(),
+  dividendAccruals: z.number(),
+  interestAccruals: z.number(),
+  brokerFeesAccruals: z.number(),
+  /** Grand total NAV for the report date. */
+  total: z.number(),
+})
+export type FlexEquitySummary = z.infer<typeof flexEquitySummarySchema>
+
 /** Instrument reference data (`SecurityInfo`) — asset class, geography, identifiers. */
 export const flexSecuritySchema = z.object({
   conid: z.number().int().nullable(),
@@ -228,6 +266,7 @@ export const flexStatementSchema = z.object({
   performanceSummaries: z.array(flexPerformanceSummarySchema),
   securities: z.array(flexSecuritySchema),
   openDividendAccruals: z.array(flexOpenDividendAccrualSchema),
+  equitySummaries: z.array(flexEquitySummarySchema),
 })
 export type FlexStatement = z.infer<typeof flexStatementSchema>
 
@@ -259,6 +298,7 @@ export const flexStatementImportSchema = z.object({
     performanceSummaries: flexRecordCountSchema,
     securities: flexRecordCountSchema,
     openDividendAccruals: flexRecordCountSchema,
+    equitySummaries: flexRecordCountSchema,
   }),
 })
 export type FlexStatementImport = z.infer<typeof flexStatementImportSchema>

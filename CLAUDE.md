@@ -6,38 +6,29 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **M0–M3 are merged and closed; refinement continues under M4.** Scaffolding (M0), the
 read-only portfolio dashboard (M1), historical snapshots (M2), and the performance &
-allocation analytics (M3, Stories #20–#24) are all on `main`. The app boots, connects to the
-Interactive Brokers Client Portal Gateway, renders live holdings/balances/allocation in a
-user-selected display currency, captures immutable snapshots (on open + on demand), imports
-IBKR Flex Query statements into local history, and renders four analytics views over that
-imported data (performance, allocation, dividends, realized gains & trade history). A tab
-shell switches between the live Portfolio dashboard and the analytics views.
+allocation analytics (M3) are all on `main`. The app boots, connects to the Interactive
+Brokers Client Portal Gateway, renders live holdings/balances/allocation in a user-selected
+display currency, captures immutable snapshots (on open + on demand), imports IBKR Flex Query
+statements into local history, and renders four analytics views over that imported data
+(performance, allocation, dividends, realized gains & trade history). A tab shell switches
+between the live Portfolio dashboard and the analytics views.
 
-**The views have been refined repeatedly, and refinement is ongoing.** Epic #4 (M3) absorbed
-four rounds before being closed as delivered: #28–#33 (display currency, day-by-day
-performance, allocation donuts + sector breakdown, net dividend chart + upcoming dividends,
-filterable dividend and trade tables), #42–#73 (frameless window shell, destructive-reset
-controls, TWR curve + chart tabs, world bubble map, cash as an asset class, tabbed breakdowns,
-time-range filters, multi-select type filter, `Symbol`→`Ticker` renames), and #74, #75, #76,
-#89, #92, #95 (dividend shares held + per-share, time-range filter on the dividend and trade
-tables, a widened content measure with charts sized by aspect ratio, and the Allocation map's
-rebuild onto a Mapbox basemap with per-holding bubbles and a gain/loss colour mode).
-
-**Further refinement lives in milestone `M4 — Analytics refinement`, split across area-scoped
-Epics** so no single Epic grows unbounded again. **Which Epics are open is not recorded here** —
+**Every view has been reworked several times, and refinement is ongoing — so read the backlog
+before assuming a view is final.** Which Epics are open is deliberately **not recorded here**:
 the backlog is the source of milestones, and a roster in this file goes stale the day an Epic
-closes. Read it (`gh issue list --state open --label epic`; see *Current Priority* below for the
-rest of the queries). What is stable is the **lifecycle rule**: an Epic closes when its stories
-close, and new refinement opens a *new* Epic under the current milestone rather than reopening a
-delivered one — with **one narrow exception**, added 2026-08-07: an Epic may reopen when its own
-stated problem is provably unfinished, meaning its acceptance criteria under-scoped the finding
-in its Summary, so the new stories close the *original* scope rather than adding refinement.
-That requires a dated note on the Epic naming which criterion under-scoped which finding.
-Epic #125 (Shared UI primitives, reopened 2026-08-07 for Round 2 and closed 2026-08-09) is the
-precedent and `docs/github-issues.md` holds the rule. **Read the backlog before assuming a view
-is final** — a view you are told is "done" has usually been reworked several times. The Stack and
-Commands sections below are **live**. Still **not built**: AI features, multi-broker support,
-benchmark comparison, and tax reporting — those are later milestones.
+closes (`gh issue list --state open --label epic`; see *Current Priority* below for the rest of
+the queries). What is stable is the **lifecycle rule** — an Epic closes when its stories close,
+and new refinement opens a *new* area-scoped Epic under the current milestone rather than
+reopening a delivered one, so no single Epic grows unbounded the way M3's #4 did. The **one
+narrow exception**, added 2026-08-07: an Epic may reopen when its own stated problem is provably
+unfinished, meaning its acceptance criteria under-scoped the finding in its Summary, so the new
+stories close the *original* scope rather than adding refinement. That requires a dated note on
+the Epic naming which criterion under-scoped which finding. Epic #125 (Shared UI primitives,
+reopened 2026-08-07 for Round 2 and closed 2026-08-09) is the precedent, and
+`docs/github-issues.md` holds the rule.
+
+The Stack and Commands sections below are **live**. Still **not built**: AI features,
+multi-broker support, benchmark comparison, and tax reporting — those are later milestones.
 
 Live domains exist end-to-end as reference patterns:
 
@@ -61,9 +52,18 @@ Live domains exist end-to-end as reference patterns:
   day-by-day performance; `flex_open_dividend_accruals` holds declared-but-unpaid dividends
   (Story #31) — an **optional** Flex section, so an export without it degrades to an empty
   list rather than failing; `flex_fifo_summaries` holds IBKR's own FIFO performance summary,
-  which backs realized/unrealized gains. Real sample exports and a field reference live in
-  `docs/flex-queries/` — check them before guessing at Flex XML shapes. See ADR-0005,
-  DDR-0004, DDR-0008, DDR-0010.
+  which backs realized/unrealized gains. `flex_equity_summaries` holds IBKR's **daily NAV by
+  category** (`EquitySummaryInBase`, Story #171) — the only genuine daily NAV in the export, and
+  the one table that is **statement-scoped *and* daily**, so overlapping statements duplicate a
+  calendar day and the caller keeps the row whose statement ends latest (`latestPerDay`). That is
+  the daily analogue of Bug #103 and the failure is worse: duplicates put two points on one date
+  rather than doubling a total, so the curve doubles back on itself. It carries **no
+  `fxRateToBase`** (reported in base already) and every category attribute is optional — an asset
+  class the query does not select is *absent*, not zero, which is why `options` never appears.
+  Real sample exports and a field reference live in `docs/flex-queries/` — check them before
+  guessing at Flex XML shapes, and before concluding a section is *missing*: Story #171 opened by
+  declaring a daily NAV unavailable when section 13 was already exported and simply unparsed. See
+  ADR-0005, DDR-0004, DDR-0008, DDR-0010, DDR-0050.
 - **analytics / dividends** — read-only analytics over the imported Flex data (M3, Stories
   #21–#24). `performanceService` / `allocationService` / `realizedGainsService` (analytics)
   and `dividendService` (dividends) read *only* through `flexReadRepository`, convert to base
@@ -163,6 +163,17 @@ Canonical flows to copy when adding a feature:
   it rather than against the synthetic point `sliceSeries` anchors at the edge. `BarChart` is its
   own component rather than a `ColumnChart` flag — that one stacks two series, legends them, and
   labels every column, which at 191 trading days is a 45:1 strip under 191 overlapping labels. The
+  fourth chart, **composition over time** (`StackedAreaChart`, DDR-0050), is **100%-stacked** —
+  composition is a question about proportions, and an absolute version would say what the value
+  curve beside it already says. Its maths is `lib/composition`, and three rules there are load-
+  bearing: a **negative band hangs below the zero line** rather than being clamped or normalised
+  away (normalising by `Σ|value|` would draw a margin position as an asset); a **zero-NAV day**
+  yields all-zero shares, not `NaN` — the real 2025 export opens on one; and the `other` band is
+  the **residual** `total − Σ components`, surfaced and never redistributed, because the Flex query
+  selects NAV categories per asset class held (the DDR-0015 lesson, a second time). The window is
+  **sliced, not carried forward** — a composition point is a simultaneous observation of every
+  band, so a synthetic edge point would draw a shape that was never measured. Palette: **all eight
+  slots**, since `SECTOR_SLOT_OFFSET` is a *sector* reservation and asset class is not sector. The
   **Allocation map is the one scoped exception**: a Mapbox GL JS basemap (ADR-0007) carrying, per
   issuer country, **two donuts side by side** — left, the country's weight in the portfolio (its
   share of NAV in blue against a muted remainder, on an **absolute 0–100% scale**); right, one
@@ -358,7 +369,7 @@ Canonical flows to copy when adding a feature:
   figure wraps.
 - **Adoption is held by a ratchet; don't re-baseline it** (DDR-0042). `lib/tokenAdoption.ts`
   carries `BASELINE` (may only shrink — currently **empty, and must stay empty**) and
-  `EXEMPTIONS` (permanent, eleven entries, each with a reason). `tokenAdoption.test.ts` fails
+  `EXEMPTIONS` (permanent, nine entries, each with a reason). `tokenAdoption.test.ts` fails
   three ways: a raw value in neither list, a *baseline* entry that stopped matching, and an
   *exemption* that stopped matching — the second is what makes it a ratchet rather than a
   suppression file. Two traps: the scanner (`lib/cssDeclarations.ts`) is text-based and
@@ -545,6 +556,9 @@ finalized. Separately, a connected `Interactive_Brokers_IBKR` MCP is available w
 account/market tools allowlisted (positions, balances, price history, etc.) — no order-placing
 tools are allowlisted, in keeping with the analytics-first, no-trading stance.
 
+Prefer Context7 over model memory when consulting framework or library documentation.
+Setup and usage notes live in `docs/mcp.md`.
+
 ## Project Overview
 
 Stock Portfolio Viewer is a personal, single-user desktop application for understanding and
@@ -577,7 +591,7 @@ The application is **analytics-first**, not advice-first.
 
 ---
 
-# Stack
+## Stack
 
 * Node ≥22.12 (`@electron/rebuild` / `node-abi` require it; CI runs Node 24)
 * npm
@@ -602,7 +616,7 @@ Avoid introducing additional dependencies unless they provide clear long-term va
 
 ---
 
-# Commands
+## Commands
 
 ```bash
 npm install            # also runs postinstall: electron-rebuild for better-sqlite3 (native)
@@ -640,92 +654,40 @@ npm run db:studio      # drizzle-kit studio — inspect the dev DB
 
 ---
 
-# MCP Servers
+## Architecture
 
-Available through `.mcp.json`.
-
-Typical servers:
-
-* interactive-brokers
-* context7
-* playwright
-* filesystem
-
-(The `postgres` server has been retired following the move to SQLite.)
-
-Prefer Context7 over model memory when consulting framework or library documentation.
-
----
-
-# Architecture Rules
-
-Dependencies point downward only.
+Dependencies point downward only, and the boundary is **ESLint-enforced rather than
+conventional** — see *Enforced boundaries & gotchas* above; adding a feature the wrong way
+fails `npm run lint`.
 
 ```text
-src/renderer   (React UI)
-        ↓ IPC
-src/main       (Electron main: IPC handlers + services)
+src/renderer      React UI — rendering, navigation, forms. No business logic, no data source.
+        ↓ IPC     (window.api only)
+src/main          thin IPC handlers: validate input with Zod, delegate to a service
         ↓
-src/services
+src/services      business logic, calculations, orchestration; independent of UI and infra
         ↓
-src/repositories
+src/repositories  the only layer that touches a data source
         ↓
 SQLite / Interactive Brokers Gateway
 ```
 
-Rules:
-
-* IPC handlers remain thin — they validate input (Zod) and delegate to services.
-* Services contain business logic.
-* Repositories own data access.
-* The React renderer never accesses repositories or data sources directly; it only calls
-  the main process over IPC.
-
----
-
-# Repository Pattern
-
-Repositories abstract data sources.
-
-Repositories may retrieve data from:
-
-* SQLite (local database)
-* Interactive Brokers (local Client Portal Gateway / MCP)
-* future external providers
-
-Services should never know where data originates.
-
-Example:
-
-```text
-PortfolioService
-
-↓
-
-PortfolioRepository
-
-↓
-
-IBKR Gateway
-+
-SQLite
-```
-
-This keeps analytics independent from external providers.
+Repositories expose **domain-oriented** methods, so a service never knows where data
+originates — `portfolioRepository` fronts the IBKR gateway, `flexReadRepository` fronts SQLite,
+`classificationRepository` fronts both — which is what keeps analytics independent of any one
+provider. `src/repositories/README.md` lists them by data source; keep it in step when adding
+one. The database holds local history, application metadata and cached derived data: don't
+duplicate live brokerage data there unless analytics needs it. Full detail lives in
+`docs/architecture.md`, which keeps the longer *Layer Responsibilities* and *Repository
+Pattern* treatments several ADRs cite by those names — this section absorbed CLAUDE.md's own
+copies of them.
 
 ---
 
-# Historical Snapshots
+## Historical Snapshots
 
-Interactive Brokers is the live source of truth.
-
-Historical portfolio snapshots are stored locally for analytics.
-
-Snapshots are:
-
-* append-only
-* immutable
-* timestamped
+Interactive Brokers is the live source of truth; historical portfolio snapshots are stored
+locally for analytics, append-only and immutable (ADR-0006).
 
 Because the app is a desktop application that only runs when launched, snapshots are
 **captured on app open** (and on demand). A background scheduler (e.g. a Windows Task
@@ -742,85 +704,15 @@ on-open snapshots cannot reconstruct. The one analytics path that reaches IBKR a
 
 ---
 
-# Domain Structure
+## Domain Structure
 
-Primary domains:
-
-* portfolio
-* holdings
-* snapshots
-* flex (imported IBKR statement history)
-* analytics
-* dividends
-* classification (instrument sector/industry)
-
-Future domains may include:
-
-* benchmarks
-* taxes
-* brokers
-* AI
-
-Keep domains cohesive.
+Keep domains cohesive. The live ones — **portfolio**, **holdings**, **snapshots**, **flex**,
+**analytics**, **dividends**, **classification** — are described under *Current Repository
+State* above; **benchmarks**, **taxes**, **brokers** and **AI** are future domains.
 
 ---
 
-# Layer Responsibilities
-
-## Renderer (UI)
-
-Responsible for:
-
-* rendering
-* navigation
-* forms
-* calling the main process over IPC
-
-Must not contain business logic or touch data sources directly.
-
----
-
-## Services
-
-Responsible for:
-
-* analytics
-* calculations
-* orchestration
-* portfolio workflows
-
-Must remain independent of UI and infrastructure.
-
----
-
-## Repositories
-
-Responsible for:
-
-* SQLite
-* Interactive Brokers (local Gateway / MCP)
-* persistence
-* external APIs
-
-Repositories expose domain-oriented methods. `src/repositories/README.md` lists the current
-repositories by data source — keep it in step when adding one.
-
----
-
-## Database
-
-Stores:
-
-* historical snapshots
-* cached analytics
-* benchmark history
-* application metadata
-
-Do not duplicate live brokerage data unless necessary for analytics.
-
----
-
-# AI Principles
+## AI Principles
 
 AI enhances portfolio understanding.
 
@@ -842,7 +734,7 @@ The user remains the decision maker.
 
 ---
 
-# Development Workflow
+## Development Workflow
 
 Stock Portfolio Viewer follows an artifact-driven workflow. Work **originates in GitHub
 Issues** — the owner authors Epics and User Stories (grouped under GitHub Milestones), and
@@ -881,7 +773,7 @@ Small bug fixes may skip planning artifacts.
 
 ---
 
-# Workflow Artifacts
+## Workflow Artifacts
 
 Workflow skills communicate through artifacts.
 
@@ -902,7 +794,7 @@ They do not redefine requirements or architecture.
 
 ---
 
-# Documentation
+## Documentation
 
 Project documentation lives under `docs/`.
 
@@ -936,7 +828,7 @@ Detailed documentation belongs in `docs/`.
 
 ---
 
-# Documentation Hierarchy
+## Documentation Hierarchy
 
 When making decisions, consult documentation in this order:
 
@@ -957,30 +849,7 @@ Never silently override accepted decisions.
 
 ---
 
-# Development Principles
-
-Prefer:
-
-* simplicity
-* existing patterns
-* small, focused changes
-* strong typing
-* explicit ownership
-
-Avoid:
-
-* speculative abstractions
-* premature optimization
-* unnecessary dependencies
-* unrelated refactoring
-
-Keep files reasonably small.
-
-Test business logic thoroughly.
-
----
-
-# Before Implementing
+## Before Implementing
 
 Before implementing any non-trivial feature:
 
@@ -991,7 +860,7 @@ Before implementing any non-trivial feature:
 
 ---
 
-# Testing
+## Testing
 
 Services are the primary unit-test target.
 
@@ -1001,7 +870,7 @@ Vitest picks up every `src/**/*.test.ts` and runs it in a **Node** environment (
 so no test may render a React component. This shapes the renderer: chart maths, filtering,
 sorting and formatting are **extracted out of components into pure modules under
 `renderer/src/lib/`** (`format`, `pie`, `worldGeo`, `countryDonuts`, `gainLoss`, `tableFilter`,
-`column`, `dateRange`, `sectorMap`, `performanceRange`, `dailyReturns`, `classifyProgress`, `dataVersion`,
+`column`, `dateRange`, `sectorMap`, `performanceRange`, `dailyReturns`, `composition`, `classifyProgress`, `dataVersion`,
 `tabKeyboard`, `buttonVariants`, `cardVariants`, `statTileVariants`, `fieldVariants`,
 `toggleGroupVariants`, `badgeVariants`, `statePanelVariants`, `tableSort`, `dataTableVariants`,
 `sliceHighlight`, `mapPopupTint`, `cssDeclarations`, `tokenAdoption`, `motionTokens`, `contrast`,
@@ -1026,7 +895,7 @@ Every completed feature should include:
 
 ---
 
-# Current Priority
+## Current Priority
 
 Milestones live in **GitHub Issues**, grouped under GitHub Milestones. Read the backlog to
 find the active milestone and its work items:

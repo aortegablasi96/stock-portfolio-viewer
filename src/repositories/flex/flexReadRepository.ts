@@ -2,6 +2,7 @@ import { desc, eq, inArray } from 'drizzle-orm'
 import { getDb } from '@db/client'
 import {
   flexCashTransactions,
+  flexEquitySummaries,
   flexFifoSummaries,
   flexNavChanges,
   flexOpenDividendAccruals,
@@ -73,6 +74,28 @@ export interface DailyMtmRow {
   date: number
   fxRateToBase: number
   priorMtmPnl: number
+}
+
+/**
+ * One report date's NAV by category, already in base currency (Story #171). No `fxRateToBase`
+ * — IBKR reports this section in base — so unlike the other rows here nothing needs converting.
+ *
+ * Carries `statementToDate` for the same reason `FifoSummaryRow` does: statements may overlap,
+ * and this is the only *daily* statement-scoped table, so one calendar day can arrive from two
+ * statements at once. The caller keeps the row from the statement that ends latest — the most
+ * recent restatement of that day. Sorted by report date, then by statement end date ascending,
+ * so a straight last-write-wins pass over the rows leaves the freshest one in place.
+ */
+export interface DailyEquityRow {
+  statementToDate: number
+  reportDate: number
+  cash: number
+  stock: number
+  options: number
+  dividendAccruals: number
+  interestAccruals: number
+  brokerFeesAccruals: number
+  total: number
 }
 
 /** A dated external contribution/withdrawal — native `amount` + its rate (Story #29). */
@@ -265,6 +288,34 @@ export const flexReadRepository = {
       })
       .from(flexPriorPeriodPositions)
       .orderBy(flexPriorPeriodPositions.date)
+      .all()
+  },
+
+  /**
+   * The daily NAV-by-category series across the whole history, oldest → newest (Story #171).
+   * Already base currency. Backs both the Performance view's value curve — authoritative,
+   * replacing the reconstruction of DDR-0008 — and its composition chart (DDR-0050).
+   *
+   * Ordered by report date, then by the owning statement's end date **ascending**, so the
+   * caller's de-dupe of overlapping statements is a plain last-write-wins over this order.
+   * Empty when the optional `EquitySummaryInBase` section was never exported.
+   */
+  getDailyEquitySummaries(): DailyEquityRow[] {
+    return getDb()
+      .select({
+        statementToDate: flexStatements.toDate,
+        reportDate: flexEquitySummaries.reportDate,
+        cash: flexEquitySummaries.cash,
+        stock: flexEquitySummaries.stock,
+        options: flexEquitySummaries.options,
+        dividendAccruals: flexEquitySummaries.dividendAccruals,
+        interestAccruals: flexEquitySummaries.interestAccruals,
+        brokerFeesAccruals: flexEquitySummaries.brokerFeesAccruals,
+        total: flexEquitySummaries.total,
+      })
+      .from(flexEquitySummaries)
+      .innerJoin(flexStatements, eq(flexEquitySummaries.statementId, flexStatements.id))
+      .orderBy(flexEquitySummaries.reportDate, flexStatements.toDate)
       .all()
   },
 

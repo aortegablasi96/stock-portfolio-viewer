@@ -8,9 +8,11 @@ import {
 } from '../../lib/format'
 import { boundsFor } from '../../lib/dateRange'
 import { dailyReturns } from '../../lib/dailyReturns'
+import { sliceComposition } from '../../lib/composition'
 import { rebaseSeries, seriesExtent, sliceSeries, windowStats } from '../../lib/performanceRange'
 import { BarChart } from '../charts/BarChart'
 import { LineChart } from '../charts/LineChart'
+import { StackedAreaChart } from '../charts/StackedAreaChart'
 import { useAnalytics } from './useAnalytics'
 import { AnalyticsShell } from './AnalyticsShell'
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card'
@@ -30,6 +32,7 @@ const CHART_TABS = [
   { id: 'value', label: 'Portfolio value over time' },
   { id: 'return', label: 'Performance change over time' },
   { id: 'daily', label: 'Daily return' },
+  { id: 'composition', label: 'Composition' },
 ] as const
 type ChartTab = (typeof CHART_TABS)[number]['id']
 
@@ -51,6 +54,11 @@ type ChartTab = (typeof CHART_TABS)[number]['id']
  * A third chart (Story #170) breaks that cumulative curve back into its individual days, because
  * neither line answers "what does a normal day look like?" — a curve that rises 40% over a year
  * looks the same whether it climbed in steady steps or in a dozen violent swings.
+ *
+ * A fourth (Story #171, DDR-0050) answers the question none of the three can: whether a return
+ * came from a portfolio held all year or one that changed shape underneath it. It is
+ * 100%-stacked rather than absolute — composition is a question about proportions — and reads
+ * IBKR's own daily NAV breakdown, the same series the value curve above now comes from.
  *
  * The view stays mounted once visited (Story #109), so the range selection and chart tab below
  * survive a trip to another tab; the `RefreshBar` gives the re-read that leaving and returning
@@ -107,12 +115,31 @@ export function PerformanceView(): React.JSX.Element {
             ? 'Daily return for each trading day'
             : `Daily return for each of ${dailyPoints.length} trading days, ${formatDate(dailyPoints[0]!.date)} to ${formatDate(dailyPoints[dailyPoints.length - 1]!.date)}`
 
+        // Composition is sliced, never rebased or carried forward: each point is a
+        // simultaneous observation of every band, so the window shows the days it really
+        // contains (Story #171).
+        const compositionPoints = bounds
+          ? sliceComposition(r.compositionSeries.points, bounds)
+          : r.compositionSeries.points
+        const compositionBands = r.compositionSeries.bands
+        // Named from the bands actually drawn, so a reader who cannot see the legend still
+        // learns what the stack is split into — and an account that has never held options is
+        // not told about an options band that isn't there.
+        const compositionChartLabel =
+          compositionPoints.length === 0
+            ? 'Portfolio composition over time'
+            : `Portfolio composition over time as a percentage of net asset value, split into ${compositionBands
+                .map((b) => b.label.toLowerCase())
+                .join(', ')}, over ${compositionPoints.length} days`
+
         const chartTitle =
           chartTab === 'value'
             ? 'Portfolio value over time'
             : chartTab === 'return'
               ? returnChartTitle
-              : 'Daily return'
+              : chartTab === 'daily'
+                ? 'Daily return'
+                : 'Composition over time'
 
         return (
           <>
@@ -193,6 +220,27 @@ export function PerformanceView(): React.JSX.Element {
                       formatDate={formatDate}
                       ariaLabel={dailyChartLabel}
                       emptyMessage="Not enough data points to plot daily returns yet."
+                    />
+                  </>
+                )}
+                {chartTab === 'composition' && (
+                  <>
+                    <p className="source-note">
+                      Each day’s net asset value split into its asset classes, as reported by
+                      IBKR — not reconstructed from holdings, so a corporate action or a
+                      transfer cannot quietly bend it. Accrued dividends, interest and broker
+                      fees are grouped as Accruals: they are part of net asset value, but too
+                      small to read as separate bands. The bands total 100% every day, so a band
+                      can only grow at another’s expense — this chart answers whether the
+                      portfolio changed shape, not whether it grew.
+                    </p>
+                    <StackedAreaChart
+                      key="composition"
+                      bands={compositionBands}
+                      points={compositionPoints}
+                      formatDate={formatDate}
+                      ariaLabel={compositionChartLabel}
+                      emptyMessage="Composition over time needs a Flex export that includes the Net Asset Value (NAV) in Base section."
                     />
                   </>
                 )}
