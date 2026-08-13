@@ -54,10 +54,15 @@ export type CompositionBand = z.infer<typeof compositionBandSchema>
  * `bands` and is in base currency; `total` is IBKR's own NAV for the day.
  *
  * Values are **signed**: cash goes negative on margin, and a negative band is drawn below the
- * zero line rather than clamped, because a 100%-stacked chart that hides a short position is
- * lying about the shape it exists to show. Proportions are deliberately *not* computed here —
- * that is stacking geometry, and it lives in `renderer/src/lib/composition.ts` where it can be
- * unit-tested against the degenerate cases (zero NAV, negative bands) as pure maths.
+ * zero line rather than clamped, because a stacked chart that hides a short position is lying
+ * about the shape it exists to show. The stacking is deliberately *not* done here — the chart
+ * stacks these values cumulatively to `total` (DDR-0052), and that geometry lives in
+ * `renderer/src/lib/composition.ts` where it can be unit-tested against the degenerate cases
+ * (zero NAV, negative bands) as pure maths.
+ *
+ * The bands are **exhaustive by construction**: whatever `total` exceeds their sum is folded into
+ * an `other` residual upstream. That is what makes the top of the drawn stack the reader's NAV,
+ * so a future category must be folded in rather than dropped.
  */
 export const compositionPointSchema = z.object({
   date: z.number().int(),

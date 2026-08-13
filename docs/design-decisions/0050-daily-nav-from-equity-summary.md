@@ -1,6 +1,11 @@
 # 0050. Daily NAV comes from IBKR's equity summary, and composition is 100%-stacked
 
-- **Status:** Accepted (supersedes the reconstruction in [[0008-daily-portfolio-value-reconstruction]]; extends [[0005-analytics-read-model-and-base-currency-conversion]], [[0015-allocation-cash-as-asset-class]], [[0018-content-measure-and-chart-aspect]])
+- **Status:** Accepted, except that the **100%-stacked** decision below is superseded by
+  [[0052-composition-cumulative-and-chart-readability]] — the chart now stacks cumulatively in base
+  currency. Everything else here stands, including the NAV source, the negative bands below the
+  baseline, the surfaced `other` residual and the zero-NAV rule, none of which were about
+  normalisation. (Supersedes the reconstruction in [[0008-daily-portfolio-value-reconstruction]];
+  extends [[0005-analytics-read-model-and-base-currency-conversion]], [[0015-allocation-cash-as-asset-class]], [[0018-content-measure-and-chart-aspect]])
 - **Date:** 2026-08-12
 - **Story:** #171, under Epic #99
 
@@ -51,6 +56,11 @@ daily MTM shape and never reads a value difference, so the daily-return bars bui
 ([[0049-daily-return-bars-thin-rather-than-aggregate]]) are unaffected by this change.
 
 ### The composition chart is 100%-stacked, not absolute
+
+> **Superseded 2026-08-13 by [[0052-composition-cumulative-and-chart-readability]].** The chart
+> stacks cumulatively in base currency; both reasons below are answered there. Kept as written
+> because they are the reasons the cumulative version has to pay for, not reasons that turned out
+> to be wrong.
 
 Composition is a question about proportions — *did the portfolio change shape?* — so the y axis is
 share of NAV. An absolute stacked area whose top edge is NAV was the alternative and was rejected

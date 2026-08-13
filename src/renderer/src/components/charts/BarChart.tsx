@@ -1,6 +1,7 @@
+import { useRef, useState } from 'react'
 import type { ValuePoint } from '@shared/domain/performance'
 import { PERFORMANCE_PLOT } from '../../lib/chartGeometry'
-import { columnDomain } from '../../lib/column'
+import { bandIndexAt, columnDomain } from '../../lib/column'
 import { StatePanel } from '../ui/StatePanel'
 
 /**
@@ -23,6 +24,13 @@ import { StatePanel } from '../ui/StatePanel'
  * series, from a 24-unit slab for a handful of points down to a hairline for a multi-year window,
  * where the chart reads as a volatility envelope rather than a row of bars. That is the honest
  * degradation — still the shape of the ride, just at a distance.
+ *
+ * **Scrubbing is what gives the individual day back.** That density is the whole reason the chart
+ * needs a hover readout and not the `<title>` element it shipped with: a native tooltip has to be
+ * *aimed*, waits half a second, and at a hairline bar there is nothing left to aim at. Hit-testing
+ * the band instead (`bandIndexAt`) means every x inside the plot names a day, so dragging across
+ * the chart reads out the series continuously — which is how a reader finds the worst day of a
+ * drawdown rather than the day they happened to click on.
  */
 
 /* The plot's aspect ratio, shared with the two other charts in the grid (Story #172, DDR-0051).
@@ -59,6 +67,9 @@ export function BarChart({
   ariaLabel: string
   emptyMessage: string
 }): React.JSX.Element {
+  const svgRef = useRef<SVGSVGElement>(null)
+  const [hover, setHover] = useState<number | null>(null)
+
   if (points.length === 0) {
     return <StatePanel surface="inline">{emptyMessage}</StatePanel>
   }
@@ -84,13 +95,27 @@ export function BarChart({
   const first = points[0]!
   const last = points[points.length - 1]!
 
+  /** Map a pointer event to the day whose band it falls in (see `bandIndexAt`). */
+  function onMove(e: React.MouseEvent<SVGSVGElement>): void {
+    const svg = svgRef.current
+    if (!svg) return
+    const rect = svg.getBoundingClientRect()
+    const vbX = ((e.clientX - rect.left) / rect.width) * W
+    setHover(bandIndexAt(vbX, PAD.left, plotW, points.length))
+  }
+
+  const active = hover !== null ? points[hover] : undefined
+
   return (
     <svg
+      ref={svgRef}
       className="chart"
       viewBox={`0 0 ${W} ${H}`}
       role="img"
       aria-label={ariaLabel}
       preserveAspectRatio="xMidYMid meet"
+      onMouseMove={onMove}
+      onMouseLeave={() => setHover(null)}
     >
       {ticks.map((t, i) => {
         // The zero line is emphasised because it is the chart's second channel: a bar's side of it
@@ -112,18 +137,20 @@ export function BarChart({
         )
       })}
 
+      {/* No per-bar `<title>`: the readout below replaces it, and leaving both in place would
+          float a slow native tooltip over the one that already answered the question. */}
       {points.map((p, i) => (
         <rect
           key={p.date}
-          className={p.value < 0 ? 'chart-bar-loss' : 'chart-bar-gain'}
+          className={`${p.value < 0 ? 'chart-bar-loss' : 'chart-bar-gain'}${
+            i === hover ? ' chart-bar-active' : ''
+          }`}
           x={PAD.left + i * band + (band - barW) / 2}
           y={Math.min(zeroY, y(p.value))}
           width={barW}
           height={Math.abs(y(p.value) - zeroY)}
           rx={rx}
-        >
-          <title>{`${formatDate(p.date)}: ${formatValue(p.value)}`}</title>
-        </rect>
+        />
       ))}
 
       {/* Only the endpoints are labelled. A label per bar is what makes `ColumnChart` unusable at
@@ -136,6 +163,58 @@ export function BarChart({
           {formatDate(last.date)}
         </text>
       )}
+
+      {active && hover !== null && (
+        <HoverReadout
+          point={active}
+          px={PAD.left + (hover + 0.5) * band}
+          formatValue={formatValue}
+          formatDate={formatDate}
+        />
+      )}
     </svg>
+  )
+}
+
+/**
+ * Crosshair plus a floating date/value tooltip for the scrubbed day.
+ *
+ * The same two-line box the value and return curves use, because the three charts sit in one grid
+ * and are read against each other (DDR-0051) — a reader moving between them should not have to
+ * re-learn where the date is. It is pinned to the top of the plot rather than tracked to the bar's
+ * own height, though: a daily-return bar can be one unit tall, and a box anchored to it would jump
+ * the full height of the plot between two adjacent days.
+ */
+function HoverReadout({
+  point,
+  px,
+  formatValue,
+  formatDate,
+}: {
+  point: ValuePoint
+  px: number
+  formatValue: (v: number) => string
+  formatDate: (epochMs: number) => string
+}): React.JSX.Element {
+  const dateLabel = formatDate(point.date)
+  const valueLabel = formatValue(point.value)
+  const boxW = Math.max(dateLabel.length, valueLabel.length) * 7 + 16
+  const boxH = 36
+  // Prefer placing the box to the right of the crosshair; flip left near the edge.
+  const bx = px + 12 + boxW > W - PAD.right ? px - 12 - boxW : px + 12
+  const by = PAD.top
+  const tx = bx + 8
+
+  return (
+    <g pointerEvents="none">
+      <line className="chart-crosshair" x1={px} x2={px} y1={PAD.top} y2={H - PAD.bottom} />
+      <rect className="chart-tooltip-bg" x={bx} y={by} width={boxW} height={boxH} rx={6} />
+      <text className="chart-tooltip-date" x={tx} y={by + 14}>
+        {dateLabel}
+      </text>
+      <text className="chart-tooltip-value" x={tx} y={by + 29}>
+        {valueLabel}
+      </text>
+    </g>
   )
 }

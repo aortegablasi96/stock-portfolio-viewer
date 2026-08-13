@@ -1504,11 +1504,26 @@ html {
   }
 }
 
-/* The source note follows its chart here rather than preceding it, so every plot in a row starts
-   at the same height. The shared rule's negative top margin is tuned for a note tucked directly
-   under a card title, which is not where this one sits. */
-.performance-charts .card-content .source-note {
-  margin: var(--space-5) 0 0;
+/* Every chart card's header is exactly one line tall, so the four cards are exactly the same
+   height (DDR-0052). `.card-header` wraps by default, which is right for a header whose action is
+   a toolbar and wrong here: the composition card carries the stack's legend, and at the narrow end
+   of the grid — just above the 1200px collapse — the title and a four-band legend are within a few
+   dozen pixels of the column. Wrapping there would make one card in the row taller than the other,
+   which is the misalignment the grid exists to avoid.
+
+   So the row never wraps and the *title* is what yields: it shrinks and ellipsizes while the
+   legend keeps its full width, because a clipped key is unreadable where a clipped title is merely
+   abbreviated — and the chart states its own full name in `aria-label` either way. */
+.chart-card-header {
+  flex-wrap: nowrap;
+}
+
+.chart-card-header .card-title {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ---- Charts (inline SVG + bar lists) ------------------------------------- */
@@ -1703,6 +1718,17 @@ html {
   fill: var(--neg);
 }
 
+/* The scrubbed day in the daily-return chart. Outlined rather than recoloured, for the reason
+   DDR-0040 gives the Allocation donut's active wedge: hue is identity, and a bar that changed
+   colour under the pointer would read as a change of sign. `non-scaling-stroke` is what makes it
+   work at density — by a few hundred trading days the bar itself is a hairline (DDR-0049), and a
+   stroke measured in viewBox units would be wider than the bar it outlines. */
+.chart-bar-active {
+  stroke: var(--text);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
 /* A composition band (Story #171, DDR-0050). The fill comes from the `.pie-series-*` class the
    band carries, exactly as a donut slice does — one asset class, one hue, shared with the
    legend swatch beside it.
@@ -1714,8 +1740,28 @@ html {
    thicker than a 0.1% band, so on this portfolio (~99.9% stocks) it painted the card colour
    straight over the cash and accrual slivers it was meant to separate: the thin bands read as
    dark specks rather than as their own hue. Verified on screen before it was removed. */
+/* The bands are softened, and *only* the bands (DDR-0052).
+
+   The `--series-*` palette is tuned for donut slices and map marks — small, isolated shapes that
+   have to hold their identity against a dark card at a few dozen pixels across. A stacked area
+   uses the same eight hues as slabs covering most of the card, and at that size the saturation
+   that makes a 40px wedge legible makes the chart shout down the two curves it shares a grid with.
+   Lowering the fill opacity blends each band toward `--card` — the same hue, further back — so
+   the chart still reads as one asset class per colour while sitting behind rather than in front.
+
+   Deliberately scoped rather than retuning the tokens: the palette is validated for CVD and
+   contrast as a set (DDR-0030) and is worn by the allocation donuts, the map and every other
+   legend, none of which have this problem. `fill-opacity` rather than `opacity` so the bands stay
+   individually composited instead of being flattened into one group. `.stack-band` needs no
+   ancestor selector — it exists in this chart alone — but the legend swatch is the shared class,
+   so `.composition-legend` scopes the matching softening to this key and no other. */
 .stack-band {
   stroke: none;
+  fill-opacity: 0.5;
+}
+
+.composition-legend .legend-swatch {
+  opacity: 0.5;
 }
 
 .chart-legend {
@@ -1724,6 +1770,22 @@ html {
   margin-top: var(--space-4);
   font-size: var(--text-xs);
   color: var(--muted);
+}
+
+/* A legend that sits in the card header instead of under the plot (DDR-0052), so the chart
+   below it is a bare `<svg>` and every card in the Performance grid is the same height.
+
+   It must not be *taller* than the title it sits beside, or it would put that height back by
+   another route: `--text-xs` under a `--text-sm` title clears that, `nowrap` keeps four bands on
+   one line, and the margin the stacked legend carries is dropped because `.card-header` owns the
+   spacing here. Should a stack ever carry enough bands to overflow the header, the answer is to
+   shorten the labels — wrapping is the one thing this placement cannot afford. */
+.chart-legend-header {
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  gap: var(--space-5);
+  margin: 0;
+  white-space: nowrap;
 }
 
 .legend-item {

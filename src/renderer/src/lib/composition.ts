@@ -7,28 +7,58 @@
  * here is the whole of the chart's maths — proportions, the signed stack, the vertical domain
  * and the ribbon paths — leaving `StackedAreaChart` with only the parts that need a DOM.
  *
- * The chart is **100%-stacked**: it answers "did the portfolio's shape change?", which is a
- * question about proportions, so the y axis is share of NAV rather than currency. That also
- * keeps it honest beside the value curve, whose absolute scale it would otherwise appear to
- * contradict on any day the two were built differently.
+ * The chart is **cumulative**: bands stack in base currency and the top edge of the stack is the
+ * day's total NAV. It supersedes the 100%-stacked version this module shipped with (DDR-0052
+ * supersedes that half of DDR-0050), so the y axis is currency rather than share of NAV.
  *
- * Two things here are less obvious than they look.
+ * The trade that decision makes is worth stating, because DDR-0050 made it the other way. A
+ * 100%-stacked chart holds proportion still and shows shape alone; a cumulative one shows shape
+ * *and* size, at the cost of squeezing a small band against a growing total — a 2% cash sliver is
+ * harder to read at €45k of NAV than at €20k. What buys that back is that a band's own thickness
+ * is now a quantity a reader can price: "cash went from nothing to €4k" is a sentence the
+ * normalised version could not produce, since there every band moved whenever any band moved.
  *
- * **Negative bands are drawn below the zero line, not clamped or normalised away.** Cash goes
- * negative on margin, and when it does, stock exceeds 100% of NAV. Dividing by Σ|value| would
- * make both bands positive and put the stack back inside 0–100% — at the cost of drawing a
- * borrowed position as though it were an asset, which is precisely the shape the chart exists
- * to reveal. So positive shares stack upward from zero, negative shares stack downward, and
- * the axis domain widens to fit. In the ordinary case that domain is exactly [0, 1] and the
- * chart looks like any other 100%-stacked area.
+ * Three things here are less obvious than they look.
  *
- * **A zero-NAV day has no proportions at all.** Every share is 0 rather than `NaN` from a
- * division by zero, so the stack pinches to nothing at that x and reopens after it. This is
- * not hypothetical: the owner's real 2025 export opens on the day before the account was
- * funded, with `total="0"`.
+ * **Negative bands are drawn below the zero line, not clamped or folded away.** Cash goes negative
+ * on margin, and when it does, the stock band alone exceeds NAV. Stacking |value| would put the
+ * top edge back on the total at the cost of drawing a borrowed position as though it were an
+ * asset, which is precisely the shape the chart exists to reveal. So positive values stack upward
+ * from zero, negative values stack downward, and the axis domain widens to fit. This survived the
+ * move off proportions unchanged — it was never about normalisation.
+ *
+ * **The top edge is NAV because the bands are exhaustive, not because anything forces it.** The
+ * `other` band is a residual (`total − Σ components`), so the stack sums to `total` by
+ * construction — the same property the normalised version relied on to reach exactly 100%. If a
+ * future band were ever dropped rather than folded into `other`, the top edge would quietly stop
+ * being NAV, and unlike the old chart nothing would look wrong.
+ *
+ * **A zero-NAV day is a genuine zero here, not a division by zero.** The stack simply pinches to
+ * the baseline and reopens after it. This is not hypothetical: the owner's real 2025 export opens
+ * on the day before the account was funded, with `total="0"`. `shares` still guards the division,
+ * because the hover readout quotes a percentage beside each figure.
  */
-import type { CompositionPoint } from '@shared/domain/performance'
+import type { CompositionBand, CompositionPoint } from '@shared/domain/performance'
+import { columnDomain, type ColumnDomain } from './column'
 import type { Bounds } from './dateRange'
+import { OTHER_KEY, sliceColorClasses } from './pie'
+
+/**
+ * The palette class for each band, index-aligned with `bands`.
+ *
+ * Shared by the chart and its legend rather than computed twice. They are no longer in the same
+ * element — the legend moved into the card header so that every card in the 2×2 grid is exactly
+ * the same height (DDR-0052) — and two call sites deriving colour separately is how a legend
+ * starts disagreeing with the thing it keys.
+ *
+ * **No offset**: `SECTOR_SLOT_OFFSET` reserves slot 1 for the Allocation map's weight donut and
+ * applies to *sectors* only (DDR-0030); an asset class is not a sector, so this chart keeps all
+ * eight slots. The residual `other` band is mapped onto `OTHER_KEY` so it takes the neutral gray
+ * rather than consuming a hue — it is not a category anyone named.
+ */
+export function compositionColors(bands: readonly CompositionBand[]): string[] {
+  return sliceColorClasses(bands.map((b) => ({ key: b.key === 'other' ? OTHER_KEY : b.key })))
+}
 
 /**
  * Restrict the series to a window, keeping only the days that really fall in it.
@@ -54,7 +84,7 @@ export interface StackBox {
   pad: { top: number; right: number; bottom: number; left: number }
 }
 
-/** Where one band sits at one point, in share space (1 = 100% of NAV). */
+/** Where one band sits at one point, in base currency. */
 export interface BandSpan {
   lo: number
   hi: number
@@ -63,8 +93,8 @@ export interface BandSpan {
 export interface StackGeometry {
   /** One closed SVG path per band, index-aligned with the series' `bands`. */
   paths: string[]
-  /** The share-space vertical domain drawn — exactly [0, 1] unless a band goes negative. */
-  domain: { min: number; max: number }
+  /** The currency vertical domain drawn, with the axis ticks that go with it. */
+  domain: ColumnDomain
   /** Each point's x in `viewBox` units, for the hover crosshair and nearest-point search. */
   xs: number[]
 }
@@ -72,8 +102,11 @@ export interface StackGeometry {
 /**
  * Each band's signed share of NAV at one point, index-aligned with `point.values`.
  *
- * Sums to exactly 1 when NAV is non-zero — the invariant the chart's "bands total 100%"
- * promise rests on, and the one asserted directly in the tests. All zero when NAV is zero.
+ * No longer what the chart is *drawn* from — that is `stackSpans` over the raw values now — but
+ * still what the hover readout quotes beside each figure, because "€612" answers a different
+ * question from "1.4% of the portfolio" and the reader of a composition chart wants both.
+ *
+ * Sums to exactly 1 when NAV is non-zero, and is all zero when NAV is zero rather than `NaN`.
  */
 export function shares(point: CompositionPoint): number[] {
   if (point.total === 0) return point.values.map(() => 0)
@@ -81,46 +114,55 @@ export function shares(point: CompositionPoint): number[] {
 }
 
 /**
- * Turn one point's shares into stacked spans, bottom band first.
+ * Turn one point's band values into stacked spans, bottom band first.
  *
- * Positive and negative shares are stacked from two independent cursors at zero, so a band
- * that flips sign — cash crossing into margin — moves from above the baseline to below it
- * rather than dragging the bands above it down through zero.
+ * Positive and negative values are stacked from two independent cursors at zero, so a band that
+ * flips sign — cash crossing into margin — moves from above the baseline to below it rather than
+ * dragging the bands above it down through zero.
+ *
+ * Unit-agnostic: it stacked shares before DDR-0052 and stacks base currency after it, because the
+ * two-cursor rule is about sign, not scale.
  */
-export function stackSpans(pointShares: readonly number[]): BandSpan[] {
+export function stackSpans(values: readonly number[]): BandSpan[] {
   let up = 0
   let down = 0
-  return pointShares.map((share) => {
-    if (share >= 0) {
-      const span = { lo: up, hi: up + share }
+  return values.map((value) => {
+    if (value >= 0) {
+      const span = { lo: up, hi: up + value }
       up = span.hi
       return span
     }
-    const span = { lo: down + share, hi: down }
+    const span = { lo: down + value, hi: down }
     down = span.lo
     return span
   })
 }
 
 /**
- * The vertical domain across the whole series — the deepest negative stack to the tallest
- * positive one.
+ * The currency domain across the whole series — the deepest negative stack to the tallest
+ * positive one — with the axis ticks to label it.
  *
- * Anchored to include 0 and 1 always, so the chart does not silently rescale between renders:
- * a window in which every day is 100% stock would otherwise draw the stack against a domain of
- * [0, 1] while its neighbour drew [−0.1, 1.1], and the two would look like different shapes at
- * the same proportion. Zero-NAV days contribute nothing and cannot collapse it.
+ * Delegated to `columnDomain` rather than taking the raw extremes, for the reason that module
+ * exists: an axis running to €43,718.02 is an axis nobody can read across. It rounds the extremes
+ * outward to a nice step, always spans zero, and always puts a tick on it — which is also what
+ * gives the tallest stack headroom instead of clipping it against the top grid line.
+ *
+ * The anchor the 100%-stacked version needed is gone with it. That chart pinned its domain to
+ * [0, 1] so two windows at the same proportion drew the same shape; here the domain is *supposed*
+ * to follow the money, since a window in which NAV doubled should look like one in which NAV
+ * doubled.
  */
-export function shareDomain(points: readonly CompositionPoint[]): { min: number; max: number } {
-  let min = 0
-  let max = 1
-  for (const point of points) {
-    for (const span of stackSpans(shares(point))) {
-      if (span.lo < min) min = span.lo
-      if (span.hi > max) max = span.hi
-    }
-  }
-  return { min, max }
+export function valueDomain(points: readonly CompositionPoint[]): ColumnDomain {
+  return columnDomain(
+    points.map((point) => {
+      const spans = stackSpans(point.values)
+      const lo = Math.min(0, ...spans.map((s) => s.lo))
+      const hi = Math.max(0, ...spans.map((s) => s.hi))
+      // `columnDomain` reads its top off `lower + upper` and its bottom off `lower`, so a stack
+      // is expressed to it as one column from the bottom of the stack to the top.
+      return { lower: lo, upper: hi - lo }
+    }),
+  )
 }
 
 /**
@@ -133,7 +175,7 @@ export function stackGeometry(
   bandCount: number,
   box: StackBox,
 ): StackGeometry {
-  const domain = shareDomain(points)
+  const domain = valueDomain(points)
   if (points.length < 2 || bandCount === 0) return { paths: [], domain, xs: [] }
 
   const { width, height, pad } = box
@@ -141,14 +183,14 @@ export function stackGeometry(
   const minD = Math.min(...dates)
   const maxD = Math.max(...dates)
   const spanD = maxD - minD || 1
-  const spanV = domain.max - domain.min || 1
+  const spanV = domain.top - domain.bottom || 1
 
   const x = (d: number): number => pad.left + ((d - minD) / spanD) * (width - pad.left - pad.right)
   const y = (v: number): number =>
-    height - pad.bottom - ((v - domain.min) / spanV) * (height - pad.top - pad.bottom)
+    height - pad.bottom - ((v - domain.bottom) / spanV) * (height - pad.top - pad.bottom)
 
   const xs = dates.map(x)
-  const spansPerPoint = points.map((p) => stackSpans(shares(p)))
+  const spansPerPoint = points.map((p) => stackSpans(p.values))
 
   const paths = Array.from({ length: bandCount }, (_, band) => {
     const top = spansPerPoint.map((spans, i) => `${xs[i]},${y(spans[band]?.hi ?? 0)}`)

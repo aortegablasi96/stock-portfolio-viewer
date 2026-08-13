@@ -97,6 +97,11 @@ to the TWR IBKR reports and apportions the days between them by each day's share
 mark-to-market result. So the boundaries are exact and the interior is modelled. A `.source-note`
 under the chart says so, in the pattern the Dividends view established for its stacked columns.
 
+> **Amended 2026-08-13 by [[0052-composition-cumulative-and-chart-readability]]:** that note is
+> deleted. Four charts on one screen (Story #172) meant four bodies of prose competing with the
+> plots; the modelling is documented here and in `lib/dailyReturns` instead. The *approximation*
+> stands exactly as described — only where it is written down changed.
+
 ## Consequences
 
 - The first point of the history draws no bar. It has no predecessor, and rendering it as 0% would
