@@ -13,7 +13,7 @@ export type ToggleOption<T extends string> = {
 }
 
 type CommonProps<T extends string> = {
-  /** Accessible name for the group, e.g. "Performance chart" — required, never inferred. */
+  /** Accessible name for the group, e.g. "Performance time range" — required, never inferred. */
   label: string
   options: readonly ToggleOption<T>[]
   /** Called with the item that was pressed. In `multiple` mode this means "toggle it". */
@@ -42,8 +42,13 @@ type CommonProps<T extends string> = {
  * no keyboard behaviour beyond the button's own.
  *
  * Presentational only. The owning view holds the selection, because what a selection *does*
- * differs by view — a chart tab picks a series, a range filter reframes a window, a type
- * chip filters rows.
+ * differs by view — a range filter reframes a window, a breakdown strip picks a dimension, a
+ * type chip filters rows.
+ *
+ * Four call sites now, not five: Story #172 retired the Performance chart switcher — the control
+ * this primitive's superseded class was named after — when the four charts moved into a grid that
+ * shows them at once (DDR-0051). The paragraph above is kept as written because it is the record
+ * of what the contract corrected, and the switcher is where the `role="tablist"` mistake started.
  */
 export function ToggleGroup<T extends string>(
   props: CommonProps<T> &

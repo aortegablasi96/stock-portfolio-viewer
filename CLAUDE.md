@@ -154,7 +154,21 @@ Canonical flows to copy when adding a feature:
   performance view's cumulative **TWR** curve, chosen over a value curve so deposits and
   withdrawals don't move it (DDR-0013). They are sized by **aspect ratio** (the `viewBox`), never
   a pixel width, because they scale to a shared `--content-max` column (DDR-0018). The Performance
-  view's **daily-return bars** are that same rule under density (DDR-0049): the ratio is fixed and
+  view's four charts render **together, in a 2×2 grid** under one `RangeFilter` (Story #172,
+  DDR-0051) — they answer one question between them, so the switcher that showed one at a time is
+  gone, and with it `chartTab`. That grid is what pulled DDR-0018's lever for the first time: an
+  axis label is 11 *viewBox units*, so halving the column halves the label, and 1080×240 in a
+  half-width card puts an 8.3px number on the axis. The three time-series charts therefore share
+  **one** geometry — `lib/chartGeometry`, 500×180 (≈2.78:1), the width halved so a unit keeps its
+  size and the ratio shortened so the plot keeps its height — and the padding stays put, because
+  `pad.left: 64` is an allowance for a currency label, not a fraction of the plot. Three things
+  follow. The grid **collapses to one column at 1200px**, chosen from the legibility floor and
+  deliberately below the 1280px default window, so a fresh install opens on the grid; the label
+  size is **checked, not asserted** (`chartGeometry.test.ts` mirrors the layout tokens, reads each
+  back out of `app.css`, and walks the layout to `--content-max`); and capping a chart's width to
+  bound the collapsed column stays **rejected** — DDR-0018 tried it and it reads as a rendering
+  bug. `ColumnChart`, `PieChart` and the map are not in the grid and keep their own aspect. The
+  **daily-return bars** are that same rule under density (DDR-0049): the ratio is fixed and
   the *bars* thin with the series, because aggregating days into weeks would destroy the volatility
   the chart exists to show. Two traps — the returns are **chain-linked** from the cumulative TWR
   series (`lib/dailyReturns`, reusing `performanceRange`'s exported `chainLink`), never differenced
@@ -870,7 +884,7 @@ Vitest picks up every `src/**/*.test.ts` and runs it in a **Node** environment (
 so no test may render a React component. This shapes the renderer: chart maths, filtering,
 sorting and formatting are **extracted out of components into pure modules under
 `renderer/src/lib/`** (`format`, `pie`, `worldGeo`, `countryDonuts`, `gainLoss`, `tableFilter`,
-`column`, `dateRange`, `sectorMap`, `performanceRange`, `dailyReturns`, `composition`, `classifyProgress`, `dataVersion`,
+`column`, `dateRange`, `sectorMap`, `performanceRange`, `dailyReturns`, `composition`, `chartGeometry`, `classifyProgress`, `dataVersion`,
 `tabKeyboard`, `buttonVariants`, `cardVariants`, `statTileVariants`, `fieldVariants`,
 `toggleGroupVariants`, `badgeVariants`, `statePanelVariants`, `tableSort`, `dataTableVariants`,
 `sliceHighlight`, `mapPopupTint`, `cssDeclarations`, `tokenAdoption`, `motionTokens`, `contrast`,

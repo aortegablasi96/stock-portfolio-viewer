@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import type { CompositionBand, CompositionPoint } from '@shared/domain/performance'
+import { PERFORMANCE_PLOT } from '../../lib/chartGeometry'
 import { formatPercent } from '../../lib/format'
 import { nearestIndex, shares, stackGeometry } from '../../lib/composition'
 import { OTHER_KEY, sliceColorClasses } from '../../lib/pie'
@@ -22,14 +23,12 @@ import { StatePanel } from '../ui/StatePanel'
  * gray rather than consuming a hue, since it is not a category anyone named.
  */
 
-/* The plot's aspect ratio (DDR-0018): the SVG scales to its panel, so this ratio — not a pixel
-   size — decides how tall the chart gets. Matched to `LineChart`'s 4.5:1 deliberately, because
-   this chart shares a card and a `RangeFilter` with the value and return curves and is read
-   against them; a different height would make the same date range look like a different span.
-   Story #172 revisits every ratio for the 2×2 grid, which is that story's job, not this one's. */
-const W = 1080
-const H = 240
-const PAD = { top: 16, right: 16, bottom: 28, left: 64 }
+/* The plot's aspect ratio, shared with the value and return curves it is read against — a
+   different height would make the same date range look like a different span. Story #172 revisited
+   it for the 2×2 grid and moved it to `lib/chartGeometry` (DDR-0051); this chart no longer shares
+   a *card* with those curves, only a row and a `RangeFilter`, which makes agreeing on the geometry
+   matter more rather than less. */
+const { width: W, height: H, pad: PAD } = PERFORMANCE_PLOT
 
 /** Tooltip row metrics, in viewBox units. */
 const ROW_H = 14
