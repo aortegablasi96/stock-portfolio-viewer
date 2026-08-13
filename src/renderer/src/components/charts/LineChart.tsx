@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import type { ValuePoint } from '@shared/domain/performance'
+import { PERFORMANCE_PLOT } from '../../lib/chartGeometry'
 import { StatePanel } from '../ui/StatePanel'
 
 /**
@@ -12,13 +13,11 @@ import { StatePanel } from '../ui/StatePanel'
  * series (period endpoints) still marks each vertex; a dense daily series (DDR-0008) would
  * clutter with 140+ markers, so above a threshold only the line + area render.
  */
-/* The plot's aspect ratio: the SVG scales to its panel, so this ratio — not a pixel size —
-   decides how tall a chart gets on a wide window. 4.5:1 keeps a full-width chart about the
-   height it had in the old 72rem column, and keeps the axis labels (sized in viewBox units)
-   rendering at the same on-screen size once scaled. Story #76. */
-const W = 1080
-const H = 240
-const PAD = { top: 16, right: 16, bottom: 28, left: 64 }
+/* The plot's aspect ratio lives in `lib/chartGeometry` now (Story #172, DDR-0051): this chart
+   shares a 2×2 grid with the bar and stacked-area charts, all three are read against each other,
+   and three private copies of the same 1080×240 is how they would stop agreeing. 500×180 is what
+   half a column needs — see that module for why the width halved and the ratio shortened. */
+const { width: W, height: H, pad: PAD } = PERFORMANCE_PLOT
 
 /** Above this many points the per-vertex markers are dropped (dense daily series). */
 const MAX_MARKERS = 30

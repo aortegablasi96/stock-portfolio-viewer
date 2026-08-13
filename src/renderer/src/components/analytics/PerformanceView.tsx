@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import type { ReactNode } from 'react'
 import type { NavPeriod, PerformanceReport, PerformanceResult } from '@shared/domain/performance'
 import {
   formatCurrency,
@@ -15,26 +15,12 @@ import { LineChart } from '../charts/LineChart'
 import { StackedAreaChart } from '../charts/StackedAreaChart'
 import { useAnalytics } from './useAnalytics'
 import { AnalyticsShell } from './AnalyticsShell'
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card'
+import { Card, CardContent, CardTitle } from '../ui/Card'
 import { DataTable, type DataColumn } from '../ui/DataTable'
 import { RangeFilter } from './RangeFilter'
 import { StatRow, StatTile } from '../ui/StatTile'
-import { ToggleGroup } from '../ui/ToggleGroup'
 import { toneClassName, toneOf } from '../../lib/statTileVariants'
 import { useRangeSelection } from './useRangeSelection'
-
-/**
- * The switchable Performance charts (Story #45; the daily bar chart joined them in Story #170).
- * Story #172 retires this switcher for a 2×2 grid, so the labels are written to work as card
- * titles rather than only as chips.
- */
-const CHART_TABS = [
-  { id: 'value', label: 'Portfolio value over time' },
-  { id: 'return', label: 'Performance change over time' },
-  { id: 'daily', label: 'Daily return' },
-  { id: 'composition', label: 'Composition' },
-] as const
-type ChartTab = (typeof CHART_TABS)[number]['id']
 
 /**
  * Performance over time (Milestone M3, Stories #21, #29, #45, #69). Shows the portfolio-value
@@ -60,17 +46,23 @@ type ChartTab = (typeof CHART_TABS)[number]['id']
  * 100%-stacked rather than absolute — composition is a question about proportions — and reads
  * IBKR's own daily NAV breakdown, the same series the value curve above now comes from.
  *
- * The view stays mounted once visited (Story #109), so the range selection and chart tab below
- * survive a trip to another tab; the `RefreshBar` gives the re-read that leaving and returning
- * used to perform by accident.
+ * All four render **at once, in a 2×2 grid** (Story #172, DDR-0051), because they are most useful
+ * read against each other: a drawdown in the value curve means one thing beside a run of red daily
+ * bars and another beside a shift in composition. The switcher that showed one at a time is gone
+ * with them, and so is the state it needed — four charts under one `RangeFilter` is one selection,
+ * not four. The narrower column is why the charts' `viewBox` changed shape; see
+ * `lib/chartGeometry`.
+ *
+ * The view stays mounted once visited (Story #109), so the range selection below survives a trip
+ * to another tab; the `RefreshBar` gives the re-read that leaving and returning used to perform by
+ * accident.
  */
 export function PerformanceView(): React.JSX.Element {
   const analytics = useAnalytics<PerformanceResult>(window.api.getPerformance)
-  const [chartTab, setChartTab] = useState<ChartTab>('value')
   const { range, setRange, custom, editCustom } = useRangeSelection()
 
-  // The range selection and chart tab stay above the shell: they are the view's own state, and
-  // the shell holds none, so they survive a tab switch exactly as they did (DDR-0027).
+  // The range selection stays above the shell: it is the view's own state, and the shell holds
+  // none, so it survives a tab switch exactly as it did (DDR-0027).
   return (
     <AnalyticsShell<PerformanceReport> subject="performance" analytics={analytics}>
       {(r) => {
@@ -132,15 +124,6 @@ export function PerformanceView(): React.JSX.Element {
                 .map((b) => b.label.toLowerCase())
                 .join(', ')}, over ${compositionPoints.length} days`
 
-        const chartTitle =
-          chartTab === 'value'
-            ? 'Portfolio value over time'
-            : chartTab === 'return'
-              ? returnChartTitle
-              : chartTab === 'daily'
-                ? 'Daily return'
-                : 'Composition over time'
-
         return (
           <>
             <RangeFilter
@@ -174,78 +157,65 @@ export function PerformanceView(): React.JSX.Element {
               />
             </StatRow>
 
-            <Card>
-              <CardHeader>
-                <CardTitle id="perf-chart-title">{chartTitle}</CardTitle>
-                <ToggleGroup
-                  label="Performance chart"
-                  options={CHART_TABS}
-                  value={chartTab}
-                  onSelect={setChartTab}
+            {/* Row 1 is the two cumulative curves, row 2 the two charts that break them apart:
+                the daily bars say how the curve was travelled, composition says what was held
+                while it was. Reading order matches, so a screen reader gets the same argument. */}
+            <div className="performance-charts">
+              <ChartCard title="Portfolio value over time">
+                <LineChart
+                  points={valueSeries}
+                  formatValue={c}
+                  formatDate={formatDate}
+                  ariaLabel="Portfolio value over time"
                 />
-              </CardHeader>
-              <CardContent>
-                {chartTab === 'value' && (
-                  <LineChart
-                    key="value"
-                    points={valueSeries}
-                    formatValue={c}
-                    formatDate={formatDate}
-                    ariaLabel="Portfolio value over time"
-                  />
-                )}
-                {chartTab === 'return' && (
-                  <LineChart
-                    key="return"
-                    points={returnSeries}
-                    formatValue={formatSignedPercent}
-                    formatDate={formatDate}
-                    ariaLabel={returnChartLabel}
-                  />
-                )}
-                {chartTab === 'daily' && (
-                  <>
-                    <p className="source-note">
-                      Each bar is one trading day’s time-weighted return, chain-linked from the
-                      cumulative return curve rather than differenced from portfolio value — so a
-                      deposit or withdrawal never shows up as a gain. Inside a statement period the
-                      day-to-day shape is apportioned by each day’s share of the period’s
-                      mark-to-market result; the period’s own endpoints are the returns IBKR
-                      reports, so the boundaries are exact and the days between them are modelled.
-                    </p>
-                    <BarChart
-                      key="daily"
-                      points={dailyPoints}
-                      formatValue={formatSignedPercent}
-                      formatDate={formatDate}
-                      ariaLabel={dailyChartLabel}
-                      emptyMessage="Not enough data points to plot daily returns yet."
-                    />
-                  </>
-                )}
-                {chartTab === 'composition' && (
-                  <>
-                    <p className="source-note">
-                      Each day’s net asset value split into its asset classes, as reported by
-                      IBKR — not reconstructed from holdings, so a corporate action or a
-                      transfer cannot quietly bend it. Accrued dividends, interest and broker
-                      fees are grouped as Accruals: they are part of net asset value, but too
-                      small to read as separate bands. The bands total 100% every day, so a band
-                      can only grow at another’s expense — this chart answers whether the
-                      portfolio changed shape, not whether it grew.
-                    </p>
-                    <StackedAreaChart
-                      key="composition"
-                      bands={compositionBands}
-                      points={compositionPoints}
-                      formatDate={formatDate}
-                      ariaLabel={compositionChartLabel}
-                      emptyMessage="Composition over time needs a Flex export that includes the Net Asset Value (NAV) in Base section."
-                    />
-                  </>
-                )}
-              </CardContent>
-            </Card>
+              </ChartCard>
+
+              <ChartCard title={returnChartTitle}>
+                <LineChart
+                  points={returnSeries}
+                  formatValue={formatSignedPercent}
+                  formatDate={formatDate}
+                  ariaLabel={returnChartLabel}
+                />
+              </ChartCard>
+
+              <ChartCard
+                title="Daily return"
+                note="Each bar is one trading day’s time-weighted return, chain-linked from the
+                  cumulative return curve rather than differenced from portfolio value — so a
+                  deposit or withdrawal never shows up as a gain. Inside a statement period the
+                  day-to-day shape is apportioned by each day’s share of the period’s
+                  mark-to-market result; the period’s own endpoints are the returns IBKR
+                  reports, so the boundaries are exact and the days between them are modelled."
+              >
+                <BarChart
+                  points={dailyPoints}
+                  formatValue={formatSignedPercent}
+                  formatDate={formatDate}
+                  ariaLabel={dailyChartLabel}
+                  emptyMessage="Not enough data points to plot daily returns yet."
+                />
+              </ChartCard>
+
+              <ChartCard
+                title="Composition over time"
+                note="Each day’s net asset value split into its asset classes, as reported by
+                  IBKR — not reconstructed from holdings, so a corporate action or a transfer
+                  cannot quietly bend it. Accrued dividends, interest and broker fees are grouped
+                  as Accruals: they are part of net asset value, but too small to read as separate
+                  bands. The bands total 100% every day, so a band can only grow at another’s
+                  expense — this chart answers whether the portfolio changed shape, not whether
+                  it grew."
+              >
+                <StackedAreaChart
+                  bands={compositionBands}
+                  points={compositionPoints}
+                  formatDate={formatDate}
+                  ariaLabel={compositionChartLabel}
+                  emptyMessage="Composition over time needs a Flex export that includes the Net Asset Value (NAV) in Base section."
+                />
+              </ChartCard>
+            </div>
 
             <Card>
               <CardTitle>Returns by period</CardTitle>
@@ -257,6 +227,39 @@ export function PerformanceView(): React.JSX.Element {
         )
       }}
     </AnalyticsShell>
+  )
+}
+
+/**
+ * One chart in the 2×2 grid: a card, its visible title, and — for the two charts whose numbers are
+ * modelled rather than reported — the note that says so (Story #172).
+ *
+ * The note sits **after** the chart, which is the one thing here that is not merely the old markup
+ * rearranged. Above the chart it pushed the plot down by however many lines it happened to run to,
+ * so the two charts in a row started at different heights: a grid whose whole point is reading one
+ * chart against the one beside it, with the two misaligned. Below it, every plot in a row starts
+ * level and the prose hangs off the bottom, where a card is free to be as tall as it needs.
+ *
+ * Not a shared primitive: this is the Performance grid's own composition of `Card`, and a second
+ * view wanting chart cards would be the moment to ask whether it wants *these* (DDR-0033).
+ */
+function ChartCard({
+  title,
+  note,
+  children,
+}: {
+  title: string
+  note?: string
+  children: ReactNode
+}): React.JSX.Element {
+  return (
+    <Card>
+      <CardTitle>{title}</CardTitle>
+      <CardContent>
+        {children}
+        {note !== undefined && <p className="source-note">{note}</p>}
+      </CardContent>
+    </Card>
   )
 }
 

@@ -1,4 +1,5 @@
 import type { ValuePoint } from '@shared/domain/performance'
+import { PERFORMANCE_PLOT } from '../../lib/chartGeometry'
 import { columnDomain } from '../../lib/column'
 import { StatePanel } from '../ui/StatePanel'
 
@@ -24,20 +25,25 @@ import { StatePanel } from '../ui/StatePanel'
  * degradation — still the shape of the ride, just at a distance.
  */
 
-/* The plot's aspect ratio, matching `LineChart`: the SVG scales to its panel, so this ratio — not
-   a pixel size — decides how tall the chart gets on a wide window (DDR-0018). Sharing 1080×240
-   with the line charts is deliberate: the three Performance charts sit in one switcher today and
-   in one grid later (Story #172), and nothing should jump when the selection changes. */
-const W = 1080
-const H = 240
-const PAD = { top: 16, right: 16, bottom: 28, left: 64 }
+/* The plot's aspect ratio, shared with the two other charts in the grid (Story #172, DDR-0051).
+   Sharing it was already deliberate when the three sat in one switcher — nothing should jump when
+   the selection changes — and it is load-bearing now that they sit side by side: two charts in one
+   row plotting the same date range at different heights would read as different spans. */
+const { width: W, height: H, pad: PAD } = PERFORMANCE_PLOT
 
 /** Share of its band a bar occupies. The gap closes on its own as the series densifies. */
 const BAR_FILL = 0.7
-/** A bar never thins past this, so one day in a multi-year window is still visible. */
-const MIN_BAR_W = 0.75
-/** Widest a bar gets, so a five-point window renders bars rather than slabs. */
-const MAX_BAR_W = 24
+/**
+ * A bar never thins past this, so one day in a multi-year window is still visible.
+ *
+ * Scaled with the plot in Story #172 (0.75 → 0.4): it is a floor on the *bar*, but a floor wider
+ * than the band it sits in makes neighbouring bars overlap, and the plot is now 436 units wide
+ * rather than 1000. At 0.4 that starts past 1,090 points — four years of trading days — where
+ * DDR-0049's volatility envelope is what the chart is anyway.
+ */
+const MIN_BAR_W = 0.4
+/** Widest a bar gets, so a five-point window renders bars rather than slabs. Also plot-relative. */
+const MAX_BAR_W = 10
 
 export function BarChart({
   points,
