@@ -31,23 +31,53 @@
 
 :root {
   color-scheme: dark;
-  --bg: #0f1115;
-  --card: #171a21;
-  --border: #262b36;
-  --text: #e6e9ef;
-  --muted: #9aa4b2;
-  --accent: #4c8dff;
-  /* The accent as a *filled button's* background (Story #163). White on --accent is 3.20:1,
-     below AA's 4.5:1, and .btn-primary:hover applies brightness(1.08) — which lightens the fill
-     and lowers it further, so the hover is the binding measurement, not the resting state.
-     Same hue as --accent (218°) so the button still reads as the accent family: 5.45:1 at rest,
-     4.81:1 hovered. Deliberately NOT used by the focus ring, the active-tab bar or the sort
-     arrow — those keep --accent, which is unchanged. */
-  --accent-strong: #1360e7;
+  /* ---- Ground, surface and ink (Story #181, DDR-0054) ---------------------
+     The redesign's navy-indigo theme. The three surfaces are the proposal's own
+     values; the two ink tokens are not, and the difference is measured.
+
+     `--muted` is the one the proposal got wrong. It quotes #64748b, which is
+     3.89:1 on --card and 4.12:1 on --bg — below AA, and this token carries every
+     stat label, hint, table header, tab label and popup row in the app. Raised
+     along the same slate-indigo hue until it clears with margin: 5.80:1 and
+     6.14:1. Still dimmer than the tone it replaces (6.90:1), which was the
+     proposal's intent; what it is not is illegible. */
+  --bg: #080b18;
+  --card: #0f1320;
+  --border: #1f2644;
+  --text: #e2e8f0; /* 15.02:1 on --card, 15.90:1 on --bg */
+  --muted: #8690aa; /* 5.80:1 on --card, 6.14:1 on --bg */
+  /* The accent is #818cf8, not the proposal's headline #6366f1, and the reason is
+     that this token is overwhelmingly *text*: seven of its nine call sites are a
+     `color` — the eyebrow, the active tab, the sorted column header, the active
+     toggle, the accent badge, the outline button's hover, the control's hover.
+     #6366f1 is 4.14:1 on --card, which clears the 3:1 a focus ring needs and
+     fails the 4.5:1 all seven of those need. #818cf8 is 6.21:1, and it is the
+     value the proposal itself assigns to "text and active states". The identity
+     hue survives at full strength in --accent-strong and in the two track tints.
+     A third `--accent-text` token was rejected: DDR-0046's lesson is that a
+     split tone is silent when you pick the wrong half, and this one needs no
+     split — one value clears both bars. */
+  --accent: #818cf8;
+  /* The accent as a *filled button's* background (Story #163, re-derived #181).
+     White on --accent is 4.47:1 and .btn-primary:hover applies brightness(1.08),
+     which lightens the fill and lowers it to 3.96:1 — so the hover is the binding
+     measurement, not the resting state. One step down the same indigo ramp clears
+     both: 6.29:1 at rest, 5.58:1 hovered. Deliberately NOT used by the focus ring,
+     the active-tab bar or the sort arrow — those keep --accent. */
+  --accent-strong: #4f46e5;
   /* Chart palette — dark-mode steps from the validated data-viz reference palette.
      Slots 1–8 are the categorical set, in the order that clears the CVD, normal-vision
      and contrast gates against the panel surface (validated 2026-07-23, all checks pass).
-     Assign them in order and never cycle: a ninth category folds into "Other". */
+     Assign them in order and never cycle: a ninth category folds into "Other".
+
+     UNCHANGED by the #181 re-key, and that is a result rather than an omission
+     (DDR-0054). Re-validated against the new surface on 2026-08-18: every check
+     still passes, because CVD separation and the normal-vision floor are measured
+     between marks and do not move when the ground does, while the contrast check
+     only improves on a darker ground. The proposal's seven ad-hoc chart colours
+     are not a validated set and were not pasted in. Re-cutting eight hues that
+     pass, to suit a ground, would spend DDR-0030's one-sector-one-hue invariant
+     on an appearance nothing measures. */
   --series-1: #3987e5; /* blue — magnitude / primary series */
   --series-2: #d95926; /* orange */
   --series-3: #199e70; /* aqua */
@@ -57,20 +87,30 @@
   --series-7: #9085e9; /* violet */
   --series-8: #e66767; /* red */
   /* Residual slices ("Other", unknown/unclassified) — neutral, so hue always means a
-     real category. 4.8:1 against the panel surface. */
-  --series-neutral: #898781;
-  --pos: #0ca30c; /* good — realized/unrealized gain. 5.19:1 on --card, 5.63:1 on --bg */
-  --neg: #d03b3b; /* critical — realized/unrealized loss. FILLS ONLY: see --neg-text */
-  /* The loss tone as *text* (Story #163). --neg is 3.62:1 on --card and 3.93:1 on --bg, both
-     below AA's 4.5:1, so every negative figure was less legible than every positive one. It
-     cannot simply be lightened: --neg is also a fill under white text (.btn-danger:hover) and
-     white on this value is 3.14:1. So the tone splits — --neg keeps its CVD-validated value
-     (DDR-0021, DDR-0030) and all five fill uses; --neg-text carries the two text uses.
-     5.53:1 on --card, 6.01:1 on --bg — matching --pos's headroom rather than scraping 4.5,
-     because the finding was that the two tones were unbalanced. */
-  --neg-text: #e56c6c;
-  --chart-grid: #2c2c2a;
-  --chart-axis: #898781;
+     real category. Re-keyed for the navy ground (#181): the old #898781 is a *warm*
+     grey, and a warm grey on a blue-black ground stops reading as "no hue" and starts
+     reading as brown — which is the one thing the residual slot must not do. Same job,
+     same lightness relationship, cool: 5.33:1 against the panel surface. */
+  --series-neutral: #8189a3;
+  --pos: #10b981; /* good — realized/unrealized gain. 7.30:1 on --card, 7.73:1 on --bg */
+  --neg: #e11d48; /* critical — realized/unrealized loss. FILLS ONLY: see --neg-text */
+  /* The loss tone as *text* (Story #163), re-derived for the new palette (#181).
+     The split survives the re-key and **inverts**, which is the finding worth keeping.
+     The proposal quotes one rose, #f43f5e, for both roles, and it is right for neither.
+     As a *fill* it is 3.67:1 under white, and .btn-danger's hover is exactly that
+     pairing — so --neg steps down the same ramp (4.70:1, matching the 4.80:1 the old
+     fill carried). As *text* it passes at 5.04:1 but fails the harder test: --pos is
+     7.30:1, so every loss in the app would again have been less legible than every
+     gain, which is the actual finding behind Story #163 and not a number it happened
+     to miss. --neg-text is one step lighter instead, 6.88:1 against --pos's 7.30:1 —
+     inside the 0.5 balance the guard enforces. Before this story the split ran the
+     other way: --neg was fill-safe and text-unstable. Same shape, opposite halves. */
+  --neg-text: #fb7185;
+  /* Chart furniture, cool for the same reason --series-neutral is (#181). The grid is
+     a rule read *behind* marks, so it sits just above the border's weight (1.37:1 on
+     --card); the axis is SVG <text> and is held to AA like any other label, 5.33:1. */
+  --chart-grid: #252c4e;
+  --chart-axis: #8189a3;
   /* The one measure the whole shell shares (Story #76): the content column's outer width,
      padding included. Wide enough that a maximized window on a normal display is filled
      edge to edge rather than framed by empty gutters, capped so an ultrawide monitor
@@ -870,8 +910,12 @@ html {
   gap: var(--space-3);
 }
 
+/* The error boundary, mixed rather than picked (#181). It was #5a2b2b, a warm dark red
+   chosen against the old near-black ground; on navy that reads as brown. Deriving it from
+   --neg is the same idiom the map popup's border already uses, and it means the boundary
+   follows the loss tone instead of drifting from it the next time the palette moves. */
 .capture-status-error {
-  border-color: #5a2b2b;
+  border-color: color-mix(in srgb, var(--neg) 50%, var(--border));
   color: var(--text);
 }
 
@@ -901,7 +945,7 @@ html {
    muted red as `.capture-status-error`, dark enough to read as a border rather
    than a warning stripe. The other three states are the absence of this. */
 .state-panel-error {
-  border-color: #5a2b2b;
+  border-color: color-mix(in srgb, var(--neg) 50%, var(--border));
 }
 
 /* -- Surfaces: only the inline form declares one -------------------------- */
@@ -986,9 +1030,13 @@ html {
   color: var(--muted);
 }
 
+/* The track behind a weight bar: the bar's own colour at 12%, so the empty part of the
+   track reads as the same measure unfilled. Mixed from --accent since #181, where it was
+   `rgba(76, 141, 255, 0.12)` — the old accent, spelled out, which no longer matched the
+   `var(--accent)` fill sitting in it. */
 .allocation-track {
   height: 8px;
-  background: rgba(76, 141, 255, 0.12);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
   border-radius: var(--radius-pill);
   overflow: hidden;
 }
@@ -1369,7 +1417,11 @@ html {
   align-items: center;
   gap: var(--space-7);
   padding: var(--space-4) var(--content-pad);
-  background: rgba(15, 17, 21, 0.85);
+  /* The page ground at 85%, so the content scrolling under the bar is blurred rather
+     than hidden. Written as a mix over --bg since #181: as a literal `rgba(15, 17, 21,
+     0.85)` it was the *old* ground, and a palette re-key would have left one strip of
+     the app behind without failing anything. */
+  background: color-mix(in srgb, var(--bg) 85%, transparent);
   backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--border);
 }
@@ -2419,9 +2471,11 @@ html {
   color: var(--text);
 }
 
+/* Same pattern as `.allocation-track`, over the series hue this bar is filled with
+   (`.bar-fill` is --series-1). Was `rgba(57, 135, 229, 0.14)`: --series-1 spelled out. */
 .bar-track {
   height: 8px;
-  background: rgba(57, 135, 229, 0.14);
+  background: color-mix(in srgb, var(--series-1) 14%, transparent);
   border-radius: var(--radius-pill);
   overflow: hidden;
 }

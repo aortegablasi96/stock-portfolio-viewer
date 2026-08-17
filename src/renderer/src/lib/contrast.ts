@@ -127,7 +127,7 @@ export const PAIRINGS: readonly Pairing[] = [
     foreground: { token: '--neg-text' },
     background: { token: '--card' },
     minimum: AA_NORMAL,
-    reason: 'The loss tone as text. --neg itself is 3.62:1 here, which is why --neg-text exists.',
+    reason: 'The loss tone as text. --neg itself is 3.94:1 here, which is why --neg-text exists.',
   },
   {
     where: '.stat-negative on the page background (.highlight-value, 20px)',
@@ -163,15 +163,15 @@ export const PAIRINGS: readonly Pairing[] = [
     background: { token: '--neg' },
     minimum: AA_NORMAL,
     reason:
-      'The fill use of --neg. This is why --neg could not simply be lightened: the value that ' +
-      'fixes .stat-negative drops this below 4.5:1.',
+      'The fill use of --neg, and the half the redesign got wrong: its single rose (#f43f5e) ' +
+      'is 3.67:1 here. Story #181 kept the split and swapped which token carries which value.',
   },
   {
     where: '.btn-primary — white label on the filled accent',
     foreground: { literal: '#ffffff' },
     background: { token: '--accent-strong' },
     minimum: AA_NORMAL,
-    reason: 'White on --accent was 3.20:1, which is why --accent-strong exists.',
+    reason: 'White on --accent is 4.47:1, which is why --accent-strong exists.',
   },
   {
     where: '.btn-primary:hover — the same label, on a fill lightened by brightness(1.08)',
@@ -197,7 +197,54 @@ export const PAIRINGS: readonly Pairing[] = [
     minimum: AA_NORMAL,
     reason:
       'Stat labels, hints and the map popup’s rows. DDR-0041 already treats this as the binding ' +
-      'constraint on how loud the popup tint may be.',
+      'constraint on how loud the popup tint may be. The redesign’s own #64748b is 3.89:1 here, ' +
+      'which is why Story #181 raised it rather than pasting it.',
+  },
+  /**
+   * The five pairings Story #181 added. Four of them were always rendered and never listed —
+   * a guard that lists only what once failed has a blind spot exactly the size of what has not
+   * failed yet, which is this module's own stated lesson. The accent one is the sharpest: it is
+   * what forces `--accent` to the redesign's lighter indigo, and without it nothing would fail
+   * if someone set the token to the proposal's headline #6366f1.
+   */
+  {
+    where: 'body text on the page ground (headings, prose outside a card)',
+    foreground: { token: '--text' },
+    background: { token: '--bg' },
+    minimum: AA_NORMAL,
+    reason: 'The counterpart of the on-card pairing; the page ground is the darker of the two.',
+  },
+  {
+    where: 'muted labels on the page ground — tab labels, the nav strip, page hints',
+    foreground: { token: '--muted' },
+    background: { token: '--bg' },
+    minimum: AA_NORMAL,
+    reason: 'An inactive tab label is --muted on the translucent nav over --bg.',
+  },
+  {
+    where: '--accent as text — .eyebrow, the active tab, a sorted header, an active toggle',
+    foreground: { token: '--accent' },
+    background: { token: '--card' },
+    minimum: AA_NORMAL,
+    reason:
+      'Seven of --accent’s nine call sites are a `color`, so this token is text before it is ' +
+      'anything else. The redesign’s #6366f1 is 4.14:1 here — enough for a ring, not for a label.',
+  },
+  {
+    where: '--accent as text on the page ground (the active tab sits on the nav over --bg)',
+    foreground: { token: '--accent' },
+    background: { token: '--bg' },
+    minimum: AA_NORMAL,
+    reason: 'The active tab’s label is the most-read accent text in the app.',
+  },
+  {
+    where: '.chart-axis-label — SVG <text> on a chart card',
+    foreground: { token: '--chart-axis' },
+    background: { token: '--card' },
+    minimum: AA_NORMAL,
+    reason:
+      'An axis label is text, whatever it is drawn with, so it is held to AA like any other. ' +
+      'Listed because --chart-axis is easy to read as chart furniture and dim on that basis.',
   },
 ]
 

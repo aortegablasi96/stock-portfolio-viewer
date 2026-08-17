@@ -507,20 +507,46 @@ Canonical flows to copy when adding a feature:
   **strips comments before matching** — the component explains itself in prose, and deleting the
   real `keyboard: false` left the assertion green off the commentary alone (the trap DDR-0042
   also records for `app.css`).
-- **The loss tone is two tokens, and picking the wrong one is silent** (DDR-0046). `--neg` is a
-  **fill only** (`.btn-danger:hover`, `.chart-bar-loss`, `.chart-bar-upper`,
-  `.legend-swatch-upper`, the map popup's tint) and `--neg-text` `#e56c6c` is **text only**
-  (`.btn-danger`, `.stat-negative`), because `--neg` `#d03b3b` measured 3.62:1 on `--card` as text
-  while the value that fixes that drops `.btn-danger:hover` under white to 3.14:1. Same shape for
-  the accent: `--accent-strong` fills `.btn-primary` alone, while `--accent` stays the focus ring,
-  the active-tab bar and the sort arrow. Three things to know. **The hover is the binding
+- **The palette is navy/indigo, and it was re-derived rather than pasted** (Story #181, DDR-0054).
+  `--bg #080b18` · `--card #0f1320` · `--border #1f2644` · `--text #e2e8f0` are the Figma proposal's
+  own values; **four of its eleven are not**, because they failed a guard. `--muted` is `#8690aa`,
+  not the proposal's `#64748b` (3.89:1 on `--card` — and this token carries every label, hint,
+  table header and tab in the app). `--accent` is `#818cf8`, not the headline `#6366f1` (4.14:1 as
+  text, and **seven of `--accent`'s nine call sites are a `color`** — it is a text token before it
+  is a ring). And the proposal's single rose `#f43f5e` is right for *neither* loss role: 3.67:1
+  under white as a fill, and as text it passes at 5.04:1 while `--pos` sits at 7.30:1, which is the
+  imbalance Story #163 existed to end. Three consequences. **The eight `--series-*` slots did not
+  move** — re-validated on the new ground and every check still passes, because CVD separation is
+  measured mark-against-mark and does not care about the ground; re-cutting them for appearance
+  would spend DDR-0030's one-sector-one-hue invariant on nothing measurable, so the proposal's seven
+  ad-hoc chart colours stay out. **What did move is achromatic**: `--series-neutral`, `--chart-axis`
+  and `--chart-grid` were *warm* greys, and a warm grey on a blue-black ground reads as brown rather
+  than as "no hue" — `designTokens.test.ts` now asserts blue exceeds red in all three. And **five
+  rules hard-coded a colour outside `:root`** (`.app-nav`'s `rgba(15,17,21,.85)` was the old ground
+  spelled out; the two track tints were the old `--accent` and `--series-1`; two error borders shared
+  a `#5a2b2b`); all five now `color-mix()` from their token, so the next re-key is a `:root` edit.
+  Deliberately **not** added: the proposal's tint backgrounds, `--surface-2/3`, `--border-2` and its
+  `#3d4f6b` dim ink — no call site until #182–#187, and `#3d4f6b` is 2.23:1, a token that cannot
+  legally carry text sitting in the scale waiting to.
+- **The loss tone is two tokens, and picking the wrong one is silent** (DDR-0046, re-derived by
+  DDR-0054). `--neg` `#e11d48` is a **fill only** (`.btn-danger:hover`, `.chart-bar-loss`,
+  `.chart-bar-upper`, `.legend-swatch-upper`, the map popup's tint) and `--neg-text` `#fb7185` is
+  **text only** (`.btn-danger`, `.stat-negative`). The split **inverted** in the re-key — before
+  #181 `--neg` was the fill-safe value and its text half was the problem; now the proposal's rose is
+  text-safe and fails as a fill — so the *shape* is the durable part, not which half is loose. Same
+  shape for the accent: `--accent-strong` `#4f46e5` fills `.btn-primary` alone, while `--accent`
+  stays the focus ring, the active-tab bar, the sort arrow **and every accent label**. Four things
+  to know. The binding constraint on `--neg-text` is **not** 4.5:1 but `--pos - 0.5`: the finding
+  was that losses read weaker than gains, so `contrast.test.ts` pins the *balance*, and it is what
+  rejected the proposal's rose. **The hover is the binding
   measurement** — `.btn-primary:hover` applies `brightness(1.08)`, which *lowers* contrast against
-  a white label (5.45:1 → 4.81:1) where axe tests resting state only, so `lib/contrast.ts` models
+  a white label (6.29:1 → 5.58:1) where axe tests resting state only, so `lib/contrast.ts` models
   the filter. `contrast.test.ts` pins the **split** as well as the ratios: a fill adopting
   `--neg-text`, or a text rule going back to `--neg`, fails even though both still pass. And the
   pairing list is **enumerated by hand** (resolving a colour against its inherited background
   needs a layout engine, which Node-only Vitest lacks), so it lists passing pairs too — a guard
-  listing only what once failed would have missed this finding. Known and deliberately open: the
+  listing only what once failed would have missed this finding — #181 grew it from ten pairings to
+  fifteen, and four of the five additions were always rendered and never listed. Known and deliberately open: the
   tab panels sit outside a landmark (axe `region`, best-practice), because `.tab-panel` wraps the
   view's `<main>` and unpicking that means restructuring DDR-0029 across every view.
 - **Never write a focus rule.** One ring — `--focus-ring` / `--focus-ring-offset`, always

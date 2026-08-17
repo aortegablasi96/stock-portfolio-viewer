@@ -241,20 +241,24 @@ describe('motion scale', () => {
 })
 
 /**
- * The colour tokens are out of scope for this story and the two chart palettes carry
- * recorded CVD and contrast validation (DDR-0021, DDR-0030) — a colour moved here is a
- * validation invalidated, not a tweak. Pinned so that only a deliberate edit can do it.
+ * The colour tokens carry recorded CVD and contrast validation (DDR-0021, DDR-0030, DDR-0046,
+ * DDR-0054) — a colour moved here is a validation invalidated, not a tweak. Pinned so that only a
+ * deliberate edit can do it.
+ *
+ * Re-keyed to the navy/indigo theme by Story #181, which is the one edit that ever should move
+ * them wholesale: every value below was re-derived and measured rather than taken from the
+ * proposal, and `contrast.test.ts` holds the thresholds this only pins.
  */
-describe('colour tokens (unchanged by Epic #125)', () => {
+describe('colour tokens', () => {
   it.each([
-    ['--bg', '#0f1115'],
-    ['--card', '#171a21'],
-    ['--border', '#262b36'],
-    ['--text', '#e6e9ef'],
-    ['--muted', '#9aa4b2'],
-    ['--accent', '#4c8dff'],
-    ['--pos', '#0ca30c'],
-    ['--neg', '#d03b3b'],
+    ['--bg', '#080b18'],
+    ['--card', '#0f1320'],
+    ['--border', '#1f2644'],
+    ['--text', '#e2e8f0'],
+    ['--muted', '#8690aa'],
+    ['--accent', '#818cf8'],
+    ['--pos', '#10b981'],
+    ['--neg', '#e11d48'],
   ])('%s is %s', (name, value) => {
     expect(token(name)).toBe(value)
   })
@@ -266,17 +270,39 @@ describe('colour tokens (unchanged by Epic #125)', () => {
    * thresholds; this pins that the split itself survives.
    */
   it('carries a text-safe loss tone and a filled-button accent, distinct from the originals', () => {
-    expect(token('--neg-text')).toBe('#e56c6c')
-    expect(token('--accent-strong')).toBe('#1360e7')
+    expect(token('--neg-text')).toBe('#fb7185')
+    expect(token('--accent-strong')).toBe('#4f46e5')
     expect(token('--neg-text')).not.toBe(token('--neg'))
     expect(token('--accent-strong')).not.toBe(token('--accent'))
   })
 
-  it('keeps the eight-slot categorical palette and its neutral residual', () => {
+  /**
+   * The eight slots are the one part of the palette Story #181 did **not** move, and that is a
+   * result rather than an oversight (DDR-0054). Re-validated against the new surface on
+   * 2026-08-18 with the data-viz validator: every check still passes, because CVD separation and
+   * the normal-vision floor are measured mark-against-mark and do not move when the ground does,
+   * while the contrast check only improves on a darker one.
+   */
+  it('keeps the eight-slot categorical palette, which the re-key did not touch', () => {
     expect(
       [1, 2, 3, 4, 5, 6, 7, 8].map((slot) => token(`--series-${slot}`)),
     ).toEqual(['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300', '#9085e9', '#e66767'])
-    expect(token('--series-neutral')).toBe('#898781')
+  })
+
+  /**
+   * The residual and the chart furniture *did* move, and for a reason no ratio reports: they are
+   * achromatic, and the old values are warm greys. A warm grey on a blue-black ground stops
+   * reading as "no hue" and starts reading as brown, which is exactly what the residual slot
+   * must not do — hue has to keep meaning "a real category" (DDR-0030).
+   */
+  it('keeps the neutral residual and the chart furniture cool, to match the ground', () => {
+    expect(token('--series-neutral')).toBe('#8189a3')
+    expect(token('--chart-axis')).toBe('#8189a3')
+    expect(token('--chart-grid')).toBe('#252c4e')
+    for (const name of ['--series-neutral', '--chart-axis', '--chart-grid']) {
+      const [r, , b] = [1, 3, 5].map((i) => Number.parseInt(token(name).slice(i, i + 2), 16))
+      expect(b, `${name} is warmer than the ground it sits on`).toBeGreaterThan(r!)
+    }
   })
 
   /**

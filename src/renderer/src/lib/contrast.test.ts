@@ -72,8 +72,8 @@ describe('reading the palette', () => {
   const tokens = readColorTokens(CSS)
 
   it('finds the colour tokens and ignores the length scales', () => {
-    expect(tokens.get('--card')).toBe('#171a21')
-    expect(tokens.get('--neg')).toBe('#d03b3b')
+    expect(tokens.get('--card')).toBe('#0f1320')
+    expect(tokens.get('--neg')).toBe('#e11d48')
     expect(tokens.has('--space-4')).toBe(false)
   })
 
