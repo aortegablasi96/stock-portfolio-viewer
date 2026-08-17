@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
+import { figureRoleSelectors } from './figureRole'
 import {
   DATA_TABLE_CELL_KINDS,
   DATA_TABLE_HEIGHTS,
@@ -174,11 +175,17 @@ describe('the stylesheet backs the primitive', () => {
     expect(ruleBody('.data-table thead th')).toContain('font-size: var(--text-xs)')
   })
 
-  /** The AC the Epic inherited from the views that already had it: figures line up. */
+  /**
+   * The AC the Epic inherited from the views that already had it: figures line up.
+   *
+   * `font-variant-numeric` left this rule in Story #180 — it only does its job beside the mono
+   * family and the negative tracking, so the three are applied together by the figure role
+   * (DDR-0053). The guarantee is the same and the assertion follows it: a numeric cell is still
+   * asserted to be a figure, by membership rather than by declaration.
+   */
   it('keeps tabular figures on numeric cells', () => {
-    const num = ruleBody('.data-table .data-table-num')
-    expect(num).toContain('font-variant-numeric: tabular-nums')
-    expect(num).toContain('text-align: right')
+    expect(figureRoleSelectors(CSS)).toContain('.data-table .data-table-num')
+    expect(ruleBody('.data-table .data-table-num')).toContain('text-align: right')
   })
 
   /**

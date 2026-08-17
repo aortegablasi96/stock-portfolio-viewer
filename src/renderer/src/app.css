@@ -1,3 +1,34 @@
+/* The two bundled typefaces (Story #180, DDR-0053).
+
+   Local assets, never a font host. The Figma Make proposal this milestone adopts opens with two
+   `@import url('https://fonts.googleapis.com/…')` lines and that cannot ship: the renderer's CSP
+   names exactly one external origin and the *omission* of every other host is the enforcement
+   (ADR-0007). Bundling them needed no CSP change, because `default-src 'self'` already covers
+   `font-src`. `src/renderer/src/assets/fonts/README.md` records provenance and the licences.
+
+   One variable file per family rather than nine static weights: 86.6 KB against roughly 240 KB,
+   and a later story can reach for a weight nobody has cut yet.
+
+   `font-display: block`, which is the opposite of the web's usual advice and right here. There is
+   no network — the file is beside the stylesheet — so the block period costs a frame, while `swap`
+   would render every table in system-ui first and then reflow it under a face with different
+   metrics. A local app has no download to hide, only a repaint to avoid. */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: block;
+  src: url('./assets/fonts/inter-latin-variable.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: block;
+  src: url('./assets/fonts/jetbrains-mono-latin-variable.woff2') format('woff2');
+}
+
 :root {
   color-scheme: dark;
   --bg: #0f1115;
@@ -98,6 +129,24 @@
   --leading-tight: 1.2; /* headings and figures */
   --leading-normal: 1.45; /* prose and wrapped body text */
 
+  /* ---- Type families (Story #180, DDR-0053) -------------------------------
+     Two roles, not two families: prose reads, a figure is *compared* with the
+     figure above it. `--font-figure` therefore travels with the two properties
+     that make the comparison work — `tabular-nums` and `--tracking-figure` —
+     and the three are applied together by one rule, below the focus ring.
+     A monospaced face alone does not clear the bar: proportional digits inside
+     a mono face would still stagger a column, and Inter's default tracking is
+     loose enough at a tile's `--text-xl` to read as gaps between digits.
+
+     The fallbacks matter more than they look. A missing asset must land on
+     `system-ui` and `monospace`, never on a UA's serif default, so both stacks
+     end in a generic family — and `--font-sans`'s tail is the exact stack the
+     app shipped before this story, which is what makes a failed load a
+     regression to the old look rather than to an unfamiliar one. */
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-figure: 'JetBrains Mono', ui-monospace, 'Cascadia Mono', 'Consolas', monospace;
+  --tracking-figure: -0.02em;
+
   /* ---- Focus ring ---------------------------------------------------------
      One treatment for every interactive element, destructive actions included:
      the ring says "this has keyboard focus", not "this is dangerous", so it is
@@ -179,10 +228,47 @@ body,
 }
 
 body {
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-family: var(--font-sans);
   background: var(--bg);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
+}
+
+/* The figure role (Story #180, DDR-0053).
+
+   One rule, listing every selector that renders a number the reader compares with another number.
+   It is deliberately a *list* and not a family declared at each call site: the three properties
+   below only work together, and thirteen copies of them is thirteen chances for one to drift —
+   which is the same argument the focus ring above makes, and the motion scale below it.
+
+   The list is not invented here. `app.css` already declared `font-variant-numeric: tabular-nums`
+   at exactly the places its author considered figures, so this story adopts that set and adds
+   `.chart-axis-label`, whose numbers wanted tabular digits all along and never had them.
+
+   Four rules that carried `tabular-nums` are deliberately **left out**, because each renders prose
+   *containing* a figure rather than a figure: `.badge` ("Already imported"), `.view-updated`
+   ("Refreshing…"), `.map-popup-title` (a country or sector name) and `.country-map-unknown` (a
+   sentence). They keep their tabular digits, which cost a sentence nothing, and stay in
+   `--font-sans`. Setting a whole badge in mono to reach the native-currency chip inside it is the
+   kind of trade a later story makes with a variant, not one this rule makes with a selector.
+
+   The four SVG selectors are here for the family and the tracking only. Both are relative — a
+   `viewBox` unit is still a `viewBox` unit — so DDR-0018 is intact: no chart label acquires a page
+   type step, and `lib/figureRole.test.ts` fails if one does. */
+.stat-value,
+.allocation-weight,
+.data-table .data-table-num,
+.snapshot-value,
+.highlight-value,
+.pie-legend-value,
+.bar-list-value,
+.map-popup-row dd,
+.chart-axis-label,
+.chart-tooltip-date,
+.chart-tooltip-value {
+  font-family: var(--font-figure);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--tracking-figure);
 }
 
 /* App-wide slim, theme-aware scrollbars (Story #67). The main view scrolls on the
@@ -517,7 +603,6 @@ html {
   margin: 0;
   font-size: var(--text-xl);
   font-weight: 600;
-  font-variant-numeric: tabular-nums;
 }
 
 .stat-hint {
@@ -568,7 +653,12 @@ html {
 
    No focus rule, because a badge is not focusable — a `<span>`, never a
    control. The one thing here that must survive is `role="status"` on the row
-   count, which is the call site's, not the primitive's. */
+   count, which is the call site's, not the primitive's.
+
+   It keeps its own `tabular-nums` and stays out of the figure role (DDR-0053):
+   a badge reads "Already imported" as often as it reads a currency chip, and
+   setting the prose in `--font-figure` to reach the figure inside it is a trade
+   for a variant, not for this selector. */
 
 .badge {
   display: inline-block;
@@ -894,7 +984,6 @@ html {
 
 .allocation-weight {
   color: var(--muted);
-  font-variant-numeric: tabular-nums;
 }
 
 .allocation-track {
@@ -990,7 +1079,6 @@ html {
    flattened into the primitive's namespace. */
 .data-table .data-table-num {
   text-align: right;
-  font-variant-numeric: tabular-nums;
 }
 
 .data-table .data-table-name {
@@ -1134,7 +1222,6 @@ html {
 
 .snapshot-value {
   font-weight: 600;
-  font-variant-numeric: tabular-nums;
 }
 
 .snapshot-count {
@@ -1394,6 +1481,8 @@ html {
   margin-bottom: calc(-1 * var(--space-4));
 }
 
+/* Prose with a clock in it — "Refreshing…", "Updated 16:04" — so it keeps tabular
+   digits and stays out of the figure role (DDR-0053). */
 .view-updated {
   margin: 0;
   font-size: var(--text-xs);
@@ -1430,7 +1519,6 @@ html {
   margin: var(--space-3) 0 0;
   font-size: var(--text-lg);
   font-weight: 600;
-  font-variant-numeric: tabular-nums;
 }
 
 /* Stack the highlights below the table on narrow widths. */
@@ -1610,7 +1698,6 @@ html {
   fill: var(--text);
   font-size: 12px;
   font-weight: 600;
-  font-variant-numeric: tabular-nums;
 }
 
 /* ---- ToggleGroup primitive (Story #131, DDR-0036) ------------------------
@@ -1882,7 +1969,6 @@ html {
 .pie-legend-value {
   margin-left: auto;
   color: var(--muted);
-  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
@@ -2170,7 +2256,9 @@ html {
 }
 
 /* Mirrors a Positions table row: ticker, company name, then the figures in the same order. The
-   sector and country depths keep the shape and swap the identity lines (Story #122). */
+   sector and country depths keep the shape and swap the identity lines (Story #122) — which is
+   why this one is not a figure: at those depths it holds "Information Technology" or "Germany".
+   Out of the figure role, tabular digits kept (DDR-0053). */
 .map-popup-title {
   margin: 0;
   font-size: var(--text-sm);
@@ -2221,7 +2309,6 @@ html {
 .map-popup-row dd {
   margin: 0;
   font-weight: 600;
-  font-variant-numeric: tabular-nums;
 }
 
 .country-map-legend {
@@ -2257,6 +2344,8 @@ html {
   font-size: var(--text-xs);
 }
 
+/* A sentence — "Unknown location — €12,480 (2.1% of NAV)" — not a figure, so it keeps tabular
+   digits and stays out of the figure role (DDR-0053). */
 .country-map-unknown {
   color: var(--text);
   font-variant-numeric: tabular-nums;
@@ -2322,7 +2411,6 @@ html {
 
 .bar-list-value {
   color: var(--muted);
-  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 

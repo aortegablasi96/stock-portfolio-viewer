@@ -116,7 +116,8 @@ src/
                  TitleBar, components/ + components/analytics/ (views, their use*
                  hooks, shared filter controls) + components/charts/ +
                  components/ui/ (shared primitives, Epic #125) +
-                 lib/ — pure, unit-tested helpers extracted out of components)
+                 lib/ — pure, unit-tested helpers extracted out of components +
+                 assets/fonts/ — the two bundled woff2 faces, DDR-0053)
   services/      pure business logic — primary unit-test target (system/, meta/, window/,
                  portfolio/, snapshots/, flex/, analytics/, dividends/, classification/)
   repositories/  the ONLY layer that touches a data source: SQLite (meta/, snapshots/,
@@ -409,6 +410,27 @@ Canonical flows to copy when adding a feature:
   sub-6px radii, which are chart geometry. One collision to know — `--text-xl` is **1.4rem, not
   1.5rem**, because `.stat-row` packs tiles into `minmax(11rem, 1fr)` columns where a bigger
   figure wraps.
+- **The scale also names two families, and a figure is a role rather than a font** (Story #180,
+  DDR-0053). `--font-sans` (Inter) is applied once, on `body`; `--font-figure` (JetBrains Mono)
+  and `--tracking-figure` (`-0.02em`) belong to the **figure role**, which is deliberately **one
+  rule** listing eleven selectors and declaring family + `font-variant-numeric: tabular-nums` +
+  the tracking *together* — the three only work as a set, and eleven copies is eleven chances for
+  one to drift, the same argument as the `:where()` focus ring and the reduced-motion block.
+  Membership is not invented: it is the set of rules that already declared `tabular-nums`, **plus**
+  `.chart-axis-label` and **minus four that render prose containing a figure** (`.badge`,
+  `.view-updated`, `.map-popup-title`, `.country-map-unknown`), which keep their tabular digits and
+  stay in `--font-sans`. Four things to know. Both faces are **variable `woff2` files checked into
+  `renderer/src/assets/fonts/`** (86.6 KB the pair, against ~240 KB for the nine static cuts the
+  proposal asked for) — **not a dependency**, extracted from Fontsource with `npm pack`; the
+  redesign's `@import url('https://fonts.googleapis.com/…')` **cannot ship**, and needed no CSP
+  change either, since `default-src 'self'` already covers `font-src`. `font-display` is **`block`,
+  not `swap`**: there is no download to hide, only a reflow of every table to avoid. The role
+  declares **no `font-size`**, which is what keeps DDR-0018 intact where it reaches four SVG
+  `<text>` selectors — family and tracking are relative and cross a `viewBox` unchanged. And the
+  guard is `lib/figureRole.test.ts` + the shared reader `lib/figureRole.ts`, which **throws rather
+  than merging** if a second rule ever applies `--font-figure`; `statTileVariants.test.ts` and
+  `dataTableVariants.test.ts` now assert *membership* where they used to assert the property.
+  Mono is ~20% wider than Inter for digits, so a view story that adds a column should re-measure.
 - **Adoption is held by a ratchet; don't re-baseline it** (DDR-0042). `lib/tokenAdoption.ts`
   carries `BASELINE` (may only shrink — currently **empty, and must stay empty**) and
   `EXEMPTIONS` (permanent, nine entries, each with a reason). `tokenAdoption.test.ts` fails
@@ -916,7 +938,7 @@ sorting and formatting are **extracted out of components into pure modules under
 `tabKeyboard`, `buttonVariants`, `cardVariants`, `statTileVariants`, `fieldVariants`,
 `toggleGroupVariants`, `badgeVariants`, `statePanelVariants`, `tableSort`, `dataTableVariants`,
 `sliceHighlight`, `mapPopupTint`, `cssDeclarations`, `tokenAdoption`, `motionTokens`, `contrast`,
-`analyticsShell`)
+`figureRole`, `analyticsShell`)
 precisely so they can be tested — follow
 that split when adding a component with real logic in it. `dataVersion` is the same move applied
 to state rather than maths: the cross-view staleness signal is a plain subscribable store a hook

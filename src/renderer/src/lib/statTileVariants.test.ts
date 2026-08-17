@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
+import { figureRoleSelectors } from './figureRole'
 import {
   DEFAULT_STAT_TONE,
   STAT_PARTS,
@@ -120,7 +121,13 @@ describe('the stylesheet backs every declared part and tone', () => {
   })
 
   it('keeps figures on tabular numerals, so a column of them lines up', () => {
-    expect(ruleBody('.stat-value')).toContain('font-variant-numeric: tabular-nums')
+    // The declaration moved out of this rule in Story #180: `tabular-nums` only does its job
+    // beside the mono family and the negative tracking, so all three are applied together by the
+    // figure role (DDR-0053). The guarantee is unchanged and the assertion follows it — a tile's
+    // figure is still asserted to be a figure, now by membership rather than by declaration.
+    // `figureRole.test.ts` pins what the role itself declares.
+    expect(figureRoleSelectors(CSS)).toContain('.stat-value')
+    expect(ruleBody('.stat-value')).not.toContain('font-variant-numeric')
   })
 
   it('sizes every line from the type scale, never a raw length', () => {

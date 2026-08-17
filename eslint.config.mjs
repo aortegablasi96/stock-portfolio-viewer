@@ -3,7 +3,12 @@ import tseslint from 'typescript-eslint'
 import globals from 'globals'
 
 export default tseslint.config(
-  { ignores: ['out/**', 'dist/**', 'release/**', 'node_modules/**'] },
+  // `docs/figma_design/` is the Figma Make export Epic #179 adopts the *design* of — a
+  // React 19 + Tailwind v4 scaffold with its own package.json, read as a specification and
+  // never built here. It is untracked and the owner deletes it once M5 lands; linting a
+  // vendored prototype fails eight ways and blocks `npm run lint` for every story in the
+  // milestone.
+  { ignores: ['out/**', 'dist/**', 'release/**', 'node_modules/**', 'docs/figma_design/**'] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
