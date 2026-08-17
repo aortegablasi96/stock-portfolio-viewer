@@ -196,15 +196,29 @@ describe('the grid’s charts take their geometry from here', () => {
   const source = (chart: string): string =>
     readFileSync(new URL(`../components/charts/${chart}.tsx`, import.meta.url), 'utf8')
 
+  /**
+   * The same source with its comments removed, for the assertions that scan for markup.
+   *
+   * These charts explain themselves in prose, and the prose names the very tags being searched
+   * for: `StackedAreaChart`'s header says it emits "a bare `<svg>`" and that a `<figcaption>`
+   * used to sit under the plot. A raw scan therefore finds three `<svg` in a file with one, and
+   * finds `<figcaption` in the file that just removed it — passing or failing on the commentary
+   * alone. This is the trap DDR-0042 records for `app.css` and DDR-0047 for `CountryMap`; the
+   * `//` rule is whole-line only, so a URL in code is not eaten.
+   */
+  const code = (chart: string): string =>
+    source(chart)
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^\s*\/\/.*$/gm, '')
+
   it.each(CHARTS)('%s imports the shared plot', (chart) => {
     expect(source(chart)).toMatch(/from '\.\.\/\.\.\/lib\/chartGeometry'/)
   })
 
   it.each(CHARTS)('%s declares no geometry of its own', (chart) => {
-    const code = source(chart)
-    expect(code).not.toMatch(/^const W = \d/m)
-    expect(code).not.toMatch(/^const H = \d/m)
-    expect(code).not.toMatch(/^const PAD = \{/m)
+    expect(code(chart)).not.toMatch(/^const W = \d/m)
+    expect(code(chart)).not.toMatch(/^const H = \d/m)
+    expect(code(chart)).not.toMatch(/^const PAD = \{/m)
   })
 
   /** `ColumnChart` and `PieChart` are not in this grid, and keep their own aspect (DDR-0018). */
@@ -212,5 +226,61 @@ describe('the grid’s charts take their geometry from here', () => {
     for (const chart of ['ColumnChart', 'PieChart']) {
       expect(source(chart)).not.toContain('chartGeometry')
     }
+  })
+
+  /**
+   * Sharing a `viewBox` makes the three *plots* the same size. It does not make the three *cards*
+   * the same size, and that is what a reader sees: `StackedAreaChart` wrapped its plot in a
+   * `<figure>` with a `<figcaption>` legend under it, which made the composition card taller than
+   * the two beside it. The legend moved into the card header instead (DDR-0052), so all three
+   * charts now emit a bare `<svg>` — and nothing else in the suite would notice if one grew a
+   * wrapper back.
+   */
+  it.each(CHARTS)('%s emits a bare svg, with nothing under the plot to change its height', (chart) => {
+    expect(code(chart)).not.toMatch(/<figure/)
+    expect(code(chart)).not.toMatch(/<figcaption/)
+  })
+
+  it('renders the same chart element in every quadrant of the grid', () => {
+    // Each chart declares exactly one root `<svg`, carrying the shared viewBox. A second one
+    // would be a nested plot, and a nested plot is a second set of dimensions.
+    for (const chart of CHARTS) {
+      expect(code(chart).match(/<svg\b/g)).toHaveLength(1)
+      expect(code(chart)).toMatch(/viewBox=\{`0 0 \$\{W\} \$\{H\}`\}/)
+    }
+  })
+})
+
+/**
+ * The four cards themselves. The charts being identical is only half of "the same dimensions" —
+ * the card around each one has to be too, and that is decided by the header rather than the plot.
+ */
+describe('the four cards in the grid are built the same way', () => {
+  /** Comment-stripped, for the same reason the chart scans above are. */
+  const VIEW = readFileSync(
+    new URL('../components/analytics/PerformanceView.tsx', import.meta.url),
+    'utf8',
+  )
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '')
+
+  it('routes every chart through one ChartCard, four times', () => {
+    expect(VIEW.match(/<ChartCard\b/g)).toHaveLength(4)
+  })
+
+  /**
+   * `ChartCard` is the only place a header is declared, so all four are the same height by
+   * construction — including the three with nothing to put at the right of it. A card spelling
+   * out its own `CardTitle` would be the drift this catches.
+   */
+  it('declares the header once, inside ChartCard', () => {
+    expect(VIEW.match(/<CardHeader\b/g)).toHaveLength(1)
+    expect(VIEW.match(/<CardTitle>\{title\}<\/CardTitle>/g)).toHaveLength(1)
+  })
+
+  /** The header must not wrap: a wrapped legend puts back the height its move removed. */
+  it('pins the single-line header against app.css', () => {
+    expect(VIEW).toContain('className="chart-card-header"')
+    expect(CSS).toMatch(/\.chart-card-header\s*\{[^}]*flex-wrap:\s*nowrap/)
   })
 })

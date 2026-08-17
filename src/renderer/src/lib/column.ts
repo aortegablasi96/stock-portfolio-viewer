@@ -10,6 +10,12 @@
  *
  * Kept out of the component so it can be unit-tested in Vitest's Node environment (no DOM),
  * matching how `lib/pie.ts` and `lib/format.ts` are tested.
+ *
+ * The Performance view's daily-return `BarChart` shares this module rather than growing its own:
+ * a single signed series is the degenerate stack (`upper` = 0), so `columnDomain` already gives it
+ * the axis it needs, and `bandIndexAt` below is the hover maths both even-band charts want.
+ * Sharing the *maths* is not the same as sharing the component — see `BarChart`'s own header for
+ * why that fork exists.
  */
 
 export interface ColumnDatum {
@@ -76,4 +82,24 @@ export function columnDomain(columns: ColumnDatum[]): ColumnDomain {
     ticks.push(clean(bottom + i * step))
   }
   return { top, bottom, ticks }
+}
+
+/**
+ * Which evenly-spaced band a pointer at `x` (in `viewBox` units) falls in, or `null` when there
+ * are no bands to hit.
+ *
+ * The daily-return chart's hover target, and deliberately the *band* rather than the bar. At any
+ * real density the bar is a fraction of its band — 0.7 of it by `BAR_FILL`, and a hairline once
+ * the series passes a few hundred days (DDR-0049) — so hit-testing the drawn rectangle would mean
+ * asking the reader to land the pointer on a sub-pixel target to read a day. Every x inside the
+ * plot belongs to exactly one day instead, which is what makes scrubbing across the chart work.
+ *
+ * Pointer positions outside the plot clamp to the nearest end rather than reporting nothing: the
+ * padding is axis-label allowance, not a gap between days, and a readout that blanked whenever the
+ * pointer strayed into it would flicker along the whole left edge.
+ */
+export function bandIndexAt(x: number, left: number, plotWidth: number, count: number): number | null {
+  if (count <= 0 || !(plotWidth > 0)) return null
+  const index = Math.floor(((x - left) / plotWidth) * count)
+  return Math.min(count - 1, Math.max(0, index))
 }

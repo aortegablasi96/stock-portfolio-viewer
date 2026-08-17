@@ -170,24 +170,52 @@ Canonical flows to copy when adding a feature:
   bug. `ColumnChart`, `PieChart` and the map are not in the grid and keep their own aspect. The
   **daily-return bars** are that same rule under density (DDR-0049): the ratio is fixed and
   the *bars* thin with the series, because aggregating days into weeks would destroy the volatility
-  the chart exists to show. Two traps — the returns are **chain-linked** from the cumulative TWR
+  the chart exists to show. Three traps — the returns are **chain-linked** from the cumulative TWR
   series (`lib/dailyReturns`, reusing `performanceRange`'s exported `chainLink`), never differenced
-  from `valueSeries`, or a deposit draws as a spectacular day; and the maths takes the
+  from `valueSeries`, or a deposit draws as a spectacular day; the maths takes the
   **unwindowed** curve, so the window's opening bar measures against the day that really preceded
-  it rather than against the synthetic point `sliceSeries` anchors at the edge. `BarChart` is its
+  it rather than against the synthetic point `sliceSeries` anchors at the edge; and the hover
+  target is the **band, not the drawn bar** (`bandIndexAt` in `lib/column`, DDR-0052) — at ~190
+  days a bar is ~1 viewBox unit, so hit-testing the rectangle asks the reader to aim at a hairline,
+  and x outside the plot **clamps** rather than blanking, since the padding is label allowance and
+  not a gap between days. The scrubbed bar is **outlined, never recoloured** (hue is sign here),
+  with `non-scaling-stroke` so the outline survives the thinning. `BarChart` is its
   own component rather than a `ColumnChart` flag — that one stacks two series, legends them, and
   labels every column, which at 191 trading days is a 45:1 strip under 191 overlapping labels. The
-  fourth chart, **composition over time** (`StackedAreaChart`, DDR-0050), is **100%-stacked** —
-  composition is a question about proportions, and an absolute version would say what the value
-  curve beside it already says. Its maths is `lib/composition`, and three rules there are load-
-  bearing: a **negative band hangs below the zero line** rather than being clamped or normalised
-  away (normalising by `Σ|value|` would draw a margin position as an asset); a **zero-NAV day**
-  yields all-zero shares, not `NaN` — the real 2025 export opens on one; and the `other` band is
+  fourth chart, **composition over time** (`StackedAreaChart`, DDR-0050), is **cumulative in base
+  currency** since DDR-0052 — bands stack from zero and the top edge is the day's NAV. It was
+  100%-stacked first, and DDR-0050's two reasons for that (proportion is the question; an absolute
+  version echoes the value curve) are *costs the current version pays*, not mistakes — read
+  DDR-0052 before proposing either direction again. Its maths is `lib/composition`, and four rules
+  there are load-bearing: a **negative band hangs below the zero line** rather than being clamped or
+  folded away (stacking `Σ|value|` would draw a margin position as an asset); a **zero-NAV day**
+  pinches to the baseline and `shares` still guards the division, because the readout quotes a
+  percentage beside each amount — the real 2025 export opens on such a day; the `other` band is
   the **residual** `total − Σ components`, surfaced and never redistributed, because the Flex query
-  selects NAV categories per asset class held (the DDR-0015 lesson, a second time). The window is
+  selects NAV categories per asset class held (the DDR-0015 lesson, a second time); and the top
+  edge is NAV **only because the bands are exhaustive** — the normalised chart divided by `total`
+  and drew a flat 100% regardless, so `composition.test.ts` now asserts the stack's top against
+  `point.total` directly. Drop a category instead of folding it into `other` and nothing will look
+  wrong. The window is
   **sliced, not carried forward** — a composition point is a simultaneous observation of every
   band, so a synthetic edge point would draw a shape that was never measured. Palette: **all eight
-  slots**, since `SECTOR_SLOT_OFFSET` is a *sector* reservation and asset class is not sector. The
+  slots**, since `SECTOR_SLOT_OFFSET` is a *sector* reservation and asset class is not sector, but
+  **softened in this chart alone** — `.stack-band` drops `fill-opacity` to 0.5 (and
+  `.composition-legend`'s swatches with it) because `--series-*` is tuned for donut wedges and map
+  marks, small shapes that need the saturation, while the same hues as card-filling slabs shout down
+  the curves beside them. Same classes, same hue, further back; retuning the tokens globally was
+  declined (DDR-0052), and a second such override is the moment to ask for a quieter *scale*
+  instead. Both the chart and its legend take their slots from **`compositionColors`**, because the
+  legend is no longer inside the chart: it renders into the card's **header**, at the top right, so
+  `StackedAreaChart` emits a bare `<svg>` like the other two and **all four cards are exactly the
+  same height**. That equality is guarded, not observed (`chartGeometry.test.ts`) — a shared
+  `viewBox` makes the *plots* identical and says nothing about the *cards*, and a `<figcaption>`
+  under one plot is what made this card the odd one out. Three rules hold it: every `ChartCard`
+  renders a `CardHeader` including the three with nothing in it, `.chart-card-header` never wraps
+  (just above the 1200px collapse a four-band legend is within a few dozen pixels of the column),
+  and when it is tight the **title** ellipsizes rather than the legend. Those component scans strip
+  comments first — the charts name `<svg>` and `<figcaption>` in their own prose, the DDR-0042
+  trap again. The
   **Allocation map is the one scoped exception**: a Mapbox GL JS basemap (ADR-0007) carrying, per
   issuer country, **two donuts side by side** — left, the country's weight in the portfolio (its
   share of NAV in blue against a muted remainder, on an **absolute 0–100% scale**); right, one

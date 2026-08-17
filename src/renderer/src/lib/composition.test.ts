@@ -1,19 +1,26 @@
 import { describe, it, expect } from 'vitest'
 import type { CompositionPoint } from '@shared/domain/performance'
+import type { CompositionBand } from '@shared/domain/performance'
 import {
+  compositionColors,
   nearestIndex,
-  shareDomain,
   shares,
   sliceComposition,
   stackGeometry,
   stackSpans,
+  valueDomain,
 } from './composition'
 
 /**
- * The composition chart's stacking maths (Story #171, DDR-0050). The invariant the whole chart
- * rests on is that the bands sum to NAV at every point — a stacked chart whose parts do not sum
- * is worse than no chart — so that is asserted directly, including in the two cases where it is
- * least obvious: a day with negative cash and a day with no NAV at all.
+ * The composition chart's stacking maths (Story #171, DDR-0050; cumulative since DDR-0052). The
+ * invariant the whole chart rests on is that the bands sum to NAV at every point — a stacked chart
+ * whose parts do not sum is worse than no chart — so that is asserted directly, including in the
+ * two cases where it is least obvious: a day with negative cash and a day with no NAV at all.
+ *
+ * That invariant is now load-bearing in a way it was not before. The normalised chart divided by
+ * `total`, so its top edge was 100% whether or not the bands really summed; the cumulative one
+ * draws the sum itself, and the top edge *is* the reader's NAV figure. So the tests assert the
+ * stack's top against `point.total`, not merely that the parts are consistent with each other.
  */
 
 const point = (total: number, values: number[], date = 0): CompositionPoint => ({
@@ -57,25 +64,31 @@ describe('shares', () => {
 
 describe('stackSpans', () => {
   it('stacks positive bands bottom-first, each starting where the last ended', () => {
-    expect(stackSpans([0.5, 0.3, 0.2])).toEqual([
-      { lo: 0, hi: 0.5 },
-      { lo: 0.5, hi: 0.8 },
-      { lo: 0.8, hi: 1 },
+    expect(stackSpans([500, 300, 200])).toEqual([
+      { lo: 0, hi: 500 },
+      { lo: 500, hi: 800 },
+      { lo: 800, hi: 1000 },
     ])
   })
 
+  it('puts the top of the stack on the day’s NAV, which is the chart’s whole promise', () => {
+    const p = point(38_510.98, [38_420.77, 40.19, 50.02])
+    const spans = stackSpans(p.values)
+    expect(spans[spans.length - 1]!.hi).toBeCloseTo(p.total, 6)
+  })
+
   it('hangs a negative band below the zero line instead of clamping it', () => {
-    const spans = stackSpans([1.125, -0.125])
-    expect(spans[0]).toEqual({ lo: 0, hi: 1.125 })
+    const spans = stackSpans([45_000, -5000])
+    expect(spans[0]).toEqual({ lo: 0, hi: 45_000 })
     // Below the baseline, not stacked on top of the band above it.
-    expect(spans[1]).toEqual({ lo: -0.125, hi: 0 })
+    expect(spans[1]).toEqual({ lo: -5000, hi: 0 })
   })
 
   it('keeps the positive stack anchored at zero when a band goes negative', () => {
     // The margin band must not drag the bands above it down through the baseline — a reader
     // comparing two days would otherwise see stock "move" purely because cash changed sign.
-    const flat = stackSpans([0.9, 0.1])
-    const margin = stackSpans([1.1, -0.1])
+    const flat = stackSpans([90, 10])
+    const margin = stackSpans([110, -10])
     expect(flat[0]?.lo).toBe(0)
     expect(margin[0]?.lo).toBe(0)
   })
@@ -89,36 +102,62 @@ describe('stackSpans', () => {
 
   it('lets a band that flips sign move across the baseline', () => {
     // Cash crossing into margin between two days is a real transition, not an error.
-    expect(stackSpans([0.8, 0.2])[1]).toEqual({ lo: 0.8, hi: 1 })
-    expect(stackSpans([1.2, -0.2])[1]).toEqual({ lo: -0.2, hi: 0 })
+    expect(stackSpans([800, 200])[1]).toEqual({ lo: 800, hi: 1000 })
+    expect(stackSpans([1200, -200])[1]).toEqual({ lo: -200, hi: 0 })
+  })
+
+  it('scales with the money rather than normalising it away', () => {
+    // The behaviour DDR-0052 bought: two days at identical proportions but different NAV are
+    // different heights. Under the 100%-stacked chart these were the same picture.
+    expect(stackSpans([60, 40])[1]!.hi).toBe(100)
+    expect(stackSpans([600, 400])[1]!.hi).toBe(1000)
   })
 })
 
-describe('shareDomain', () => {
-  it('is exactly 0–100% for an ordinary all-positive series', () => {
-    expect(
-      shareDomain([point(100, [60, 40]), point(200, [50, 150])]),
-    ).toEqual({ min: 0, max: 1 })
+describe('valueDomain', () => {
+  it('spans zero up to a round top that covers the tallest stack', () => {
+    const domain = valueDomain([point(100, [60, 40]), point(200, [50, 150])])
+    expect(domain.bottom).toBe(0)
+    expect(domain.top).toBeGreaterThanOrEqual(200)
+    expect(domain.ticks).toContain(0)
   })
 
-  it('widens to fit a negative band rather than cropping it', () => {
-    const domain = shareDomain([point(100, [60, 40]), point(40_000, [45_000, -5000])])
-    expect(domain.min).toBeCloseTo(-0.125, 10)
-    expect(domain.max).toBeCloseTo(1.125, 10)
+  it('gives the tallest stack headroom instead of clipping it on the top gridline', () => {
+    const domain = valueDomain([point(43_718.02, [43_718.02])])
+    expect(domain.top).toBeGreaterThan(43_718.02)
   })
 
-  it('stays anchored to 0–100% so two windows are drawn at the same scale', () => {
-    // Every day 100% stock: without the anchor this would be [0, 1] here and something else
-    // next door, and equal proportions would draw as different shapes.
-    expect(shareDomain([point(100, [100]), point(200, [200])])).toEqual({ min: 0, max: 1 })
+  it('drops below zero to fit a negative band rather than cropping it', () => {
+    const domain = valueDomain([point(40_000, [45_000, -5000])])
+    expect(domain.bottom).toBeLessThanOrEqual(-5000)
+    expect(domain.top).toBeGreaterThanOrEqual(45_000)
+  })
+
+  it('follows the money, so a window in which NAV doubled is drawn taller', () => {
+    // The deliberate opposite of the old share domain, which was anchored to [0, 1] precisely so
+    // that it would *not* move. Here it should move: that is the information (DDR-0052).
+    const small = valueDomain([point(20_000, [20_000])])
+    const large = valueDomain([point(45_000, [45_000])])
+    expect(large.top).toBeGreaterThan(small.top)
+  })
+
+  it('lands its ticks on round, evenly spaced numbers a reader can scan', () => {
+    const { ticks } = valueDomain([point(43_718.02, [43_718.02])])
+    expect(ticks.length).toBeGreaterThan(1)
+    const step = ticks[1]! - ticks[0]!
+    for (let i = 1; i < ticks.length; i++) {
+      expect(ticks[i]! - ticks[i - 1]!).toBeCloseTo(step, 6)
+    }
+    expect(ticks).toContain(0)
   })
 
   it('is unaffected by zero-NAV days', () => {
-    expect(shareDomain([point(0, [0, 0]), point(100, [60, 40])])).toEqual({ min: 0, max: 1 })
+    const withGap = valueDomain([point(0, [0, 0]), point(100, [60, 40])])
+    expect(withGap).toEqual(valueDomain([point(100, [60, 40])]))
   })
 
-  it('is the anchored default for an empty series', () => {
-    expect(shareDomain([])).toEqual({ min: 0, max: 1 })
+  it('collapses to a single zero tick for an empty series', () => {
+    expect(valueDomain([])).toEqual({ top: 0, bottom: 0, ticks: [0] })
   })
 })
 
@@ -142,11 +181,27 @@ describe('stackGeometry', () => {
     expect(xs[2]).toBe(BOX.width - BOX.pad.right)
   })
 
-  it('puts the bottom band on the baseline and the top band at full height', () => {
+  it('rests the bottom band on the zero baseline', () => {
     const { paths } = stackGeometry([point(100, [100, 0]), point(100, [100, 0])], 2, BOX)
-    // The lower band fills the plot: its top edge is at the top pad, its base at the bottom.
-    expect(paths[0]).toContain(`,${BOX.pad.top}`)
     expect(paths[0]).toContain(`,${BOX.height - BOX.pad.bottom}`)
+  })
+
+  it('leaves the top of the stack short of the top pad, because the axis rounds outward', () => {
+    // The normalised chart's top band sat exactly on `pad.top` — its domain ended at 1 by
+    // definition. A currency axis rounds up to a round tick instead, so a real NAV (which is
+    // never a round number) has headroom and the stack does not touch the top gridline.
+    const nav = 43_718.02
+    const { paths, domain } = stackGeometry([point(nav, [nav], 10), point(nav, [nav], 20)], 1, BOX)
+    expect(domain.top).toBeGreaterThan(nav)
+    expect(paths[0]).not.toContain(`,${BOX.pad.top}`)
+  })
+
+  it('draws the same proportions at different heights when NAV differs', () => {
+    // Two series, each 60/40 every day, one at ten times the NAV. Under the old chart these were
+    // pixel-identical; the point of the cumulative version is that they are not.
+    const small = stackGeometry([point(100, [60, 40], 10), point(100, [60, 40], 20)], 2, BOX)
+    const large = stackGeometry([point(1000, [600, 400], 10), point(1000, [600, 400], 20)], 2, BOX)
+    expect(large.domain.top).toBeGreaterThan(small.domain.top)
   })
 
   it('produces finite geometry for a zero-NAV day mid-series', () => {
@@ -158,7 +213,7 @@ describe('stackGeometry', () => {
   it('produces finite geometry when a band is negative', () => {
     const margin = [point(40_000, [45_000, -5000], 10), point(40_000, [44_000, -4000], 20)]
     const { paths, domain } = stackGeometry(margin, 2, BOX)
-    expect(domain.min).toBeLessThan(0)
+    expect(domain.bottom).toBeLessThan(0)
     for (const path of paths) expect(path).not.toMatch(/NaN|Infinity/)
   })
 
@@ -201,6 +256,52 @@ describe('sliceComposition', () => {
 
   it('is empty when the window contains no measured day', () => {
     expect(sliceComposition(series, { from: 40, to: 50 })).toEqual([])
+  })
+})
+
+/**
+ * The chart and its legend no longer share an element — the legend sits in the card header so the
+ * four cards match in height (DDR-0052) — so they share this function instead. A key that
+ * disagrees with the bands it keys is worse than no key.
+ */
+describe('compositionColors', () => {
+  const band = (key: CompositionBand['key'], label: string): CompositionBand => ({ key, label })
+
+  const bands: CompositionBand[] = [
+    band('stock', 'Stock'),
+    band('cash', 'Cash'),
+    band('accruals', 'Accruals'),
+  ]
+
+  it('returns one class per band, in the bands’ own order', () => {
+    const colors = compositionColors(bands)
+    expect(colors).toHaveLength(3)
+    for (const c of colors) expect(c).toMatch(/^pie-series-/)
+  })
+
+  it('gives each named asset class its own hue', () => {
+    expect(new Set(compositionColors(bands)).size).toBe(3)
+  })
+
+  it('takes the palette from slot 1, because asset class is not sector', () => {
+    // SECTOR_SLOT_OFFSET reserves the blue for the Allocation map's weight donut and applies to
+    // sectors only (DDR-0030). Reserving it here would spend a hue for nothing.
+    expect(compositionColors(bands)[0]).toBe('pie-series-1')
+  })
+
+  it('gives the residual band the neutral swatch rather than a category hue', () => {
+    const withOther = [...bands, band('other', 'Other')]
+    expect(compositionColors(withOther)[3]).toBe('pie-series-neutral')
+  })
+
+  it('keeps a band’s hue when a later band appears, so a colour means one thing over time', () => {
+    const colors = compositionColors(bands)
+    const grown = compositionColors([...bands, band('other', 'Other')])
+    expect(grown.slice(0, 3)).toEqual(colors)
+  })
+
+  it('has nothing to colour for an empty stack', () => {
+    expect(compositionColors([])).toEqual([])
   })
 })
 

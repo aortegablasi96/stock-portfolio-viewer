@@ -12,10 +12,10 @@ import { sliceComposition } from '../../lib/composition'
 import { rebaseSeries, seriesExtent, sliceSeries, windowStats } from '../../lib/performanceRange'
 import { BarChart } from '../charts/BarChart'
 import { LineChart } from '../charts/LineChart'
-import { StackedAreaChart } from '../charts/StackedAreaChart'
+import { CompositionLegend, StackedAreaChart } from '../charts/StackedAreaChart'
 import { useAnalytics } from './useAnalytics'
 import { AnalyticsShell } from './AnalyticsShell'
-import { Card, CardContent, CardTitle } from '../ui/Card'
+import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card'
 import { DataTable, type DataColumn } from '../ui/DataTable'
 import { RangeFilter } from './RangeFilter'
 import { StatRow, StatTile } from '../ui/StatTile'
@@ -42,9 +42,10 @@ import { useRangeSelection } from './useRangeSelection'
  * looks the same whether it climbed in steady steps or in a dozen violent swings.
  *
  * A fourth (Story #171, DDR-0050) answers the question none of the three can: whether a return
- * came from a portfolio held all year or one that changed shape underneath it. It is
- * 100%-stacked rather than absolute — composition is a question about proportions — and reads
- * IBKR's own daily NAV breakdown, the same series the value curve above now comes from.
+ * came from a portfolio held all year or one that changed shape underneath it. It reads IBKR's own
+ * daily NAV breakdown — the same series the value curve above now comes from — and stacks it
+ * **cumulatively**, in base currency, so a band's thickness is an amount rather than a proportion
+ * (DDR-0052, superseding DDR-0050 on that point).
  *
  * All four render **at once, in a 2×2 grid** (Story #172, DDR-0051), because they are most useful
  * read against each other: a drawdown in the value curve means one thing beside a run of red daily
@@ -120,7 +121,7 @@ export function PerformanceView(): React.JSX.Element {
         const compositionChartLabel =
           compositionPoints.length === 0
             ? 'Portfolio composition over time'
-            : `Portfolio composition over time as a percentage of net asset value, split into ${compositionBands
+            : `Portfolio composition over time in ${r.baseCurrency}, stacked to total net asset value and split into ${compositionBands
                 .map((b) => b.label.toLowerCase())
                 .join(', ')}, over ${compositionPoints.length} days`
 
@@ -179,15 +180,7 @@ export function PerformanceView(): React.JSX.Element {
                 />
               </ChartCard>
 
-              <ChartCard
-                title="Daily return"
-                note="Each bar is one trading day’s time-weighted return, chain-linked from the
-                  cumulative return curve rather than differenced from portfolio value — so a
-                  deposit or withdrawal never shows up as a gain. Inside a statement period the
-                  day-to-day shape is apportioned by each day’s share of the period’s
-                  mark-to-market result; the period’s own endpoints are the returns IBKR
-                  reports, so the boundaries are exact and the days between them are modelled."
-              >
+              <ChartCard title="Daily return">
                 <BarChart
                   points={dailyPoints}
                   formatValue={formatSignedPercent}
@@ -199,17 +192,12 @@ export function PerformanceView(): React.JSX.Element {
 
               <ChartCard
                 title="Composition over time"
-                note="Each day’s net asset value split into its asset classes, as reported by
-                  IBKR — not reconstructed from holdings, so a corporate action or a transfer
-                  cannot quietly bend it. Accrued dividends, interest and broker fees are grouped
-                  as Accruals: they are part of net asset value, but too small to read as separate
-                  bands. The bands total 100% every day, so a band can only grow at another’s
-                  expense — this chart answers whether the portfolio changed shape, not whether
-                  it grew."
+                aside={<CompositionLegend bands={compositionBands} />}
               >
                 <StackedAreaChart
                   bands={compositionBands}
                   points={compositionPoints}
+                  formatValue={c}
                   formatDate={formatDate}
                   ariaLabel={compositionChartLabel}
                   emptyMessage="Composition over time needs a Flex export that includes the Net Asset Value (NAV) in Base section."
@@ -231,34 +219,43 @@ export function PerformanceView(): React.JSX.Element {
 }
 
 /**
- * One chart in the 2×2 grid: a card, its visible title, and — for the two charts whose numbers are
- * modelled rather than reported — the note that says so (Story #172).
+ * One chart in the 2×2 grid: a card, a header carrying its title and anything the chart needs
+ * named at the top right, and the chart itself (Story #172).
  *
- * The note sits **after** the chart, which is the one thing here that is not merely the old markup
- * rearranged. Above the chart it pushed the plot down by however many lines it happened to run to,
- * so the two charts in a row started at different heights: a grid whose whole point is reading one
- * chart against the one beside it, with the two misaligned. Below it, every plot in a row starts
- * level and the prose hangs off the bottom, where a card is free to be as tall as it needs.
+ * **Every card uses `CardHeader`, including the three with nothing to put in it.** That is what
+ * makes the four exactly the same height: a bare `CardTitle` and a `CardHeader` around one are
+ * near-identical but not identical, and a grid built to be read across its rows cannot afford
+ * "near". The header is centred, so a legend shorter than the title does not change its height
+ * either.
+ *
+ * The daily-return and composition cards used to carry a `source-note` paragraph explaining how
+ * their numbers were derived. Both are gone: four charts on one screen meant four bodies of prose
+ * competing with the plots they annotated, and a card whose note ran to seven lines was taller
+ * than the chart it belonged to. The derivations they described have not changed and are not
+ * lost — they are in `lib/dailyReturns` and `lib/composition`, and in DDR-0049 / DDR-0050, which
+ * is where a reader who wants the method is better served than by a caption. What the reader of
+ * the *view* needs is on the chart itself: the axis, the legend and the hover readout.
  *
  * Not a shared primitive: this is the Performance grid's own composition of `Card`, and a second
  * view wanting chart cards would be the moment to ask whether it wants *these* (DDR-0033).
  */
 function ChartCard({
   title,
-  note,
+  aside,
   children,
 }: {
   title: string
-  note?: string
+  /** Rendered at the header's right edge — the composition stack's legend, today. */
+  aside?: ReactNode
   children: ReactNode
 }): React.JSX.Element {
   return (
     <Card>
-      <CardTitle>{title}</CardTitle>
-      <CardContent>
-        {children}
-        {note !== undefined && <p className="source-note">{note}</p>}
-      </CardContent>
+      <CardHeader align="center" className="chart-card-header">
+        <CardTitle>{title}</CardTitle>
+        {aside}
+      </CardHeader>
+      <CardContent>{children}</CardContent>
     </Card>
   )
 }
