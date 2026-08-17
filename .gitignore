@@ -27,6 +27,11 @@ electron.vite.config.*.mjs
 # The parser is tested against a compact inline fixture; the real-file test skips when absent.
 docs/flex-queries/
 
+# The Figma Make export Epic #179 adopts the design of. A local working copy of a proposal
+# whose source of truth is the Figma file; every M5 story states its own values rather than
+# pointing here, so the folder can go at any time without making an issue unreadable.
+docs/figma_design/
+
 # Local SQLite database files
 *.sqlite
 *.sqlite3

@@ -112,6 +112,26 @@ describe('type scale', () => {
     expect(token('--leading-normal')).toMatch(/^\d+(\.\d+)?$/)
     expect(Number(token('--leading-normal'))).toBeGreaterThan(Number(token('--leading-tight')))
   })
+
+  /**
+   * The two families the scale gained in Story #180 (DDR-0053). Pinned here beside the steps
+   * because they are part of the same contract — a step says how big a figure is, a family says
+   * what shape its digits are — while `figureRole.test.ts` guards the harder half: that the three
+   * properties making a figure comparable stay in one rule, and that neither face is ever fetched.
+   */
+  it('names a prose family and a figure family, both ahead of a generic fallback', () => {
+    expect(token('--font-sans')).toBe(
+      "'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+    )
+    expect(token('--font-figure')).toBe(
+      "'JetBrains Mono', ui-monospace, 'Cascadia Mono', 'Consolas', monospace",
+    )
+    expect(token('--tracking-figure')).toBe('-0.02em')
+  })
+
+  it('applies the prose family once, on body, so everything inherits it', () => {
+    expect(CSS).toMatch(/body \{\n {2}font-family: var\(--font-sans\);/)
+  })
 })
 
 describe('focus ring', () => {
