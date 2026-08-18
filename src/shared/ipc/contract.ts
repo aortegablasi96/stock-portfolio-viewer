@@ -184,6 +184,23 @@ export type { PerformanceResult, AllocationResult, DividendResult, RealizedGains
 export { classifyInstrumentsResultSchema }
 export type { ClassifyInstrumentsResult, ClassificationProgress }
 
+/**
+ * The sidebar's collapsed/expanded state (Story #184).
+ *
+ * Declared here rather than in `shared/domain/` because it is not a domain result: nothing about
+ * a portfolio is being reported. It is shell state, the renderer half of the `app_meta` value
+ * `sidebarStateService` keeps — the same relationship the window's own remembered bounds have to
+ * `windowStateService`, which likewise has no domain module.
+ *
+ * The setter echoes the state it stored rather than resolving to `void`, so a caller that wants
+ * to know the write landed can await one value instead of inferring it from silence.
+ */
+export const sidebarStateSchema = z.object({
+  /** `true` = the 56px icon rail, `false` = the labelled column. */
+  collapsed: z.boolean(),
+})
+export type SidebarState = z.infer<typeof sidebarStateSchema>
+
 // ---- window.api bridge shape ------------------------------------------------
 
 /**
@@ -235,4 +252,8 @@ export interface RendererApi {
    * title bar can swap its maximize/restore icon (Story #42). Returns an unsubscribe fn.
    */
   onWindowMaximizeChanged: (callback: (isMaximized: boolean) => void) => () => void
+  /** Whether the sidebar was left collapsed to its icon rail, read once on launch (Story #184). */
+  getSidebarState: () => Promise<SidebarState>
+  /** Remember the sidebar's collapsed state; resolves to what was stored (Story #184). */
+  setSidebarState: (state: SidebarState) => Promise<SidebarState>
 }

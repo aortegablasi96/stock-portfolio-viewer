@@ -17,6 +17,7 @@ import type {
   PortfolioOverviewResult,
   RealizedGainsResult,
   RendererApi,
+  SidebarState,
   SnapshotList,
   SnapshotListRequest,
 } from '@shared/ipc/contract'
@@ -78,6 +79,12 @@ const api: RendererApi = {
     ipcRenderer.on(IpcChannels.windowMaximizeChanged, listener)
     return () => ipcRenderer.removeListener(IpcChannels.windowMaximizeChanged, listener)
   },
+  // The sidebar's remembered width (Story #184). A payload to validate, so unlike the three
+  // window commands above these are `invoke` rather than `send`.
+  getSidebarState: (): Promise<SidebarState> =>
+    ipcRenderer.invoke(IpcChannels.windowGetSidebarState),
+  setSidebarState: (state: SidebarState): Promise<SidebarState> =>
+    ipcRenderer.invoke(IpcChannels.windowSetSidebarState, state),
 }
 
 contextBridge.exposeInMainWorld('api', api)

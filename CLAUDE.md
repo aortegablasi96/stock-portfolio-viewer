@@ -20,9 +20,9 @@ navy/indigo palette re-key (#181, DDR-0054), and the **vertical sidebar** that r
 horizontal tab strip (#182, DDR-0055). The WAI-ARIA tabs pattern described below was kept, not
 dropped — the rotation cost `aria-orientation` and Up/Down and nothing else. Its **context rail**
 followed (#183, DDR-0056): a brand mark, a gateway badge derived from the Portfolio view's own read,
-and the display currency, which is now the *app's* selection rather than the dashboard's. One
-sidebar story is still open — collapsing it — so the column's 220px **width** is not settled; its
-semantics and its contents are.
+and the display currency, which is now the *app's* selection rather than the dashboard's. The
+sidebar shell is now finished: #184 (DDR-0057) **collapses** it to a 56px icon rail, so the column
+has two widths and 220px is only one of them.
 
 **Every view has been reworked several times, and refinement is ongoing — so read the backlog
 before assuming a view is final.** Which Epics are open is deliberately **not recorded here**:
@@ -181,10 +181,15 @@ Canonical flows to copy when adding a feature:
   column* the legibility floor picked — since #182 the column is the window minus a 220px sidebar,
   so `chartGeometry` subtracts `--sidebar-width` before the measure caps anything, and the media
   query has to add it back. What that cost is DDR-0051's second property: 1200px sat below the
-  1280px default window so a fresh install opened on the grid, and **it no longer does** — at
-  1280px a half column renders a 9.7px axis label, under the floor, so a default window opens
-  Performance stacked and the 2×2 grid wants ≥1421px. Don't "restore" it by lowering the
-  breakpoint; that ships illegible labels. The label
+  1280px default window so a fresh install opened on the grid, and **it no longer does with the
+  column open** — at 1280px a half column renders a 9.7px axis label, under the floor, so a default
+  window opens Performance stacked and the 2×2 grid wants ≥1421px. Don't "restore" it by lowering
+  the breakpoint; that ships illegible labels. **Collapsing the sidebar is what restores it**
+  (#184, DDR-0057), and legitimately: the rail hands 164px back, so the same 1200px column arrives
+  at 1257px of viewport and a half column at 1280px renders 11.4px. Both thresholds are therefore
+  derived from **one** number — `GRID_CONTENT_BREAKPOINT_PX` (1200) — and `gridColumns` /
+  `chartWidthPx` take the sidebar width as a defaulted parameter, so neither can be tuned alone.
+  The label
   size is **checked, not asserted** (`chartGeometry.test.ts` mirrors the layout tokens, reads each
   back out of `app.css`, and walks the layout to `--content-max`); and capping a chart's width to
   bound the collapsed column stays **rejected** — DDR-0018 tried it and it reads as a rendering
@@ -311,8 +316,8 @@ Canonical flows to copy when adding a feature:
   500→600 weight step the strip had no room for. And `.app-tab:hover` is scoped
   **`:not(.app-tab-active)`** — a pseudo-class counts as a class, so `:hover` out-specifies
   `.app-tab-active` regardless of source order and a pointer on the current view would repaint it
-  as unselected. `--titlebar-height` and `--sidebar-width` are `:root` tokens because each is now
-  quoted in more than one rule.
+  as unselected. `--titlebar-height`, `--sidebar-width` and `--sidebar-width-collapsed` are `:root`
+  tokens because each is now quoted in more than one rule.
   Every view — the Portfolio dashboard included — is wrapped in a `TabPanel` (`role="tabpanel"`,
   `id="panel-<tab>"`, `aria-labelledby="tab-<tab>"`, `tabIndex={0}`) and its tab points back with
   `aria-controls`, **set only on the selected tab** because an unvisited tab has no panel in the
@@ -365,6 +370,30 @@ Canonical flows to copy when adding a feature:
   milestone to presentation-only changes, so that is a new figure needing its own story. One
   consequence to expect: Tab from the selected tab now reaches the currency control before the panel,
   which `e2e/tab-navigation.spec.ts` was adapted for.
+- **The sidebar collapses to a 56px icon rail, and collapse is one flag rather than a prop**
+  (Story #184, DDR-0057). `shellClassName` puts `app-collapsed` on the app's root and every
+  collapsed rule in `app.css` hangs off it — nothing in the rail takes a `collapsed` prop, which is
+  what keeps the tabs pattern *the same code* in both states and makes "selecting a view must not
+  reopen the column" unexpressible rather than merely untrue. Six things to know. The **title bar
+  still spans the window above the sidebar**, and that is now a decision: with no OS frame the bar
+  is the window's only grab handle, and DDR-0028 judges a restored window's reachability on it, so
+  a full-height sidebar beside it would make the drag region's width depend on a *navigation*
+  preference. A **collapsed label is clipped, never removed** — one rule, four selectors, the same
+  `position: absolute` + `clip` technique `.sr-only` uses — so a nav row is still named by its own
+  text and the currency select by its own `<label for>`; `title` is an addition, which is the
+  distinction the prototype gets wrong. That needs a `<span>` around each tab's label, and the
+  tab's `textContent` is unchanged, which is why `e2e/tab-navigation.spec.ts` still reads five
+  names. The **status dot grows a shape channel on the rail** (filled = live, hollow = idle, haloed
+  = the two unhappy outcomes), because DDR-0056 made the *wording* the channel and the rail clips
+  it — three tones separated by hue alone is the one thing DDR-0021 forbids. The **transition is
+  armed a frame after the stored state arrives**, so a rail left collapsed is simply collapsed on
+  launch instead of sliding shut in front of the reader; the width itself is `--duration-base`,
+  which is what puts it inside the one reduced-motion rule (DDR-0044). The state is **one
+  overwritten `app_meta` value** (`sidebar_state`) beside the window's own, read over
+  `window:getSidebarState` / `window:setSidebarState` — `invoke`, not `send`, because there is a
+  payload to validate. And the toggle sits **last in the column, not beside the brand**: 220px
+  minus the brand tile ellipsises "Stock Portfolio Viewer", so the cost is one more Tab stop
+  between the selected tab and its panel, which `e2e/tab-navigation.spec.ts` records.
 - **Fire-and-forget command + state event:** the `window:*` channels show the *other* IPC
   shape — `ipcRenderer.send` / `ipcMain.on` with no payload and no Zod (there is nothing to
   validate), plus one `invoke` query (`window:isMaximized`) and one main→renderer event
@@ -1041,7 +1070,7 @@ so no test may render a React component. This shapes the renderer: chart maths, 
 sorting and formatting are **extracted out of components into pure modules under
 `renderer/src/lib/`** (`format`, `pie`, `worldGeo`, `countryDonuts`, `gainLoss`, `tableFilter`,
 `column`, `dateRange`, `sectorMap`, `performanceRange`, `dailyReturns`, `composition`, `chartGeometry`, `classifyProgress`, `dataVersion`,
-`gatewayStatus`, `tabKeyboard`, `buttonVariants`, `cardVariants`, `statTileVariants`, `fieldVariants`,
+`gatewayStatus`, `sidebarCollapse`, `tabKeyboard`, `buttonVariants`, `cardVariants`, `statTileVariants`, `fieldVariants`,
 `toggleGroupVariants`, `badgeVariants`, `statePanelVariants`, `tableSort`, `dataTableVariants`,
 `sliceHighlight`, `mapPopupTint`, `cssDeclarations`, `tokenAdoption`, `motionTokens`, `contrast`,
 `figureRole`, `analyticsShell`)

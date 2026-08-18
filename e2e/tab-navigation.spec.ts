@@ -86,12 +86,12 @@ test('the tablist is a single stop in the Tab order', async () => {
   ])
 })
 
-test('Tab from the selected tab leaves the tablist, and reaches the panel (Story #183)', async () => {
+test('Tab from the selected tab leaves the tablist, and reaches the panel (Story #184)', async () => {
   // What this has always pinned is the roving tabindex: Tab out of the selected tab must not walk
   // the other four. It used to land directly on the panel, because the tablist was the last thing
-  // in the sidebar. Story #183 put the display-currency control below it, so the next stop is now
-  // that control — the sidebar's own content, in DOM order, which is also its visual order — and
-  // the panel is the one after.
+  // in the sidebar. Story #183 put the display-currency control below it, and Story #184 the
+  // collapse toggle below that — so the sidebar's footer is now two stops, in DOM order, which is
+  // also its visual order, and the panel is the one after.
   await page.getByRole('tab', { name: 'Portfolio' }).focus()
 
   await page.keyboard.press('Tab')
@@ -108,6 +108,23 @@ test('Tab from the selected tab leaves the tablist, and reaches the panel (Story
   expect(stops.isATab).toBe(false)
   expect(stops.inTheSidebar).toBe(true)
   expect(stops.label).toBe('Display currency')
+
+  // The collapse toggle (Story #184). It is last in the column rather than beside the brand,
+  // because a control there ellipsises the product's own name at 220px (DDR-0057) — and this is
+  // the cost of that: one more stop between the selected tab and its panel.
+  await page.keyboard.press('Tab')
+  const toggle = await page.evaluate(() => {
+    const focused = document.activeElement as HTMLElement | null
+    return {
+      inTheSidebar: focused?.closest('.app-sidebar') !== null,
+      // The accessible name, which states the action rather than the state.
+      label: focused?.getAttribute('aria-label'),
+      expanded: focused?.getAttribute('aria-expanded'),
+    }
+  })
+  expect(toggle.inTheSidebar).toBe(true)
+  expect(toggle.label).toBe('Collapse sidebar')
+  expect(toggle.expanded).toBe('true')
 
   await page.keyboard.press('Tab')
   expect(await focusedId()).toBe('panel-portfolio')

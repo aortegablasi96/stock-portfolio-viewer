@@ -38,6 +38,13 @@ export const IpcChannels = {
   // double-click, or window snapping), so the title bar can swap its maximize/restore
   // icon. Carries a single boolean payload.
   windowMaximizeChanged: 'window:maximizeChanged',
+  // Whether the sidebar is collapsed to its icon rail, remembered across launches (Story
+  // #184). Under the `window:` prefix because with no OS frame the app owns its own chrome
+  // (DDR-0011), and the rail's width is the same class of remembered shell fact as the
+  // window's own bounds (DDR-0028). A payload to validate, so these are `invoke` channels
+  // rather than the payload-free commands above.
+  windowGetSidebarState: 'window:getSidebarState',
+  windowSetSidebarState: 'window:setSidebarState',
 } as const
 
 export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels]

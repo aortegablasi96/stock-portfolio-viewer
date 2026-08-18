@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { Button } from './ui/Button'
+import { sidebarToggleLabel } from '../lib/sidebarCollapse'
 import {
   describeGateway,
   GATEWAY_READING_TTL_MS,
@@ -17,6 +19,12 @@ import {
  *
  * Neither part reaches IPC. The badge renders a reading the Portfolio view already took — see
  * `lib/gatewayStatus.ts` for why that is the source of truth and why nothing polls.
+ *
+ * Story #184 added the third thing that is true of the app rather than of a view: how wide this
+ * column is. The toggle below is the rail's only control, and it reaches IPC no more than the
+ * badge does — the shell owns the state and the write, and hands down a callback (DDR-0057).
+ * Nothing else here learned about collapse at all: the brand's name, the badge's wording and the
+ * nav rows' labels are clipped by one CSS rule, so none of them takes a `collapsed` prop.
  */
 
 /**
@@ -53,6 +61,60 @@ export function SidebarBrand(): React.JSX.Element {
       </span>
       <span className="app-brand-name">Stock Portfolio Viewer</span>
     </div>
+  )
+}
+
+/**
+ * The one control that collapses the column and expands it again (Story #184).
+ *
+ * A single toggle rather than the prototype's pair of buttons — an invisible full-width strip at
+ * the top of the rail and a second, visible one at the bottom. One visible control that is in the
+ * same place in both states is what makes the affordance findable; two, one of which is invisible,
+ * is how a reader collapses the sidebar by accident and cannot see what to click to undo it.
+ *
+ * It sits *first* in the sidebar, which is a keyboard decision as much as a visual one: the
+ * tablist is a single Tab stop with a roving `tabindex` (DDR-0029), so anything placed after it
+ * lands between the selected tab and its panel. First, the toggle costs that path nothing.
+ *
+ * `aria-expanded` states what the button did to the region; the name states what it will do next.
+ * The glyph is the same panel in both states with its chevron reversed — the thing being acted on
+ * stays recognisable, and only the direction changes.
+ */
+export function SidebarToggle({
+  collapsed,
+  onToggle,
+}: {
+  collapsed: boolean
+  onToggle: () => void
+}): React.JSX.Element {
+  const label = sidebarToggleLabel(collapsed)
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      className="app-sidebar-toggle"
+      aria-expanded={!collapsed}
+      aria-controls="app-sidebar"
+      aria-label={label}
+      title={label}
+      onClick={onToggle}
+    >
+      <svg
+        className="app-sidebar-toggle-glyph"
+        viewBox="0 0 16 16"
+        aria-hidden="true"
+        focusable="false"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <rect x="1.75" y="2.75" width="12.5" height="10.5" rx="2.5" />
+        <path d="M6.25 2.75v10.5" />
+        <path d={collapsed ? 'M9 6.25 10.75 8 9 9.75' : 'M10.75 6.25 9 8l1.75 1.75'} />
+      </svg>
+    </Button>
   )
 }
 
