@@ -25,7 +25,12 @@ sidebar shell is now finished: #184 (DDR-0057) **collapses** it to a 56px icon r
 has two widths and 220px is only one of them. The first of the **shared surfaces** has landed with
 it: #185 (DDR-0058) gives all five views **one page header**, owned by `AnalyticsShell` rather than
 by `App.tsx` — which is where the second copy of the dashboard's header actually lived, not the
-"no heading at all" the story was filed on.
+"no heading at all" the story was filed on. #186 (DDR-0059) restyles the two surfaces every view is
+built from: the card grows a **ruled header strip** and the table an 11px column head and a CSS row
+lift. Read that DDR before restyling anything else against the proposal — most of what it asked for
+was *already true* (the 12px radius, the 20px padding, the dropped trailing row rule, the accent
+sort head), which is the second time this milestone that measuring the proposal against the scale
+found the scale already there (DDR-0054's eight unchanged hues was the first).
 
 **Every view has been reworked several times, and refinement is ongoing — so read the backlog
 before assuming a view is final.** Which Epics are open is deliberately **not recorded here**:
@@ -564,13 +569,13 @@ Canonical flows to copy when adding a feature:
 | Primitive | Axes | The rule that isn't obvious |
 | --- | --- | --- |
 | `Button` (DDR-0032) | `variant` = colour + border (`outline` default · `primary` · `secondary` · `danger` · `ghost` **borderless** · `link` · `surface`) × `size` (`sm\|md\|lg` are the `--control-pad-*` steps; `icon` is a *shape*) | `ghost` changed meaning — the old `.ghost-button` had a border and is now `secondary`. `type` defaults to `"button"`. `className` is appended for **placement, not colour**. `.btn` declares no `line-height` on purpose. |
-| `Card` / `CardHeader` / `CardTitle` / `CardContent` (DDR-0033) | `variant` = surface colour (`default` `--card` · `nested` `--bg`) × `size` = the `--surface-pad-*` steps | `CardContent` is a **scope**: the rules `.panel` declared on its descendants hang off `.card-content`, not `.card`, which keeps a state panel's prose out of their reach. `as` is a prop, because the superseded surfaces weren't one element. |
+| `Card` / `CardHeader` / `CardTitle` / `CardContent` (DDR-0033, restyled DDR-0059) | `variant` = surface colour (`default` `--card` · `nested` `--bg`) × `size` = the `--surface-pad-*` steps | `CardContent` is a **scope**: the rules `.panel` declared on its descendants hang off `.card-content`, not `.card`, which keeps a state panel's prose out of their reach — and it is why the #186 strip is declared on the *header* only, so no `StatePanel` moved. `as` is a prop, because the superseded surfaces weren't one element. The **ruled header strip** is one rule over `.card-header` *and* a bare `.card > .card-title`, because nine of the sixteen titles have nothing beside them and both must read alike; it bleeds to the card's edges by negating `--card-pad`, which each size restates beside its `padding` (change one, change both). `.card-header:last-child` gives the strip back — a header with no body divides nothing. |
 | `StatTile` / `StatRow` (DDR-0034) | `tone` only — a headline figure is always a panel-level tile, so `variant`/`size` would each have one value | A tile **is** a `Card`, so it declares no surface of its own. **Neutral is the absence of a rule** (`toneClassName('neutral')` returns `''`); `.stat-positive` / `.stat-negative` are the app's tone semantic, worn by a table cell and the map popup too. |
 | `Field` + `Select` + `DateInput` (DDR-0035) | `kind` (`select \| date`) only — both call sites are the same dense box | **`Field` generates the id with `useId()` and takes no `id` prop**: analytics tabs stay mounted (DDR-0027), so all three `RangeFilter`s can be in the document at once and a fixed id would name only the first. The control is passed as a function of that id. |
 | `ToggleGroup` (DDR-0036) | `mode` (`single \| multiple`), and the mode is **worn** — `--radius-md` vs `--radius-pill` | **Never a tablist**: `aria-pressed`, not `role="tab"` — only `.app-tab` is a real tablist (DDR-0029). The active item carries a doubled stroke (`box-shadow: inset 0 0 0 1px`) as well as the accent. `ToggleOption.title` is a tooltip. |
 | `Badge` (DDR-0037) | `variant` = boundary + ink (`neutral` · `accent` · `plain`) × `size` = type + box padding | **Never a pill** — that corner means multi-select (DDR-0036) — and **never a background**. `sm` carries no vertical padding: an inline-block with it grows every holdings row by ~7px. |
 | `StatePanel` (DDR-0038) | `variant` = the state (`loading \| empty \| notice \| error`) × `surface` (`panel` = a `Card` at `lg` · `inline`) | Only `error` paints; the other three declare no CSS — the axis exists because the copy and the *announcement* differ. `role` is derived (`error` → `alert`, else `status`); no heading → the panel **is** a `<p>`. Parts render in a fixed order, recovery action last. |
-| `DataTable` (DDR-0039) | the *container's* axes: `surface` (`inline \| card`) × `height` (`auto \| capped`) | Sorting is **opt-in per column** (a `sortValue` gets a header button). A **missing value sorts last in both directions**. It composes with the view's filters rather than replacing them, so the "N of M shown" count is untouched. The sort control is not a `Button` — the header cell already is the box. |
+| `DataTable` (DDR-0039, restyled DDR-0059) | the *container's* axes: `surface` (`inline \| card`) × `height` (`auto \| capped`) | Sorting is **opt-in per column** (a `sortValue` gets a header button). A **missing value sorts last in both directions**. It composes with the view's filters rather than replacing them, so the "N of M shown" count is untouched. The sort control is not a `Button` — the header cell already is the box. The column head is `--text-2xs` at `0.06em` and the two are a **pair** — 11px uppercase at a body face's tracking is the thing that fails. Every table lifts the row under the pointer in **CSS** (`--duration-fast`, so reduced motion zeroes it); the linked row's stronger lift is scoped `.data-table tbody tr.data-table-row-active` to match the hover's specificity and win on source order — unscoped, `tr:hover > th` silently out-specifies it and the DDR-0040 link disappears in the pointer case. |
 
 - **An analytics view is a subject noun and a function of its report** (DDR-0043).
   `components/analytics/AnalyticsShell.tsx` owns the four-branch guard all four views had spelled
@@ -673,7 +678,11 @@ Canonical flows to copy when adding a feature:
   seventeenth form: a colour can now be named as a **token mixed into a surface**, because
   DDR-0054 made `color-mix()` the way a rule tints something and nothing measured the results. The
   sidebar's active row is the first such pairing (accent text on a 16% accent wash, 4.95:1) and
-  the ceiling is near — 22% fails — so a tint is a measured number, never an eyeballed one. #183
+  the ceiling is near — 22% fails — so a tint is a measured number, never an eyeballed one. #186
+  added three more of that form, for the table row's lift, and they say where the *neutral* tint's
+  ceiling is: `--muted` measures 5.34:1 on the 4% hover and 4.97:1 on the linked row's 7%, and 10%
+  would be 4.60:1. The muted half is the binding one in a table and has no counterpart in the
+  sidebar, where a row's label is `--muted` or `--accent` and never both. #183
   added the first pairings that are **not text at all** — the gateway dot in each of its three
   tones — and with them `NON_TEXT` (3:1, WCAG 1.4.11), a separate name for the same number
   `AA_LARGE` carries, because reading "large" beside a dot invites someone to "fix" a failure by

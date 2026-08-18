@@ -540,17 +540,26 @@ html {
   border-radius: var(--radius-lg);
 }
 
-/* -- Sizes: padding only -------------------------------------------------- */
+/* -- Sizes: padding only --------------------------------------------------
+
+   Each size also names its own padding as `--card-pad` (Story #186). The
+   header strip below has to bleed out to the card's edges, and a negative
+   margin cannot read a shorthand back off the box — so the length is stated
+   twice rather than derived. It is stated in all three rather than defaulted
+   on `.card`, so a size is one place to read and one place to change. */
 
 .card-sm {
+  --card-pad: var(--surface-pad-sm);
   padding: var(--surface-pad-sm);
 }
 
 .card-md {
+  --card-pad: var(--surface-pad-md);
   padding: var(--surface-pad-md);
 }
 
 .card-lg {
+  --card-pad: var(--surface-pad-lg);
   padding: var(--surface-pad-lg);
 }
 
@@ -574,12 +583,40 @@ html {
    `.snapshot-history h2` — and sentence case wins: it was already fourteen of
    the fifteen call sites, and uppercase-with-tracking is the app's treatment
    for a *label* naming one figure (`.balance-label`, `.stat-label`,
-   `.highlight-label`), which is a different job. No `font-weight`: the `h2`
-   default is what both superseded rules rendered. */
+   `.highlight-label`), which is a different job.
+
+   Full ink at 600 since Story #186. It was `--muted` at the `h2` weight, which
+   is the reading of a title that sits *inside* the body it names; the redesign
+   makes the header a ruled strip of its own, and a muted title on a ruled strip
+   reads as a disabled one. The uppercase/sentence-case distinction above is
+   untouched — this is the same treatment, in the ink the redesign gives it. */
 .card-title {
   margin: 0 0 var(--space-5);
   font-size: var(--text-sm);
-  color: var(--muted);
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* -- The header strip (Story #186, DDR-0059) ------------------------------
+
+   The redesign's card is a surface with a *ruled strip* across its top: title
+   left, whatever the card offers to do with itself right, a 1px rule below,
+   and the body in its own region under that. The rule has to reach both edges
+   or it reads as an underline on the title rather than as a division of the
+   card, so the strip cancels the card's own inline padding with a negative
+   margin and re-applies it as its own — which is what `--card-pad` is for, and
+   why the strip works at all three sizes without a call site naming one.
+
+   Two selectors, because a card states its title two ways and the reader must
+   not be able to tell which: `CardHeader` where something sits beside the
+   title, and a bare `CardTitle` where nothing does — nine of the sixteen
+   titles in the app. `:not(:last-child)` keeps a card that is *only* a title out of it —
+   a strip with nothing under it is a rule drawn across the bottom of a card. */
+.card-header,
+.card > .card-title:not(:last-child) {
+  margin: calc(-1 * var(--card-pad)) calc(-1 * var(--card-pad)) var(--card-pad);
+  padding: var(--space-5) var(--card-pad);
+  border-bottom: 1px solid var(--border);
 }
 
 /* A title beside what the card offers to do with itself. */
@@ -588,7 +625,6 @@ html {
   justify-content: space-between;
   gap: var(--space-5);
   flex-wrap: wrap;
-  margin-bottom: var(--space-5);
 }
 
 .card-header-center {
@@ -606,9 +642,13 @@ html {
 }
 
 /* A header that is the whole card — the import panel before anything has been
-   imported — owns no gap below itself. */
+   imported — is not a strip at all: there is no body for it to be divided
+   from, so it gives back the negative margin, the padding and the rule, and
+   the card is left as the plain padded surface it was. */
 .card-header:last-child {
-  margin-bottom: 0;
+  margin: 0;
+  padding: 0;
+  border-bottom: none;
 }
 
 /* The body is a scope, not decoration: the override `.panel` used to declare on
@@ -1126,15 +1166,23 @@ html {
 }
 
 /* Sticky costs nothing on an uncapped table — with no scrollable range there is
-   nothing to stick to — so it is declared once here rather than twice. */
+   nothing to stick to — so it is declared once here rather than twice.
+
+   The column head is the redesign's micro-label since Story #186: one step
+   smaller and one step wider-tracked than the rest of the app's uppercase
+   labels. `--text-2xs` is the scale's 11px, which is the size the redesign
+   names, and the extra tracking is what keeps eleven-pixel capitals legible —
+   the two only work as a pair, the same argument the figure role makes for its
+   three properties (DDR-0053). It stays `--muted` and stays 600: this is a
+   quieter label, not a fainter one. */
 .data-table thead th {
   position: sticky;
   top: 0;
   background: var(--card);
   color: var(--muted);
   font-weight: 600;
-  font-size: var(--text-xs);
-  letter-spacing: 0.04em;
+  font-size: var(--text-2xs);
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
@@ -1143,12 +1191,41 @@ html {
   border-bottom: none;
 }
 
+/* The row under the pointer (Story #186). A reading aid on every table in the
+   app and nothing more — a wide row of figures is easy to slip a line on, and
+   the lift is what ties a ticker at the left edge to the P&L at the right.
+
+   It is CSS rather than the prototype's `onMouseEnter`/`onMouseLeave` pair,
+   which would put a re-render behind every pointer move across a 260-row trade
+   history. The transition is `--duration-fast`: the pointer is already on the
+   row (DDR-0044), and under `prefers-reduced-motion` the token is 0ms, so the
+   lift lands instantly rather than not at all.
+
+   Scoped to `tbody`, so the sticky header keeps the opaque `--card` it needs to
+   cover the rows scrolling under it. */
+.data-table tbody tr > th,
+.data-table tbody tr > td {
+  transition: background-color var(--duration-fast) var(--ease-out);
+}
+
+.data-table tbody tr:hover > th,
+.data-table tbody tr:hover > td {
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+}
+
 /* The row linked to something outside the table — the donut slice under the pointer, in the
    one view that pairs them (Story #147, DDR-0040). Neutral rather than accent-tinted: the row
    is being pointed at, not selected, and the accent already means "this column holds the
-   sort" two rows above. */
-.data-table-row-active > th,
-.data-table-row-active > td {
+   sort" two rows above.
+
+   Louder than the hover above, and scoped to match its specificity so it wins
+   on source order (Story #186). Both states are on the same row whenever the
+   pointer is what linked it, and the link is the stronger claim: the hover says
+   "you are reading this line", the emphasis says "this line is the wedge you
+   are pointing at". Unscoped, the hover's extra element selectors would have
+   quietly overridden it — in the pointer case, which is the common one. */
+.data-table tbody tr.data-table-row-active > th,
+.data-table tbody tr.data-table-row-active > td {
   background: color-mix(in srgb, var(--text) 7%, transparent);
 }
 

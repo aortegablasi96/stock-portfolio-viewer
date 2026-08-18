@@ -351,6 +351,44 @@ export const PAIRINGS: readonly Pairing[] = [
       'The quietest of the three, and the one a future dimming of --muted would break first. ' +
       'It is also the resting state of a fresh launch, so it is the mark most often on screen.',
   },
+  /**
+   * The three pairings Story #186 added: a table row's ink on the lift the row takes under the
+   * pointer, and on the stronger lift the linked row takes (DDR-0059).
+   *
+   * The same form as the sidebar's hover, and listed for the same reason — a lift lightens the
+   * surface *under* the ink, so a hovered row is always the row's worse state and a later story
+   * raising the lift would otherwise go unmeasured. What the sidebar's entry has no counterpart
+   * for is the muted half: a nav row's label is either --muted or --accent and never both, while
+   * a table row carries --text figures and --muted secondary cells on the same tinted background.
+   * That half is where the headroom actually is — --text is 13.81:1 on the hover lift, --muted is
+   * 5.34:1, and on the linked row's 7% it is 4.97:1. 10% would measure 4.60:1, so the ceiling on
+   * this family is close enough that the next story to reach for a louder row has to measure it.
+   */
+  {
+    where: '.data-table tbody tr:hover — a cell’s figures on the row lift',
+    foreground: { token: '--text' },
+    background: { mix: { token: '--text', percent: 4, over: '--card' } },
+    minimum: AA_NORMAL,
+    reason: 'The hovered row is the row’s worse state, so it is the one worth pinning.',
+  },
+  {
+    where: '.data-table tbody tr:hover — a muted secondary cell on the same lift',
+    foreground: { token: '--muted' },
+    background: { mix: { token: '--text', percent: 4, over: '--card' } },
+    minimum: AA_NORMAL,
+    reason:
+      'The faintest ink a table renders — a description, a statement’s period — on the tint every ' +
+      'table in the app now carries. The binding half of the hover.',
+  },
+  {
+    where: '.data-table-row-active — a muted secondary cell on the linked row’s stronger lift',
+    foreground: { token: '--muted' },
+    background: { mix: { token: '--text', percent: 7, over: '--card' } },
+    minimum: AA_NORMAL,
+    reason:
+      'The loudest lift in the family under the faintest ink in a table: the two together are ' +
+      'what decides how far the linked row may be pushed (DDR-0040).',
+  },
   {
     where: '.chart-axis-label — SVG <text> on a chart card',
     foreground: { token: '--chart-axis' },

@@ -98,6 +98,57 @@ describe('the stylesheet backs every declared variant, size, alignment and part'
     }
   })
 
+  /**
+   * Every size also names its padding as `--card-pad` (Story #186, DDR-0059). The header strip
+   * cancels the card's inline padding and re-applies it as its own, so the rule that bleeds it out
+   * to the card's edges has to know a length that only the *size* rules carry — and a shorthand
+   * cannot be read back off the box. Stated in all three rather than defaulted on `.card`, so a
+   * size is one place to read; a size that grows a padding and forgets the variable would draw its
+   * strip at the wrong width, which is the failure this catches.
+   */
+  it('names each size’s padding again as --card-pad, for the strip to bleed against', () => {
+    for (const size of CARD_SIZES) {
+      const rule = new RegExp(`^\\.card-${size} \\{([^}]*)\\}`, 'm').exec(CSS)?.[1] ?? ''
+      expect(rule, size).toContain(`--card-pad: var(--surface-pad-${size})`)
+    }
+  })
+
+  /**
+   * The ruled header strip (Story #186, DDR-0059), and the property that makes it one treatment
+   * rather than two: a card states its title either as a `CardHeader` or as a bare `CardTitle`,
+   * and the reader must not be able to tell which. Both selectors carry the same three
+   * declarations, in one rule, for the same reason the figure role is one rule (DDR-0053).
+   */
+  it('draws one strip, for a header and for a bare title alike', () => {
+    const strip =
+      /^\.card-header,\n\.card > \.card-title:not\(:last-child\) \{([^}]*)\}/m.exec(CSS)?.[1] ?? ''
+    expect(strip).not.toBe('')
+    expect(strip).toContain('border-bottom: 1px solid var(--border)')
+    // Out to both edges and back again: the negative margin is the card's own padding.
+    expect(strip).toContain('margin: calc(-1 * var(--card-pad)) calc(-1 * var(--card-pad))')
+    expect(strip).toContain('padding: var(--space-5) var(--card-pad)')
+  })
+
+  /**
+   * A header that is the whole card — the import panel before anything has been imported — is not
+   * a strip: there is no body for it to be divided from, so it gives all three back. Without this
+   * the panel would carry a rule across its bottom edge with nothing beneath it.
+   */
+  it('un-draws the strip where the header is the whole card', () => {
+    const rule = /^\.card-header:last-child \{([^}]*)\}/m.exec(CSS)?.[1] ?? ''
+    expect(rule).toContain('margin: 0')
+    expect(rule).toContain('padding: 0')
+    expect(rule).toContain('border-bottom: none')
+  })
+
+  /** The title sits *on* the strip now, so it carries the page's ink rather than the muted tone. */
+  it('gives the title full ink at the semibold weight', () => {
+    const rule = /^\.card-title \{([^}]*)\}/m.exec(CSS)?.[1] ?? ''
+    expect(rule).toContain('color: var(--text)')
+    expect(rule).toContain('font-weight: 600')
+    expect(rule).toContain('font-size: var(--text-sm)')
+  })
+
   it('leaves the focus ring to the base rule, so no card can ring differently', () => {
     const cardRules = [...CSS.matchAll(/^\.card[\w-]*[^{]*\{([^}]*)\}/gm)].map((m) => m[1] ?? '')
     expect(cardRules.length).toBeGreaterThan(0)

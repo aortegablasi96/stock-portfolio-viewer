@@ -43,6 +43,15 @@ function ruleBody(selector: string): string {
   return new RegExp(`^\\${selector} \\{([^}]*)\\}`, 'm').exec(CSS)?.[1] ?? ''
 }
 
+/**
+ * The body of a rule whose selector list is exactly these, one per line — the shape every
+ * cell-level rule in this primitive has, since a `<th>` and a `<td>` are always styled together.
+ */
+function groupBody(...selectors: string[]): string {
+  const pattern = selectors.map((selector) => selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+  return new RegExp(`^${pattern.join(',\\n')} \\{([^}]*)\\}`, 'm').exec(CSS)?.[1] ?? ''
+}
+
 describe('dataTableScrollClassName', () => {
   it('is the bare container by default — a table inside a card body adds nothing', () => {
     expect(DEFAULT_DATA_TABLE_SURFACE).toBe('inline')
@@ -141,7 +150,24 @@ describe('dataTableRowClassName', () => {
   })
 
   it('is backed by a rule that tints the cells rather than the row box', () => {
-    expect(CSS).toMatch(/^\.data-table-row-active > th,\n\.data-table-row-active > td \{/m)
+    expect(CSS).toMatch(
+      /^\.data-table tbody tr\.data-table-row-active > th,\n\.data-table tbody tr\.data-table-row-active > td \{/m,
+    )
+  })
+
+  /**
+   * The linked row and the hovered row are the same row whenever the pointer is what linked it
+   * (Story #186), so the two rules meet on every pointer move in the Allocation breakdown. The
+   * emphasis has to win, and it wins the way CSS decides: equal specificity, later in the file.
+   * Before the row hover existed the active rule was unscoped, and `tbody tr:hover > th` carries
+   * two more element selectors than `.data-table-row-active > th` — it would have taken the row
+   * over silently, in the common case, leaving the link visible only from the keyboard.
+   */
+  it('lets the linked row out-weigh the hover it sits under', () => {
+    const hover = CSS.indexOf('.data-table tbody tr:hover > th')
+    const active = CSS.indexOf('.data-table tbody tr.data-table-row-active > th')
+    expect(hover).toBeGreaterThan(-1)
+    expect(active).toBeGreaterThan(hover)
   })
 })
 
@@ -172,7 +198,54 @@ describe('the stylesheet backs the primitive', () => {
       /^\.data-table th,\n\.data-table td \{[^}]*padding: var\(--space-4\) var\(--space-5\);/m,
     )
     expect(ruleBody('.data-table')).toContain('font-size: var(--text-sm)')
-    expect(ruleBody('.data-table thead th')).toContain('font-size: var(--text-xs)')
+    expect(ruleBody('.data-table thead th')).toContain('font-size: var(--text-2xs)')
+  })
+
+  /**
+   * The column head is the redesign's 11px micro-label (Story #186, DDR-0059), and the two halves
+   * of it are asserted together because they only work together: `--text-2xs` alone is small
+   * capitals set at the tracking of a body face, which is the thing eleven-pixel uppercase cannot
+   * survive. It is the same argument the figure role makes for its three properties (DDR-0053),
+   * and the same shape of assertion.
+   */
+  it('sets the column head one step smaller and one step wider-tracked', () => {
+    const head = ruleBody('.data-table thead th')
+    expect(head).toContain('font-size: var(--text-2xs)')
+    expect(head).toContain('letter-spacing: 0.06em')
+    expect(head).toContain('text-transform: uppercase')
+    // Quieter, not fainter: the size step is the change, the ink is not.
+    expect(head).toContain('color: var(--muted)')
+    expect(head).toContain('font-weight: 600')
+  })
+
+  /**
+   * The row hover (Story #186). CSS rather than the prototype's `onMouseEnter`/`onMouseLeave`
+   * pair, which re-renders a 260-row table on every pointer move — the assertion that it is a
+   * rule at all is in `DataTable`'s own scan below.
+   *
+   * `--duration-fast` is the token, not a number: it is the one that reduced motion zeroes
+   * (DDR-0044), and a raw duration here would be a lift that keeps animating when the reader has
+   * asked for none. `background-color` rather than `background`, so the transition names the one
+   * property that changes.
+   */
+  it('lifts the hovered row in CSS, on the fast duration', () => {
+    const hover = groupBody('.data-table tbody tr:hover > th', '.data-table tbody tr:hover > td')
+    expect(hover).toContain('background: color-mix(in srgb, var(--text) 4%, transparent)')
+    const transition = groupBody('.data-table tbody tr > th', '.data-table tbody tr > td')
+    expect(transition).toContain('transition: background-color var(--duration-fast)')
+  })
+
+  /**
+   * The trailing rule the redesign drops was already absent — `tbody tr:last-child` clears it —
+   * and this pins it against a restyle that reaches for `border-bottom` on the table instead.
+   * The header's own rule is the same declaration on `thead th`, which the base cell rule gives
+   * it for free.
+   */
+  it('rules between rows and under the head, but not after the last row', () => {
+    expect(groupBody('.data-table th', '.data-table td')).toContain('border-bottom: 1px solid')
+    expect(
+      groupBody('.data-table tbody tr:last-child th', '.data-table tbody tr:last-child td'),
+    ).toContain('border-bottom: none')
   })
 
   /**
@@ -270,5 +343,30 @@ describe('the superseded table rules are gone', () => {
    */
   it('lets the breakdown split size both its children instead', () => {
     expect(CSS).toMatch(/^\.breakdown-split > \* \{[^}]*min-width: 0;/m)
+  })
+})
+
+/**
+ * The component, read as text (Story #186). The row hover is a stylesheet rule, and the one way
+ * to lose that is the shape the redesign's prototype ships: `onMouseEnter`/`onMouseLeave` writing
+ * `currentTarget.style.background`. The pointer handlers themselves stay — they are how a row
+ * reports the slice it is linked to (DDR-0040), which is data and not decoration — so what this
+ * scans for is a component *writing a style*, not a component listening to a pointer.
+ */
+describe('the row hover belongs to the stylesheet', () => {
+  const TSX = readFileSync(new URL('../components/ui/DataTable.tsx', import.meta.url), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '')
+
+  it('sets no inline style and reads back no element style', () => {
+    expect(TSX).not.toMatch(/\bstyle=\{/)
+    expect(TSX).not.toContain('.style.')
+  })
+
+  /** The handlers that stay, and what they are for. */
+  it('keeps the pointer and focus handlers that report the linked row', () => {
+    for (const handler of ['onMouseEnter', 'onMouseLeave', 'onFocus', 'onBlur']) {
+      expect(TSX, handler).toContain(`${handler}={linked ?`)
+    }
   })
 })
