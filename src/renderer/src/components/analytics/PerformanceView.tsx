@@ -65,7 +65,11 @@ export function PerformanceView(): React.JSX.Element {
   // The range selection stays above the shell: it is the view's own state, and the shell holds
   // none, so it survives a tab switch exactly as it did (DDR-0027).
   return (
-    <AnalyticsShell<PerformanceReport> subject="performance" analytics={analytics}>
+    <AnalyticsShell<PerformanceReport>
+      title="Performance"
+      subject="performance"
+      analytics={analytics}
+    >
       {(r) => {
         const c = (v: number): string => formatCurrency(v, r.baseCurrency)
 

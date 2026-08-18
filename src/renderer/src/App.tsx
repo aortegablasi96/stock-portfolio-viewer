@@ -98,28 +98,6 @@ function sameCodes(a: readonly string[], b: readonly string[]): boolean {
 const tabDomId = (id: Tab): string => `tab-${id}`
 const panelDomId = (id: Tab): string => `panel-${id}`
 
-/** Header + layout wrapper for an analytics tab, matching the dashboard chrome. */
-function AnalyticsPage({
-  title,
-  children,
-}: {
-  title: string
-  children: React.ReactNode
-}): React.JSX.Element {
-  return (
-    <main className="dashboard">
-      <header className="dashboard-header">
-        <div>
-          <p className="eyebrow">Stock Portfolio Viewer</p>
-          <h1>{title}</h1>
-        </div>
-        <p className="source-note">From imported Flex Query data</p>
-      </header>
-      {children}
-    </main>
-  )
-}
-
 export function App(): React.JSX.Element {
   const [tab, setTab] = useState<Tab>('portfolio')
   // Which analytics tabs have been opened at least once — the set of views that exist in the
@@ -221,11 +199,18 @@ export function App(): React.JSX.Element {
     [tab, select],
   )
 
-  /** An analytics tab's panel: rendered from first visit, then hidden while another tab is active. */
-  const panel = (id: Tab, title: string, view: React.ReactNode): React.JSX.Element | null =>
+  /**
+   * An analytics tab's panel: rendered from first visit, then hidden while another tab is active.
+   *
+   * It wraps the view and nothing else. The page box and its header used to be added here, by an
+   * `AnalyticsPage` component that was a second implementation of the dashboard's own header;
+   * since Story #185 the view brings both with it through `AnalyticsShell`, which is what lets the
+   * title render in the three branches that have no report (DDR-0058).
+   */
+  const panel = (id: Tab, view: React.ReactNode): React.JSX.Element | null =>
     visited.has(id) ? (
       <TabPanel id={id} hidden={tab !== id}>
-        <AnalyticsPage title={title}>{view}</AnalyticsPage>
+        {view}
       </TabPanel>
     ) : null
 
@@ -333,10 +318,10 @@ export function App(): React.JSX.Element {
               <FlexImport />
             </TabPanel>
           )}
-          {panel('performance', 'Performance', <PerformanceView />)}
-          {panel('allocation', 'Allocation', <AllocationView />)}
-          {panel('dividends', 'Dividends', <DividendsView />)}
-          {panel('trades', 'Trades & realized gains', <TradeHistoryView />)}
+          {panel('performance', <PerformanceView />)}
+          {panel('allocation', <AllocationView />)}
+          {panel('dividends', <DividendsView />)}
+          {panel('trades', <TradeHistoryView />)}
         </div>
       </div>
     </div>

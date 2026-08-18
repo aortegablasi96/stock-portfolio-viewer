@@ -173,7 +173,11 @@ export function DividendsView(): React.JSX.Element {
   const analytics = useAnalytics<DividendResult>(window.api.getDividends)
 
   return (
-    <AnalyticsShell<DividendReport> subject="dividends" analytics={analytics}>
+    <AnalyticsShell<DividendReport>
+      title="Dividends"
+      subject="dividends"
+      analytics={analytics}
+    >
       {(r) => {
         const c = (v: number): string => formatCurrency(v, r.baseCurrency)
 

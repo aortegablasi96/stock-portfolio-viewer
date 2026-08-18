@@ -32,10 +32,12 @@ import { DataTable, type DataColumn } from '../ui/DataTable'
 export function TradeHistoryView(): React.JSX.Element {
   const analytics = useAnalytics<RealizedGainsResult>(window.api.getRealizedGains)
 
-  // The subject and the refresh label differ here, and only here: the view loads "trade history"
-  // while the bar refreshes "trades and realized gains", which is what the page actually holds.
+  // This is the view where all three of the shell's nouns disagree, which is why they are three
+  // props rather than one: the page is titled "Trades & realized gains", it loads "trade history",
+  // and the Refresh action refreshes "trades and realized gains".
   return (
     <AnalyticsShell<RealizedGainsReport>
+      title="Trades & realized gains"
       subject="trade history"
       refreshLabel="trades and realized gains"
       analytics={analytics}

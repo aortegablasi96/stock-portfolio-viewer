@@ -103,8 +103,17 @@ describe('the wording derived from the subject noun', () => {
 describe('no analytics view restates the shell', () => {
   const VIEWS = ['PerformanceView', 'AllocationView', 'DividendsView', 'TradeHistoryView']
 
+  /**
+   * The source with its comments removed — the trap DDR-0042 and DDR-0047 both record, and one
+   * this file walked straight into when Story #185 added its guards: the views and `App.tsx`
+   * explain in prose exactly what they must not contain, so an unstripped read fails on the
+   * sentence saying a thing is gone.
+   */
+  const strip = (code: string): string =>
+    code.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+
   const source = (view: string): string =>
-    readFileSync(new URL(`../components/analytics/${view}.tsx`, import.meta.url), 'utf8')
+    strip(readFileSync(new URL(`../components/analytics/${view}.tsx`, import.meta.url), 'utf8'))
 
   it.each(VIEWS)('%s does not re-declare the four-branch guard', (view) => {
     const code = source(view)
@@ -114,10 +123,39 @@ describe('no analytics view restates the shell', () => {
     expect(code).not.toContain('<NeedsImport')
   })
 
-  it.each(VIEWS)('%s does not re-declare the wrapper or the refresh bar', (view) => {
+  it.each(VIEWS)('%s does not re-declare the wrapper or the refresh action', (view) => {
     const code = source(view)
     expect(code).not.toContain('className="analytics-view"')
+    // `RefreshBar` was the component that carried the reading time and the Refresh button in a
+    // row of its own; Story #185 folded both into the page header. Both names are guarded, so a
+    // view cannot bring back either the old control or the new one.
     expect(code).not.toContain('<RefreshBar')
+    expect(code).not.toContain('<PageHeader')
+  })
+
+  /**
+   * The header half of the guard (Story #185, DDR-0058). The shell renders the title in *all
+   * four* branches — a view that failed to load should still say which view it is — which it can
+   * only do by owning the page box the header sits in. A view that draws its own `<main>`, its own
+   * `<h1>` or its own dashboard wrapper has taken that back without meaning to.
+   */
+  it.each(VIEWS)('%s does not re-declare the page box or its heading', (view) => {
+    const code = source(view)
+    expect(code).not.toContain('<main')
+    expect(code).not.toContain('<h1')
+    expect(code).not.toContain('className="dashboard"')
+  })
+
+  /**
+   * `AnalyticsPage` in `App.tsx` was the second implementation of the dashboard's header — the
+   * thing Story #185 removed. The shell is the only place a title may be attached to a view now,
+   * so the shell is where the shell's own titles have to come from.
+   */
+  it('App does not wrap an analytics panel in a page of its own', () => {
+    const app = strip(readFileSync(new URL('../App.tsx', import.meta.url), 'utf8'))
+    expect(app).not.toContain('AnalyticsPage')
+    expect(app).not.toContain('className="dashboard"')
+    expect(app).not.toContain('<h1')
   })
 
   /**
