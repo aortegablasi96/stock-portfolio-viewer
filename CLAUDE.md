@@ -4,14 +4,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current Repository State
 
-**M0–M3 are merged and closed; refinement continues under M4.** Scaffolding (M0), the
-read-only portfolio dashboard (M1), historical snapshots (M2), and the performance &
-allocation analytics (M3) are all on `main`. The app boots, connects to the Interactive
-Brokers Client Portal Gateway, renders live holdings/balances/allocation in a user-selected
-display currency, captures immutable snapshots (on open + on demand), imports IBKR Flex Query
-statements into local history, and renders four analytics views over that imported data
-(performance, allocation, dividends, realized gains & trade history). A tab shell switches
-between the live Portfolio dashboard and the analytics views.
+**M0–M4 are delivered; work is now under M5 — Visual redesign.** Scaffolding (M0), the
+read-only portfolio dashboard (M1), historical snapshots (M2), the performance & allocation
+analytics (M3) and the analytics-refinement milestone (M4) are all on `main`. The app boots,
+connects to the Interactive Brokers Client Portal Gateway, renders live
+holdings/balances/allocation in a user-selected display currency, captures immutable snapshots
+(on open + on demand), imports IBKR Flex Query statements into local history, and renders four
+analytics views over that imported data (performance, allocation, dividends, realized gains &
+trade history). A tab shell switches between the live Portfolio dashboard and the analytics
+views.
+
+**M5 restyles all of that** — it adopts a Figma Make proposal across every view, and its
+foundation stories have landed: bundled typefaces with a figure role (#180, DDR-0053) and the
+navy/indigo palette re-key (#181, DDR-0054). What is queued matters more than usual to the rest
+of this file, because the next stories **replace the tab strip with a vertical sidebar**: the
+WAI-ARIA tabs pattern described below is kept, not dropped, but DDR-0029 is the one structural
+invariant here with an open story against it. Read that story before treating the tab shell's
+layout as settled — its *semantics* are settled either way.
 
 **Every view has been reworked several times, and refinement is ongoing — so read the backlog
 before assuming a view is final.** Which Epics are open is deliberately **not recorded here**:
