@@ -91,6 +91,15 @@ export function brightness(hex: string, factor: number): string {
 export const AA_NORMAL = 4.5
 export const AA_LARGE = 3
 
+/**
+ * The threshold for a graphic that carries meaning (WCAG 1.4.11 Non-text Contrast).
+ *
+ * Numerically the same 3:1 as large text and deliberately a separate name: a mark held to this
+ * bar is one whose *shape* is the information, and reading `AA_LARGE` beside a dot that contains
+ * no text would invite someone to "fix" it by making the dot bigger.
+ */
+export const NON_TEXT = 3
+
 /** A colour used directly, or a token name resolved from `:root`. */
 /**
  * A colour named three ways: a `:root` token, a literal, or a token mixed into a surface.
@@ -304,6 +313,43 @@ export const PAIRINGS: readonly Pairing[] = [
     reason:
       'Listed although it passes wide: the hover lightens the surface under the ink, so it is ' +
       'the row’s worse state, and a later story raising the lift would otherwise go unmeasured.',
+  },
+  /**
+   * The three pairings Story #183 added: the gateway dot, in each of its tones (DDR-0056).
+   *
+   * They are the first entries in this list that are **not text**, which is why they carry
+   * {@link NON_TEXT} rather than an AA threshold. The dot is the badge's colour channel and never
+   * its only one — every outcome has its own wording — but a mark that cannot be seen against the
+   * sidebar is not a second channel at all, and 3:1 is the bar that says it can be.
+   *
+   * The warn tone is the half of the loss split this list has the least coverage of: `--neg` as a
+   * *fill* appears here and in `.btn-danger:hover` and nowhere else, and unlike that one it is not
+   * measured against a label sitting on it — it is measured against the surface it sits on.
+   */
+  {
+    where: '.gateway-dot in .gateway-badge-live — the "answering" mark on the sidebar',
+    foreground: { token: '--pos' },
+    background: { token: '--card' },
+    minimum: NON_TEXT,
+    reason: 'A graphic that carries state has to be distinguishable from the surface behind it.',
+  },
+  {
+    where: '.gateway-dot in .gateway-badge-warn — the stalled/unavailable mark',
+    foreground: { token: '--neg' },
+    background: { token: '--card' },
+    minimum: NON_TEXT,
+    reason:
+      'The fill half of the loss split (DDR-0046), measured against its surface rather than ' +
+      'against a label on it: 3.94:1, which clears 1.4.11 and would not clear AA as text.',
+  },
+  {
+    where: '.gateway-dot in .gateway-badge-idle — not running, or a reading that has aged out',
+    foreground: { token: '--muted' },
+    background: { token: '--card' },
+    minimum: NON_TEXT,
+    reason:
+      'The quietest of the three, and the one a future dimming of --muted would break first. ' +
+      'It is also the resting state of a fresh launch, so it is the mark most often on screen.',
   },
   {
     where: '.chart-axis-label — SVG <text> on a chart card',

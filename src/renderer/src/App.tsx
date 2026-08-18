@@ -1,7 +1,9 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { TitleBar } from './components/TitleBar'
 import { PortfolioDashboard } from './components/PortfolioDashboard'
 import { FlexImport } from './components/FlexImport'
+import { CurrencySelector } from './components/CurrencySelector'
+import { GatewayBadge, SidebarBrand } from './components/SidebarRail'
 import { PerformanceView } from './components/analytics/PerformanceView'
 import { AllocationView } from './components/analytics/AllocationView'
 import { DividendsView } from './components/analytics/DividendsView'
@@ -14,6 +16,7 @@ import {
   TradesIcon,
 } from './components/TabIcons'
 import { nextTabIndex } from './lib/tabKeyboard'
+import type { GatewayReading } from './lib/gatewayStatus'
 
 /**
  * Application root. A lightweight tab shell (Milestone M3) switches between the live
@@ -45,6 +48,25 @@ import { nextTabIndex } from './lib/tabKeyboard'
  * Each tab also carries an icon (Story #168). It is a *second* channel: the label stays, and the
  * glyph is `aria-hidden`, so nothing about the pattern above — or about what a screen reader is
  * told — changes. See `components/TabIcons.tsx`.
+ *
+ * **Story #183 fills the column above and below that list**, and with it this component gains
+ * the app's standing context (DDR-0056). Three pieces of state moved up here, and each moved for
+ * the same reason: the sidebar outlives every view, while the Portfolio tab — the one component
+ * that knew any of this — unmounts on every switch away.
+ *
+ *   - `displayCurrency` is now the *app's* selection rather than the dashboard's, so it survives
+ *     a trip to Performance and back instead of resetting to EUR. The conversion itself is
+ *     untouched (DDR-0007); only the control's home moved.
+ *   - `heldCurrencies` is what the last overview reported holding, which is what the selector
+ *     offers beyond the base currency.
+ *   - `gateway` is the last thing the app learned about the gateway, which is what the badge
+ *     reports. Nothing polls — see `lib/gatewayStatus.ts` for why that is the source of truth.
+ *
+ * All three are plain `useState` in the shell rather than a store or a context, because the
+ * shell is already the only common ancestor of the sidebar and the dashboard. Both callbacks
+ * handed down are stable, and that is load-bearing rather than tidy: the dashboard's load effect
+ * depends on their identity, so a new function each render would re-run the read that produced
+ * the report that caused the render.
  */
 type Tab = 'portfolio' | 'performance' | 'allocation' | 'dividends' | 'trades'
 
@@ -55,6 +77,14 @@ const TABS: { id: Tab; label: string; icon: () => React.JSX.Element }[] = [
   { id: 'dividends', label: 'Dividends', icon: DividendsIcon },
   { id: 'trades', label: 'Trades', icon: TradesIcon },
 ]
+
+/** Display currency on first launch: the account's base currency (Story #28). */
+const BASE_DISPLAY_CURRENCY = 'EUR'
+
+/** Whether two currency lists hold the same codes, so a re-read that found nothing new re-renders nothing. */
+function sameCodes(a: readonly string[], b: readonly string[]): boolean {
+  return a.length === b.length && a.every((code, index) => code === b[index])
+}
 
 /** The two halves of each tab/panel pair, so `aria-controls` and `aria-labelledby` can't drift. */
 const tabDomId = (id: Tab): string => `tab-${id}`
@@ -87,6 +117,10 @@ export function App(): React.JSX.Element {
   // Which analytics tabs have been opened at least once — the set of views that exist in the
   // tree. It only ever grows, so a view is mounted once per session and never re-mounted.
   const [visited, setVisited] = useState<ReadonlySet<Tab>>(() => new Set<Tab>())
+  // The app's standing context (Story #183): what the sidebar reports, and what it controls.
+  const [displayCurrency, setDisplayCurrency] = useState(BASE_DISPLAY_CURRENCY)
+  const [heldCurrencies, setHeldCurrencies] = useState<readonly string[]>([])
+  const [gateway, setGateway] = useState<GatewayReading | null>(null)
   // The buttons themselves, so a keyboard move can put focus on the tab it selected. A roving
   // tabindex means the tab being left is about to stop being focusable, so focus has to be
   // moved deliberately rather than left to the browser.
@@ -96,6 +130,22 @@ export function App(): React.JSX.Element {
     setTab(id)
     setVisited((prev) => (prev.has(id) ? prev : new Set(prev).add(id)))
   }, [])
+
+  /**
+   * What the dashboard found the account holding, reported after each overview read.
+   *
+   * The same-codes guard is not an optimisation for its own sake: without it every re-read
+   * replaces an identical array, which re-renders the shell and every mounted view for nothing.
+   */
+  const onCurrenciesFound = useCallback((codes: readonly string[]): void => {
+    setHeldCurrencies((prev) => (sameCodes(prev, codes) ? prev : codes))
+  }, [])
+
+  /** The base currency, whatever is selected, and every currency actually held. */
+  const currencyOptions = useMemo(
+    () => [...new Set([BASE_DISPLAY_CURRENCY, displayCurrency, ...heldCurrencies])].sort(),
+    [displayCurrency, heldCurrencies],
+  )
 
   /**
    * Arrow / Home / End movement along the tablist.
@@ -141,6 +191,15 @@ export function App(): React.JSX.Element {
           the window instead of running under the sidebar (DDR-0055). */}
       <div className="app-body">
         <nav className="app-sidebar" aria-label="Primary">
+          {/* The context rail: what the app is, and whether the source behind it is answering
+              (Story #183, DDR-0056). Above the list because both are true of the app rather than
+              of any one view — and the list is the part that gives if the column ever runs short,
+              so nothing here can be pushed out of sight. */}
+          <div className="app-sidebar-head">
+            <SidebarBrand />
+            <GatewayBadge reading={gateway} />
+          </div>
+
           <div
             className="app-sidebar-tabs"
             role="tablist"
@@ -182,12 +241,29 @@ export function App(): React.JSX.Element {
               )
             })}
           </div>
+
+          {/* Pinned to the bottom of the column (Story #183). It drives `portfolio:getOverview`'s
+              display currency exactly as it did from the dashboard header; what changed is that
+              the selection now outlives the view it converts, since the Portfolio tab unmounts on
+              every switch away (DDR-0007, DDR-0027). */}
+          <div className="app-sidebar-foot">
+            <CurrencySelector
+              className="app-currency"
+              value={displayCurrency}
+              options={currencyOptions}
+              onChange={setDisplayCurrency}
+            />
+          </div>
         </nav>
 
         <div className="app-content">
           {tab === 'portfolio' && (
             <TabPanel id="portfolio">
-              <PortfolioDashboard />
+              <PortfolioDashboard
+                displayCurrency={displayCurrency}
+                onCurrenciesFound={onCurrenciesFound}
+                onGatewayReading={setGateway}
+              />
               <FlexImport />
             </TabPanel>
           )}

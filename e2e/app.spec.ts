@@ -50,10 +50,12 @@ test('the display-currency control is labelled and keyboard-reachable (Story #13
   // accessible name — which is what a screen reader announces — rather than by a class.
   const currency = page.getByLabel('Display currency')
   await expect(currency).toBeVisible()
-  // Enabled, not merely visible (Bug #142). The dashboard disables the selector while its first
-  // overview load is in flight (DDR-0007), and `focus()` waits for the element to be attached,
-  // not for it to be actionable — so focusing it a moment too early is a silent no-op that the
-  // `toBeFocused` retry can never recover from, because nothing focuses it a second time.
+  // Enabled, not merely visible (Bug #142). The dashboard used to disable the selector while its
+  // first overview load was in flight, and `focus()` waits for the element to be attached, not
+  // for it to be actionable — so focusing it a moment too early was a silent no-op the
+  // `toBeFocused` retry could never recover from. Story #183 moved the control to the sidebar,
+  // where it is never disabled at all (it has to work while the view it converts is unmounted),
+  // so this now asserts that the disabling did not come back with the move.
   await expect(currency).toBeEnabled()
   await currency.focus()
   await expect(currency).toBeFocused()
@@ -77,6 +79,29 @@ test('shows the not-connected state when no IBKR gateway is running', async () =
   // to connect and the dashboard resolves to its not_connected state (ADR-0004).
   await expect(page.getByText('Not connected to Interactive Brokers')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible()
+})
+
+test('the sidebar rail reports the gateway state the app actually learned (Story #183)', async () => {
+  // The badge derives from the Portfolio view's own overview read — there is no second caller of
+  // the gateway and no timer (DDR-0022, DDR-0024). No gateway is running here, so that read
+  // resolved to not_connected and the badge has to say so.
+  const badge = page.locator('.gateway-badge')
+  await expect(badge).toContainText('IBKR Gateway')
+  // In words, not only in colour: "Not running" is a gateway that isn't there, and it must not be
+  // confusable with the stalled state, which reads "Stalled".
+  await expect(badge).toContainText('Not running')
+  await expect(badge).not.toContainText('Live')
+  await expect(badge).not.toContainText('Stalled')
+
+  // The brand mark carries the product's name, not the prototype's.
+  await expect(page.locator('.app-brand-name')).toHaveText('Stock Portfolio Viewer')
+})
+
+test('the display-currency control sits in the sidebar, not in the view (Story #183)', async () => {
+  const sidebar = page.locator('.app-sidebar')
+  await expect(sidebar.getByLabel('Display currency')).toHaveValue('EUR')
+  // Exactly one in the document: the dashboard header's copy is gone, not duplicated.
+  await expect(page.getByLabel('Display currency')).toHaveCount(1)
 })
 
 test('renders the snapshot history section, empty on a fresh database', async () => {
@@ -286,6 +311,11 @@ test('an analytics tab stays mounted after switching away, and comes back withou
   await page.getByRole('tab', { name: 'Performance' }).click()
   await expect(panels).toHaveCount(1)
   await expect(panels.locator('h1')).toHaveText('Performance')
+  // The sidebar outlives every view, which is the point of putting the app's standing context in
+  // it (Story #183): the Portfolio panel — and with it the dashboard that used to own this
+  // control — is not in the document at all right now.
+  await expect(page.locator('.app-sidebar').getByLabel('Display currency')).toBeVisible()
+  await expect(page.locator('#panel-portfolio')).toHaveCount(0)
   // No import has happened in this run, so the view resolves to its needs-import state.
   await expect(page.getByText('No imported data yet')).toBeVisible()
 
