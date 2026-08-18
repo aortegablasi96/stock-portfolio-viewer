@@ -61,12 +61,23 @@ export const AXIS_LABEL_UNITS = 11
 /**
  * The viewport width at or below which `.performance-charts` collapses to a single column.
  *
- * Chosen from the floor, not from a round number: a half-column chart at 1201px CSS px renders
- * its axis labels at 11.2px, and one pixel narrower is where they stop clearing
- * {@link MIN_AXIS_LABEL_PX}. It sits **below the 1280px default window width** on purpose, so a
- * fresh install opens on the grid rather than on the stack.
+ * Chosen from the floor, not from a round number: a half-column chart renders its axis labels at
+ * 11.2px one pixel above this, and one pixel below is where they stop clearing
+ * {@link MIN_AXIS_LABEL_PX}. The number that matters is the **content column**, which is still
+ * 1200px here — but the column is no longer the window. Story #182 put a 220px sidebar beside it
+ * (DDR-0055), so the same threshold is 1420px of *viewport*, and moving the two numbers together
+ * is what keeps the breakpoint meaning what it meant.
+ *
+ * The one thing that could not come across is DDR-0051's second property: 1200 sat **below** the
+ * 1280px default window, so a fresh install opened on the grid. 1420 does not, and no arithmetic
+ * makes it — at 1280px the content column is 1045px, and a half column of that renders a 9.7px
+ * axis label, which is under the floor whatever the breakpoint says. So a default window now
+ * opens Performance **stacked**, four full-width charts at a comfortable 20.7px label, and the
+ * 2×2 grid wants a window of 1421px or more. That is a real cost of the sidebar and it is
+ * recorded rather than absorbed; the two ways out — a wider default window, or a narrower
+ * sidebar — are both decisions about the shell, not about this module.
  */
-export const PERFORMANCE_GRID_BREAKPOINT_PX = 1200
+export const PERFORMANCE_GRID_BREAKPOINT_PX = 1420
 
 /** The floor an axis label may not render below: the app's smallest type is `--text-2xs`, 11.5px. */
 export const MIN_AXIS_LABEL_PX = 11
@@ -91,6 +102,7 @@ const CONTENT_MAX_PX = 1760 /* --content-max: 110rem */
 const CONTENT_PAD_PX = 32 /* --content-pad: 2rem, one side */
 const CARD_PAD_PX = 20 /* --surface-pad-md (--space-6: 1.25rem), one side */
 const GRID_GAP_PX = 24 /* --space-7: 1.5rem */
+const SIDEBAR_PX = 220 /* --sidebar-width, the shell's left column (Story #182) */
 
 /**
  * A classic Windows scrollbar. The analytics views are always taller than the window, so the
@@ -112,7 +124,11 @@ export function gridColumns(viewportPx: number): 1 | 2 {
  */
 export function chartWidthPx(viewportPx: number): number {
   const columns = gridColumns(viewportPx)
-  const content = Math.min(viewportPx - SCROLLBAR_PX, CONTENT_MAX_PX) - 2 * CONTENT_PAD_PX
+  // The sidebar comes off the top, before the measure caps anything: it is a fixed column beside
+  // the content, not part of it. Omitting it is the drift this story would otherwise have left —
+  // the arithmetic would keep passing while describing a layout that no longer exists.
+  const available = viewportPx - SIDEBAR_PX - SCROLLBAR_PX
+  const content = Math.min(available, CONTENT_MAX_PX) - 2 * CONTENT_PAD_PX
   const column = (content - (columns - 1) * GRID_GAP_PX) / columns
   return column - 2 * CARD_PAD_PX
 }

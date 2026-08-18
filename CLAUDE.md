@@ -15,12 +15,12 @@ trade history). A tab shell switches between the live Portfolio dashboard and th
 views.
 
 **M5 restyles all of that** — it adopts a Figma Make proposal across every view, and its
-foundation stories have landed: bundled typefaces with a figure role (#180, DDR-0053) and the
-navy/indigo palette re-key (#181, DDR-0054). What is queued matters more than usual to the rest
-of this file, because the next stories **replace the tab strip with a vertical sidebar**: the
-WAI-ARIA tabs pattern described below is kept, not dropped, but DDR-0029 is the one structural
-invariant here with an open story against it. Read that story before treating the tab shell's
-layout as settled — its *semantics* are settled either way.
+foundation stories have landed: bundled typefaces with a figure role (#180, DDR-0053), the
+navy/indigo palette re-key (#181, DDR-0054), and the **vertical sidebar** that replaced the
+horizontal tab strip (#182, DDR-0055). The WAI-ARIA tabs pattern described below was kept, not
+dropped — the rotation cost `aria-orientation` and Up/Down and nothing else. Two sidebar stories
+are still open (its context rail, and collapsing it), so the *column's contents* are not settled;
+its semantics and its 220px width are.
 
 **Every view has been reworked several times, and refinement is ongoing — so read the backlog
 before assuming a view is final.** Which Epics are open is deliberately **not recorded here**:
@@ -123,7 +123,7 @@ The current source tree (mirror it when adding features):
 src/
   main/          Electron main: entry (index.ts) + ipc/handlers.ts (thin, Zod-validated)
   preload/       contextBridge bridge → window.api (types + channel names only, no Zod)
-  renderer/      React + Vite UI (src/renderer/src/*; App tab shell under a custom
+  renderer/      React + Vite UI (src/renderer/src/*; App sidebar shell under a custom
                  TitleBar, components/ + components/analytics/ (views, their use*
                  hooks, shared filter controls) + components/charts/ +
                  components/ui/ (shared primitives, Epic #125) +
@@ -168,15 +168,21 @@ Canonical flows to copy when adding a feature:
   withdrawals don't move it (DDR-0013). They are sized by **aspect ratio** (the `viewBox`), never
   a pixel width, because they scale to a shared `--content-max` column (DDR-0018). The Performance
   view's four charts render **together, in a 2×2 grid** under one `RangeFilter` (Story #172,
-  DDR-0051) — they answer one question between them, so the switcher that showed one at a time is
+  DDR-0051, breakpoint amended by DDR-0055) — they answer one question between them, so the switcher that showed one at a time is
   gone, and with it `chartTab`. That grid is what pulled DDR-0018's lever for the first time: an
   axis label is 11 *viewBox units*, so halving the column halves the label, and 1080×240 in a
   half-width card puts an 8.3px number on the axis. The three time-series charts therefore share
   **one** geometry — `lib/chartGeometry`, 500×180 (≈2.78:1), the width halved so a unit keeps its
   size and the ratio shortened so the plot keeps its height — and the padding stays put, because
   `pad.left: 64` is an allowance for a currency label, not a fraction of the plot. Three things
-  follow. The grid **collapses to one column at 1200px**, chosen from the legibility floor and
-  deliberately below the 1280px default window, so a fresh install opens on the grid; the label
+  follow. The grid **collapses to one column at 1420px of viewport**, which is the same 1200px *content
+  column* the legibility floor picked — since #182 the column is the window minus a 220px sidebar,
+  so `chartGeometry` subtracts `--sidebar-width` before the measure caps anything, and the media
+  query has to add it back. What that cost is DDR-0051's second property: 1200px sat below the
+  1280px default window so a fresh install opened on the grid, and **it no longer does** — at
+  1280px a half column renders a 9.7px axis label, under the floor, so a default window opens
+  Performance stacked and the 2×2 grid wants ≥1421px. Don't "restore" it by lowering the
+  breakpoint; that ships illegible labels. The label
   size is **checked, not asserted** (`chartGeometry.test.ts` mirrors the layout tokens, reads each
   back out of `app.css`, and walks the layout to `--content-max`); and capping a chart's width to
   bound the collapsed column stays **rejected** — DDR-0018 tried it and it reads as a rendering
@@ -225,7 +231,7 @@ Canonical flows to copy when adding a feature:
   `viewBox` makes the *plots* identical and says nothing about the *cards*, and a `<figcaption>`
   under one plot is what made this card the odd one out. Three rules hold it: every `ChartCard`
   renders a `CardHeader` including the three with nothing in it, `.chart-card-header` never wraps
-  (just above the 1200px collapse a four-band legend is within a few dozen pixels of the column),
+  (just above the collapse a four-band legend is within a few dozen pixels of the column),
   and when it is tight the **title** ellipsizes rather than the legend. Those component scans strip
   comments first — the charts name `<svg>` and `<figcaption>` in their own prose, the DDR-0042
   trap again. The
@@ -288,7 +294,23 @@ Canonical flows to copy when adding a feature:
   what makes the shared `RefreshBar` (reading time + Refresh) non-destructive. The **Portfolio
   tab is deliberately excluded** and still re-reads on every visit: it shows live IBKR data,
   which changes with no event to signal it. See DDR-0027 (extends DDR-0006).
-- **The tab bar is the full WAI-ARIA tabs pattern**, not a styled row of buttons (DDR-0029).
+- **The view list is the full WAI-ARIA tabs pattern**, not a styled column of buttons (DDR-0029),
+  and since Story #182 it is a **vertical 220px sidebar** rather than a horizontal strip
+  (DDR-0055). The rotation changed exactly two things about the pattern — the tablist declares
+  `aria-orientation="vertical"`, and `lib/tabKeyboard.ts` moves on **Up/Down**; Left/Right are
+  deliberately *inert*, because a tablist answering to both axes describes neither. Everything in
+  the rest of this bullet is unchanged. Four things about the shell around it are worth knowing.
+  `.app-body` is a flex row of `.app-sidebar` and `.app-content` under the full-width title bar,
+  with `align-items: flex-start` (a stretched item is as tall as the document and cannot stick)
+  and `min-width: 0` on the content column (without it one wide table scrolls the whole page
+  sideways). The document still scrolls — no second scroll container, so the sticky title bar and
+  the capped tables' scroll-driven fade are untouched. The active row's non-colour cue **rotated
+  with it**: the 2px underline is a 3px leading-edge `::after` bar at `--radius-pill`, plus a
+  500→600 weight step the strip had no room for. And `.app-tab:hover` is scoped
+  **`:not(.app-tab-active)`** — a pseudo-class counts as a class, so `:hover` out-specifies
+  `.app-tab-active` regardless of source order and a pointer on the current view would repaint it
+  as unselected. `--titlebar-height` and `--sidebar-width` are `:root` tokens because each is now
+  quoted in more than one rule.
   Every view — the Portfolio dashboard included — is wrapped in a `TabPanel` (`role="tabpanel"`,
   `id="panel-<tab>"`, `aria-labelledby="tab-<tab>"`, `tabIndex={0}`) and its tab points back with
   `aria-controls`, **set only on the selected tab** because an unvisited tab has no panel in the
@@ -445,7 +467,8 @@ Canonical flows to copy when adding a feature:
   Mono is ~20% wider than Inter for digits, so a view story that adds a column should re-measure.
 - **Adoption is held by a ratchet; don't re-baseline it** (DDR-0042). `lib/tokenAdoption.ts`
   carries `BASELINE` (may only shrink — currently **empty, and must stay empty**) and
-  `EXEMPTIONS` (permanent, nine entries, each with a reason). `tokenAdoption.test.ts` fails
+  `EXEMPTIONS` (permanent, **eight** entries, each with a reason — #182 retired the ninth, the
+  active tab's `1px` bar radius, when `--radius-pill` turned out to express it). `tokenAdoption.test.ts` fails
   three ways: a raw value in neither list, a *baseline* entry that stopped matching, and an
   *exemption* that stopped matching — the second is what makes it a ratchet rather than a
   suppression file. Two traps: the scanner (`lib/cssDeclarations.ts`) is text-based and
@@ -562,7 +585,11 @@ Canonical flows to copy when adding a feature:
   pairing list is **enumerated by hand** (resolving a colour against its inherited background
   needs a layout engine, which Node-only Vitest lacks), so it lists passing pairs too — a guard
   listing only what once failed would have missed this finding — #181 grew it from ten pairings to
-  fifteen, and four of the five additions were always rendered and never listed. Known and deliberately open: the
+  fifteen, and four of the five additions were always rendered and never listed. #182 added the
+  seventeenth form: a colour can now be named as a **token mixed into a surface**, because
+  DDR-0054 made `color-mix()` the way a rule tints something and nothing measured the results. The
+  sidebar's active row is the first such pairing (accent text on a 16% accent wash, 4.95:1) and
+  the ceiling is near — 22% fails — so a tint is a measured number, never an eyeballed one. Known and deliberately open: the
   tab panels sit outside a landmark (axe `region`, best-practice), because `.tab-panel` wraps the
   view's `<main>` and unpicking that means restructuring DDR-0029 across every view.
 - **Never write a focus rule.** One ring — `--focus-ring` / `--focus-ring-offset`, always

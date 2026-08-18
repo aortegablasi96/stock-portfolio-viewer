@@ -191,9 +191,11 @@ describe('app.css token adoption', () => {
     // Not a target to chase: it makes an unreviewed bulk change to either list visible in a diff.
     // #152 emptied BASELINE, so it stays at 0; EXEMPTIONS only moves with a recorded reason.
     // 11 → 9 in #160, when the diverging legend's two end caps left with the gain/loss mode.
+    // 9 → 8 in #182, when the active tab's marker rotated into the sidebar and its `1px` became
+    // `--radius-pill` — an exemption the scale turned out to be able to express after all.
     expect({ baseline: BASELINE.length, exemptions: EXEMPTIONS.length }).toEqual({
       baseline: 0,
-      exemptions: 9,
+      exemptions: 8,
     })
   })
 

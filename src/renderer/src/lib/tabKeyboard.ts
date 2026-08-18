@@ -7,8 +7,12 @@
  * Vitest runs in a Node environment with no jsdom, so nothing that only exists inside a
  * component can be tested at all (see the Testing section of CLAUDE.md).
  *
- * Horizontal only. The tablist is a single row, and the ARIA pattern reserves Up/Down for
- * vertical tablists — binding them here would announce a movement the layout doesn't have.
+ * Vertical only since Story #182 (DDR-0055). The tablist moved from a row under the title bar
+ * into the sidebar, and the ARIA pattern's axis is the layout's axis: a vertical tablist owns
+ * Up/Down, and Left/Right are not its keys. They are deliberately *not* accepted as a second
+ * way to move — a tablist that answers to both announces `aria-orientation="vertical"` and then
+ * behaves like neither orientation, and Left/Right belong to whatever the row of controls
+ * inside the focused panel does with them.
  */
 
 /**
@@ -16,16 +20,16 @@
  * handles (in which case the caller must leave the event alone — Tab, typing, and every
  * shortcut still has to work).
  *
- * Movement **wraps**: right from the last tab lands on the first, left from the first on the
- * last. That is the pattern's default and it is what makes a five-tab bar quick to cross.
+ * Movement **wraps**: down from the last tab lands on the first, up from the first on the
+ * last. That is the pattern's default and it is what makes a five-view list quick to cross.
  */
 export function nextTabIndex(key: string, current: number, count: number): number | null {
   if (count <= 0) return null
 
   switch (key) {
-    case 'ArrowRight':
+    case 'ArrowDown':
       return wrap(current + 1, count)
-    case 'ArrowLeft':
+    case 'ArrowUp':
       return wrap(current - 1, count)
     case 'Home':
       return 0

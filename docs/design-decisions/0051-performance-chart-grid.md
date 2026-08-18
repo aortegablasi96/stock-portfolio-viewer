@@ -1,6 +1,12 @@
 # 0051. The four Performance charts in a 2×2 grid, and the aspect ratio that pays for it
 
-- **Status:** Accepted
+- **Status:** Accepted, except that the **collapse breakpoint** below is amended by
+  [[0055-vertical-sidebar-tablist]]. The threshold is the content column and the column is still
+  1200px wide; the *media query* is 1420px, because Story #182 put a 220px sidebar beside it. What
+  that amendment could not carry is the second property claimed for 1200px — that it sits below
+  the 1280px default window so a fresh install opens on the grid. It no longer does, and no
+  breakpoint restores it: at 1280px a half column renders a 9.7px axis label, under this DDR's own
+  floor. Everything else here stands, the 500×180 plot and the legibility walk included.
 - **Date:** 2026-08-13
 
 ## Context

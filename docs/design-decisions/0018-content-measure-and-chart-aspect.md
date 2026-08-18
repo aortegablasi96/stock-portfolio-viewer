@@ -28,6 +28,12 @@ are declared on `:root` and used by both the content column (`.dashboard`) and t
 tabs inside it sit on the content measure, so the first tab lines up with the page heading at
 every width. Alignment is now structural rather than coincidental.
 
+> **Amended by [[0055-vertical-sidebar-tablist]] (Story #182).** The tab strip is gone: the views
+> are a vertical sidebar beside the content, not a row above it, so there is nothing left to align
+> to the measure and the second half of this paragraph no longer describes the app. The measure
+> itself is untouched and now governs the content column alone — but it is measured from what the
+> sidebar leaves, which is why `lib/chartGeometry` subtracts `--sidebar-width` before capping.
+
 `110rem` (1760px) is chosen so a maximized window on an ordinary display is filled edge to
 edge — at the common 1536px-wide desktop the column simply becomes the window — while an
 ultrawide monitor still gets a cap rather than table rows a metre long.

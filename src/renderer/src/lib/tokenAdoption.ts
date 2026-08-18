@@ -37,7 +37,14 @@
  * **Story #160 removed two of the eleven**, the diverging legend's end caps, when the map's
  * gain/loss colour mode was withdrawn and its rules left the stylesheet. Worth noting as the
  * ratchet's second half doing its job unprompted: nothing in that story went looking for this
- * list, and "an exemption that stopped matching also fails" is what sent someone to it. Nine now.
+ * list, and "an exemption that stopped matching also fails" is what sent someone to it.
+ *
+ * **Story #182 removed a third**, the same way and for a better reason. The active tab's marker
+ * rotated with the tablist — a 2px bar under a label became a 3px bar down a row's leading edge
+ * (DDR-0055) — and a vertical bar rounds to a stadium, so `--radius-pill` says what `1px` was
+ * approximating. The note above, that a "sub-6px radius" rule would have wrongly exempted this
+ * very declaration, now reads as the argument it always was: the only radius in this file that a
+ * mechanical rule would have hidden turned out to be one the scale could express. **Eight.**
  */
 import { scanDeclarations, type CssDeclaration } from './cssDeclarations'
 
@@ -183,11 +190,6 @@ export const EXEMPTIONS: readonly ExemptEntry[] = [
     key: '.sr-only | margin',
     value: '-1px',
     reason: 'The visually-hidden clip pattern: -1px pairs with the 1px box, and is not spacing.',
-  },
-  {
-    key: '.app-tab-active::after | border-radius',
-    value: '1px',
-    reason: 'The 2px active-tab bar’s own rounding (DDR-0029); 1px is below --radius-sm.',
   },
   {
     key: '.chart-axis-label | font-size',
