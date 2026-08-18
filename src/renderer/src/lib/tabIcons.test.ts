@@ -56,10 +56,16 @@ describe('the frame keeps the icons out of the accessible name', () => {
     expect(ICONS).toMatch(/focusable="false"/)
   })
 
-  it('leaves the label a bare text node beside the icon', () => {
-    // `e2e/tab-navigation.spec.ts` asserts the five tabs read exactly their labels. Wrapping the
-    // label in an element would still pass that — this pins the markup the story specified.
-    expect(APP).toMatch(/<Icon \/>\s*\{t\.label\}/)
+  it('leaves the label beside the icon, as the tab’s only text', () => {
+    // The invariant is that the icon is a *second* channel: the label is still there, still text,
+    // and still the whole of the tab's `textContent` — which is what `e2e/tab-navigation.spec.ts`
+    // asserts when it reads the five tabs as their five names.
+    //
+    // Story #184 wrapped that text in a `<span>`, because the collapsed rail needs an element to
+    // clip; the label is still one text node, and an SVG contributes none. What this pins now is
+    // that the wrapper carries nothing but the label — an icon moved inside it, or a second
+    // string beside it, would give the tab a name it was never meant to have.
+    expect(APP).toMatch(/<Icon \/>\s*<span className="app-tab-label">\{t\.label\}<\/span>/)
   })
 })
 

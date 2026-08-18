@@ -2,6 +2,9 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
   AXIS_LABEL_UNITS,
+  GRID_CONTENT_BREAKPOINT_PX,
+  PERFORMANCE_GRID_BREAKPOINT_COLLAPSED_PX,
+  SIDEBAR_COLLAPSED_PX,
   MAX_GRID_AXIS_LABEL_PX,
   MAX_STACKED_AXIS_LABEL_PX,
   MIN_AXIS_LABEL_PX,
@@ -111,6 +114,12 @@ describe('the mirrored layout tokens still match app.css', () => {
     expect(rootToken('--sidebar-width')).toBe('220px')
   })
 
+  /** And the width it takes when collapsed, which is the other half of the same term (#184). */
+  it('mirrors the collapsed rail', () => {
+    expect(rootToken('--sidebar-width-collapsed')).toBe('56px')
+    expect(SIDEBAR_COLLAPSED_PX).toBe(56)
+  })
+
   it('mirrors the axis label size, which is a viewBox unit and not a type step', () => {
     expect(CSS).toMatch(/\.chart-axis-label\s*\{[^}]*font-size:\s*11px/)
     expect(AXIS_LABEL_UNITS).toBe(11)
@@ -162,6 +171,94 @@ describe('the grid collapses where the labels would stop being legible', () => {
     expect(axisLabelPx(halfColumn)).toBeLessThan(MIN_AXIS_LABEL_PX)
     // ...while the one column the reader actually gets is well inside it.
     expect(axisLabelPx(chartWidthPx(WINDOW_DEFAULT_WIDTH))).toBeGreaterThan(MIN_AXIS_LABEL_PX)
+  })
+})
+
+/**
+ * The rail (Story #184). The grid collapses on the **column** it is given, not on the window, so
+ * a sidebar that can be 220px or 56px wide is a threshold that has to move with it — and the
+ * whole point of deriving both from one content width is that neither can be tuned on its own.
+ */
+describe('collapsing the sidebar moves the breakpoint, not the floor', () => {
+  it('is the same 1200px column, measured past a 56px rail instead of a 220px column', () => {
+    expect(PERFORMANCE_GRID_BREAKPOINT_COLLAPSED_PX - SIDEBAR_COLLAPSED_PX).toBe(
+      GRID_CONTENT_BREAKPOINT_PX,
+    )
+    expect(PERFORMANCE_GRID_BREAKPOINT_PX - SIDEBAR_WIDTH).toBe(GRID_CONTENT_BREAKPOINT_PX)
+    // The rail hands back exactly what it stopped taking; nothing else moved.
+    expect(PERFORMANCE_GRID_BREAKPOINT_PX - PERFORMANCE_GRID_BREAKPOINT_COLLAPSED_PX).toBe(
+      SIDEBAR_WIDTH - SIDEBAR_COLLAPSED_PX,
+    )
+  })
+
+  it('states the same viewport width in app.css, scoped to the collapsed shell', () => {
+    // Whitespace-flattened rather than matched with a hand-escaped regex: the assertion is that
+    // the stylesheet states this breakpoint, and the number is the only part worth being precise
+    // about. CSS cannot read this module, so a threshold moved in one file and not the other is
+    // exactly the drift this catches.
+    const flat = CSS.replace(/\s+/g, ' ')
+    expect(flat).toContain(
+      `@media (min-width: ${PERFORMANCE_GRID_BREAKPOINT_COLLAPSED_PX + 1}px) ` +
+        '{ .app-collapsed .performance-charts { grid-template-columns: repeat(2,',
+    )
+  })
+
+  it('is two columns above the collapsed breakpoint and one at or below it', () => {
+    expect(
+      gridColumns(PERFORMANCE_GRID_BREAKPOINT_COLLAPSED_PX + 1, SIDEBAR_COLLAPSED_PX),
+    ).toBe(2)
+    expect(gridColumns(PERFORMANCE_GRID_BREAKPOINT_COLLAPSED_PX, SIDEBAR_COLLAPSED_PX)).toBe(1)
+  })
+
+  /**
+   * The property DDR-0051 had, #182 spent, and this story hands back — recorded as an assertion
+   * because it is the reader-facing point of collapsing at all. The same default window that
+   * opens Performance stacked with the column open opens it on the grid with the rail closed,
+   * and both are the legibility floor answering rather than a preference.
+   */
+  it('gives a default window its 2×2 grid back, on the floor’s terms', () => {
+    expect(gridColumns(WINDOW_DEFAULT_WIDTH)).toBe(1)
+    expect(gridColumns(WINDOW_DEFAULT_WIDTH, SIDEBAR_COLLAPSED_PX)).toBe(2)
+
+    const half = chartWidthPx(WINDOW_DEFAULT_WIDTH, SIDEBAR_COLLAPSED_PX)
+    expect(axisLabelPx(half)).toBeGreaterThanOrEqual(MIN_AXIS_LABEL_PX)
+    expect(axisLabelPx(half)).toBeLessThanOrEqual(MAX_GRID_AXIS_LABEL_PX)
+  })
+
+  const collapsedGrid = [
+    PERFORMANCE_GRID_BREAKPOINT_COLLAPSED_PX + 1,
+    WINDOW_DEFAULT_WIDTH,
+    1366,
+    1440,
+    1920,
+    3440,
+  ]
+
+  it.each(collapsedGrid)('two columns on the rail at %ipx keep the label inside the band', (viewport) => {
+    const label = axisLabelPx(chartWidthPx(viewport, SIDEBAR_COLLAPSED_PX))
+    expect(gridColumns(viewport, SIDEBAR_COLLAPSED_PX)).toBe(2)
+    expect(label).toBeGreaterThanOrEqual(MIN_AXIS_LABEL_PX)
+    expect(label).toBeLessThanOrEqual(MAX_GRID_AXIS_LABEL_PX)
+  })
+
+  it.each([NARROWEST_TESTED_PX, 1100, PERFORMANCE_GRID_BREAKPOINT_COLLAPSED_PX])(
+    'one column on the rail at %ipx stays legible, if larger',
+    (viewport) => {
+      const label = axisLabelPx(chartWidthPx(viewport, SIDEBAR_COLLAPSED_PX))
+      expect(gridColumns(viewport, SIDEBAR_COLLAPSED_PX)).toBe(1)
+      expect(label).toBeGreaterThanOrEqual(MIN_AXIS_LABEL_PX)
+      expect(label).toBeLessThanOrEqual(MAX_STACKED_AXIS_LABEL_PX)
+    },
+  )
+
+  /** A wider chart in the same window, at every width — the rail cannot cost the grid anything. */
+  it('never leaves a chart narrower than the same window with the column open', () => {
+    for (const viewport of [1020, WINDOW_DEFAULT_WIDTH, 1440, 1920, 3440]) {
+      expect(chartWidthPx(viewport, SIDEBAR_COLLAPSED_PX)).toBeGreaterThanOrEqual(
+        // Above the cap both are the same chart; below it the rail is strictly wider.
+        Math.min(chartWidthPx(viewport), chartWidthPx(viewport, SIDEBAR_COLLAPSED_PX)),
+      )
+    }
   })
 })
 

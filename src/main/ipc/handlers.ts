@@ -3,6 +3,7 @@ import { IpcChannels } from '@shared/ipc/channels'
 import {
   pingRequestSchema,
   portfolioOverviewRequestSchema,
+  sidebarStateSchema,
   snapshotListRequestSchema,
   type CaptureSnapshotResult,
   type ClearHistoryResult,
@@ -10,6 +11,7 @@ import {
   type FlexImportResult,
   type FlexStatementStore,
   type PortfolioOverviewResult,
+  type SidebarState,
   type SnapshotList,
 } from '@shared/ipc/contract'
 import { systemService } from '@services/system/systemService'
@@ -22,6 +24,7 @@ import { allocationService } from '@services/analytics/allocationService'
 import { realizedGainsService } from '@services/analytics/realizedGainsService'
 import { dividendService } from '@services/dividends/dividendService'
 import { classificationService } from '@services/classification/classificationService'
+import { sidebarStateService } from '@services/window/sidebarStateService'
 import { IbkrNotConnectedError, IbkrTimeoutError, ValidationError } from '@shared/errors'
 
 /**
@@ -192,4 +195,13 @@ export function registerIpcHandlers(): void {
     IpcChannels.windowIsMaximized,
     (event): boolean => BrowserWindow.fromWebContents(event.sender)?.isMaximized() ?? false,
   )
+
+  // The sidebar's remembered width (Story #184). Persisted the way the window's own bounds are
+  // — one overwritten `app_meta` value, no new table (DDR-0028).
+  ipcMain.handle(IpcChannels.windowGetSidebarState, (): SidebarState => sidebarStateService.get())
+  ipcMain.handle(IpcChannels.windowSetSidebarState, (_event, rawInput: unknown): SidebarState => {
+    const state = sidebarStateSchema.parse(rawInput)
+    sidebarStateService.set(state)
+    return state
+  })
 }

@@ -1,9 +1,9 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { TitleBar } from './components/TitleBar'
 import { PortfolioDashboard } from './components/PortfolioDashboard'
 import { FlexImport } from './components/FlexImport'
 import { CurrencySelector } from './components/CurrencySelector'
-import { GatewayBadge, SidebarBrand } from './components/SidebarRail'
+import { GatewayBadge, SidebarBrand, SidebarToggle } from './components/SidebarRail'
 import { PerformanceView } from './components/analytics/PerformanceView'
 import { AllocationView } from './components/analytics/AllocationView'
 import { DividendsView } from './components/analytics/DividendsView'
@@ -16,6 +16,7 @@ import {
   TradesIcon,
 } from './components/TabIcons'
 import { nextTabIndex } from './lib/tabKeyboard'
+import { collapsedTitle, shellClassName, sidebarClassName } from './lib/sidebarCollapse'
 import type { GatewayReading } from './lib/gatewayStatus'
 
 /**
@@ -67,6 +68,13 @@ import type { GatewayReading } from './lib/gatewayStatus'
  * handed down are stable, and that is load-bearing rather than tidy: the dashboard's load effect
  * depends on their identity, so a new function each render would re-run the read that produced
  * the report that caused the render.
+ *
+ * **Story #184 adds the fourth piece: how wide that column is** (DDR-0057). It is a *setting*
+ * rather than a session fact, so unlike the three above it is read from and written to
+ * `app_meta` — the mechanism the window's own bounds already use (DDR-0028). Two consequences
+ * live here rather than in the sidebar. The state arrives asynchronously, so the width is applied
+ * without animating until a frame has passed; and the flag is set once, on the root element, so
+ * nothing in the rail takes a `collapsed` prop and no view below knows the sidebar moved.
  */
 type Tab = 'portfolio' | 'performance' | 'allocation' | 'dividends' | 'trades'
 
@@ -121,10 +129,48 @@ export function App(): React.JSX.Element {
   const [displayCurrency, setDisplayCurrency] = useState(BASE_DISPLAY_CURRENCY)
   const [heldCurrencies, setHeldCurrencies] = useState<readonly string[]>([])
   const [gateway, setGateway] = useState<GatewayReading | null>(null)
+  // The sidebar's width, and whether it may animate to it yet. See the effect below.
+  const [collapsed, setCollapsed] = useState(false)
+  const [animated, setAnimated] = useState(false)
   // The buttons themselves, so a keyboard move can put focus on the tab it selected. A roving
   // tabindex means the tab being left is about to stop being focusable, so focus has to be
   // moved deliberately rather than left to the browser.
   const tabRefs = useRef(new Map<Tab, HTMLButtonElement>())
+
+  /**
+   * The remembered sidebar width, read once on launch.
+   *
+   * The first paint is always the expanded column — there is no synchronous way to know
+   * otherwise from the renderer — so a rail left collapsed is applied here, and the transition is
+   * armed a frame later so that application is instant rather than a 120ms slide reporting a
+   * decision the owner made on a previous launch. Every toggle after this one animates.
+   */
+  useEffect(() => {
+    let live = true
+    void window.api.getSidebarState().then((state) => {
+      if (!live) return
+      setCollapsed(state.collapsed)
+      requestAnimationFrame(() => {
+        if (live) setAnimated(true)
+      })
+    })
+    return () => {
+      live = false
+    }
+  }, [])
+
+  /**
+   * Collapse, and remember it.
+   *
+   * The write is a plain statement beside the state update rather than an effect on `collapsed`,
+   * for two reasons: an effect would also fire on the read above and write back what it just
+   * read, and a side effect inside a `setState` updater runs twice under StrictMode. Nothing
+   * awaits the write — the rail has already moved, and a failed write costs a preference.
+   */
+  const setSidebarCollapsed = useCallback((next: boolean): void => {
+    setCollapsed(next)
+    void window.api.setSidebarState({ collapsed: next })
+  }, [])
 
   const select = useCallback((id: Tab): void => {
     setTab(id)
@@ -184,13 +230,19 @@ export function App(): React.JSX.Element {
     ) : null
 
   return (
-    <div className="app">
+    <div className={shellClassName(collapsed)}>
+      {/* The title bar spans the full width *above* the sidebar rather than the sidebar running
+          full height beside it, which is the corner Story #184 had to settle. With no OS frame
+          the bar is the window's only grab handle, and DDR-0028 judges a restored window's
+          reachability on it — so a sidebar beside it would carve 220px out of the drag region,
+          and collapsing would then change how grabbable the window is as a side effect of a
+          navigation preference (DDR-0011, DDR-0057). */}
       <TitleBar />
       {/* Sidebar beside content, under the full-width title bar. The panels sit in their own
           column rather than as siblings of the nav, so the content reflows to what is left of
           the window instead of running under the sidebar (DDR-0055). */}
       <div className="app-body">
-        <nav className="app-sidebar" aria-label="Primary">
+        <nav id="app-sidebar" className={sidebarClassName(animated)} aria-label="Primary">
           {/* The context rail: what the app is, and whether the source behind it is answering
               (Story #183, DDR-0056). Above the list because both are true of the app rather than
               of any one view — and the list is the part that gives if the column ever runs short,
@@ -231,12 +283,16 @@ export function App(): React.JSX.Element {
                   // selected tab moves on into its panel rather than along the other four.
                   tabIndex={isActive ? 0 : -1}
                   className={`app-tab ${isActive ? 'app-tab-active' : ''}`}
+                  // An addition, never the mechanism: the row's accessible name is still the
+                  // label below, which is clipped rather than removed when the rail collapses.
+                  title={collapsedTitle(collapsed, t.label)}
                   onClick={() => select(t.id)}
                 >
-                  {/* Icon first, label second — and the label is a bare text node so the tab's
-                      `textContent` stays exactly its name. */}
+                  {/* Icon first, label second. The label is wrapped only so the collapsed rail
+                      has something to clip (Story #184) — it is still one text node, so the
+                      tab's `textContent` is still exactly its name. */}
                   <Icon />
-                  {t.label}
+                  <span className="app-tab-label">{t.label}</span>
                 </button>
               )
             })}
@@ -253,6 +309,16 @@ export function App(): React.JSX.Element {
               options={currencyOptions}
               onChange={setDisplayCurrency}
             />
+            {/* Last in the column, which is where the prototype sketched an expand control and
+                where the collapsed rail's bottom-most glyph is easiest to find again. It is not
+                beside the brand for a plain reason: 220px minus the tile leaves the product's
+                own name barely fitting, and a control there ellipsizes it (Story #184). */}
+            <div className="app-sidebar-toggle-row">
+              <SidebarToggle
+                collapsed={collapsed}
+                onToggle={() => setSidebarCollapsed(!collapsed)}
+              />
+            </div>
           </div>
         </nav>
 

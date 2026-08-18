@@ -59,6 +59,24 @@ export const PERFORMANCE_PLOT: PlotGeometry = {
 export const AXIS_LABEL_UNITS = 11
 
 /**
+ * The content column at which a half-column plot stops clearing {@link MIN_AXIS_LABEL_PX}.
+ *
+ * The one number both breakpoints below are chosen from. It is a property of the *column*, so it
+ * survived a sidebar arriving beside it (Story #182) and survives that sidebar collapsing (Story
+ * #184) — what changes each time is only how much window it takes to leave 1200px of column.
+ */
+export const GRID_CONTENT_BREAKPOINT_PX = 1200
+
+/* The shell's own measures, mirrored from `:root` so the width maths can run under Node. The
+   test reads each one back out of `app.css` and fails if the stylesheet has moved. */
+const CONTENT_MAX_PX = 1760 /* --content-max: 110rem */
+const CONTENT_PAD_PX = 32 /* --content-pad: 2rem, one side */
+const CARD_PAD_PX = 20 /* --surface-pad-md (--space-6: 1.25rem), one side */
+const GRID_GAP_PX = 24 /* --space-7: 1.5rem */
+export const SIDEBAR_PX = 220 /* --sidebar-width, the shell's left column (Story #182) */
+export const SIDEBAR_COLLAPSED_PX = 56 /* --sidebar-width-collapsed, the icon rail (Story #184) */
+
+/**
  * The viewport width at or below which `.performance-charts` collapses to a single column.
  *
  * Chosen from the floor, not from a round number: a half-column chart renders its axis labels at
@@ -77,7 +95,23 @@ export const AXIS_LABEL_UNITS = 11
  * recorded rather than absorbed; the two ways out — a wider default window, or a narrower
  * sidebar — are both decisions about the shell, not about this module.
  */
-export const PERFORMANCE_GRID_BREAKPOINT_PX = 1420
+export const PERFORMANCE_GRID_BREAKPOINT_PX = GRID_CONTENT_BREAKPOINT_PX + SIDEBAR_PX
+
+/**
+ * The same threshold measured from a window carrying the **collapsed** rail (Story #184).
+ *
+ * Nothing about the legibility floor moved — the number that decides the grid is still a 1200px
+ * content column, and the only term that changed is what stands beside it. 56px instead of 220px
+ * hands 164px back, so the grid arrives at 1256px of viewport rather than 1420px.
+ *
+ * That recovers the property DDR-0051 had and #182 spent: the default 1280px window is *above*
+ * this, so collapsing the rail opens Performance on the 2×2 grid there. It is a legibility fact
+ * rather than a preference — at 1280px a half column is 520px collapsed (an 11.4px label, over
+ * the floor) against 438px expanded (9.7px, under it) — which is why the two thresholds are
+ * derived from one content width instead of hand-picked apart.
+ */
+export const PERFORMANCE_GRID_BREAKPOINT_COLLAPSED_PX =
+  GRID_CONTENT_BREAKPOINT_PX + SIDEBAR_COLLAPSED_PX
 
 /** The floor an axis label may not render below: the app's smallest type is `--text-2xs`, 11.5px. */
 export const MIN_AXIS_LABEL_PX = 11
@@ -96,14 +130,6 @@ export const MAX_GRID_AXIS_LABEL_PX = 18
  */
 export const MAX_STACKED_AXIS_LABEL_PX = 25
 
-/* The shell's own measures, mirrored from `:root` so the width maths can run under Node. The
-   test reads each one back out of `app.css` and fails if the stylesheet has moved. */
-const CONTENT_MAX_PX = 1760 /* --content-max: 110rem */
-const CONTENT_PAD_PX = 32 /* --content-pad: 2rem, one side */
-const CARD_PAD_PX = 20 /* --surface-pad-md (--space-6: 1.25rem), one side */
-const GRID_GAP_PX = 24 /* --space-7: 1.5rem */
-const SIDEBAR_PX = 220 /* --sidebar-width, the shell's left column (Story #182) */
-
 /**
  * A classic Windows scrollbar. The analytics views are always taller than the window, so the
  * viewport the grid actually gets is this much narrower than the window — which matters, because
@@ -111,9 +137,15 @@ const SIDEBAR_PX = 220 /* --sidebar-width, the shell's left column (Story #182) 
  */
 const SCROLLBAR_PX = 15
 
-/** How many columns the grid resolves to at a given window width. */
-export function gridColumns(viewportPx: number): 1 | 2 {
-  return viewportPx > PERFORMANCE_GRID_BREAKPOINT_PX ? 2 : 1
+/**
+ * How many columns the grid resolves to at a given window width.
+ *
+ * `sidebarPx` defaults to the expanded column because that is what a launch opens on. Passing
+ * {@link SIDEBAR_COLLAPSED_PX} asks the same question of the rail — the grid collapses on the
+ * *column* it is given, and the sidebar is the only thing between that column and the window.
+ */
+export function gridColumns(viewportPx: number, sidebarPx: number = SIDEBAR_PX): 1 | 2 {
+  return viewportPx > GRID_CONTENT_BREAKPOINT_PX + sidebarPx ? 2 : 1
 }
 
 /**
@@ -122,12 +154,12 @@ export function gridColumns(viewportPx: number): 1 | 2 {
  * measurement here and deliberately none in the components either (DDR-0018 rejected sizing a
  * chart from a `ResizeObserver`).
  */
-export function chartWidthPx(viewportPx: number): number {
-  const columns = gridColumns(viewportPx)
+export function chartWidthPx(viewportPx: number, sidebarPx: number = SIDEBAR_PX): number {
+  const columns = gridColumns(viewportPx, sidebarPx)
   // The sidebar comes off the top, before the measure caps anything: it is a fixed column beside
   // the content, not part of it. Omitting it is the drift this story would otherwise have left —
   // the arithmetic would keep passing while describing a layout that no longer exists.
-  const available = viewportPx - SIDEBAR_PX - SCROLLBAR_PX
+  const available = viewportPx - sidebarPx - SCROLLBAR_PX
   const content = Math.min(available, CONTENT_MAX_PX) - 2 * CONTENT_PAD_PX
   const column = (content - (columns - 1) * GRID_GAP_PX) / columns
   return column - 2 * CARD_PAD_PX
