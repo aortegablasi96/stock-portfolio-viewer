@@ -117,9 +117,18 @@ describe('the stylesheet backs the emphasis', () => {
     expect(ruleBody('.pie-slice-muted')).toContain('opacity')
   })
 
-  /** The linked row is neutral: it is pointed at, not selected, and the accent means "sorted". */
+  /**
+   * The linked row is neutral: it is pointed at, not selected, and the accent means "sorted".
+   *
+   * Scoped to `.data-table tbody tr` since Story #186, when every table gained a hover lift of its
+   * own: the emphasis and the hover are the same row whenever the pointer is what linked it, and
+   * the emphasis only wins if it matches the hover's specificity and comes later (DDR-0059).
+   */
   it('tints the linked table row without borrowing the accent', () => {
-    const row = ruleBody('.data-table-row-active > th,\n.data-table-row-active > td')
+    const row = ruleBody(
+      '.data-table tbody tr.data-table-row-active > th,\n' +
+        '.data-table tbody tr.data-table-row-active > td',
+    )
     expect(row).toContain('background')
     expect(row).not.toContain('--accent')
   })
