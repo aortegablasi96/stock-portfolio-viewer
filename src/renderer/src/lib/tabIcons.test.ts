@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 /**
- * The main tab strip's icons (Story #168).
+ * The main tablist's icons (Story #168), which moved into the sidebar with it (Story #182).
  *
  * No module under test — the subject is `TabIcons.tsx` and the tab markup in `App.tsx`, the same
  * shape as `mapAccessibility.test.ts` taking a component as its subject and `designTokens.test.ts`
@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest'
  * with no jsdom, so no component may be rendered, and the only place that could observe the real
  * DOM is `e2e/` — which CI does not run, because it needs a display server.
  *
- * What it protects is that this stayed cosmetic. The strip is the app's most invariant-heavy
+ * What it protects is that this stayed cosmetic. The tablist is the app's most invariant-heavy
  * component (DDR-0029), and an icon is one attribute away from becoming the tab's accessible name:
  * drop `aria-hidden` and a screen reader gains a graphic it cannot describe, while
  * `e2e/tab-navigation.spec.ts`'s five label texts would still pass, since an SVG contributes no
@@ -95,10 +95,13 @@ describe('the icons are sized from the token scale', () => {
 })
 
 describe('what the icons must not have displaced', () => {
-  it('keeps the active tab’s 2px bar', () => {
-    // Accent-on-pill is two cues but both are colour; the bar is the non-colour one, and an icon
-    // is not a substitute for it (DDR-0029). `tab-navigation.spec.ts` checks the computed height.
-    expect(CSS).toMatch(/\.app-tab-active::after\s*\{[^}]*height:\s*2px/)
+  it('keeps the active tab’s bar', () => {
+    // Accent-on-tint is two cues but both are colour; the bar is the non-colour one, and an icon
+    // is not a substitute for it (DDR-0029). It rotated with the tablist in Story #182 — a 2px
+    // bar under a label became a 3px bar down a row's leading edge — so what is asserted is the
+    // marker's thickness, which is its `width` now that its length is the row's own height.
+    // `tab-navigation.spec.ts` checks the computed value in a real browser.
+    expect(CSS).toMatch(/\.app-tab-active::after\s*\{[^}]*width:\s*3px/)
   })
 
   it('declares no focus rule of its own', () => {

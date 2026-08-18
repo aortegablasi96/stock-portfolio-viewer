@@ -114,9 +114,22 @@
   /* The one measure the whole shell shares (Story #76): the content column's outer width,
      padding included. Wide enough that a maximized window on a normal display is filled
      edge to edge rather than framed by empty gutters, capped so an ultrawide monitor
-     doesn't stretch tables into a wall of text. The nav strip aligns to the same measure. */
+     doesn't stretch tables into a wall of text. Story #182 retired the one thing that used
+     to align to it besides the views themselves — the horizontal nav strip — so the measure
+     now governs the content column alone (DDR-0018, DDR-0055). */
   --content-max: 110rem;
   --content-pad: 2rem;
+
+  /* ---- Shell geometry (Story #182, DDR-0055) ------------------------------
+     Two structural measures rather than type or spacing steps, which is why they
+     are not on a scale: the title bar's height and the sidebar's width are the
+     shell's own dimensions, and each is quoted in more than one rule. The title
+     bar's 40px was written out three times the moment the sidebar had to stick
+     below it and be as tall as the rest of the viewport; naming it is what keeps
+     those three from drifting. 220px is the redesign's own sidebar width, wide
+     enough for the longest label ("Performance") at --text-sm beside a 1em icon. */
+  --titlebar-height: 40px;
+  --sidebar-width: 220px;
 
   /* ---- Spacing scale (Story #126, DDR-0031) -------------------------------
      A 4px grid with one 6px half-step, derived from the values already in the
@@ -1354,7 +1367,7 @@ html {
   z-index: 20;
   display: flex;
   align-items: stretch;
-  height: 40px;
+  height: var(--titlebar-height);
   background: var(--bg);
   border-bottom: 1px solid var(--border);
 }
@@ -1409,94 +1422,136 @@ html {
   background: #e81123;
 }
 
-.app-nav {
+/* The shell below the title bar: a fixed-width sidebar beside a fluid content column
+   (Story #182). `align-items: flex-start` rather than the flex default `stretch`, because the
+   sidebar sticks — a stretched item is as tall as the whole document and has nowhere to stick
+   to. The document still scrolls, exactly as it did under the horizontal strip; nothing here
+   introduces a second scroll container. */
+.app-body {
+  display: flex;
+  align-items: flex-start;
+}
+
+/* The five views as a vertical list (Story #182), replacing the horizontal `.app-tabs` strip.
+
+   It is *still* the WAI-ARIA tabs pattern (DDR-0029) — orientation and skin changed, semantics
+   did not. `aria-orientation="vertical"` and Up/Down live in `App.tsx` and `lib/tabKeyboard.ts`.
+
+   Sticky at the title bar's own height, so the list stays put while a long view scrolls under
+   it, and exactly as tall as what is left of the viewport. That is what makes `overflow-y`
+   meaningful here: five rows never fill it, but the context rail (#183) will add to the column
+   and the list has to be the part that gives. */
+.app-sidebar {
   position: sticky;
-  top: 40px;
+  top: var(--titlebar-height);
   z-index: 10;
+  flex-shrink: 0;
   display: flex;
-  align-items: center;
-  gap: var(--space-7);
-  padding: var(--space-4) var(--content-pad);
-  /* The page ground at 85%, so the content scrolling under the bar is blurred rather
-     than hidden. Written as a mix over --bg since #181: as a literal `rgba(15, 17, 21,
-     0.85)` it was the *old* ground, and a palette re-key would have left one strip of
-     the app behind without failing anything. */
-  background: color-mix(in srgb, var(--bg) 85%, transparent);
-  backdrop-filter: blur(8px);
-  border-bottom: 1px solid var(--border);
+  flex-direction: column;
+  width: var(--sidebar-width);
+  height: calc(100vh - var(--titlebar-height));
+  overflow-y: auto;
+  background: var(--card);
+  border-right: 1px solid var(--border);
 }
 
-/* The bar spans the window (its border and blur are full-bleed) but the tabs inside sit on
-   the same measure as the content below, so the first tab lines up with the page heading at
-   every width — including when the content column stops growing on a very wide monitor. */
-.app-tabs {
-  width: 100%;
-  max-width: calc(var(--content-max) - 2 * var(--content-pad));
-  margin: 0 auto;
+/* The tablist itself. Its padding is not decoration: it is the gutter the focus ring lives in.
+   The sidebar clips (it scrolls), and the ring is drawn 2px outside a 2px stroke — so a row
+   flush against the sidebar's edge would lose the left half of its ring. `--space-3` is 8px,
+   comfortably more than the 4px needed. */
+.app-sidebar-tabs {
   display: flex;
+  flex-direction: column;
   gap: var(--space-1);
-  flex-wrap: wrap;
+  padding: var(--space-3);
 }
 
+/* The content column. `min-width: 0` is the load-bearing half: a flex item's default minimum is
+   its content's intrinsic width, so one wide table would push the column past the window and
+   scroll the whole page sideways instead of scrolling inside its own container. */
+.app-content {
+  flex: 1;
+  min-width: 0;
+}
+
+/* One row of the list. Full width, icon then label, left-aligned — the class name is unchanged
+   from the horizontal strip on purpose: it is the same tab, and DDR-0029's vocabulary (and the
+   guards that read it) still describe it. */
 .app-tab {
   position: relative;
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: var(--space-2);
-  padding: var(--space-2) var(--space-5);
+  width: 100%;
+  padding: var(--space-2) var(--space-4);
   font: inherit;
   font-size: var(--text-sm);
-  font-weight: 600;
+  font-weight: 500;
+  text-align: left;
   color: var(--muted);
   background: transparent;
   border: none;
   border-radius: var(--radius-md);
   cursor: pointer;
+  transition:
+    color var(--duration-fast) var(--ease-out),
+    background-color var(--duration-fast) var(--ease-out);
 }
 
 /* Each tab's icon (Story #168) — a second channel beside the label, never a replacement.
    Sized in `em`, so it tracks the tab's own `--text-sm` instead of pinning a height of its
    own: the type scale is already the token that decides how big this row is, and an icon
-   picked in px would be the one thing in the strip that didn't move with it (DDR-0031).
-   `flex-shrink: 0` because the strip wraps at narrow widths, and a squashed glyph reads as a
-   different shape rather than as a smaller one. It is drawn in `currentColor`, so it follows
-   the tab through muted → text → accent with no colour of its own. */
+   picked in px would be the one thing in the list that didn't move with it (DDR-0031).
+   `flex-shrink: 0` because a squashed glyph reads as a different shape rather than as a
+   smaller one. It is drawn in `currentColor`, so it follows the tab through muted → text →
+   accent with no colour of its own. */
 .app-tab-icon {
   width: 1em;
   height: 1em;
   flex-shrink: 0;
 }
 
-.app-tab:hover {
+/* The hover is a neutral lift, not a dilute accent: accent means "selected" in this list, and a
+   pointer resting on a row must not preview that. Mixed from `--text` rather than written as a
+   literal, so the next palette re-key is a `:root` edit (DDR-0054).
+
+   `:not(.app-tab-active)` is not tidiness — it is the whole reason the rule works. A pseudo-class
+   counts as a class, so `.app-tab:hover` is (0,2,0) against `.app-tab-active`'s (0,1,0) and wins
+   outright: without the exclusion, resting the pointer on the selected row repaints it in the
+   *unselected* ink and the reader is told the app has no current view. Source order cannot fix
+   that, and the horizontal strip carried the same defect unnoticed because both of its states
+   happened to share a background. */
+.app-tab:hover:not(.app-tab-active) {
   color: var(--text);
-  background: var(--card);
+  background: color-mix(in srgb, var(--text) 7%, transparent);
 }
 
 .app-tab-active {
   color: var(--accent);
-  background: var(--card);
+  font-weight: 600;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
 }
 
-/* The active tab is marked by a bar under its label as well as by the accent colour and the
-   filled pill (Story #111). Both of those are colour, and colour is the one channel that can't
-   be relied on alone: a reader who doesn't separate the accent from the muted grey would have
-   no cue left. The bar is presence-or-absence, so it survives any palette. Deliberately inside
-   the pill and drawn in `currentColor` — this is the existing design gaining a cue, not a
-   restyle. */
+/* The active row is marked by an edge bar as well as by the accent ink and the tinted fill
+   (Story #182, carrying DDR-0029's rule across the rotation). Both of those are colour, and
+   colour is the one channel that cannot be relied on alone; the bar is presence-or-absence and
+   survives any palette. The horizontal strip drew it under the label — a vertical row's
+   equivalent is its leading edge, so the same `::after`, rotated. `--radius-pill` rather than a
+   hand-picked hairline radius: on a 3px bar it resolves to a stadium, and the 1px the strip used
+   was the last raw radius in this file (DDR-0042).
+
+   The weight step from 500 to 600 is a second non-colour cue, which the strip could not offer —
+   its tabs were already 600 and there was no room to step (DDR-0029 rejected weight on exactly
+   that ground). A list of full-width rows has the room. */
 .app-tab-active::after {
   content: '';
   position: absolute;
-  left: 0.9rem;
-  right: 0.9rem;
-  bottom: 0.15rem;
-  height: 2px;
-  border-radius: 1px;
+  left: 0;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  width: 3px;
+  border-radius: var(--radius-pill);
   background: currentColor;
-}
-
-.app-tab:focus-visible {
-  outline: var(--focus-ring);
-  outline-offset: var(--focus-ring-offset);
 }
 
 /* An analytics tab stays in the tree once opened and is hidden while another tab is active
@@ -1634,11 +1689,16 @@ html {
 /* Axis labels are sized in viewBox units, so they scale with the column (DDR-0018). Below this
    width a half-column plot renders them under 11px and the grid stops being readable, so it
    collapses to one column and the charts take their size back — four readable charts stacked
-   rather than four unreadable ones side by side. 1200px, not a rounder 1280px, because 1280px
-   is the default window width: a breakpoint there would ship the grid to nobody who had not
-   first resized. `lib/chartGeometry.test.ts` pins this number against the module that derives
-   it. */
-@media (max-width: 1200px) {
+   rather than four unreadable ones side by side.
+
+   1420px, up from 1200px, and the threshold did not move: the *content column* still collapses at
+   1200px, but since Story #182 the column is the window minus a 220px sidebar (DDR-0055). A media
+   query measures the viewport, so the sidebar has to be added back in here. What did not survive
+   the move is DDR-0051's second property — 1200px sat below the 1280px default window so a fresh
+   install opened on the grid, and 1420px cannot. At 1280px a half column would render a 9.7px
+   label, so the stack is the correct answer there rather than a concession.
+   `lib/chartGeometry.test.ts` pins this number against the module that derives it. */
+@media (max-width: 1420px) {
   .performance-charts {
     grid-template-columns: 1fr;
   }

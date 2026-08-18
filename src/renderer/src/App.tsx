@@ -32,9 +32,15 @@ import { nextTabIndex } from './lib/tabKeyboard'
  * The **Portfolio** tab is deliberately the exception: it reads live IBKR data, which changes
  * on its own, so it keeps unmounting and re-reading on every visit.
  *
- * The bar implements the full WAI-ARIA tabs pattern (Story #111, DDR-0029): every panel is a
+ * The list implements the full WAI-ARIA tabs pattern (Story #111, DDR-0029): every panel is a
  * `tabpanel` tied to its tab both ways, arrow keys move between tabs and activate as they go,
  * and a roving `tabindex` keeps the whole tablist a single stop in the Tab order.
+ *
+ * Since Story #182 (DDR-0055) the tablist is a **vertical sidebar** rather than a horizontal
+ * strip. That is a change of orientation and skin, not of pattern: the tablist declares
+ * `aria-orientation="vertical"` and `lib/tabKeyboard.ts` moves on Up/Down instead of Left/Right,
+ * and every other part of the paragraph above is untouched — including the mounted-view rule,
+ * which the redesign's own prototype would have discarded.
  *
  * Each tab also carries an icon (Story #168). It is a *second* channel: the label stays, and the
  * glyph is `aria-hidden`, so nothing about the pattern above — or about what a screen reader is
@@ -92,7 +98,7 @@ export function App(): React.JSX.Element {
   }, [])
 
   /**
-   * Arrow / Home / End movement across the tablist.
+   * Arrow / Home / End movement along the tablist.
    *
    * Tabs activate as focus reaches them ("automatic activation"), which is the pattern's
    * default and the reason it reads well with a screen reader: what is announced and what is
@@ -130,52 +136,67 @@ export function App(): React.JSX.Element {
   return (
     <div className="app">
       <TitleBar />
-      <nav className="app-nav" aria-label="Primary">
-        <div className="app-tabs" role="tablist" aria-label="Views" onKeyDown={onTabKeyDown}>
-          {TABS.map((t) => {
-            const isActive = tab === t.id
-            const Icon = t.icon
-            return (
-              <button
-                key={t.id}
-                ref={(node) => {
-                  if (node) tabRefs.current.set(t.id, node)
-                  else tabRefs.current.delete(t.id)
-                }}
-                type="button"
-                role="tab"
-                id={tabDomId(t.id)}
-                // Only the selected tab has a panel in the tree, so this is the only tab that
-                // can point at one — `aria-controls` naming an element that isn't there is
-                // exactly the broken promise this story is about.
-                aria-controls={isActive ? panelDomId(t.id) : undefined}
-                aria-selected={isActive}
-                // Roving tabindex: the tablist is one stop in the Tab order, and Tab from the
-                // selected tab moves on into its panel rather than along the other four.
-                tabIndex={isActive ? 0 : -1}
-                className={`app-tab ${isActive ? 'app-tab-active' : ''}`}
-                onClick={() => select(t.id)}
-              >
-                {/* Icon first, label second — and the label is a bare text node so the tab's
-                    `textContent` stays exactly its name. */}
-                <Icon />
-                {t.label}
-              </button>
-            )
-          })}
-        </div>
-      </nav>
+      {/* Sidebar beside content, under the full-width title bar. The panels sit in their own
+          column rather than as siblings of the nav, so the content reflows to what is left of
+          the window instead of running under the sidebar (DDR-0055). */}
+      <div className="app-body">
+        <nav className="app-sidebar" aria-label="Primary">
+          <div
+            className="app-sidebar-tabs"
+            role="tablist"
+            aria-label="Views"
+            // The list runs down the sidebar, so Up/Down are the keys that move along it and
+            // assistive technology has to be told which axis it is on (DDR-0055).
+            aria-orientation="vertical"
+            onKeyDown={onTabKeyDown}
+          >
+            {TABS.map((t) => {
+              const isActive = tab === t.id
+              const Icon = t.icon
+              return (
+                <button
+                  key={t.id}
+                  ref={(node) => {
+                    if (node) tabRefs.current.set(t.id, node)
+                    else tabRefs.current.delete(t.id)
+                  }}
+                  type="button"
+                  role="tab"
+                  id={tabDomId(t.id)}
+                  // Only the selected tab has a panel in the tree, so this is the only tab that
+                  // can point at one — `aria-controls` naming an element that isn't there is
+                  // exactly the broken promise this story is about.
+                  aria-controls={isActive ? panelDomId(t.id) : undefined}
+                  aria-selected={isActive}
+                  // Roving tabindex: the tablist is one stop in the Tab order, and Tab from the
+                  // selected tab moves on into its panel rather than along the other four.
+                  tabIndex={isActive ? 0 : -1}
+                  className={`app-tab ${isActive ? 'app-tab-active' : ''}`}
+                  onClick={() => select(t.id)}
+                >
+                  {/* Icon first, label second — and the label is a bare text node so the tab's
+                      `textContent` stays exactly its name. */}
+                  <Icon />
+                  {t.label}
+                </button>
+              )
+            })}
+          </div>
+        </nav>
 
-      {tab === 'portfolio' && (
-        <TabPanel id="portfolio">
-          <PortfolioDashboard />
-          <FlexImport />
-        </TabPanel>
-      )}
-      {panel('performance', 'Performance', <PerformanceView />)}
-      {panel('allocation', 'Allocation', <AllocationView />)}
-      {panel('dividends', 'Dividends', <DividendsView />)}
-      {panel('trades', 'Trades & realized gains', <TradeHistoryView />)}
+        <div className="app-content">
+          {tab === 'portfolio' && (
+            <TabPanel id="portfolio">
+              <PortfolioDashboard />
+              <FlexImport />
+            </TabPanel>
+          )}
+          {panel('performance', 'Performance', <PerformanceView />)}
+          {panel('allocation', 'Allocation', <AllocationView />)}
+          {panel('dividends', 'Dividends', <DividendsView />)}
+          {panel('trades', 'Trades & realized gains', <TradeHistoryView />)}
+        </div>
+      </div>
     </div>
   )
 }

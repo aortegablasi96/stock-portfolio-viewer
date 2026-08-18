@@ -32,8 +32,23 @@ const CSS = readFileSync(new URL('../app.css', import.meta.url), 'utf8')
 /** The default window width, from `windowStateService`. The renderer may not import `@services`. */
 const WINDOW_DEFAULT_WIDTH = 1280
 
-/** Narrowest window the walk covers. Below this every view in the app is squeezed, not just this one. */
-const NARROWEST_TESTED_PX = 800
+/* Three of `chartGeometry`'s private mirrors, restated for the assertions below. Each is read
+   back out of `app.css` by the "mirrored layout tokens" block, so restating them here cannot
+   drift from the stylesheet without that block failing first. */
+const SIDEBAR_WIDTH = 220 /* --sidebar-width */
+const GRID_GAP_PX = 24 /* --space-7 */
+const CARD_PAD_PX = 20 /* --space-6, one side */
+
+/**
+ * Narrowest window the walk covers. Below this every view in the app is squeezed, not just this
+ * one.
+ *
+ * 1020, up from 800, and it is the same floor: Story #182 put a fixed 220px sidebar beside the
+ * content (DDR-0055), so a window has to be 220px wider to leave the content what it had. The
+ * number is the old one plus the sidebar rather than the narrowest width that happens to pass —
+ * tuning it to the pass/fail edge would turn a stated floor into a fitted one.
+ */
+const NARROWEST_TESTED_PX = 1020
 
 function rootToken(name: string): string {
   const match = CSS.match(new RegExp(`^\\s*${name}:\\s*([^;]+);`, 'm'))
@@ -87,6 +102,15 @@ describe('the mirrored layout tokens still match app.css', () => {
     expect(rootToken('--space-6')).toBe('1.25rem') // 20px, the card padding
   })
 
+  /**
+   * The sidebar is the newest term in the width maths and the easiest to forget (Story #182).
+   * It is not part of the content measure — it sits beside it — so it comes off the viewport
+   * before `--content-max` caps anything, and a change to it moves every chart in the grid.
+   */
+  it('mirrors the sidebar the content column now sits beside', () => {
+    expect(rootToken('--sidebar-width')).toBe('220px')
+  })
+
   it('mirrors the axis label size, which is a viewBox unit and not a type step', () => {
     expect(CSS).toMatch(/\.chart-axis-label\s*\{[^}]*font-size:\s*11px/)
     expect(AXIS_LABEL_UNITS).toBe(11)
@@ -103,7 +127,7 @@ describe('the grid collapses where the labels would stop being legible', () => {
    * The stated width is in the stylesheet too, and CSS cannot read this module. A breakpoint
    * moved in one file and not the other is the drift this catches.
    */
-  it('states the same width in app.css', () => {
+  it('states the same viewport width in app.css', () => {
     expect(CSS).toMatch(
       new RegExp(
         `@media \\(max-width: ${PERFORMANCE_GRID_BREAKPOINT_PX}px\\)\\s*\\{\\s*\\.performance-charts\\s*\\{\\s*grid-template-columns:\\s*1fr;`,
@@ -112,26 +136,39 @@ describe('the grid collapses where the labels would stop being legible', () => {
   })
 
   /**
-   * The reason it is 1200 and not a rounder 1280: a fresh install opens 1280px wide, and a
-   * breakpoint at or above that would ship the grid to nobody who had not first resized.
+   * The threshold is the **content column**, and since Story #182 the column is the window minus
+   * the sidebar (DDR-0055). The breakpoint is therefore stated in viewport pixels but chosen in
+   * column pixels, and this is where the two are reconciled.
    */
-  it('sits below the default window width, so a fresh install opens on the grid', () => {
-    expect(PERFORMANCE_GRID_BREAKPOINT_PX).toBeLessThan(WINDOW_DEFAULT_WIDTH)
-    expect(gridColumns(WINDOW_DEFAULT_WIDTH)).toBe(2)
+  it('is the same 1200px column, measured from a window that now carries a sidebar', () => {
+    expect(PERFORMANCE_GRID_BREAKPOINT_PX - SIDEBAR_WIDTH).toBe(1200)
+  })
+
+  /**
+   * The property DDR-0051 had and this layout cannot keep, recorded rather than deleted.
+   *
+   * 1200px sat below the 1280px default window on purpose, so a fresh install opened on the grid.
+   * With 220px of that window spent on the sidebar there is no breakpoint that does both: at
+   * 1280px a half column is 438px, which renders a 9.7px axis label — under the floor. So the
+   * default window opens on the **stack**, and the assertion is that this is a legibility
+   * decision rather than an accident: the stacked chart at 1280px is comfortably inside the band.
+   */
+  it('now opens a default window on the stack, because a half column there is illegible', () => {
+    expect(PERFORMANCE_GRID_BREAKPOINT_PX).toBeGreaterThan(WINDOW_DEFAULT_WIDTH)
+    expect(gridColumns(WINDOW_DEFAULT_WIDTH)).toBe(1)
+
+    // Not a concession: two columns at the default window would be below the floor...
+    const halfColumn = (chartWidthPx(WINDOW_DEFAULT_WIDTH) - GRID_GAP_PX) / 2 - CARD_PAD_PX
+    expect(axisLabelPx(halfColumn)).toBeLessThan(MIN_AXIS_LABEL_PX)
+    // ...while the one column the reader actually gets is well inside it.
+    expect(axisLabelPx(chartWidthPx(WINDOW_DEFAULT_WIDTH))).toBeGreaterThan(MIN_AXIS_LABEL_PX)
   })
 })
 
 describe('an axis label renders legibly at every width the grid is used at', () => {
-  const widths = [
-    PERFORMANCE_GRID_BREAKPOINT_PX + 1,
-    WINDOW_DEFAULT_WIDTH,
-    1366,
-    1440,
-    1536,
-    1920,
-    2560,
-    3440,
-  ]
+  // 1280 and 1366 left this list in Story #182: with a 220px sidebar they are stacked widths now,
+  // and they moved into `stacked` below rather than being dropped.
+  const widths = [PERFORMANCE_GRID_BREAKPOINT_PX + 1, 1440, 1536, 1920, 2560, 3440]
 
   it.each(widths)('two columns at %ipx keep the label inside the band', (viewport) => {
     const label = axisLabelPx(chartWidthPx(viewport))
@@ -150,7 +187,13 @@ describe('an axis label renders legibly at every width the grid is used at', () 
     expect((AXIS_LABEL_UNITS * narrowest) / 1080).toBeLessThan(6)
   })
 
-  const stacked = [NARROWEST_TESTED_PX, 1024, 1100, PERFORMANCE_GRID_BREAKPOINT_PX]
+  const stacked = [
+    NARROWEST_TESTED_PX,
+    1100,
+    WINDOW_DEFAULT_WIDTH,
+    1366,
+    PERFORMANCE_GRID_BREAKPOINT_PX,
+  ]
 
   /**
    * Collapsing doubles the chart's width, so it doubles the label — a `viewBox` has no way to
@@ -167,12 +210,13 @@ describe('an axis label renders legibly at every width the grid is used at', () 
 
 describe('the height that follows from the ratio', () => {
   /**
-   * Four charts on one screen only works if two rows fit a normal window. At the default 1280
-   * these are 197px each; the old 4.5:1 in the same column would have given 122px, which is where
-   * a 3% drawdown stops being a shape and becomes a wobble.
+   * Four charts on one screen only works if two rows fit the window that shows them. The widths
+   * are the grid's own, which since Story #182 start just above the breakpoint rather than at the
+   * default window: the old 4.5:1 in the same column would give 117px, which is where a 3%
+   * drawdown stops being a shape and becomes a wobble.
    */
   it('keeps a grid chart between 180 and 300 CSS px tall', () => {
-    for (const viewport of [WINDOW_DEFAULT_WIDTH, 1536, 1920, 3440]) {
+    for (const viewport of [PERFORMANCE_GRID_BREAKPOINT_PX + 1, 1536, 1920, 3440]) {
       const height = chartHeightPx(chartWidthPx(viewport))
       expect(height).toBeGreaterThan(180)
       expect(height).toBeLessThan(300)
@@ -180,7 +224,7 @@ describe('the height that follows from the ratio', () => {
   })
 
   it('is taller than DDR-0018’s ratio would have made it in the same column', () => {
-    const width = chartWidthPx(WINDOW_DEFAULT_WIDTH)
+    const width = chartWidthPx(PERFORMANCE_GRID_BREAKPOINT_PX + 1)
     expect(chartHeightPx(width)).toBeGreaterThan((width * 240) / 1080)
   })
 })

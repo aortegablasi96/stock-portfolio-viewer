@@ -92,7 +92,24 @@ export const AA_NORMAL = 4.5
 export const AA_LARGE = 3
 
 /** A colour used directly, or a token name resolved from `:root`. */
-type Colour = { readonly token: string } | { readonly literal: string }
+/**
+ * A colour named three ways: a `:root` token, a literal, or a token mixed into a surface.
+ *
+ * The third exists because Story #181 made `color-mix()` the way a rule tints something — five
+ * rules that had hard-coded a colour now mix it from a token, so the next re-key is a `:root`
+ * edit (DDR-0054) — and Story #182's sidebar puts accent text on exactly such a tint. Nothing
+ * measured those mixes before, which is the same blind spot this module's own header describes:
+ * a guard that lists only what has failed cannot see what has not failed *yet*.
+ *
+ * It models one form only, `color-mix(in srgb, X p%, transparent)` composited over an opaque
+ * surface. That is a per-channel lerp in sRGB, which is what a browser does for it, and it is
+ * the only form `app.css` uses. A mix in `oklab`, or over a translucent backdrop, would need
+ * more than this and should get it when a rule needs one.
+ */
+type Colour =
+  | { readonly token: string }
+  | { readonly literal: string }
+  | { readonly mix: { readonly token: string; readonly percent: number; readonly over: string } }
 
 /** One enumerated pairing that really occurs in the UI. */
 export interface Pairing {
@@ -106,11 +123,33 @@ export interface Pairing {
   readonly reason: string
 }
 
+function lookUp(name: string, tokens: Map<string, string>): string {
+  const hex = tokens.get(name)
+  if (hex === undefined) throw new Error(`${name} is not declared in :root`)
+  return hex
+}
+
+/** `color-mix(in srgb, top p%, transparent)` laid over an opaque `under`: a per-channel lerp. */
+export function mixOver(top: string, percent: number, under: string): string {
+  const a = Number.parseInt(top.slice(1), 16)
+  const b = Number.parseInt(under.slice(1), 16)
+  const f = percent / 100
+  const channels = [16, 8, 0].map((shift) =>
+    Math.round(f * ((a >> shift) & 255) + (1 - f) * ((b >> shift) & 255)),
+  )
+  return `#${channels.map((c) => c.toString(16).padStart(2, '0')).join('')}`
+}
+
 function resolve(colour: Colour, tokens: Map<string, string>): string {
   if ('literal' in colour) return colour.literal
-  const hex = tokens.get(colour.token)
-  if (hex === undefined) throw new Error(`${colour.token} is not declared in :root`)
-  return hex
+  if ('mix' in colour) {
+    return mixOver(
+      lookUp(colour.mix.token, tokens),
+      colour.mix.percent,
+      lookUp(colour.mix.over, tokens),
+    )
+  }
+  return lookUp(colour.token, tokens)
 }
 
 /**
@@ -236,6 +275,35 @@ export const PAIRINGS: readonly Pairing[] = [
     background: { token: '--bg' },
     minimum: AA_NORMAL,
     reason: 'The active tab’s label is the most-read accent text in the app.',
+  },
+  /**
+   * The two pairings Story #182 added, both on the sidebar (DDR-0055).
+   *
+   * The sidebar's ground is `--card`, so an inactive row's `--muted` label and an active row's
+   * `--accent` label are already covered above. What is new is that the active row is *tinted*:
+   * neither of those two entries measures accent text on an accent wash, and the wash is what
+   * decides how loud the tint may be. 16% measures 4.95:1, and the ceiling is close enough to
+   * matter: 20% is 4.60:1 and 22% is 4.41:1 — a failure. Tuning the wash by eye would cross that
+   * line without anything noticing, which is the whole reason the mix is measured rather than
+   * described.
+   */
+  {
+    where: '.app-tab-active — the accent label on the sidebar row’s own accent tint',
+    foreground: { token: '--accent' },
+    background: { mix: { token: '--accent', percent: 16, over: '--card' } },
+    minimum: AA_NORMAL,
+    reason:
+      'The active view’s label sits on a dilute wash of the same hue, which is the pairing a ' +
+      'tinted "selected" row always creates and the one nothing measured before Story #182.',
+  },
+  {
+    where: '.app-tab:hover — a hovered row’s label on its neutral lift',
+    foreground: { token: '--text' },
+    background: { mix: { token: '--text', percent: 7, over: '--card' } },
+    minimum: AA_NORMAL,
+    reason:
+      'Listed although it passes wide: the hover lightens the surface under the ink, so it is ' +
+      'the row’s worse state, and a later story raising the lift would otherwise go unmeasured.',
   },
   {
     where: '.chart-axis-label — SVG <text> on a chart card',
