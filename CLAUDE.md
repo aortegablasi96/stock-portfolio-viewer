@@ -60,10 +60,12 @@ Live domains exist end-to-end as reference patterns:
   rather than doubling a total, so the curve doubles back on itself. It carries **no
   `fxRateToBase`** (reported in base already) and every category attribute is optional — an asset
   class the query does not select is *absent*, not zero, which is why `options` never appears.
-  Real sample exports and a field reference live in `docs/flex-queries/` — check them before
-  guessing at Flex XML shapes, and before concluding a section is *missing*: Story #171 opened by
-  declaring a daily NAV unavailable when section 13 was already exported and simply unparsed. See
-  ADR-0005, DDR-0004, DDR-0008, DDR-0010, DDR-0050.
+  Real sample exports and a field reference live in `docs/flex-queries/`, which is **gitignored**
+  — it is real account data, so a fresh clone has none of it and the parser's own tests fall back
+  to a compact inline fixture. Check them before guessing at Flex XML shapes, and before
+  concluding a section is *missing*: Story #171 opened by declaring a daily NAV unavailable when
+  section 13 was already exported and simply unparsed. See ADR-0005, DDR-0004, DDR-0008,
+  DDR-0010, DDR-0050.
 - **analytics / dividends** — read-only analytics over the imported Flex data (M3, Stories
   #21–#24). `performanceService` / `allocationService` / `realizedGainsService` (analytics)
   and `dividendService` (dividends) read *only* through `flexReadRepository`, convert to base
@@ -130,7 +132,8 @@ src/
                  classification.ts), errors.ts
 drizzle/         generated SQL migrations + meta journal
 e2e/             Playwright specs that launch the built Electron app
-docs/flex-queries/  real IBKR Flex exports + field reference (parser ground truth)
+docs/flex-queries/  real IBKR Flex exports + field reference (parser ground truth) — gitignored
+docs/figma_design/  Epic #179's Figma Make export — a gitignored local copy of the proposal
 ```
 
 Canonical flows to copy when adding a feature:
@@ -391,8 +394,8 @@ Canonical flows to copy when adding a feature:
   enabled — as a *reference* for the component API, not as a dependency to install. Do not run
   `shadcn add`, and do not propose adopting the package again without new reasons: it would pull
   Tailwind v4 + PostCSS into the renderer build plus `radix-ui`, `cva`, `clsx`, `tailwind-merge`
-  and `lucide-react`; a large share of the 2,200-line `renderer/src/app.css` is chart/donut/map
-  styling shadcn has no equivalent for (so the app would run two styling systems); Radix Tabs
+  and `lucide-react`; a large share of `renderer/src/app.css` is chart/donut/map styling
+  shadcn has no equivalent for (so the app would run two styling systems); Radix Tabs
   would displace `lib/tabKeyboard.ts`, which exists precisely because Vitest is Node-only
   (DDR-0029); and DDR-0012 already rules out the modal components carrying much of shadcn's
   value. What *is* adopted is the API shape — a `variant`/`size` prop contract and
@@ -452,10 +455,14 @@ Canonical flows to copy when adding a feature:
   which `lib/motionTokens.ts` guards; and the scroll-driven table fade is the one structural
   exemption (`animation-timeline: scroll(self block)` has no duration to zero and is the "more
   rows below" affordance), which is why the blanket `*{animation-duration:0.01ms!important}`
-  reset was rejected. Mapbox's own camera is already honoured —
-  `respectPrefersReducedMotion` defaults true and `CountryMap.tsx` passes no `essential: true`
-  — so **don't file a story for it**; what's missing is only a guard, since `motionTokens.ts`
-  reads `app.css` and a call-site opt-out lives in a `.tsx`.
+  reset was rejected. The cascade itself is pinned in a real browser by
+  `e2e/reduced-motion.spec.ts` (Story #154), because `designTokens.test.ts` can see that a token
+  is zeroed but not that the media query wins over `:root` — nor that the three animations which
+  used to escape (`.country-mark-slice`, `.classify-progress-bar`, `.map-popup-shell`) now stop.
+  Mapbox's own camera is already honoured — `respectPrefersReducedMotion` defaults true and
+  `CountryMap.tsx` passes no `essential: true` — so **don't file a story for it**; what's missing
+  is only a guard on that one call site, since `motionTokens.ts` reads `app.css` and the opt-out
+  would live in a `.tsx`.
 - **The renderer has one of each control, and adding a variant means naming a role rather than
   writing CSS** (Epic #125, Stories #127–#134). Each primitive under `components/ui/` replaced
   several hand-rolled class families, and each has a guard test in `lib/*Variants.test.ts` that
@@ -607,6 +614,9 @@ Canonical flows to copy when adding a feature:
 The artifact-driven workflow in this file is implemented as concrete skills in four tiers.
 Each stage produces an artifact that becomes the input to the next; execution skills only
 consume *approved* artifacts and must not redefine requirements, design, or architecture.
+
+They are **plain `SKILL.md` files, not `Skill`-tool skills** — read the one you need directly
+at `.claude/skills/<tier>/<name>/SKILL.md` and follow it; invoking it by name resolves nothing.
 
 **workflow-skills** — planning, each produces a review artifact:
 `product-manager` (Product Review) → `ui-designer` (UI Review) → `architect`
@@ -895,6 +905,11 @@ Core documents:
 * product.md
 * mcp.md (MCP server setup and usage notes)
 * github-issues.md (backlog conventions — Epics / User Stories / Bugs)
+
+Two directories under `docs/` are **gitignored and local-only**, so a fresh clone has neither:
+`flex-queries/` (real IBKR exports — the parser's ground truth) and `figma_design/` (the Figma
+Make export Epic #179 adopts, which carries its own CLAUDE.md and AGENTS.md). Every redesign
+story states its own values rather than pointing at the latter, so it can go at any time.
 
 Project history and milestones are **not** kept in local files. Milestones and work items
 live in GitHub Issues (Epics / User Stories, grouped under GitHub Milestones); the record of
