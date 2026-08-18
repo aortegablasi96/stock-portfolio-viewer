@@ -8,8 +8,10 @@ import { SnapshotHistory } from './SnapshotHistory'
 import { ConfirmAction } from './ConfirmAction'
 import { Button } from './ui/Button'
 import { Card } from './ui/Card'
+import { PageHeader } from './ui/PageHeader'
 import { StatePanel } from './ui/StatePanel'
 import { readingFrom, type GatewayReading } from '../lib/gatewayStatus'
+import { LIVE_SOURCE } from '../lib/pageHeader'
 
 /** The currencies this account actually holds, sorted — what the sidebar's selector offers. */
 function heldCurrencies(holdings: readonly Holding[]): string[] {
@@ -71,6 +73,16 @@ export function PortfolioDashboard({
   const [capture, setCapture] = useState<CaptureState>({ phase: 'idle' })
   const [busy, setBusy] = useState(false)
   const [historyStatus, setHistoryStatus] = useState<string | null>(null)
+  /**
+   * When the figures on screen were read, for the header's freshness line (Story #185).
+   *
+   * Set only where `state` is set to `ok`, which is the same rule `useAnalytics` follows for the
+   * analytics views: a failed read tells you nothing about how old the last successful one is, and
+   * dating an error would age figures that never arrived. The sidebar's gateway badge is the
+   * counterpart that *does* report the failures (DDR-0056) — it answers "is the source
+   * answering?", where this answers "how old is what I am reading?".
+   */
+  const [loadedAt, setLoadedAt] = useState<number | null>(null)
 
   // Latest selected currency for callbacks that fire outside React's render flow (the
   // main→renderer "snapshot captured" event), so an on-open capture reloads history in the
@@ -107,6 +119,7 @@ export function PortfolioDashboard({
         switch (result.status) {
           case 'ok':
             setState({ phase: 'ok', overview: result.overview })
+            setLoadedAt(Date.now())
             break
           case 'not_connected':
             setState({ phase: 'not_connected', message: result.message })
@@ -219,20 +232,23 @@ export function PortfolioDashboard({
 
   return (
     <main className="dashboard">
-      <header className="dashboard-header">
-        <div>
-          <p className="eyebrow">Stock Portfolio Viewer</p>
-          <h1>Portfolio</h1>
-        </div>
-        <div className="dashboard-actions">
-          {/* The display-currency control used to sit between these two (Story #183): it is a
-              property of the app rather than of this view, so it moved to the sidebar's footer. */}
-          <p className="source-note">Live from Interactive Brokers</p>
+      {/* The same header the four analytics views open with (Story #185, DDR-0058). Two things
+          this view used to spell out are the shell's now: the provenance sentence, and the reading
+          time — which this view had no equivalent of at all, since the `RefreshBar` that carried
+          it is an analytics control. The display-currency control used to sit inside this block
+          (Story #183); it is a property of the app rather than of this view, so it moved to the
+          sidebar's footer. */}
+      <PageHeader
+        title="Portfolio"
+        source={LIVE_SOURCE}
+        loadedAt={loadedAt}
+        refreshing={busy}
+        action={
           <Button onClick={() => void captureNow()} disabled={capture.phase === 'capturing'}>
             {capture.phase === 'capturing' ? 'Capturing…' : 'Capture now'}
           </Button>
-        </div>
-      </header>
+        }
+      />
 
       {(capture.phase === 'done' || capture.phase === 'error') && (
         <p

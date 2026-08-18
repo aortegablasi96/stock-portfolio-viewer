@@ -50,6 +50,8 @@
      that this token is overwhelmingly *text*: seven of its nine call sites are a
      `color` — the eyebrow, the active tab, the sorted column header, the active
      toggle, the accent badge, the outline button's hover, the control's hover.
+     (Story #185 dropped the eyebrow, so it is six of them now; the ratio that
+     settled the value is unchanged, and the count is left as #181 measured it.)
      #6366f1 is 4.14:1 on --card, which clears the 3:1 a focus ring needs and
      fails the 4.5:1 all seven of those need. #818cf8 is 6.21:1, and it is the
      value the proposal itself assigns to "text and active states". The identity
@@ -358,13 +360,11 @@ html {
   background: transparent;
 }
 
-.eyebrow {
-  margin: 0 0 var(--space-2);
-  font-size: var(--text-xs);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--accent);
-}
+/* `.eyebrow` — the accent micro-label that used to print the app's name above each page title —
+   was dropped in Story #185. The redesign's prototype keeps it, and that is the one part of its
+   header this app cannot take: the title bar is the window's banner and carries the app name, and
+   the sidebar's brand tile carries it again, so an eyebrow would name the app three times on
+   every screen and the view once. */
 
 .sr-only {
   position: absolute;
@@ -847,30 +847,42 @@ html {
   gap: var(--space-7);
 }
 
-.dashboard-header {
+/* The one header every view opens with (Story #185, DDR-0058). It replaces `.dashboard-header`
+   and `.dashboard-actions`, which the Portfolio view and the `AnalyticsPage` wrapper each drew,
+   and it absorbs the `.view-toolbar` row that used to carry the reading time *below* the header.
+   Top-aligned rather than bottom-aligned, because the right column is now two rows deep and its
+   first line has to sit level with the title. */
+.page-header {
   display: flex;
-  align-items: flex-end;
+  align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-5);
   flex-wrap: wrap;
 }
 
-.dashboard-header h1 {
+.page-title {
   margin: 0;
   font-size: var(--text-2xl);
+}
+
+/* Provenance over [reading time · primary action], right-aligned against the page's edge. */
+.page-header-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-3);
+}
+
+.page-header-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
 }
 
 .source-note {
   margin: 0;
   font-size: var(--text-xs);
   color: var(--muted);
-}
-
-.dashboard-actions {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: var(--space-3);
 }
 
 .table-notice {
@@ -1855,18 +1867,13 @@ html {
   gap: var(--space-7);
 }
 
-/* Freshness line + explicit refresh, above the view's own controls (Story #109). Right-aligned
-   and quiet: it reports on the view rather than being part of it, and the negative margin keeps
-   it tucked against whatever follows instead of reading as its own band. */
-.view-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: var(--space-4);
-  margin-bottom: calc(-1 * var(--space-4));
-}
+/* The freshness line the explicit refresh sits beside (Story #109). It had a row of its own
+   (`.view-toolbar`) between the header and the view's first control until Story #185 folded it
+   into `.page-header-status` — a line reporting on the view reads as part of the header rather
+   than as a band of its own, which is what the negative margin that rule carried was working
+   around.
 
-/* Prose with a clock in it — "Refreshing…", "Updated 16:04" — so it keeps tabular
+   Prose with a clock in it — "Refreshing…", "Updated 16:04" — so it keeps tabular
    digits and stays out of the figure role (DDR-0053). */
 .view-updated {
   margin: 0;

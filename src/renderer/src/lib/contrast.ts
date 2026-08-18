@@ -270,7 +270,7 @@ export const PAIRINGS: readonly Pairing[] = [
     reason: 'An inactive tab label is --muted on the translucent nav over --bg.',
   },
   {
-    where: '--accent as text — .eyebrow, the active tab, a sorted header, an active toggle',
+    where: '--accent as text — the active tab, a sorted header, an active toggle, an accent badge',
     foreground: { token: '--accent' },
     background: { token: '--card' },
     minimum: AA_NORMAL,

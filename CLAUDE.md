@@ -22,7 +22,10 @@ dropped — the rotation cost `aria-orientation` and Up/Down and nothing else. I
 followed (#183, DDR-0056): a brand mark, a gateway badge derived from the Portfolio view's own read,
 and the display currency, which is now the *app's* selection rather than the dashboard's. The
 sidebar shell is now finished: #184 (DDR-0057) **collapses** it to a 56px icon rail, so the column
-has two widths and 220px is only one of them.
+has two widths and 220px is only one of them. The first of the **shared surfaces** has landed with
+it: #185 (DDR-0058) gives all five views **one page header**, owned by `AnalyticsShell` rather than
+by `App.tsx` — which is where the second copy of the dashboard's header actually lived, not the
+"no heading at all" the story was filed on.
 
 **Every view has been reworked several times, and refinement is ongoing — so read the backlog
 before assuming a view is final.** Which Epics are open is deliberately **not recorded here**:
@@ -298,7 +301,8 @@ Canonical flows to copy when adding a feature:
   clear, the inline `NeedsImport` action) bump `renderer/src/lib/dataVersion`, and every
   `useAnalytics` re-reads on a bump. `loading` therefore means the **first** load only — a
   reload keeps the current report on screen and reports itself through `refreshing`, which is
-  what makes the shared `RefreshBar` (reading time + Refresh) non-destructive. The **Portfolio
+  what makes the page header's reading time + Refresh non-destructive (a `RefreshBar` of its own
+  until #185 folded it into the header, DDR-0058). The **Portfolio
   tab is deliberately excluded** and still re-reads on every visit: it shows live IBKR data,
   which changes with no event to signal it. See DDR-0027 (extends DDR-0006).
 - **The view list is the full WAI-ARIA tabs pattern**, not a styled column of buttons (DDR-0029),
@@ -571,7 +575,7 @@ Canonical flows to copy when adding a feature:
 - **An analytics view is a subject noun and a function of its report** (DDR-0043).
   `components/analytics/AnalyticsShell.tsx` owns the four-branch guard all four views had spelled
   out byte-for-byte — loading, error + Retry, `NeedsImport`, then the `.analytics-view` wrapper
-  and the `RefreshBar`. Three things to know. The children are a **function of the report, not
+  and the freshness line. Three things to know. The children are a **function of the report, not
   elements**: three of the four states have no report, so a `ReactNode` shell would force every
   view to guard *again*. **The shell holds no state whatsoever**, which is what keeps DDR-0027
   intact — range selection, chart tab, type chips and map colour mode stay in the view *above*
@@ -579,6 +583,32 @@ Canonical flows to copy when adding a feature:
   **explicitly** at all four call sites, because inferring it out of a union member is where
   TypeScript is weakest. `lib/analyticsShell.ts` holds the branch mapping and the wording; its
   test reads the four views as text and fails if one re-declares the guard, the wrapper or the bar.
+- **Since #185 the shell also owns the page box and the header, and the header is one component for
+  all five views** (DDR-0058). `components/ui/PageHeader.tsx` — title left; provenance right, over
+  the reading time and the primary action — replaces *two* implementations of the same block:
+  `PortfolioDashboard`'s `.dashboard-header` and an `AnalyticsPage` wrapper that lived in `App.tsx`
+  (so the story's premise that the analytics views had "no heading at all" was wrong; they had a
+  second copy of the dashboard's). Six things follow. The shell renders `<main className="dashboard">`
+  and the header **above** its four-way switch, which is what makes "the title renders in every
+  branch" a mechanism rather than a convention — an error state still says which view it is. The
+  **status row is absent, not empty**, in the three unloaded branches: `error` already carries Retry
+  inside its `StatePanel` and `needs_import` its own import action, so a header action there would be
+  a second control for one job (DDR-0038). `RefreshBar` is **gone**, dissolved into the header's
+  status row with its `role="status"` live region, its `aria-label` and its `disabled={refreshing}`
+  intact — `.view-toolbar` and the negative margin holding it against the content went with it. The
+  shell now takes **three nouns** (`title`, `subject`, `refreshLabel`), because `TradeHistoryView`
+  disagrees with itself three ways. `readingLine` (`lib/pageHeader.ts`) tests **`loadedAt` before
+  `refreshing`**, which the analytics views cannot tell apart but Portfolio can: it renders one
+  header over all five of its own states, so it is busy before anything has been read, and Portfolio
+  gained a `loadedAt` of its own — written only where the state is set to `ok`, the rule
+  `useAnalytics` already follows. And the prototype's `STOCK PORTFOLIO VIEWER` **eyebrow is dropped**
+  (`.eyebrow` is out of `app.css`): the title bar and the sidebar's brand tile already name the app,
+  and a third copy names it three times per screen against the view's once. The `analyticsShell`
+  guard grew `<PageHeader`, `<main`, `<h1>` and `className="dashboard"` — over the four views **and
+  `App.tsx`** — and **now strips comments first**, which it did not before and which it needed the
+  moment those were added (the DDR-0042 / DDR-0047 trap, a third time). `e2e/page-header.spec.ts`
+  holds what no Node test can see: one header per view, the title surviving a report-less branch,
+  and exactly one exposed `<h1>`.
 - **The Allocation breakdown's table and donut are linked, and the link is keyed on the slice's
   `key`, never on position** (DDR-0040) — the table sorts by any column (DDR-0039), so row order
   and arc order have no reason to agree. The emphasis **never touches `fill`** (hue is identity,
@@ -1070,7 +1100,7 @@ so no test may render a React component. This shapes the renderer: chart maths, 
 sorting and formatting are **extracted out of components into pure modules under
 `renderer/src/lib/`** (`format`, `pie`, `worldGeo`, `countryDonuts`, `gainLoss`, `tableFilter`,
 `column`, `dateRange`, `sectorMap`, `performanceRange`, `dailyReturns`, `composition`, `chartGeometry`, `classifyProgress`, `dataVersion`,
-`gatewayStatus`, `sidebarCollapse`, `tabKeyboard`, `buttonVariants`, `cardVariants`, `statTileVariants`, `fieldVariants`,
+`gatewayStatus`, `sidebarCollapse`, `tabKeyboard`, `pageHeader`, `buttonVariants`, `cardVariants`, `statTileVariants`, `fieldVariants`,
 `toggleGroupVariants`, `badgeVariants`, `statePanelVariants`, `tableSort`, `dataTableVariants`,
 `sliceHighlight`, `mapPopupTint`, `cssDeclarations`, `tokenAdoption`, `motionTokens`, `contrast`,
 `figureRole`, `analyticsShell`)

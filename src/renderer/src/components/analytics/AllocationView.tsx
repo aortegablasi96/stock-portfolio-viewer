@@ -57,7 +57,11 @@ export function AllocationView(): React.JSX.Element {
   // The breakdown tab stays above the shell: it is the view's own state, and the shell holds
   // none, so it survives a tab switch exactly as it did (DDR-0027).
   return (
-    <AnalyticsShell<AllocationReport> subject="allocation" analytics={analytics}>
+    <AnalyticsShell<AllocationReport>
+      title="Allocation"
+      subject="allocation"
+      analytics={analytics}
+    >
       {(r) => {
         const c = (v: number): string => formatCurrency(v, r.baseCurrency)
         const top = r.positions[0]
