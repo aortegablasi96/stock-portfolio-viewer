@@ -1,18 +1,20 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { PortfolioOverview } from '@shared/domain/portfolio'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import type { Holding, PortfolioOverview } from '@shared/domain/portfolio'
 import type { SnapshotSummary } from '@shared/domain/snapshot'
 import { HoldingsTable } from './HoldingsTable'
 import { BalancesSummary } from './BalancesSummary'
 import { AllocationPanel } from './AllocationPanel'
 import { SnapshotHistory } from './SnapshotHistory'
-import { CurrencySelector } from './CurrencySelector'
 import { ConfirmAction } from './ConfirmAction'
 import { Button } from './ui/Button'
 import { Card } from './ui/Card'
 import { StatePanel } from './ui/StatePanel'
+import { readingFrom, type GatewayReading } from '../lib/gatewayStatus'
 
-/** Default display currency on first load: the account base currency (Story #28). */
-const DEFAULT_DISPLAY_CURRENCY = 'EUR'
+/** The currencies this account actually holds, sorted — what the sidebar's selector offers. */
+function heldCurrencies(holdings: readonly Holding[]): string[] {
+  return [...new Set(holdings.map((h) => h.currency).filter((code) => code !== ''))].sort()
+}
 
 /**
  * The portfolio dashboard. Fetches the live overview from the main process on
@@ -31,6 +33,13 @@ const DEFAULT_DISPLAY_CURRENCY = 'EUR'
  * gateway, so it renders even when the live overview is not_connected/error.
  * The component holds no business logic — assembly, calculations, and the capture
  * policy live in the services (see the M2 Architecture Review / DDR-0003).
+ *
+ * Story #183 moved the display-currency control out of this header and into the sidebar, which
+ * makes this view a **reporter as well as a reader** (DDR-0056). It receives the currency to
+ * convert into, and it hands back up the two things only a live read can know: which currencies
+ * the account holds, and what the gateway did when asked. That reporting is the whole source of
+ * truth for the sidebar's status badge — this view already re-reads on every visit, because it
+ * is the one tab deliberately excluded from stay-mounted (DDR-0027), so nothing has to poll.
  */
 type LoadState =
   | { phase: 'loading' }
@@ -45,11 +54,21 @@ type CaptureState =
   | { phase: 'done'; message: string }
   | { phase: 'error'; message: string }
 
-export function PortfolioDashboard(): React.JSX.Element {
+export function PortfolioDashboard({
+  displayCurrency,
+  onCurrenciesFound,
+  onGatewayReading,
+}: {
+  /** The app's display currency, owned by the shell since the control moved to the sidebar. */
+  displayCurrency: string
+  /** The currencies this account holds, so the sidebar's selector can offer them. */
+  onCurrenciesFound: (codes: readonly string[]) => void
+  /** What the gateway did, for the sidebar's badge. Reported on every read, success or not. */
+  onGatewayReading: (reading: GatewayReading) => void
+}): React.JSX.Element {
   const [state, setState] = useState<LoadState>({ phase: 'loading' })
   const [snapshots, setSnapshots] = useState<SnapshotSummary[]>([])
   const [capture, setCapture] = useState<CaptureState>({ phase: 'idle' })
-  const [displayCurrency, setDisplayCurrency] = useState(DEFAULT_DISPLAY_CURRENCY)
   const [busy, setBusy] = useState(false)
   const [historyStatus, setHistoryStatus] = useState<string | null>(null)
 
@@ -61,36 +80,59 @@ export function PortfolioDashboard(): React.JSX.Element {
     displayCurrencyRef.current = displayCurrency
   }, [displayCurrency])
 
+  /**
+   * Which overview read is the current one.
+   *
+   * The selector used to be disabled while a conversion was in flight, which is how two reads
+   * were kept from overlapping. It cannot be disabled from the sidebar — it has to stay usable
+   * while this tab is not even mounted (DDR-0056) — so the race is handled instead of avoided:
+   * a superseded read still reports its gateway reading, because that observation is true
+   * whatever the owner has since selected, and then drops its figures on the floor.
+   */
+  const currentRead = useRef(0)
+
   // `keepPrevious` keeps the current figures visible while re-converting on a currency
   // change, so switching currency shows a subtle busy hint rather than blanking the view.
-  const load = useCallback(async (currency: string, keepPrevious = false) => {
-    if (!keepPrevious) setState({ phase: 'loading' })
-    setBusy(true)
-    try {
-      const result = await window.api.getPortfolioOverview({ displayCurrency: currency })
-      switch (result.status) {
-        case 'ok':
-          setState({ phase: 'ok', overview: result.overview })
-          break
-        case 'not_connected':
-          setState({ phase: 'not_connected', message: result.message })
-          break
-        case 'not_responding':
-          setState({ phase: 'not_responding', message: result.message })
-          break
-        case 'error':
-          setState({ phase: 'error', message: result.message })
-          break
+  const load = useCallback(
+    async (currency: string, keepPrevious = false) => {
+      const read = ++currentRead.current
+      const isCurrent = (): boolean => currentRead.current === read
+      if (!keepPrevious) setState({ phase: 'loading' })
+      setBusy(true)
+      try {
+        const result = await window.api.getPortfolioOverview({ displayCurrency: currency })
+        onGatewayReading(readingFrom(result.status, Date.now()))
+        if (result.status === 'ok') onCurrenciesFound(heldCurrencies(result.overview.holdings))
+        if (!isCurrent()) return
+        switch (result.status) {
+          case 'ok':
+            setState({ phase: 'ok', overview: result.overview })
+            break
+          case 'not_connected':
+            setState({ phase: 'not_connected', message: result.message })
+            break
+          case 'not_responding':
+            setState({ phase: 'not_responding', message: result.message })
+            break
+          case 'error':
+            setState({ phase: 'error', message: result.message })
+            break
+        }
+      } catch (err) {
+        // The bridge itself failed, which the badge reports the same way the handler's `error`
+        // variant is reported: the gateway told us nothing usable.
+        onGatewayReading({ status: 'error', at: Date.now() })
+        if (!isCurrent()) return
+        setState({
+          phase: 'error',
+          message: err instanceof Error ? err.message : 'Unexpected error loading the portfolio.',
+        })
+      } finally {
+        if (isCurrent()) setBusy(false)
       }
-    } catch (err) {
-      setState({
-        phase: 'error',
-        message: err instanceof Error ? err.message : 'Unexpected error loading the portfolio.',
-      })
-    } finally {
-      setBusy(false)
-    }
-  }, [])
+    },
+    [onCurrenciesFound, onGatewayReading],
+  )
 
   // History is read from local storage but converted to the display currency with live
   // gateway FX (Bug #44); it degrades gracefully in the service when disconnected, so it
@@ -102,24 +144,6 @@ export function PortfolioDashboard(): React.JSX.Element {
       setSnapshots([])
     }
   }, [])
-
-  const onCurrencyChange = useCallback(
-    (currency: string) => {
-      setDisplayCurrency(currency)
-      void load(currency, true)
-      void loadHistory(currency)
-    },
-    [load, loadHistory],
-  )
-
-  // The currencies the selector offers: the default base plus every currency actually held.
-  const currencyOptions = useMemo(() => {
-    const codes = new Set<string>([DEFAULT_DISPLAY_CURRENCY, displayCurrency])
-    if (state.phase === 'ok') {
-      for (const h of state.overview.holdings) if (h.currency) codes.add(h.currency)
-    }
-    return [...codes].sort()
-  }, [state, displayCurrency])
 
   const captureNow = useCallback(async () => {
     setCapture({ phase: 'capturing' })
@@ -170,13 +194,28 @@ export function PortfolioDashboard(): React.JSX.Element {
     }
   }, [])
 
+  /**
+   * Read on mount, and again whenever the app's display currency changes.
+   *
+   * One effect covers both because they are the same read; what differs is whether there are
+   * figures on screen worth keeping. The first pass blanks to a loading state, a currency change
+   * keeps the previous figures under the "Converting…" hint — the behaviour the old in-header
+   * selector had, now driven from outside the component.
+   */
+  const hasLoaded = useRef(false)
   useEffect(() => {
-    void load(DEFAULT_DISPLAY_CURRENCY)
-    void loadHistory(DEFAULT_DISPLAY_CURRENCY)
+    const keepPrevious = hasLoaded.current
+    hasLoaded.current = true
+    void load(displayCurrency, keepPrevious)
+    void loadHistory(displayCurrency)
+  }, [displayCurrency, load, loadHistory])
+
+  useEffect(
     // Refresh history when the main process captures a snapshot on open, in the currency
     // currently on screen (the ref avoids re-subscribing on every currency change).
-    return window.api.onSnapshotCaptured(() => void loadHistory(displayCurrencyRef.current))
-  }, [load, loadHistory])
+    () => window.api.onSnapshotCaptured(() => void loadHistory(displayCurrencyRef.current)),
+    [loadHistory],
+  )
 
   return (
     <main className="dashboard">
@@ -186,13 +225,9 @@ export function PortfolioDashboard(): React.JSX.Element {
           <h1>Portfolio</h1>
         </div>
         <div className="dashboard-actions">
+          {/* The display-currency control used to sit between these two (Story #183): it is a
+              property of the app rather than of this view, so it moved to the sidebar's footer. */}
           <p className="source-note">Live from Interactive Brokers</p>
-          <CurrencySelector
-            value={displayCurrency}
-            options={currencyOptions}
-            disabled={busy}
-            onChange={onCurrencyChange}
-          />
           <Button onClick={() => void captureNow()} disabled={capture.phase === 'capturing'}>
             {capture.phase === 'capturing' ? 'Capturing…' : 'Capture now'}
           </Button>

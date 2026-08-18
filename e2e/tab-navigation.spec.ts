@@ -86,8 +86,29 @@ test('the tablist is a single stop in the Tab order', async () => {
   ])
 })
 
-test('Tab from the selected tab moves into its panel, not along the other tabs', async () => {
+test('Tab from the selected tab leaves the tablist, and reaches the panel (Story #183)', async () => {
+  // What this has always pinned is the roving tabindex: Tab out of the selected tab must not walk
+  // the other four. It used to land directly on the panel, because the tablist was the last thing
+  // in the sidebar. Story #183 put the display-currency control below it, so the next stop is now
+  // that control — the sidebar's own content, in DOM order, which is also its visual order — and
+  // the panel is the one after.
   await page.getByRole('tab', { name: 'Portfolio' }).focus()
+
+  await page.keyboard.press('Tab')
+  const afterTablist = await focusedId()
+  const stops = await page.evaluate((id) => {
+    const focused = document.getElementById(id)
+    return {
+      isATab: focused?.getAttribute('role') === 'tab',
+      inTheSidebar: focused?.closest('.app-sidebar') !== null,
+      // The accessible name, which is what a keyboard reader hears on arriving.
+      label: document.querySelector(`label[for="${CSS.escape(id)}"]`)?.textContent,
+    }
+  }, afterTablist)
+  expect(stops.isATab).toBe(false)
+  expect(stops.inTheSidebar).toBe(true)
+  expect(stops.label).toBe('Display currency')
+
   await page.keyboard.press('Tab')
   expect(await focusedId()).toBe('panel-portfolio')
 })

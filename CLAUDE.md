@@ -18,9 +18,11 @@ views.
 foundation stories have landed: bundled typefaces with a figure role (#180, DDR-0053), the
 navy/indigo palette re-key (#181, DDR-0054), and the **vertical sidebar** that replaced the
 horizontal tab strip (#182, DDR-0055). The WAI-ARIA tabs pattern described below was kept, not
-dropped — the rotation cost `aria-orientation` and Up/Down and nothing else. Two sidebar stories
-are still open (its context rail, and collapsing it), so the *column's contents* are not settled;
-its semantics and its 220px width are.
+dropped — the rotation cost `aria-orientation` and Up/Down and nothing else. Its **context rail**
+followed (#183, DDR-0056): a brand mark, a gateway badge derived from the Portfolio view's own read,
+and the display currency, which is now the *app's* selection rather than the dashboard's. One
+sidebar story is still open — collapsing it — so the column's 220px **width** is not settled; its
+semantics and its contents are.
 
 **Every view has been reworked several times, and refinement is ongoing — so read the backlog
 before assuming a view is final.** Which Epics are open is deliberately **not recorded here**:
@@ -340,6 +342,29 @@ Canonical flows to copy when adding a feature:
   both record. Icons stop at the tablist: the analytics sub-tabs, the breakdown strip and the
   `RangeFilter` presets are `ToggleGroup`s, not tabs (DDR-0036), and giving them icons is a
   separate judgement.
+- **The sidebar also carries the app's standing context, and the gateway badge is derived rather
+  than polled** (Story #183, DDR-0056). Its source of truth is the last `portfolio:getOverview`
+  result, which the Portfolio view reports up to `App` — that tab re-reads on every visit because it
+  is the one excluded from stay-mounted (DDR-0027), so **nothing polls**: a timer would contradict
+  "one bounded attempt, never a retry loop" (DDR-0022) and would mostly be answered from
+  `gatewayCache` anyway (DDR-0024). The cost of deriving is that a reading **ages**, so a live one
+  expires after five minutes — `Live · 14:32` becomes `Last seen 14:32` — mirroring `SESSION_TTL_MS`,
+  *restated* in `lib/gatewayStatus.ts` rather than imported, since the renderer may not reach
+  `@repositories`. Only `live` ages out; the three unhappy outcomes are already the absence of a
+  gateway. There are **five outcomes, five wordings and three tones**, in that order of importance:
+  two pairs share a tone, so no pair is separated by colour alone, and `--gateway-mark` /
+  `--gateway-ink` declare the dot's fill (`--neg`) and its detail line's text (`--neg-text`) once
+  each so the DDR-0046 split cannot be swapped. The one `setTimeout` in `SidebarRail.tsx` is a clock,
+  not a poll — armed for the moment a live reading goes stale, never an interval. Three things moved
+  with it. `displayCurrency` is now the **app's** selection, held in `App`: it survives a switch away
+  and back, where it used to reset to EUR, and the control is **never disabled** (it must work while
+  the view it converts is unmounted), so the overlapping-read race it used to prevent is handled by a
+  request sequence in `PortfolioDashboard` instead. The callbacks `App` hands the dashboard must stay
+  **stable**, or its load effect re-runs the read that caused the render. And the prototype's account
+  number is deliberately **not** shown — `PortfolioOverview` carries none, and Epic #179 holds this
+  milestone to presentation-only changes, so that is a new figure needing its own story. One
+  consequence to expect: Tab from the selected tab now reaches the currency control before the panel,
+  which `e2e/tab-navigation.spec.ts` was adapted for.
 - **Fire-and-forget command + state event:** the `window:*` channels show the *other* IPC
   shape — `ipcRenderer.send` / `ipcMain.on` with no payload and no Zod (there is nothing to
   validate), plus one `invoke` query (`window:isMaximized`) and one main→renderer event
@@ -589,7 +614,11 @@ Canonical flows to copy when adding a feature:
   seventeenth form: a colour can now be named as a **token mixed into a surface**, because
   DDR-0054 made `color-mix()` the way a rule tints something and nothing measured the results. The
   sidebar's active row is the first such pairing (accent text on a 16% accent wash, 4.95:1) and
-  the ceiling is near — 22% fails — so a tint is a measured number, never an eyeballed one. Known and deliberately open: the
+  the ceiling is near — 22% fails — so a tint is a measured number, never an eyeballed one. #183
+  added the first pairings that are **not text at all** — the gateway dot in each of its three
+  tones — and with them `NON_TEXT` (3:1, WCAG 1.4.11), a separate name for the same number
+  `AA_LARGE` carries, because reading "large" beside a dot invites someone to "fix" a failure by
+  making the dot bigger. Known and deliberately open: the
   tab panels sit outside a landmark (axe `region`, best-practice), because `.tab-panel` wraps the
   view's `<main>` and unpicking that means restructuring DDR-0029 across every view.
 - **Never write a focus rule.** One ring — `--focus-ring` / `--focus-ring-offset`, always
@@ -1012,7 +1041,7 @@ so no test may render a React component. This shapes the renderer: chart maths, 
 sorting and formatting are **extracted out of components into pure modules under
 `renderer/src/lib/`** (`format`, `pie`, `worldGeo`, `countryDonuts`, `gainLoss`, `tableFilter`,
 `column`, `dateRange`, `sectorMap`, `performanceRange`, `dailyReturns`, `composition`, `chartGeometry`, `classifyProgress`, `dataVersion`,
-`tabKeyboard`, `buttonVariants`, `cardVariants`, `statTileVariants`, `fieldVariants`,
+`gatewayStatus`, `tabKeyboard`, `buttonVariants`, `cardVariants`, `statTileVariants`, `fieldVariants`,
 `toggleGroupVariants`, `badgeVariants`, `statePanelVariants`, `tableSort`, `dataTableVariants`,
 `sliceHighlight`, `mapPopupTint`, `cssDeclarations`, `tokenAdoption`, `motionTokens`, `contrast`,
 `figureRole`, `analyticsShell`)

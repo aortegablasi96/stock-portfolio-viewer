@@ -809,9 +809,11 @@ html {
   border-color: var(--accent);
 }
 
-/* One disabled treatment, and the same one the button uses — the currency
-   selector is disabled while a conversion is in flight (DDR-0007), which means
-   exactly what a disabled button means. */
+/* One disabled treatment, and the same one the button uses: a disabled control
+   means exactly what a disabled button means. (The display-currency selector
+   used to be the example here — it is no longer ever disabled, since Story #183
+   moved it to the sidebar, where it has to stay usable while the view it
+   converts is not mounted.) */
 .control:disabled {
   opacity: 0.6;
   cursor: default;
@@ -1438,9 +1440,13 @@ html {
    did not. `aria-orientation="vertical"` and Up/Down live in `App.tsx` and `lib/tabKeyboard.ts`.
 
    Sticky at the title bar's own height, so the list stays put while a long view scrolls under
-   it, and exactly as tall as what is left of the viewport. That is what makes `overflow-y`
-   meaningful here: five rows never fill it, but the context rail (#183) will add to the column
-   and the list has to be the part that gives. */
+   it, and exactly as tall as what is left of the viewport.
+
+   Story #183 filled the column above and below the list, and that settles which part gives when
+   the column runs short: the *list*. The rail states what the app is and whether its data source
+   is answering, and the footer holds a control — none of that may scroll out of sight to make
+   room for a sixth view. So the column itself no longer scrolls (`overflow: hidden`, where it
+   was `overflow-y: auto`) and `.app-sidebar-tabs` owns the scroll instead. */
 .app-sidebar {
   position: sticky;
   top: var(--titlebar-height);
@@ -1450,16 +1456,137 @@ html {
   flex-direction: column;
   width: var(--sidebar-width);
   height: calc(100vh - var(--titlebar-height));
-  overflow-y: auto;
+  overflow: hidden;
   background: var(--card);
   border-right: 1px solid var(--border);
+}
+
+/* ---- The sidebar's context rail (Story #183, DDR-0056) -------------------
+
+   Everything true of the *app* rather than of a view: what it is, whether the gateway behind it
+   is answering, and the currency every figure is shown in. */
+
+.app-sidebar-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-4);
+  border-bottom: 1px solid var(--border);
+}
+
+.app-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/* The mark: a rounded tile carrying the glyph. `--accent-strong` rather than `--accent` because
+   this is a *fill* under a white mark, and that is the half of the accent split measured for it
+   (DDR-0046) — white on it is 6.29:1, the same pairing `.btn-primary` renders. `--radius-md`
+   rather than a hand-picked corner, and `--space-8` for the box: 32px is on the scale, so the
+   tile needs no length of its own (DDR-0031). */
+.app-brand-mark {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: var(--space-8);
+  height: var(--space-8);
+  font-size: var(--text-md);
+  color: #ffffff;
+  background: var(--accent-strong);
+  border-radius: var(--radius-md);
+}
+
+/* Sized in `em` off the tile's own type step, for the reason `.app-tab-icon` is: an icon picked
+   in px is the one thing in the shell that would not move with the type scale (DDR-0048). */
+.app-brand-glyph {
+  width: 1em;
+  height: 1em;
+}
+
+.app-brand-name {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The gateway badge. Its three tones are declared once, as two local custom properties, so the
+   fill half and the text half of the loss tone cannot be mixed up at the two call sites below:
+   a dot is a filled shape and takes `--neg`, while the detail line is text and takes
+   `--neg-text` (DDR-0046). The wording is the channel that carries the state; this is the
+   second one. */
+.gateway-badge {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.gateway-badge-live {
+  --gateway-mark: var(--pos);
+  --gateway-ink: var(--pos);
+}
+
+.gateway-badge-idle {
+  --gateway-mark: var(--muted);
+  --gateway-ink: var(--muted);
+}
+
+.gateway-badge-warn {
+  --gateway-mark: var(--neg);
+  --gateway-ink: var(--neg-text);
+}
+
+/* The dot and its glow. The glow is `currentColor` diluted rather than a second colour, so a
+   tone is one declaration, and its blur is a spacing step rather than a hand-picked radius. */
+.gateway-dot {
+  flex-shrink: 0;
+  width: var(--space-3);
+  height: var(--space-3);
+  color: var(--gateway-mark);
+  background: currentColor;
+  border-radius: var(--radius-pill);
+  box-shadow: 0 0 var(--space-2) color-mix(in srgb, currentColor 60%, transparent);
+}
+
+.gateway-badge-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.gateway-badge-label {
+  font-size: var(--text-2xs);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.gateway-badge-detail {
+  font-size: var(--text-xs);
+  color: var(--gateway-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* The tablist itself. Its padding is not decoration: it is the gutter the focus ring lives in.
    The sidebar clips (it scrolls), and the ring is drawn 2px outside a 2px stroke — so a row
    flush against the sidebar's edge would lose the left half of its ring. `--space-3` is 8px,
-   comfortably more than the 4px needed. */
+   comfortably more than the 4px needed.
+
+   It is also the part of the column that gives (Story #183): `flex: 1` with `min-height: 0`, so
+   a short window shortens the *list* and leaves the rail and the currency footer where they are.
+   `min-height: 0` is the load-bearing half — a flex item's default minimum is its content, so
+   without it the list would refuse to shrink and push the footer off the bottom instead. */
 .app-sidebar-tabs {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
@@ -1552,6 +1679,29 @@ html {
   width: 3px;
   border-radius: var(--radius-pill);
   background: currentColor;
+}
+
+/* The column's footer: the display-currency control, pinned to the bottom (Story #183). It is
+   there because the currency is a property of the app rather than of the Portfolio view, and
+   because that view unmounts on every switch away (DDR-0027) — a control that lives inside it
+   cannot hold a selection the other four views are also converted by. */
+.app-sidebar-foot {
+  padding: var(--space-4);
+  border-top: 1px solid var(--border);
+}
+
+/* The field stacks here rather than sitting label-beside-control: 220px minus the column's own
+   padding has no room for both, and the label is a micro-label above its value in the redesign's
+   vocabulary. Placement only — `Field` and `Select` are unchanged, and the control keeps its own
+   box, hover, disabled and focus treatment (DDR-0035). */
+.app-currency {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
+}
+
+.app-currency .control {
+  width: 100%;
 }
 
 /* An analytics tab stays in the tree once opened and is hidden while another tab is active
