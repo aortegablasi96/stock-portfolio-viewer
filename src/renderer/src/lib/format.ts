@@ -122,10 +122,56 @@ export function formatSignedPercent(value: number): string {
   return base
 }
 
-/** Capitalise the first letter of each word, leaving intra-word letters (e.g. after an apostrophe) alone. */
+/**
+ * A token with no vowel is not a word, so it is an acronym and keeps its capitals (Story #214).
+ *
+ * IBKR exports every name in capitals, so nothing in the input distinguishes `LVMH` from `GOLD`:
+ * the case that would have carried the answer is the case being replaced. This is the one signal
+ * left that costs nothing to be wrong about — a vowel-less run of two or more letters is not
+ * pronounceable as a word in any of the languages these names come from.
+ *
+ * It is deliberately narrow, and the misses are the point of writing it down: `AB`, `SAP`, `AIG`
+ * and `BASF` all contain a vowel and still title-case to `Ab`, `Sap`, `Aig`, `Basf`. Widening it
+ * needs a signal, not a longer list of consonants — a wrong guess here renames a company, which
+ * is worse than leaving one shouting.
+ */
+const ACRONYM = /^[BCDFGHJKLMNPQRSTVWXZ]{2,}$/
+
+/**
+ * Title-case a name, one word at a time. A word is a run between spaces, hyphens and slashes, so
+ * an apostrophe is *inside* one and `LEON'S` becomes `Leon's` rather than `Leon'S`.
+ *
+ * Hyphens stay word separators, which is right for `COCA-COLA` → `Coca-Cola` and wrong for
+ * `CO-OPERATIVE` → `Co-Operative`. Both are hyphenated, both arrive in capitals, and nothing in
+ * either distinguishes them; the same holds for `MCLENNAN` → `Mclennan`. Story #214 leaves both
+ * alone deliberately (DDR-0067) rather than trading one wrong answer for another.
+ */
 function titleCaseWords(s: string): string {
-  return s.toLowerCase().replace(/(^|[\s\-/])([a-z])/g, (_, sep: string, c: string) => sep + c.toUpperCase())
+  return s.replace(/[^\s\-/]+/g, (word) =>
+    ACRONYM.test(word) ? word : word.toLowerCase().replace(/^[a-z]/, (c) => c.toUpperCase()),
+  )
 }
+
+/**
+ * A legal form — never part of a company's name, so it is stripped wherever it trails, and
+ * repeatedly ("… HOLDINGS PLC", once `HOLDINGS` has been handled by {@link TRAILING_NOUN}).
+ *
+ * `SPA` stays in this list. It is the Italian *S.p.A.*, and the owner holds two companies
+ * carrying it (`FILA SPA`, `NEWPRINCES SPA`); a wellness business whose name genuinely ends in
+ * the word would be shortened wrongly. That is a trade made on evidence — two real holdings
+ * against a hypothetical one (Story #214, DDR-0067).
+ */
+const LEGAL_FORM =
+  /\s+(?:INC(?:ORPORATED)?|CORP(?:ORATION)?|LIMITED|LTD|PLC|LLC|LLP|LP|SE|SA|SPA|AG|NV|ASA|AB|OYJ)\.?$/i
+
+/**
+ * A common noun that is *often part of the name itself*, which is the distinction Story #214
+ * draws (DDR-0067). `GROUP` in `GOLDMAN SACHS GROUP INC` is boilerplate; `GROUP` in
+ * `JUROKU FINANCIAL GROUP INC` is the company. One rule cannot read both, so the owner's call is
+ * the position: **strip it only when it is the last word.** A name ending in the noun is naming
+ * a kind of company; a name that continues past it into a legal form is using it.
+ */
+const TRAILING_NOUN = /\s+(?:COMPANY|CO|GROUP|GRP|HOLDINGS?|HLDGS?)\.?$/i
 
 /**
  * Shorten a raw IBKR instrument name into a readable company name — e.g.
@@ -145,11 +191,20 @@ export function formatCompanyName(raw: string): string {
   // Drop a trailing share-class / group-class descriptor: "GRO-CL A", "-CL A",
   // "CL A", "CLASS A", "SER A", … (with anything after it).
   let s = trimmed.replace(/[\s-]+(?:[A-Z]{2,4}[\s-]*)?(?:CL|CLASS|SER|SERIES)\.?\s*[A-D]\b.*$/i, '')
-  // Drop trailing legal-form tokens, possibly several ("… HOLDINGS PLC").
-  const LEGAL =
-    /\s+(?:INC(?:ORPORATED)?|CORP(?:ORATION)?|COMPANY|CO|LIMITED|LTD|PLC|LLC|LLP|LP|GROUP|GRP|HOLDINGS?|HLDGS?|SE|SA|SPA|AG|NV|ASA|AB|OYJ)\.?$/i
-  while (LEGAL.test(s)) s = s.replace(LEGAL, '')
+
+  // A common noun goes **only where it is the last word** (Story #214, DDR-0067) — once, and
+  // before any legal form, so "last word" means last in what IBKR exported rather than last in
+  // whatever survives once INC has gone.
+  s = s.replace(TRAILING_NOUN, '')
+  // A legal form is never part of a name, so it goes wherever it trails, and repeatedly.
+  while (LEGAL_FORM.test(s)) s = s.replace(LEGAL_FORM, '')
+
   s = s.replace(/[.,\s]+$/, '').trim()
+  if (s === '') return titleCaseWords(trimmed)
+  // A leading article pairs with the noun that has just been removed: "THE WALT DISNEY COMPANY"
+  // is a name and "The Walt Disney" is not. Dropped only where something *was* stripped, which
+  // is what leaves "THE TORONTO-DOMINION BANK" intact.
+  if (s !== trimmed) s = s.replace(/^THE\s+/i, '')
   return titleCaseWords(s === '' ? trimmed : s)
 }
 

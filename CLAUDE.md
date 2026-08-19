@@ -73,7 +73,7 @@ These have each shipped broken at least once. Read them before touching analytic
   exports and becomes an empty list.
 - **A description that repeats the symbol is not a name** — IBKR writes the identifier again where
   an instrument has none: `EUR.CHF` in trades, bare `CAD` in the FIFO summary. Views go through
-  `instrumentName`, never `formatCompanyName`, which title-cases (`Cad`) (DDR-0066).
+  `instrumentName`, never `formatCompanyName`, which title-cases (`Cad`) (DDR-0066, DDR-0067).
 - **Check `docs/flex-queries/` before guessing at XML shapes — or before concluding a section is
   missing** (#171). The directory is **gitignored** (real account data), so a fresh clone has
   none of it and the parser's tests fall back to an inline fixture.

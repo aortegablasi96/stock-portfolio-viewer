@@ -134,7 +134,68 @@ describe('formatCompanyName', () => {
 
   it('handles an explicit share class and multiple trailing suffixes', () => {
     expect(formatCompanyName('VISA INC-CLASS A')).toBe('Visa')
-    expect(formatCompanyName('SOME NAME HOLDINGS PLC')).toBe('Some Name')
+    // Story #214 changed this expectation deliberately: `HOLDINGS` is not the last word here,
+    // so it is part of the name and only `PLC` goes. It used to read 'Some Name'.
+    expect(formatCompanyName('SOME NAME HOLDINGS PLC')).toBe('Some Name Holdings')
+  })
+
+  /**
+   * A common noun goes only where it is the **last word** (Story #214, DDR-0067). These four are
+   * the whole argument: the same `GROUP` is boilerplate in one name and the company in another,
+   * and no rule can read both — so the position decides, and `Goldman Sachs Group` is the price
+   * of `Juroku Financial Group`.
+   */
+  it('keeps a common noun that the name continues past, and drops it where it ends', () => {
+    expect(formatCompanyName('JUROKU FINANCIAL GROUP INC')).toBe('Juroku Financial Group')
+    expect(formatCompanyName('RECKITT BENCKISER GROUP PLC')).toBe('Reckitt Benckiser Group')
+    expect(formatCompanyName('GOLDMAN SACHS GROUP INC')).toBe('Goldman Sachs Group')
+    expect(formatCompanyName('PROSUS HOLDINGS')).toBe('Prosus')
+  })
+
+  /**
+   * Stripping the noun must happen *before* the legal form, or removing `INC` promotes `GROUP`
+   * into last place and strips it after all — which is the bug this ordering exists to prevent.
+   */
+  it('decides "last word" against what IBKR exported, not against what survives', () => {
+    expect(formatCompanyName('ACME GROUP INC')).toBe('Acme Group')
+    expect(formatCompanyName('ACME GROUP')).toBe('Acme')
+  })
+
+  /**
+   * A leading article pairs with the noun that has just gone. `The Walt Disney` is not a name in
+   * any reading, which is what makes this one not a judgement call.
+   */
+  it('drops a stranded leading article, and only where something was stripped', () => {
+    expect(formatCompanyName('THE WALT DISNEY COMPANY')).toBe('Walt Disney')
+    expect(formatCompanyName('THE BOEING COMPANY')).toBe('Boeing')
+    expect(formatCompanyName('THE COCA-COLA CO')).toBe('Coca-Cola')
+    // Nothing is stripped here, so the article stays — the name really does begin with it.
+    expect(formatCompanyName('THE TORONTO-DOMINION BANK')).toBe('The Toronto-Dominion Bank')
+  })
+
+  /**
+   * IBKR exports capitals, so the case that would tell an acronym from a word is the case being
+   * replaced. A vowel-less run is the one signal left; its misses are asserted too, because a
+   * later story widening the rule needs to see what it is changing.
+   */
+  it('keeps a vowel-less acronym, and title-cases everything else', () => {
+    expect(formatCompanyName('LVMH MOET HENNESSY LOUIS VUITTON SE')).toBe(
+      'LVMH Moet Hennessy Louis Vuitton',
+    )
+    expect(formatCompanyName('BNP PARIBAS SA')).toBe('BNP Paribas')
+    // Known misses: a vowel makes an acronym indistinguishable from a word.
+    expect(formatCompanyName('AB DYNAMICS PLC')).toBe('Ab Dynamics')
+    expect(formatCompanyName('SAP SE')).toBe('Sap')
+  })
+
+  /**
+   * Two shapes Story #214 looked at and deliberately left alone (DDR-0067): both are hyphenated
+   * all-caps input, and nothing distinguishes the one that wants a capital from the one that
+   * does not. Asserted so the next story sees today's behaviour rather than guessing at it.
+   */
+  it('leaves the hyphen and Mc cases as they are, on purpose', () => {
+    expect(formatCompanyName('CO-OPERATIVE GROUP LTD')).toBe('Co-Operative Group')
+    expect(formatCompanyName('MARSH & MCLENNAN COMPANIES INC')).toBe('Marsh & Mclennan Companies')
   })
 
   it('returns the trimmed input unchanged when there is nothing to strip', () => {
