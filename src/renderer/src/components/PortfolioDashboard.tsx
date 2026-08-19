@@ -5,6 +5,12 @@ import { HoldingsTable } from './HoldingsTable'
 import { BalancesSummary } from './BalancesSummary'
 import { AllocationPanel } from './AllocationPanel'
 import { SnapshotHistory } from './SnapshotHistory'
+import {
+  DataSourcesCard,
+  ImportReceipt,
+  StoredStatementsCard,
+  useFlexSources,
+} from './DataSources'
 import { ConfirmAction } from './ConfirmAction'
 import { Button } from './ui/Button'
 import { Card } from './ui/Card'
@@ -35,6 +41,28 @@ function heldCurrencies(holdings: readonly Holding[]): string[] {
  * gateway, so it renders even when the live overview is not_connected/error.
  * The component holds no business logic — assembly, calculations, and the capture
  * policy live in the services (see the M2 Architecture Review / DDR-0003).
+ *
+ * **Story #189 gives the view the redesign's shape**, and with it the Flex import controls, which
+ * used to sit in a second `.dashboard` block beside this one in `App.tsx`. The page is now a
+ * header, a KPI row, a `1fr / 260px` pair — the holdings table beside a rail carrying allocation
+ * weights and a data-sources card — and then the full-width stored-statement and snapshot tables.
+ *
+ * Three placement decisions are worth stating, because each answers a question the prototype left
+ * open:
+ *
+ *   - **The rail renders in every live state, not only `ok`.** The prototype draws it beside a
+ *     populated table and says nothing about a disconnected gateway. Imported Flex history is
+ *     local and has never needed the gateway, so a `not_connected` dashboard that also hid the
+ *     import button would strand the owner exactly when importing is the useful thing to do. The
+ *     live state renders in the main column; the rail's data-sources card is beside it either way.
+ *   - **The allocation list is the part that comes and goes**, because it is a reading of the same
+ *     positions the main column is showing — with nothing to weigh, there is no list.
+ *   - **`SnapshotHistory` stays, last on the page**, directly under Stored statements. The
+ *     prototype has no snapshot section at all; that is an omission in a sketch, not a decision to
+ *     delete a feature. Below the statements is where it belongs: the two are the app's two local
+ *     stores, each with its own `ConfirmAction` reset, and pairing them puts "what history do I
+ *     hold?" in one band. The rail was the alternative and is too narrow — a snapshot row is a
+ *     time, a converted total and a holdings count on one line.
  *
  * Story #183 moved the display-currency control out of this header and into the sidebar, which
  * makes this view a **reporter as well as a reader** (DDR-0056). It receives the currency to
@@ -83,6 +111,16 @@ export function PortfolioDashboard({
    * answering?", where this answers "how old is what I am reading?".
    */
   const [loadedAt, setLoadedAt] = useState<number | null>(null)
+  /**
+   * The imported-statement store and the two controls that change it (Story #189).
+   *
+   * Called here rather than inside the rail card because the three fragments it feeds sit in three
+   * different cells of the layout below, and because both of its write paths bump
+   * `flexDataVersion` — which is what makes a mounted analytics view re-read after an import
+   * (DDR-0027). It reads local SQLite and never touches the gateway, so it is deliberately outside
+   * every `state.phase` branch: a disconnected dashboard still offers the import.
+   */
+  const sources = useFlexSources()
 
   // Latest selected currency for callbacks that fire outside React's render flow (the
   // main→renderer "snapshot captured" event), so an on-open capture reloads history in the
@@ -259,86 +297,102 @@ export function PortfolioDashboard({
         </p>
       )}
 
-      {state.phase === 'loading' && <StatePanel variant="loading">Loading your portfolio…</StatePanel>}
-
-      {state.phase === 'not_connected' && (
-        <StatePanel
-          variant="notice"
-          heading="Not connected to Interactive Brokers"
-          action={
-            <Button variant="primary" onClick={() => void load(displayCurrency)}>
-              Retry
-            </Button>
-          }
-        >
-          {state.message}
-        </StatePanel>
+      {/* A refresh, not a state: the figures stay on screen while they are re-converted,
+          which is why this is the `converting-note` and not a `StatePanel` (DDR-0027). */}
+      {state.phase === 'ok' && busy && (
+        <Card as="p" size="lg" className="converting-note" role="status">
+          Converting to {displayCurrency}…
+        </Card>
       )}
 
-      {/* Distinct from not_connected by its heading and by the fix it names: this gateway is
-          running, so a restart is the wrong advice (DDR-0022). */}
-      {state.phase === 'not_responding' && (
-        <StatePanel
-          variant="notice"
-          heading="Interactive Brokers isn’t responding"
-          hint={
-            <>
-              The gateway is running but didn’t answer. Its session usually needs re-authenticating
-              at <code>https://localhost:5000</code>.
-            </>
-          }
-          action={
-            <Button variant="primary" onClick={() => void load(displayCurrency)}>
-              Retry
-            </Button>
-          }
-        >
-          {state.message}
-        </StatePanel>
-      )}
+      {state.phase === 'ok' && <BalancesSummary balances={state.overview.balances} />}
 
-      {state.phase === 'error' && (
-        <StatePanel
-          variant="error"
-          heading="Couldn’t load your portfolio"
-          action={
-            <Button variant="primary" onClick={() => void load(displayCurrency)}>
-              Retry
-            </Button>
-          }
-        >
-          {state.message}
-        </StatePanel>
-      )}
-
-      {state.phase === 'ok' && (
-        <>
-          {/* A refresh, not a state: the figures stay on screen while they are re-converted,
-              which is why this is the `converting-note` and not a `StatePanel` (DDR-0027). */}
-          {busy && (
-            <Card as="p" size="lg" className="converting-note" role="status">
-              Converting to {displayCurrency}…
-            </Card>
+      {/* The redesign's pair (Story #189). The grid itself is unconditional: the main column
+          carries whatever the live read produced — a table, an empty account, or one of the three
+          gateway states — while the rail carries the local store, which none of those states can
+          affect. */}
+      <div className="dashboard-columns">
+        <div className="col-main">
+          {state.phase === 'loading' && (
+            <StatePanel variant="loading">Loading your portfolio…</StatePanel>
           )}
-          <BalancesSummary balances={state.overview.balances} />
-          {state.overview.holdings.length === 0 ? (
-            <StatePanel variant="empty">No open positions in this account.</StatePanel>
-          ) : (
-            <div className="dashboard-columns">
-              <div className="col-main">
-                <HoldingsTable
-                  holdings={state.overview.holdings}
-                  allocation={state.overview.allocation}
-                  displayCurrency={state.overview.displayCurrency}
-                />
-              </div>
-              <aside className="col-side">
-                <AllocationPanel allocation={state.overview.allocation} />
-              </aside>
-            </div>
+
+          {state.phase === 'not_connected' && (
+            <StatePanel
+              variant="notice"
+              heading="Not connected to Interactive Brokers"
+              action={
+                <Button variant="primary" onClick={() => void load(displayCurrency)}>
+                  Retry
+                </Button>
+              }
+            >
+              {state.message}
+            </StatePanel>
           )}
-        </>
-      )}
+
+          {/* Distinct from not_connected by its heading and by the fix it names: this gateway is
+              running, so a restart is the wrong advice (DDR-0022). */}
+          {state.phase === 'not_responding' && (
+            <StatePanel
+              variant="notice"
+              heading="Interactive Brokers isn’t responding"
+              hint={
+                <>
+                  The gateway is running but didn’t answer. Its session usually needs
+                  re-authenticating at <code>https://localhost:5000</code>.
+                </>
+              }
+              action={
+                <Button variant="primary" onClick={() => void load(displayCurrency)}>
+                  Retry
+                </Button>
+              }
+            >
+              {state.message}
+            </StatePanel>
+          )}
+
+          {state.phase === 'error' && (
+            <StatePanel
+              variant="error"
+              heading="Couldn’t load your portfolio"
+              action={
+                <Button variant="primary" onClick={() => void load(displayCurrency)}>
+                  Retry
+                </Button>
+              }
+            >
+              {state.message}
+            </StatePanel>
+          )}
+
+          {state.phase === 'ok' &&
+            (state.overview.holdings.length === 0 ? (
+              <StatePanel variant="empty">No open positions in this account.</StatePanel>
+            ) : (
+              <HoldingsTable
+                holdings={state.overview.holdings}
+                allocation={state.overview.allocation}
+                displayCurrency={state.overview.displayCurrency}
+              />
+            ))}
+        </div>
+
+        <aside className="col-side">
+          {/* A reading of the positions in the main column, so it is present exactly when they
+              are. Unconvertible rows are already out of `allocation` upstream (DDR-0007). */}
+          {state.phase === 'ok' && state.overview.holdings.length > 0 && (
+            <AllocationPanel allocation={state.overview.allocation} />
+          )}
+          <DataSourcesCard sources={sources} />
+        </aside>
+      </div>
+
+      {/* Both full width, and both below the pair: a receipt for the import that just ran, and
+          the standing list of what the store holds. */}
+      <ImportReceipt sources={sources} />
+      <StoredStatementsCard sources={sources} />
 
       {historyStatus && (
         <p className="capture-status" role="status">
