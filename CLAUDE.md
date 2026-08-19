@@ -319,6 +319,10 @@ may not import `@db` or `electron`; the **CSP's omitted telemetry origin** (belo
 - **The Allocation breakdown's table and donut link on the slice's `key`, never on position** — the
   table sorts by any column, so row order and arc order have no reason to agree. Emphasis **never
   touches `fill`**: the active wedge keeps its colour and the rest drop to 0.35 opacity (DDR-0040).
+  The donut's track is **fixed** (`--donut-column-width`) and its stacking breakpoint derived;
+  `allocationLayout.test.ts` has the arithmetic (DDR-0063).
+- **The basemap and the weight donut's track are one decision** (DDR-0063): the track was `--card`
+  at 42%, a grey ring *only over a white map*, and vanishes on `dark-v11`. Move both or neither.
 
 ### UI primitives (`components/ui/`, Epic #125)
 
@@ -407,15 +411,12 @@ Services are the primary unit-test target; mock repositories and external provid
 **Vitest runs every test under `src/` in a Node environment with no jsdom, so no test may render a
 React component.** This shapes the renderer: chart maths, filtering, sorting, formatting and state
 are **extracted into pure modules under `renderer/src/lib/`** precisely so they can be tested.
-Follow that split when adding a component with real logic. The map is the sharpest case —
-`countryDonuts` emits palette *classes*, so the whole of the map's geometry and colour is testable
-under Node while the component keeps only what needs a DOM. `dataVersion` is the same move applied
-to state: a plain subscribable store read with `useSyncExternalStore`. Pure repository helpers that
-touch no data source (`flexStatementParser`, `snapshotMapping`, `fifoSummary`) are tested the same way.
+Follow that split when adding a component with real logic — `countryDonuts` emits palette
+*classes*, so even the map's geometry and colour are testable under Node. Pure repository helpers
+touching no data source (`flexStatementParser`, `snapshotMapping`, `fifoSummary`) are tested alike.
 
 Several `lib/*.test.ts` files have **no module under test** — they guard `app.css`, the components,
-or accessibility by scanning source text (`designTokens`, `tokenAdoption`, `contrast`, `motionTokens`,
-`figureRole`, `mapAccessibility`, `tabIcons`, `sidebarRail`, `analyticsShell`, `chartGeometry`).
+a view's own composition, or accessibility by scanning source text.
 **They must strip comments before matching.** What no Node test can see is pinned by Playwright:
 `e2e/page-header.spec.ts`, `e2e/tab-navigation.spec.ts`, `e2e/reduced-motion.spec.ts` (that the
 media query actually wins the cascade), `e2e/window-state.spec.ts`, `e2e/sidebar-collapse.spec.ts`.

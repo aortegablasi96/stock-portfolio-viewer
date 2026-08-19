@@ -141,6 +141,13 @@
      the two above are: it is the redesign's own 260px, and it is quoted by the grid that
      places it and by the media query that decides when it stops fitting. */
   --rail-width: 260px;
+  /* The Allocation breakdown's donut column (Story #191), the third of these and the same
+     kind of measure: the redesign's own 280px, quoted by the grid that places it and by the
+     media query that decides when it stops fitting. It is a *fixed* track on purpose — the
+     donut is a square that stops growing at `.pie`'s own 13rem cap, so a fractional track
+     would only add empty air either side of it while taking width off the table,
+     which is the half that has figures to line up. */
+  --donut-column-width: 280px;
 
   /* ---- Spacing scale (Story #126, DDR-0031) -------------------------------
      A 4px grid with one 6px half-step, derived from the values already in the
@@ -2089,12 +2096,22 @@ html {
   align-items: start;
 }
 
-/* One tabbed breakdown: composing-slices table on the left, donut on the right (Story #48). */
+/* One tabbed breakdown: composing-slices table on the left, donut on the right (Story #48).
+
+   The redesign fixes the donut's track at 280px rather than letting it take a share of the
+   card (Story #191, DDR-0063). Under `1.4fr / 1fr` the donut's column grew with the window
+   while the donut itself stopped at 13rem, so a maximized display spent ~250px of the card on
+   air beside a chart that had finished growing — and took it from the table, which is where
+   the figures are. A fixed track hands every pixel the window gains to the table.
+
+   `align-items: start`, not `center`: the donut column is now the short one at most widths,
+   and centring it against a twelve-row table floats it in the middle of the card with the
+   legend adrift below. Both halves start at the card's top edge and read as a pair. */
 .breakdown-split {
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) var(--donut-column-width);
   gap: var(--space-7);
-  align-items: center;
+  align-items: start;
 }
 
 /* Both halves are grid children that must be allowed to shrink. This was two
@@ -2109,10 +2126,19 @@ html {
   justify-content: center;
 }
 
-/* Stack the table above the donut on narrow widths. */
-@media (max-width: 640px) {
+/* Stack the table above the donut on narrow widths. 640px was right for two fractional
+   tracks, which shrink together; a fixed 280px track does not, so the table is the only
+   thing left to squeeze and it reaches three cramped columns long before the viewport
+   reaches 640px. The number is derived rather than chosen, and `allocationLayout.test.ts`
+   does the arithmetic rather than trusting this comment: the sidebar at its expanded 220px
+   + 2rem of content padding each side + the card's own --space-6 either side + the 280px
+   donut column + the --space-7 gap + 320px left for the table, which is what a slice label,
+   a currency value and a percentage need before the columns start colliding.
+   220 + 64 + 40 + 280 + 24 + 320. Collapsing the sidebar buys 164px of it back, so the pair
+   returns before the window has to grow. */
+@media (max-width: 948px) {
   .breakdown-split {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -2554,19 +2580,28 @@ html {
   margin-top: var(--space-3);
 }
 
+/* The legend under the donut names each hue and its share (Story #191). It **wraps** rather
+   than stacking one item per line, and it carries the percentage rather than the value:
+   the table beside it is the full legend — every slice, its value and its share, sortable —
+   and a second vertical list of the same rows would be that table again, in a 280px column,
+   at half the legibility. What the donut needs from a legend is the thing the table cannot
+   say, which is which hue is which; the percentage rides along because it is what the arc
+   itself encodes, and a reader following an arc round should not have to change columns to
+   find out what it came to. */
 .pie-legend-list {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2) var(--space-5);
 }
 
 .pie-legend-item {
   display: flex;
   align-items: baseline;
-  gap: var(--space-3);
+  gap: var(--space-2);
   font-size: var(--text-xs);
 }
 
@@ -2575,16 +2610,15 @@ html {
   align-self: center;
 }
 
+/* Muted name, full-strength figure — the inverse of the vertical legend this replaces, and
+   the same relationship every other pairing of a label and its number in the app has. */
 .pie-legend-label {
-  color: var(--text);
-  overflow: hidden;
-  text-overflow: ellipsis;
+  color: var(--muted);
   white-space: nowrap;
 }
 
 .pie-legend-value {
-  margin-left: auto;
-  color: var(--muted);
+  color: var(--text);
   white-space: nowrap;
 }
 
@@ -2701,8 +2735,9 @@ html {
 }
 
 /* The full-sweep track behind each bar. Without it a swept arc states no proportion — it is what
-   turns "an arc" into "38% of the way round". Dark against the light basemap, like the popup, and
-   pointer-transparent so only the ring's group takes the hover. */
+   turns "an arc" into "38% of the way round". Neutral against the basemap, whichever way the
+   basemap runs (see `.country-mark-rest`), and pointer-transparent so only the ring's group
+   takes the hover. */
 /* A surface-coloured hairline between neighbouring slices — the same separator the view's own
    donuts use (`.pie-slice`), at map scale. Every slice is its own hit target: SVG hit-testing only
    ever reaches leaves, so grouping them would catch nothing anyway. */
@@ -2716,12 +2751,19 @@ html {
 }
 
 /* The remainder of the left donut: the portfolio held *elsewhere*. Muted, because it is the
-   context that makes the blue arc read as a proportion rather than a subject of its own. */
+   context that makes the blue arc read as a proportion rather than a subject of its own.
+
+   It is drawn in `--muted` rather than `--card` since Story #191 (DDR-0063). The old value was
+   the card's own dark navy at 42%, which is how you draw a grey ring **on a white basemap** —
+   and on `dark-v11` it resolves to near-black on near-black, so the track disappears and the
+   weight donut becomes a blue arc floating in space with nothing to be a fraction *of*. That
+   is the one thing DDR-0030 says this half of the mark exists to do. `--muted` is the app's
+   neutral for exactly this — text that recedes — and it is a hue-free grey, which the track
+   must stay: a tinted track would read as a ninth category. The hairline override goes with
+   it, so the rest wears the same `--card` separator as every other slice on the mark. */
 .country-mark-rest {
-  fill: var(--card);
-  fill-opacity: 0.42;
-  stroke: var(--border);
-  stroke-width: 0.5;
+  fill: var(--muted);
+  fill-opacity: 0.4;
 }
 
 /* Everything recedes on hover so the one slice under the cursor can come forward. */

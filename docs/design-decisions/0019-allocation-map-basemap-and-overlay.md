@@ -1,6 +1,9 @@
 # 0019. Allocation map: Mapbox basemap with an SVG bubble overlay
 
-- **Status:** Superseded by 0020 (overlay and tooltips only — the basemap decisions below still apply)
+- **Status:** Superseded by 0020 (overlay and tooltips only — the basemap decisions below still
+  apply) and in part by 0063 (the style value goes from `light-v11` to `dark-v11` for the navy
+  ground — the *reason* below, that it must be monochrome and low-saturation so the sector hues
+  stay the only saturated thing on screen, is what chose the replacement and still applies)
 - **Date:** 2026-07-26
 
 ## Context

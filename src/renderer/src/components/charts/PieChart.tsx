@@ -10,9 +10,15 @@ import { StatePanel } from '../ui/StatePanel'
  * so the shown percentages don't sum to 100).
  *
  * Identity is never colour-alone: a legend is always present and every slice is direct-
- * labelled there with its value and percentage. Slices are separated by a 2px surface ring,
+ * labelled there with its name and its share. Slices are separated by a 2px surface ring,
  * and the palette is the eight validated categorical slots — the tail folds into "Other"
  * rather than generating a ninth hue. Inline SVG, no charting dependency (DDR-0006).
+ *
+ * The legend used to be optional, and off at its one call site: the breakdown's table said
+ * everything it did and more (Story #48). Story #191 made it unconditional and cut it back to
+ * a name and a percentage — the two things the table cannot supply, which are the hue's
+ * meaning and what the arc under the cursor came to. Value stays in the slice's `<title>`
+ * and in the table, each of them once.
  */
 const SIZE = 200
 const R_OUTER = 92
@@ -23,7 +29,6 @@ export function PieChart({
   formatValue,
   ariaLabel,
   emptyMessage = 'Nothing to plot yet.',
-  showLegend = true,
   colorOffset = 0,
   activeKey = null,
   onSliceActivate,
@@ -32,9 +37,6 @@ export function PieChart({
   formatValue: (v: number) => string
   ariaLabel: string
   emptyMessage?: string
-  /** When false, the donut renders without its legend — used where a composing-assets
-   *  table already carries the labels/values (Story #48). */
-  showLegend?: boolean
   /** Palette slots to skip — `SECTOR_SLOT_OFFSET` for the sector breakdown (Story #122). */
   colorOffset?: number
   /** The slice to emphasise — the table row under the pointer, where the two are linked
@@ -74,22 +76,17 @@ export function PieChart({
           </path>
         ))}
       </svg>
-      {showLegend && (
-        <figcaption className="chart-legend pie-legend">
-          <ul className="pie-legend-list">
-            {arcs.map((arc, i) => (
-              <li key={arc.key} className="pie-legend-item">
-                <span className={`legend-swatch ${seriesClass[i]}`} aria-hidden="true" />
-                <span className="pie-legend-label">{arc.label}</span>
-                <span className="pie-legend-value">
-                  {formatValue(arc.value)}
-                  <span className="bar-list-pct">{arc.percent.toFixed(1)}%</span>
-                </span>
-              </li>
-            ))}
-          </ul>
-        </figcaption>
-      )}
+      <figcaption className="chart-legend pie-legend">
+        <ul className="pie-legend-list">
+          {arcs.map((arc, i) => (
+            <li key={arc.key} className="pie-legend-item">
+              <span className={`legend-swatch ${seriesClass[i]}`} aria-hidden="true" />
+              <span className="pie-legend-label">{arc.label}</span>
+              <span className="pie-legend-value">{arc.percent.toFixed(1)}%</span>
+            </li>
+          ))}
+        </ul>
+      </figcaption>
     </figure>
   )
 }

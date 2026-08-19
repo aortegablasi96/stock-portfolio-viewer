@@ -10,7 +10,13 @@ import { DataTable, type DataColumn } from '../ui/DataTable'
  * the left and the matching donut on the right. Both are driven by the same grouped slice
  * set (`groupTail` + `sliceColorClasses`), so a slice wears the same colour in the table
  * and the chart and the two reconcile — the table is, in effect, the donut's legend spread
- * out with tabular numbers, which is why the donut here renders without its own legend.
+ * out with tabular numbers.
+ *
+ * The redesign fixes the donut's column at 280px and puts a name + percentage legend back
+ * under it (Story #191, DDR-0063). The pair is the story's whole point: the arc is where a
+ * share is *seen*, the row beside it is where the exact figure is *read*, and both are on
+ * screen at once. What links them is the slice's `key` and never its position — the table
+ * sorts by any column, so row order and arc order have no reason to agree (DDR-0040).
  */
 function toItems(slices: AllocationSlice[]): PieDatum[] {
   return slices.map((s) => ({
@@ -99,7 +105,6 @@ export function AllocationBreakdown({
           data={items}
           formatValue={formatValue}
           ariaLabel={ariaLabel}
-          showLegend={false}
           colorOffset={colorOffset}
           activeKey={activeKey}
           onSliceActivate={setActiveKey}
