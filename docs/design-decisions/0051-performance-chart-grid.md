@@ -1,12 +1,17 @@
 # 0051. The four Performance charts in a 2×2 grid, and the aspect ratio that pays for it
 
-- **Status:** Accepted, except that the **collapse breakpoint** below is amended by
-  [[0055-vertical-sidebar-tablist]]. The threshold is the content column and the column is still
-  1200px wide; the *media query* is 1420px, because Story #182 put a 220px sidebar beside it. What
-  that amendment could not carry is the second property claimed for 1200px — that it sits below
-  the 1280px default window so a fresh install opens on the grid. It no longer does, and no
-  breakpoint restores it: at 1280px a half column renders a 9.7px axis label, under this DDR's own
-  floor. Everything else here stands, the 500×180 plot and the legibility walk included.
+- **Status:** Accepted, with two amendments.
+  - The **collapse breakpoint** is amended by [[0055-vertical-sidebar-tablist]] and then by
+    [[0057-sidebar-collapse-and-the-frameless-corner]]. The threshold is the content column and the column is still 1200px
+    wide; the *media query* is 1420px, because Story #182 put a 220px sidebar beside it, and
+    1256px behind the collapsed rail. The second property claimed for 1200px — that it sits
+    below the 1280px default window, so a fresh install opens on the grid — was lost to the
+    sidebar and handed back by the rail: at 1280px a half column renders 9.7px with the column
+    open and 11.4px with it collapsed, so which layout a default window opens on is the floor
+    answering rather than a preference.
+  - **`pad.left` is 80, not 64** — see the amendment at the end of this record (Story #190). The
+    *rule* stated below is unchanged and is what the correction restores.
+  - Everything else here stands, the 500×180 plot and the legibility walk included.
 - **Date:** 2026-08-13
 
 ## Context
@@ -55,8 +60,9 @@ move for two different reasons:
 - The **ratio shortens** because carrying 4.5:1 into half the width would halve the height too.
   2.78:1 gives a 197px plot at the default window where 4.5:1 would have given 122px.
 
-The padding is deliberately **not** scaled with it. `pad.left: 64` is an absolute allowance for a
-formatted currency label at 11 units; the label did not get shorter because the chart did.
+The padding is deliberately **not** scaled with it. `pad.left` is an absolute allowance for a
+formatted currency label at 11 units; the label did not get shorter because the chart did. (The
+number recorded here was 64, which is eight characters wide. See the amendment below.)
 
 **The geometry lives in one module.** `renderer/src/lib/chartGeometry.ts` holds the plot, the
 breakpoint and the width maths; `LineChart`, `BarChart` and `StackedAreaChart` import it instead
@@ -151,6 +157,51 @@ Considered as the fallback if Story #171 slipped, per the story's own sequencing
 composition landed first, so the grid ships with four quadrants filled rather than with a hole in
 it.
 
+## Amendment — Story #190 (2026-08-19): the gutter never fitted the label it was for
+
+`pad.left: 64` was carried across from [[0018-content-measure-and-chart-aspect]] unchanged, and
+the sentence above is the whole justification it ever had: an absolute allowance for a formatted
+currency label at 11 units. Reviewing the view in the running app for this story is what finally
+put a ruler on it.
+
+At 11 units in `--font-figure`, a glyph advances **6.38 units** — 0.6em from JetBrains Mono, less
+0.02em of `--tracking-figure` ([[0053-bundled-typefaces-and-the-figure-role]]). The charts anchor a
+y-axis tick at `pad.left - 8` with `text-anchor="end"`, so 64 buys **eight characters**. Every
+value chart in this grid labels its axis with **ten**: `€68,517.70` on the value curve,
+`€80,000.00` on the composition stack. Those labels began at x = −7.8, and the root `<svg>`
+clips to its viewport, so the **currency symbol was cut off every tick but the smallest** — in
+both charts, at every width, since the grid shipped.
+
+Nothing could have caught it. A `viewBox` has no layout engine, so an overflowing label neither
+throws nor reflows; it is simply not drawn. The Node suite cannot render, and the assertion that
+stood here — `pad.left > AXIS_LABEL_UNITS * 5` — asked for five characters, which 64 comfortably
+passed while failing at ten.
+
+**The gutter is 80 and is derived rather than picked.** `lib/chartGeometry` states the three terms
+the arithmetic needs — `AXIS_LABEL_ADVANCE_UNITS` (6.4, rounded up for the reason
+`lib/chartTooltip`'s `CHAR_W` is generous), `AXIS_LABEL_GAP_UNITS` (8, the gap the charts actually
+draw) and `AXIS_LABEL_BUDGET_CHARS` (11) — and the test asserts that a label of the budgeted width
+**starts inside the viewBox**, with no more slack than one character. Eleven rather than ten
+because a budget fitted to today's figures is a budget that clips on the first good year;
+`€999,999.99` is where it now stops, which is a real bound and is stated where it can be widened.
+
+The plot loses 16 units of width, 420 → 404, and keeps the ratio, the breakpoints and every number
+in the legibility walk: `axisLabelPx` is a function of the `viewBox` width alone, which did not
+move.
+
+### The two alternatives, and why neither
+
+**Shorten the tick instead** — the Figma prototype's own answer (`€68k`, decimals dropped). It is
+the better long-run shape and it costs the plot nothing, but the axis and the hover card share one
+`formatValue` prop today, so it needs a second formatter on `LineChart`, `BarChart` and
+`StackedAreaChart`. Story #190 excludes changing the chart components, and a tick that no longer
+agrees with the card beside it is a decision about the chart language rather than about this
+grid's geometry. Worth its own story.
+
+**Leave it and widen `AXIS_LABEL_BUDGET_CHARS` later** — rejected because the symptom is silent.
+A clipped `€` is not obviously a clip; it reads as a chart that labels its axis with bare numbers,
+which is a plausible design and is what this one appeared to be for two milestones.
+
 ## References
 
 - [[0018-content-measure-and-chart-aspect]] (the aspect-ratio rule this pulls the lever on, and
@@ -158,8 +209,11 @@ it.
   [[0050-daily-nav-from-equity-summary]], [[0036-toggle-group-mode-axis-and-pressed-semantics]],
   [[0027-analytics-views-persist-and-explicit-refresh]], [[0043-analytics-view-shell]],
   [[0031-design-token-scales]], [[0042-token-adoption-ratchet]]
+- [[0053-bundled-typefaces-and-the-figure-role]] (the face and tracking the gutter is measured
+  against), [[0057-sidebar-collapse-and-the-frameless-corner]] (the second breakpoint amendment)
 - `src/renderer/src/lib/chartGeometry.ts` + its test,
+  `src/renderer/src/lib/performanceLayout.test.ts` (the view's range plumbing),
   `src/renderer/src/components/analytics/PerformanceView.tsx`,
   `src/renderer/src/components/charts/{LineChart,BarChart,StackedAreaChart}.tsx`,
   `src/renderer/src/app.css` (`.performance-charts`)
-- GitHub Issue #172 (Epic #99)
+- GitHub Issue #172 (Epic #99); the amendment is Issue #190 (Epic #179)

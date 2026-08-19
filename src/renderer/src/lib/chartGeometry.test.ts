@@ -1,6 +1,9 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
+  AXIS_LABEL_ADVANCE_UNITS,
+  AXIS_LABEL_BUDGET_CHARS,
+  AXIS_LABEL_GAP_UNITS,
   AXIS_LABEL_UNITS,
   GRID_CONTENT_BREAKPOINT_PX,
   PERFORMANCE_GRID_BREAKPOINT_COLLAPSED_PX,
@@ -72,13 +75,56 @@ describe('the plot geometry', () => {
   })
 
   /**
-   * The padding is an allowance for text, not a fraction of the plot: `left: 64` is what a
-   * formatted currency label occupies at 11 units, and that did not change when the chart did.
-   * Shrinking it in proportion to the width is the plausible mistake this pins against.
+   * The padding is an allowance for text, not a fraction of the plot, and the axis label did not
+   * get shorter when the chart did. Shrinking it in proportion to the width is one plausible
+   * mistake; the other is the one Story #190 found in the running app, where the allowance had
+   * simply never been checked against a label.
    */
   it('keeps DDR-0018’s padding, because it is sized by the label rather than by the plot', () => {
-    expect(PERFORMANCE_PLOT.pad).toEqual({ top: 16, right: 16, bottom: 28, left: 64 })
-    expect(PERFORMANCE_PLOT.pad.left).toBeGreaterThan(AXIS_LABEL_UNITS * 5)
+    expect(PERFORMANCE_PLOT.pad).toEqual({ top: 16, right: 16, bottom: 28, left: 80 })
+  })
+
+  /**
+   * The y-axis gutter, checked against the label it exists for rather than restated.
+   *
+   * `left: 64` held eight characters and every value chart in this grid labels its axis with ten
+   * (`€68,517.70`, `€80,000.00`), so the widest ticks began at x = −7.8 and the root `<svg>`
+   * clipped their currency symbol — invisibly, because an SVG has no layout engine to complain
+   * to. Nothing in the suite could see it, which is exactly why the arithmetic is here now: the
+   * assertion is that a label of the budgeted width **starts inside the viewBox**, so a wider
+   * figure fails a test rather than losing its €.
+   */
+  it('leaves a y-axis label its whole width, symbol included', () => {
+    const label = AXIS_LABEL_BUDGET_CHARS * AXIS_LABEL_ADVANCE_UNITS
+    // The charts anchor a tick at `pad.left - 8`, `text-anchor="end"`, so it grows leftward.
+    const startsAt = PERFORMANCE_PLOT.pad.left - AXIS_LABEL_GAP_UNITS - label
+    expect(startsAt).toBeGreaterThanOrEqual(0)
+    // And not so generous that the gutter is buying slack the plot pays for.
+    expect(startsAt).toBeLessThan(AXIS_LABEL_ADVANCE_UNITS)
+  })
+
+  /**
+   * The advance is a measurement, not a guess, and the two things it is measured from are in
+   * `app.css`. Read back here for the same reason the layout tokens below are: a number mirrored
+   * out of the stylesheet is a number that will disagree with it.
+   */
+  it('mirrors the face and the size the advance was measured at', () => {
+    expect(CSS).toMatch(/--font-figure:\s*'JetBrains Mono'/)
+    expect(CSS).toMatch(/--tracking-figure:\s*-0\.02em/)
+    // 0.6em advance − 0.02em tracking, at 11 units — 6.38, rounded up.
+    expect(AXIS_LABEL_ADVANCE_UNITS).toBeGreaterThanOrEqual((0.6 - 0.02) * AXIS_LABEL_UNITS)
+    expect(AXIS_LABEL_ADVANCE_UNITS).toBeLessThan(0.6 * AXIS_LABEL_UNITS)
+  })
+
+  /** The gutter the module derives is the gutter the three charts actually anchor against. */
+  it('is the gap every chart draws its ticks with', () => {
+    for (const chart of ['LineChart', 'BarChart', 'StackedAreaChart']) {
+      const source = readFileSync(
+        new URL(`../components/charts/${chart}.tsx`, import.meta.url),
+        'utf8',
+      )
+      expect(source).toContain(`x={PAD.left - ${AXIS_LABEL_GAP_UNITS}}`)
+    }
   })
 
   it('leaves a usable plot after the padding', () => {

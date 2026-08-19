@@ -273,7 +273,9 @@ may not import `@db` or `electron`; the **CSP's omitted telemetry origin** (belo
   derive from **one** number (`GRID_CONTENT_BREAKPOINT_PX`, 1200) with the sidebar width as a
   defaulted parameter, so neither can be tuned alone. Don't "restore" the old breakpoint by
   lowering it — that ships illegible labels; capping a chart's width stays **rejected**, since it
-  reads as a rendering bug (DDR-0051, DDR-0057).
+  reads as a rendering bug (DDR-0051, DDR-0057). **A `viewBox` clips an overflowing label in
+  silence**, so `pad.left` is *derived* from a measured glyph advance and a character budget — 64
+  cut the `€` off every value tick for two milestones (DDR-0051 §#190).
 - **One chart tooltip, drawn inside the `viewBox`** (DDR-0061). Three `HoverReadout`s became
   `ChartTooltip` over `lib/chartTooltip`, in the plot's own space — so it **cannot** cover the
   neighbouring chart — and **pinned to the plot's top** in all three, since a one-unit-tall daily
@@ -364,8 +366,8 @@ Node ≥22.12 (CI runs 24) · npm · Electron · React + Vite · TypeScript (ren
 SQLite via Drizzle · Zod · IBKR Client Portal Gateway · Vitest · Playwright.
 
 Runtime dependencies are deliberately few — `better-sqlite3`, `drizzle-orm`, `fast-xml-parser`,
-`mapbox-gl` (the Allocation basemap only), `react`, `react-dom`, `zod`. Charts are hand-written SVG,
-not a charting library. **Avoid adding dependencies without clear long-term value.**
+`mapbox-gl` (the Allocation basemap only), `react`, `react-dom`, `zod`.
+**Avoid adding dependencies without clear long-term value.**
 
 ## Commands
 
@@ -468,11 +470,11 @@ produce the required planning artifacts, follow the approved plan.
 ## MCP Servers
 
 `.claude/settings.local.json` enables `context7`, `filesystem`, `playwright`, `interactive-brokers`
-and `shadcn` (`postgres` was retired with the move to SQLite). The `shadcn` server is for *reading*
-component APIs — see ADR-0008 before reaching for it. The `interactive-brokers` entry in `.mcp.json`
-still has a **placeholder runtime** (`REPLACE_WITH_RUNTIME`), so enabling it does not make it
-functional. A connected `Interactive_Brokers_IBKR` MCP has read-only account/market tools
-allowlisted — **no order-placing tools**, in keeping with the analytics-first, no-trading stance.
+and `shadcn`. The `shadcn` server is for *reading* component APIs — see ADR-0008 before reaching
+for it. The `interactive-brokers` entry in `.mcp.json` still has a **placeholder runtime**
+(`REPLACE_WITH_RUNTIME`), so enabling it does not make it functional. A connected
+`Interactive_Brokers_IBKR` MCP has read-only account/market tools allowlisted — **no
+order-placing tools**.
 
 **Prefer Context7 over model memory** for framework or library documentation. Setup notes: `docs/mcp.md`.
 
