@@ -32,6 +32,36 @@ export interface PlotGeometry {
 }
 
 /**
+ * `.chart-axis-label`'s per-character advance, in viewBox units.
+ *
+ * The three charts set their axis labels in `--font-figure` at {@link AXIS_LABEL_UNITS}, and
+ * JetBrains Mono advances 0.6em per glyph with `--tracking-figure` taking 0.02em back — 6.38
+ * units, which is what `getComputedTextLength()` reports in the running app. Rounded up rather
+ * than down, for the reason `lib/chartTooltip`'s `CHAR_W` is generous: a label allowance a
+ * fraction too wide is invisible, and one a fraction too narrow clips a currency symbol.
+ *
+ * It is a *number* here because a `viewBox` has no layout engine. That is the same constraint
+ * DDR-0018 met by sizing charts from a ratio, and it is why the y-axis gutter below has to be
+ * derived rather than eyeballed — nothing at runtime will notice a label that no longer fits.
+ */
+export const AXIS_LABEL_ADVANCE_UNITS = 6.4
+
+/** The gap between the end of a y-axis label and the plot's left edge, as the charts draw it. */
+export const AXIS_LABEL_GAP_UNITS = 8
+
+/**
+ * The longest y-axis label the gutter is sized to hold, in characters.
+ *
+ * Eleven is `€999,999.99` — a formatted base-currency figure with grouping and two decimals, at
+ * the widest a six-figure portfolio produces. Ten is what this view actually renders today
+ * (`€68,517.70`, `€80,000.00`), and a budget fitted to today's data is a budget that clips on
+ * the first good year. Above €1M the symbol clips again; that is a real bound, and the honest
+ * place to widen it is here rather than at the two decimals, which the tooltip has no way to
+ * restate if the axis stops showing them.
+ */
+export const AXIS_LABEL_BUDGET_CHARS = 11
+
+/**
  * 500×180 — **25:9, ≈2.78:1**, down from DDR-0018's 1080×240 (4.5:1).
  *
  * Two things move, and they move for different reasons. The **width** halves because the column
@@ -40,14 +70,17 @@ export interface PlotGeometry {
  * carrying 4.5:1 into half the width would halve the height too, and a 180px-tall value curve
  * flattens a drawdown into a wobble — the plot needs its vertical resolution back.
  *
- * `pad` is unchanged, and deliberately so: it is an absolute allowance for text, not a fraction
- * of the plot. `left: 64` is what a formatted currency label occupies at 11 units, and the axis
- * label did not get shorter because the chart did.
+ * `pad` is an absolute allowance for text, not a fraction of the plot — an axis label does not
+ * get shorter because the chart did. **`left` is 80, up from the 64 DDR-0051 recorded** (Story
+ * #190): 64 holds eight characters and every value chart in this grid labels its axis with ten,
+ * so `€68,517.70` began at x = −7.8 and the root `<svg>` clipped the currency symbol off every
+ * tick but the smallest. The rule was right and the number never implemented it; it is derived
+ * from the three constants above now, so a wider figure fails a test instead of losing its €.
  */
 export const PERFORMANCE_PLOT: PlotGeometry = {
   width: 500,
   height: 180,
-  pad: { top: 16, right: 16, bottom: 28, left: 64 },
+  pad: { top: 16, right: 16, bottom: 28, left: 80 },
 }
 
 /**
