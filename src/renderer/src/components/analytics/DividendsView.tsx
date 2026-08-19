@@ -17,7 +17,10 @@ import {
 import { datedExtent, filterByRange, windowFor } from '../../lib/dateRange'
 import { distinctTypes, filterByTypes } from '../../lib/tableFilter'
 import { useTypeSelection } from './useTypeSelection'
-import { ColumnChart, type StackedColumn } from '../charts/ColumnChart'
+import { ColumnChart, IncomeLegend, type StackedColumn } from '../charts/ColumnChart'
+import { toneClassName, toneOf } from '../../lib/statTileVariants'
+import { BADGE_CELL_CLASS } from '../../lib/badgeVariants'
+import { Badge } from '../ui/Badge'
 import { useAnalytics } from './useAnalytics'
 import { AnalyticsShell } from './AnalyticsShell'
 import { RangeFilter } from './RangeFilter'
@@ -36,6 +39,14 @@ import { DataTable, type DataColumn } from '../ui/DataTable'
  * actually received. Above it, "Upcoming" lists dividends already declared but not yet
  * paid, from the latest statement's open accruals (DDR-0010).
  */
+
+/**
+ * The two series in the income stack, named once. The chart's tooltips and the key in the card
+ * header both take these, so the legend cannot come to say something the tooltip does not
+ * (Story #192, DDR-0064).
+ */
+const INCOME_NET_LABEL = 'Net received'
+const INCOME_TAX_LABEL = 'Withholding tax'
 
 /**
  * Declared-but-unpaid dividends. Three distinct empty states matter here: no accruals
@@ -220,19 +231,21 @@ export function DividendsView(): React.JSX.Element {
             <Upcoming upcoming={r.upcoming} baseCurrency={r.baseCurrency} />
 
             <Card>
-              <CardTitle>Income over time</CardTitle>
+              <CardHeader className="chart-card-header">
+                <CardTitle>Income over time</CardTitle>
+                <IncomeLegend lowerLabel={INCOME_NET_LABEL} upperLabel={INCOME_TAX_LABEL} />
+              </CardHeader>
               <CardContent>
                 <p className="source-note">
-                  Each column is the month’s net income received, with the tax withheld at source
-                  stacked on top — so the solid segment is what reached the account and the full
-                  height is gross. A month where withholding outweighs the dividends dips below
-                  the zero line as a net loss.
+                  Column height is the month’s gross income and the solid segment is what reached
+                  the account; a month whose withholding outweighs its dividends dips below the
+                  zero line.
                 </p>
                 <ColumnChart
                   columns={columns}
                   formatValue={c}
-                  lowerLabel="Net received"
-                  upperLabel="Withholding tax"
+                  lowerLabel={INCOME_NET_LABEL}
+                  upperLabel={INCOME_TAX_LABEL}
                   totalLabel="Gross"
                   ariaLabel="Net dividend income by month, with withholding tax stacked to gross"
                 />
@@ -403,6 +416,17 @@ function Transactions({
  * Shares and per-share are reconstructed and can legitimately be absent for a payment the
  * imported statements don't reach back far enough to account for; those rows sort to the bottom
  * instead of reading as zero holdings.
+ *
+ * Story #192 badges the type and tones the base-currency column, and both take their polarity
+ * from **the row's own signed amount** rather than from a list of type strings (DDR-0064). The
+ * three types the service builds this table from are `Dividends`, `Payment In Lieu Of Dividends`
+ * and `Withholding Tax`, and matching on those names would put two of them in one branch by
+ * coincidence and leave a fourth — a reversal, a fee IBKR renames — falling into the gain tone
+ * silently. The amount already answers the question the tone is asking: money in, or money out.
+ *
+ * The badge's text is still the type's own name, so the tone is a second channel rather than the
+ * only one, and the column still sorts on `e.type` — a badge is what the cell *renders*, not
+ * what it holds.
  */
 function transactionColumns(
   baseCurrency: string,
@@ -429,7 +453,16 @@ function transactionColumns(
       ),
       sortValue: (e) => e.symbol || null,
     },
-    { key: 'type', header: 'Type', cell: (e) => e.type, sortValue: (e) => e.type },
+    {
+      key: 'type',
+      header: 'Type',
+      cell: (e) => (
+        <Badge variant={toneOf(e.amountBase)} size="sm" className={BADGE_CELL_CLASS}>
+          {e.type}
+        </Badge>
+      ),
+      sortValue: (e) => e.type,
+    },
     {
       key: 'shares',
       header: 'Shares',
@@ -456,6 +489,7 @@ function transactionColumns(
       header: `In ${baseCurrency}`,
       numeric: true,
       cell: (e) => c(e.amountBase),
+      cellClassName: (e) => toneClassName(toneOf(e.amountBase)),
       sortValue: (e) => e.amountBase,
     },
   ]

@@ -1,12 +1,15 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
+  BADGE_CELL_CLASS,
   BADGE_SIZES,
   BADGE_VARIANTS,
   badgeClassName,
   DEFAULT_BADGE_SIZE,
   DEFAULT_BADGE_VARIANT,
+  TONED_BADGE_VARIANTS,
 } from './badgeVariants'
+import { STAT_TONES, toneOf } from './statTileVariants'
 
 /**
  * The `Badge` contract (Story #132, DDR-0037).
@@ -58,6 +61,12 @@ describe('badgeClassName', () => {
 
   it('appends a caller’s className last, so a call site extends rather than forks', () => {
     expect(badgeClassName('plain', 'md', 'wide')).toBe('badge badge-plain badge-md wide')
+  })
+
+  it('composes the toned cell badge the Dividends transactions table renders', () => {
+    expect(badgeClassName('negative', 'sm', BADGE_CELL_CLASS)).toBe(
+      'badge badge-negative badge-sm badge-cell',
+    )
   })
 
   it('omits an absent or empty className rather than emitting a stray space', () => {
@@ -142,6 +151,81 @@ describe('the stylesheet backs every declared variant and size', () => {
   it('carries no background — the boundary is the border', () => {
     const bodies = [...CSS.matchAll(/^\.badge[\w-.]*[^{]*\{([^}]*)\}/gm)].map((m) => m[1] ?? '')
     expect(bodies.filter((body) => body.includes('background'))).toEqual([])
+  })
+})
+
+/**
+ * The two toned variants (Story #192, DDR-0064). The prototype draws a dividend row's type as a
+ * *tinted chip*; what ships is the primitive's own treatment — a boundary and an ink — in the
+ * gain and loss tones, so DDR-0037's "never a background" survives the redesign rather than
+ * being amended out of it.
+ */
+describe('the toned variants keep the primitive’s shape and the tone split', () => {
+  it('carries the loss tone as --neg-text, never the fill token (DDR-0046)', () => {
+    expect(ruleBody('.badge-negative')).toContain('color: var(--neg-text)')
+    expect(ruleBody('.badge-negative')).not.toMatch(/color:\s*var\(--neg\)/)
+  })
+
+  it('carries the gain tone as --pos', () => {
+    expect(ruleBody('.badge-positive')).toContain('color: var(--pos)')
+  })
+
+  /**
+   * The boundary is the tone mixed halfway into `--border` — the idiom `.capture-status-error`
+   * and `.state-panel-error` already use. Full-strength on a 200-row table would read as stripes,
+   * and it is the *border* that takes the fill token, because a border is painted area.
+   */
+  it.each(TONED_BADGE_VARIANTS)('mixes variant "%s" into the shared border rather than replacing it', (variant) => {
+    expect(ruleBody(`.badge-${variant}`)).toMatch(
+      /border: 1px solid color-mix\(in srgb, var\(--(pos|neg)\) 50%, var\(--border\)\)/,
+    )
+  })
+
+  /**
+   * The badge's text names the transaction type, so the tone is a second channel and not the
+   * only one — which is why these two do not take `.badge-accent`'s weight step. That variant
+   * needs it because a call site could word "Imported" and "Already imported" identically; a
+   * type label cannot stop naming its type.
+   */
+  it('leaves the weight step to the one variant whose meaning rides on colour alone', () => {
+    expect(ruleBody('.badge-positive')).not.toContain('font-weight')
+    expect(ruleBody('.badge-negative')).not.toContain('font-weight')
+  })
+
+  /**
+   * The reason the badge's variant union is a superset of the tile's tone union rather than a
+   * parallel vocabulary: `toneOf()` is handed straight to `variant`, and `neutral` is both the
+   * default badge and the absence of a tone. Two unions agreeing on two names and disagreeing on
+   * the third would type-check at every call site and render the wrong chip at one.
+   */
+  it('contains every stat tone, so toneOf() can name a variant directly', () => {
+    for (const tone of STAT_TONES) {
+      expect(BADGE_VARIANTS).toContain(tone)
+    }
+    expect(toneOf(-12.5)).toBe('negative')
+    expect(toneOf(0)).toBe(DEFAULT_BADGE_VARIANT)
+  })
+})
+
+/**
+ * The cell placement. `sm` is the size, because `md`'s vertical padding is taller than the
+ * `--text-sm` line every other cell in the row draws; the gap `sm` also carries is what this
+ * undoes, and it has to beat the size by specificity rather than by source order.
+ */
+describe('a badge that opens its own table cell', () => {
+  it('is named once, and the stylesheet declares it doubled', () => {
+    expect(BADGE_CELL_CLASS).toBe('badge-cell')
+    expect(CSS).toMatch(/^\.badge\.badge-cell \{/m)
+    expect(/^\.badge\.badge-cell \{([^}]*)\}/m.exec(CSS)?.[1] ?? '').toContain('margin-left: 0')
+  })
+
+  /**
+   * It undoes the gap and nothing else. A padding or a font-size here would be a third size
+   * wearing a placement class, which is exactly the fork `className` is not for (ADR-0008).
+   */
+  it('undoes the inline gap and declares nothing else', () => {
+    const body = /^\.badge\.badge-cell \{([^}]*)\}/m.exec(CSS)?.[1] ?? ''
+    expect(body.match(/[\w-]+\s*:/g)).toHaveLength(1)
   })
 })
 

@@ -13,6 +13,12 @@ import { StatePanel } from '../ui/StatePanel'
  * drawn in the loss colour (red) rather than the positive "received" blue so a net-loss month
  * is unmistakable (Story #49). `upper` is still assumed non-negative. Inline SVG, no charting
  * dependency.
+ *
+ * **The legend moved into the card header** in Story #192 (DDR-0064), the same move DDR-0052
+ * made for the composition stack and for the same two reasons: a key is read *before* the plot
+ * rather than after it, and a `<figcaption>` under the plot is height the card's neighbours do
+ * not have. `IncomeLegend` below is what the view renders there, so this component emits a bare
+ * `<svg>` — the labels it still takes are the tooltip's, which repeats the whole column.
  */
 export interface StackedColumn {
   key: string
@@ -60,91 +66,108 @@ export function ColumnChart({
   const zeroY = y(0)
 
   return (
-    <figure className="chart-figure">
-      <svg
-        className="chart"
-        viewBox={`0 0 ${W} ${H}`}
-        role="img"
-        aria-label={ariaLabel}
-        preserveAspectRatio="xMidYMid meet"
-      >
-        {ticks.map((t, i) => {
-          const yy = y(t)
-          // The zero line is emphasised so positive and negative months read as either side of it.
-          const isZero = t === 0
-          return (
-            <g key={`${t}-${i}`}>
-              <line
-                className={isZero ? 'chart-zero' : 'chart-grid'}
-                x1={PAD.left}
-                x2={W - PAD.right}
-                y1={yy}
-                y2={yy}
-              />
-              <text className="chart-axis-label" x={PAD.left - 8} y={yy} dy="0.32em" textAnchor="end">
-                {formatValue(t)}
-              </text>
-            </g>
-          )
-        })}
+    <svg
+      className="chart"
+      viewBox={`0 0 ${W} ${H}`}
+      role="img"
+      aria-label={ariaLabel}
+      preserveAspectRatio="xMidYMid meet"
+    >
+      {ticks.map((t, i) => {
+        const yy = y(t)
+        // The zero line is emphasised so positive and negative months read as either side of it.
+        const isZero = t === 0
+        return (
+          <g key={`${t}-${i}`}>
+            <line
+              className={isZero ? 'chart-zero' : 'chart-grid'}
+              x1={PAD.left}
+              x2={W - PAD.right}
+              y1={yy}
+              y2={yy}
+            />
+            <text className="chart-axis-label" x={PAD.left - 8} y={yy} dy="0.32em" textAnchor="end">
+              {formatValue(t)}
+            </text>
+          </g>
+        )
+      })}
 
-        {columns.map((c, i) => {
-          const cx = PAD.left + i * band + (band - barW) / 2
-          const gross = c.lower + c.upper
-          // The net (lower) segment runs from the zero line to `lower` — upward when positive,
-          // downward past the baseline when negative. Its rect is anchored by the higher edge.
-          const lowerTop = Math.min(zeroY, y(c.lower))
-          const lowerH = Math.abs(y(c.lower) - zeroY)
-          // Withholding stacks on top of a positive net (`lower` → `gross`). A negative-net
-          // month can't stack across zero without overlapping the downward bar, so it's shown
-          // through the tooltip alone rather than a second rect.
-          const stackUpper = c.lower >= 0 && c.upper > 0
-          const upperH = stackUpper ? y(c.lower) - y(gross) : 0
-          // Each tooltip repeats the whole column so reading one segment never loses the rest.
-          const tip = (): string =>
-            [
-              c.label,
-              `${lowerLabel}: ${formatValue(c.lower)}`,
-              `${upperLabel}: ${formatValue(c.upper)}`,
-              totalLabel ? `${totalLabel}: ${formatValue(gross)}` : null,
-            ]
-              .filter((line) => line !== null)
-              .join('\n')
-          // A below-zero net (withholding outweighed the dividends) is a loss, so its bar
-          // switches from the positive "received" blue to the loss red (Story #49 refinement).
-          const lowerClass = c.lower < 0 ? 'chart-bar-lower chart-bar-loss' : 'chart-bar-lower'
-          return (
-            <g key={c.key}>
-              <rect className={lowerClass} x={cx} y={lowerTop} width={barW} height={lowerH} rx={2}>
+      {columns.map((c, i) => {
+        const cx = PAD.left + i * band + (band - barW) / 2
+        const gross = c.lower + c.upper
+        // The net (lower) segment runs from the zero line to `lower` — upward when positive,
+        // downward past the baseline when negative. Its rect is anchored by the higher edge.
+        const lowerTop = Math.min(zeroY, y(c.lower))
+        const lowerH = Math.abs(y(c.lower) - zeroY)
+        // Withholding stacks on top of a positive net (`lower` → `gross`). A negative-net
+        // month can't stack across zero without overlapping the downward bar, so it's shown
+        // through the tooltip alone rather than a second rect.
+        const stackUpper = c.lower >= 0 && c.upper > 0
+        const upperH = stackUpper ? y(c.lower) - y(gross) : 0
+        // Each tooltip repeats the whole column so reading one segment never loses the rest.
+        const tip = (): string =>
+          [
+            c.label,
+            `${lowerLabel}: ${formatValue(c.lower)}`,
+            `${upperLabel}: ${formatValue(c.upper)}`,
+            totalLabel ? `${totalLabel}: ${formatValue(gross)}` : null,
+          ]
+            .filter((line) => line !== null)
+            .join('\n')
+        // A below-zero net (withholding outweighed the dividends) is a loss, so its bar
+        // switches from the positive "received" blue to the loss red (Story #49 refinement).
+        const lowerClass = c.lower < 0 ? 'chart-bar-lower chart-bar-loss' : 'chart-bar-lower'
+        return (
+          <g key={c.key}>
+            <rect className={lowerClass} x={cx} y={lowerTop} width={barW} height={lowerH} rx={2}>
+              <title>{tip()}</title>
+            </rect>
+            {stackUpper && (
+              <rect
+                className="chart-bar-upper"
+                x={cx}
+                y={y(gross)}
+                width={barW}
+                height={upperH}
+                rx={2}
+              >
                 <title>{tip()}</title>
               </rect>
-              {stackUpper && (
-                <rect
-                  className="chart-bar-upper"
-                  x={cx}
-                  y={y(gross)}
-                  width={barW}
-                  height={upperH}
-                  rx={2}
-                >
-                  <title>{tip()}</title>
-                </rect>
-              )}
-              <text className="chart-axis-label" x={cx + barW / 2} y={H - 10} textAnchor="middle">
-                {c.label}
-              </text>
-            </g>
-          )
-        })}
-      </svg>
-      <figcaption className="chart-legend">
-        <span className="legend-item">
-          <span className="legend-swatch legend-swatch-lower" aria-hidden="true" /> {lowerLabel}
-        </span>
-        <span className="legend-item">
-          <span className="legend-swatch legend-swatch-upper" aria-hidden="true" /> {upperLabel}
-        </span>
-      </figcaption>
-    </figure>
+            )}
+            <text className="chart-axis-label" x={cx + barW / 2} y={H - 10} textAnchor="middle">
+              {c.label}
+            </text>
+          </g>
+        )
+      })}
+    </svg>
+  )
+}
+
+/**
+ * The stack's key, rendered into the income card's **header** rather than under the plot
+ * (Story #192, DDR-0064) — the placement DDR-0052 settled for the composition stack.
+ *
+ * It takes the same two labels the chart's tooltips use, so the key cannot name one thing while
+ * the tooltip names another. The swatches are `aria-hidden`: the label beside each is the text,
+ * and a screen reader reading "square, Net received" gains nothing.
+ */
+export function IncomeLegend({
+  lowerLabel,
+  upperLabel,
+}: {
+  lowerLabel: string
+  upperLabel: string
+}): React.JSX.Element {
+  return (
+    <p className="chart-legend chart-legend-header">
+      <span className="legend-item">
+        <span className="legend-swatch legend-swatch-lower" aria-hidden="true" /> {lowerLabel}
+      </span>
+      <span className="legend-item">
+        <span className="legend-swatch legend-swatch-upper" aria-hidden="true" /> {upperLabel}
+      </span>
+    </p>
   )
 }
