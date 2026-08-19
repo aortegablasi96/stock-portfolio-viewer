@@ -245,8 +245,15 @@ describe('the superseded badge rules are gone', () => {
     expect(RULES).not.toContain(selector)
   })
 
-  /** `.flex-import-dim` stays: it colours a table cell standing in for a count, not a label. */
-  it('leaves the dimmed cell rule alone', () => {
-    expect(declaresRule('.flex-import-dim')).toBe(true)
+  /**
+   * The dimmed cell rule stays — it colours a table cell standing in for an absent value, not a
+   * label — but it is no longer `.flex-import-dim`. Story #193 gave the Realized P&L column the
+   * same em dash, so the rule moved into the `DataTable` cell-class namespace it shares with
+   * `.data-table-note`, `.data-table-num` and `.data-table-name` rather than gaining a second
+   * copy under a second view's prefix (DDR-0065).
+   */
+  it('leaves the dimmed cell rule alone, under the table’s own name', () => {
+    expect(declaresRule('.data-table-dim')).toBe(true)
+    expect(RULES).not.toContain('.flex-import-dim')
   })
 })

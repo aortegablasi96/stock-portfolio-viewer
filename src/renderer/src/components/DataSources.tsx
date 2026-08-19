@@ -397,7 +397,7 @@ const summaryColumns: DataColumn<FlexStatementImport>[] = [
       key: section.key,
       header: section.header,
       numeric: true,
-      cellClassName: (s) => (s.alreadyImported ? 'flex-import-dim' : ''),
+      cellClassName: (s) => (s.alreadyImported ? 'data-table-dim' : ''),
       cell: (s) => <RecordCount count={s.records[section.key]} dim={s.alreadyImported} />,
     }),
   ),
