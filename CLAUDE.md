@@ -15,20 +15,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current Repository State
 
-M0–M4 are delivered; work is under **M5 — Visual redesign**, which restyles every view against a
-Figma Make proposal and is **presentation-only**. The app boots, connects to the Interactive
-Brokers Client Portal Gateway, renders live holdings/balances/allocation in a display currency,
-captures immutable snapshots (on open + on demand), imports IBKR Flex Query statements, and
-renders four analytics views over that imported data. A vertical sidebar switches between the
-live Portfolio dashboard and the four analytics views.
+M0–M5 are delivered. The app boots, connects to the Interactive Brokers Client Portal Gateway,
+renders live holdings/balances/allocation in a display currency, captures immutable snapshots (on
+open + on demand), imports IBKR Flex Query statements, and renders four analytics views over that
+imported data. A vertical sidebar switches between the live Portfolio dashboard and the four
+analytics views.
 
 Not built: AI features, multi-broker support, benchmark comparison, tax reporting.
 
 **Which Epics are open is deliberately not recorded here** — the backlog is the source of
 milestones (see *Current Priority*). The stable rule is the **lifecycle**: an Epic closes when its
 stories close, and new refinement opens a *new* area-scoped Epic rather than reopening a delivered
-one. The one narrow exception — reopening when an Epic's acceptance criteria provably under-scoped
-its own Summary, requiring a dated note — is in `docs/github-issues.md`; Epic #125 is the precedent.
+one. The one narrow exception is in `docs/github-issues.md`; Epic #125 is the precedent.
 
 **Views are reworked often — read the backlog before assuming one is final.**
 
@@ -74,8 +72,7 @@ These have each shipped broken at least once. Read them before touching analytic
 - **Optional sections degrade, never fail** — `flex_open_dividend_accruals` is absent from some
   exports and becomes an empty list.
 - **Check `docs/flex-queries/` before guessing at XML shapes — or before concluding a section is
-  missing.** Story #171 opened by declaring a daily NAV unavailable when it was already exported
-  and simply unparsed. The directory is **gitignored** (real account data), so a fresh clone has
+  missing** (#171). The directory is **gitignored** (real account data), so a fresh clone has
   none of it and the parser's tests fall back to an inline fixture.
 
 ### As-built layout
@@ -101,8 +98,7 @@ docs/figma_design/  Epic #179's Figma Make export — gitignored
 - **Minimal slice / test style** — `app:ping` and `metaService.getInstallId()`; see
   `services/meta/metaService.test.ts` for the repository-mocking pattern.
 - **External data source** — `portfolio:getOverview`: a repository fronting IBKR with Zod at
-  ingress, and **connection state modelled as data** (`not_connected` as a result variant, not a
-  throw). ADR-0004, DDR-0002.
+  ingress, and connection state modelled as data. ADR-0004, DDR-0002.
 - **Local persistence + policy** — the `snapshot:*` channels: a service owning a capture policy
   over an append-only table, plus a main→renderer event. DDR-0003.
 - **Read-only analytics** — the `analytics:*` channels: read through a read-only repository,
@@ -115,11 +111,11 @@ docs/figma_design/  Epic #179's Figma Make export — gitignored
 
 ### Enforced by the platform, not by convention
 
-This repo's habit is to make invariants *unexpressible* rather than documented. Four examples, and
-you should reach for the same instinct: **ESLint layer boundaries** (`eslint.config.mjs`, ADR-0002/
-0003) — the renderer may not import `@services`/`@repositories`/`@db`/`@main`/`electron`, services
-may not import `@db` or `electron`; the **CSP's omitted telemetry origin** (below); the
-**zero-specificity `:where()` focus ring** (below); and the **token adoption ratchet** (below).
+This repo's habit is to make invariants *unexpressible* rather than documented — reach for the same
+instinct. **ESLint layer boundaries** (`eslint.config.mjs`, ADR-0002/0003): the renderer may not
+import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not import `@db` or
+`electron`. The CSP's omitted telemetry origin, the `:where()` focus ring and the token ratchet
+below are the same move.
 
 ### Build, runtime, environment
 
@@ -184,7 +180,7 @@ may not import `@db` or `electron`; the **CSP's omitted telemetry origin** (belo
 - **Every request is bounded by a whole-request deadline** (`IBKR_GATEWAY_TIMEOUT_MS`, 15s),
   defined once in `ibkrGateway`. Deliberately *not* `request.setTimeout` (socket inactivity, reset
   by every byte) — the gateway's usual failure is accepting the connection and then going quiet,
-  which emits no error code and once hung the dashboard forever.
+  which emits no error code.
 - **One bounded attempt, never a retry loop**, and **no per-item loop may pay the timeout once per
   item** (DDR-0022). Classification stops at the first timeout; `getExchangeRates` instead issues
   every pair **concurrently**, bounding the wait the same way while keeping rates that answered
@@ -207,8 +203,8 @@ may not import `@db` or `electron`; the **CSP's omitted telemetry origin** (belo
   `--radius-*` in **px**, `--text-2xs..2xl`, `--leading-*`. Deliberately off-scale: chart/map SVG
   label sizes (DDR-0018) and sub-6px radii. One collision, re-decided: **`--text-xl` (26px) and
   `.stat-row`'s `minmax(14.5rem, 1fr)` are one number** — the column holds a twelve-character
-  figure at 0.6em per digit, asserted in `statTileVariants.test.ts`. Both ends bind: narrower
-  overruns the card, wider drops Trades to two rows at 1280px (DDR-0060).
+  figure, asserted in `statTileVariants.test.ts`. Both ends bind: narrower overruns the card,
+  wider drops Trades to two rows at 1280px (DDR-0060).
 - **Adoption is held by a ratchet; don't re-baseline it** (DDR-0042). `lib/tokenAdoption.ts` has
   `BASELINE` (may only shrink — **currently empty and must stay empty**) and `EXEMPTIONS`
   (permanent, **eight**, each with a reason). The test fails three ways, including on a *dead*
@@ -272,28 +268,26 @@ may not import `@db` or `electron`; the **CSP's omitted telemetry origin** (belo
   Performance's four charts share one geometry (`lib/chartGeometry`), and both grid breakpoints
   derive from **one** number (`GRID_CONTENT_BREAKPOINT_PX`, 1200) with the sidebar width as a
   defaulted parameter, so neither can be tuned alone. Don't "restore" the old breakpoint by
-  lowering it — that ships illegible labels; capping a chart's width stays **rejected**, since it
-  reads as a rendering bug (DDR-0051, DDR-0057). **A `viewBox` clips an overflowing label in
-  silence**, so `pad.left` is *derived* from a measured glyph advance and a character budget
-  (DDR-0051 §#190). A stacked chart's key lives in the **card header**, not a `<figcaption>` —
-  `ColumnChart` and `StackedAreaChart` both emit a bare `<svg>` (DDR-0052, DDR-0064).
+  lowering it — that ships illegible labels; capping a chart's width stays **rejected**
+  (DDR-0051, DDR-0057). **A `viewBox` clips an overflowing label in silence**, so `pad.left` is
+  *derived* from a measured glyph advance and a character budget (DDR-0051 §#190). A stacked
+  chart's key lives in the **card header**, not a `<figcaption>` — `ColumnChart` and
+  `StackedAreaChart` both emit a bare `<svg>` (DDR-0052, DDR-0064).
 - **One chart tooltip, drawn inside the `viewBox`** (DDR-0061). Three `HoverReadout`s became
   `ChartTooltip` over `lib/chartTooltip`, in the plot's own space — so it **cannot** cover the
   neighbouring chart — and **pinned to the plot's top** in all three, never tracking the mark. A
   row's label is prose (sans), its date a figure; sharing one rule keeps `tokenAdoption` at
-  **eight**. The
-  area fill is a `<linearGradient>` with **stops in `app.css`, `fill` per element** (`useId()` —
-  two curves, one page); `LineChart` draws a zero line only where the series *crosses* zero. Bars,
-  `.stack-band` and the donut's native tooltip are untouched.
+  **eight**. The area fill is a `<linearGradient>` with **stops in `app.css`, `fill` per element**
+  (`useId()` — two curves, one page); `LineChart` draws a zero line only where the series *crosses*
+  zero. Bars, `.stack-band` and the donut's native tooltip are untouched.
 - **Chart maths that has drawn a wrong picture before.** The performance curve is **cumulative
   TWR**, not a value curve, so deposits and withdrawals don't move it (DDR-0013). Daily returns are
-  **chain-linked from that curve** (`lib/dailyReturns`), never differenced from `valueSeries` — a
-  deposit would draw as a spectacular day — and take the **unwindowed** series, so the opening bar
-  measures against the day that really preceded it; bars **thin rather than aggregate** (DDR-0049).
-  Composition stacks
-  **cumulatively in base currency** with the top edge as NAV: a negative band **hangs below the
-  zero line** (never clamped or folded), and `other` is the **residual, surfaced and never
-  redistributed** — drop a category into it instead and nothing will look wrong (DDR-0052).
+  **chain-linked from that curve** (`lib/dailyReturns`), never differenced from `valueSeries`, and
+  take the **unwindowed** series, so the opening bar measures against the day that really preceded
+  it; bars **thin rather than aggregate** (DDR-0049). Composition stacks **cumulatively in base
+  currency** with the top edge as NAV: a negative band **hangs below the zero line** (never
+  clamped or folded), and `other` is the **residual, surfaced and never redistributed** — drop a
+  category into it instead and nothing will look wrong (DDR-0052).
 - **The map popup's tint is banked into its edges, and the geometry is what lets it be loud**
   (DDR-0041): the gradient's inner stops sit at `--popup-pad-y`, an **absolute length, not a
   percentage** (a percentage band creeps under the text of taller popups), and
@@ -301,10 +295,10 @@ may not import `@db` or `electron`; the **CSP's omitted telemetry origin** (belo
   `--pos`/`--neg` may never be the *only* channel on a mark; a figure must accompany them
   (DDR-0021, superseded but still governing).
 - **The sidebar's gateway badge is derived, never polled** (DDR-0056) — its source is the last
-  `portfolio:getOverview` result, which is why that tab is excluded from stay-mounted. A timer
-  would contradict "one bounded attempt, never a retry loop". The one `setTimeout` in
-  `SidebarRail.tsx` is a **clock** arming the moment a live reading goes stale, not an interval.
-  `displayCurrency` is the **app's** selection, so the control is never disabled.
+  `portfolio:getOverview` result, which is why that tab is excluded from stay-mounted. The one
+  `setTimeout` in `SidebarRail.tsx` is a **clock** arming the moment a live reading goes stale,
+  not an interval. `displayCurrency` is the **app's** selection, so the control is never
+  disabled.
 - **One sector, one hue, everywhere.** `pie-series-1` — the palette's only blue — is reserved for
   the map's country-weight donut, so the *sector* dimension starts at slot 2 (`SECTOR_SLOT_OFFSET`
   in `lib/pie`) wherever a sector appears. Only sectors pay it; asset class, currency and country
@@ -340,9 +334,9 @@ alternatives this table can only name.
 | `StatTile` / `StatRow` (DDR-0034, DDR-0060) | `tone` only | A tile **is** a `Card`, so it declares no surface. **Neutral is the absence of a rule.** Its label is the app's *one* micro-label — the same four declarations as `.data-table thead th`; don't grow a second. |
 | `Field` + `Select` + `DateInput` (DDR-0035) | `kind` only | **`Field` generates its id with `useId()` and takes no `id` prop** — tabs stay mounted, so all three `RangeFilter`s can be in the document at once and a fixed id would name only the first. |
 | `ToggleGroup` (DDR-0036) | `mode`, which is **worn** (`--radius-md` vs `--radius-pill`) | **Never a tablist**: `aria-pressed`, not `role="tab"`. Only `.app-tab` is a real tablist. |
-| `Badge` (DDR-0037, DDR-0064, DDR-0065) | `variant` × `size` | **Never a pill** (that corner means multi-select) and **never a background** — the toned pair keeps both: `--pos` / `--neg-text` ink, the *borders* take the fill tokens. `BADGE_VARIANTS` ⊇ `STAT_TONES`, so `toneOf()` names a variant. `sm` carries no vertical padding — with it, every holdings row grows ~7px; alone in a cell it also needs `BADGE_CELL_CLASS`, because CSS cannot see that an inline chip follows a *text node*. Trades' side badge is **untoned on purpose** — a buy is not a gain, and that hue is spoken for by the same row's P&L cell; don't paint it, and don't reach for `--accent` or a `--series-*` slot either (DDR-0065). |
+| `Badge` (DDR-0037, DDR-0064, DDR-0065) | `variant` × `size` | **Never a pill** (that corner means multi-select) and **never a background** — the toned pair keeps both: `--pos` / `--neg-text` ink, the *borders* take the fill tokens. `BADGE_VARIANTS` ⊇ `STAT_TONES`, so `toneOf()` names a variant. `sm` carries no vertical padding — with it, every holdings row grows ~7px; alone in a cell it also needs `BADGE_CELL_CLASS`, because CSS cannot see that an inline chip follows a *text node*. Trades' side badge is **untoned on purpose** (DDR-0065): a buy is not a gain, and no substitute hue is free either. |
 | `StatePanel` (DDR-0038) | `variant` (the state) × `surface` | Only `error` paints; the axis exists because the copy and the *announcement* differ. `role` is derived. No heading → the panel **is** a `<p>`. |
-| `DataTable` (DDR-0039, DDR-0059, DDR-0065) | the *container's* `surface` × `height` | Sorting is **opt-in per column**; a **missing value sorts last in both directions**. `.data-table-dim` is the absent-value cell (an em dash), and it must be asked for — a *neutral* tone is the **absence** of a class, so an untoned cell keeps `--text`. The 11px column head and its `0.06em` tracking are a **pair**. The linked row's lift is scoped to match the hover's specificity and win on source order — unscoped, `tr:hover > th` silently out-specifies it. |
+| `DataTable` (DDR-0039, DDR-0059, DDR-0065) | the *container's* `surface` × `height` | Sorting is **opt-in per column**; a **missing value sorts last in both directions**. `.data-table-dim` is the absent-value cell — a *neutral* tone is the **absence** of a class, so an untoned cell keeps `--text`. The 11px column head and its `0.06em` tracking are a **pair**. The linked row's lift is scoped to match the hover's specificity and win on source order — unscoped, `tr:hover > th` silently out-specifies it. |
 
 ## Architecture
 
@@ -411,8 +405,8 @@ Services are the primary unit-test target; mock repositories and external provid
 
 **Vitest runs every test under `src/` in a Node environment with no jsdom, so no test may render a
 React component.** This shapes the renderer: chart maths, filtering, sorting, formatting and state
-are **extracted into pure modules under `renderer/src/lib/`** precisely so they can be tested.
-Follow that split when adding a component with real logic. Pure repository helpers
+are **extracted into pure modules under `renderer/src/lib/`** precisely so they can be tested —
+follow that split when adding a component with real logic. Pure repository helpers
 touching no data source (`flexStatementParser`, `snapshotMapping`, `fifoSummary`) are tested alike.
 
 Several `lib/*.test.ts` files have **no module under test** — they guard `app.css`, the components,
@@ -426,9 +420,8 @@ Testing Report.
 
 ## Skills System (`.claude/skills/`)
 
-The artifact-driven workflow is implemented as skills in four tiers. Each stage produces an
-artifact that is the input to the next; execution skills consume only *approved* artifacts and must
-not redefine requirements, design, or architecture.
+Four tiers. Each stage produces an artifact that is the next stage's input; execution skills
+consume only *approved* artifacts and must not redefine requirements, design, or architecture.
 
 They are **plain `SKILL.md` files, not `Skill`-tool skills** — read
 `.claude/skills/<tier>/<name>/SKILL.md` directly; invoking one by name resolves nothing.
@@ -454,8 +447,7 @@ and return to the owning workflow skill rather than being made inline.**
 `docs/` holds `architecture.md`, `database.md`, `product.md`, `mcp.md`, `github-issues.md`, plus
 `decisions/` (ADRs) and `design-decisions/` (DDRs), each with a README indexing every record in one
 line. Two directories are **gitignored and local-only**, so a fresh clone has neither:
-`flex-queries/` and `figma_design/`. Every redesign story states its own values rather than pointing
-at the latter, so it can go at any time.
+`flex-queries/` and `figma_design/`.
 
 Project history is **not** kept in local files — milestones and work items live in GitHub Issues;
 the record of completed work is the git history and closed issues.
@@ -465,14 +457,11 @@ Consult documentation in this order: **`docs/decisions/` → `docs/design-decisi
 identify it, explain the tradeoffs, and request clarification or propose a new ADR. **Never silently
 override an accepted decision.**
 
-Before implementing anything non-trivial: review the relevant docs, identify affected domains,
-produce the required planning artifacts, follow the approved plan.
-
 ## MCP Servers
 
 `.claude/settings.local.json` enables `context7`, `filesystem`, `playwright`, `interactive-brokers`
-and `shadcn`. The `shadcn` server is for *reading* component APIs — see ADR-0008 before reaching
-for it. The `interactive-brokers` entry in `.mcp.json` still has a **placeholder runtime**
+and `shadcn`. The `shadcn` server is for *reading* component APIs only (ADR-0008). The
+`interactive-brokers` entry in `.mcp.json` still has a **placeholder runtime**
 (`REPLACE_WITH_RUNTIME`), so enabling it does not make it functional. A connected
 `Interactive_Brokers_IBKR` MCP has read-only account/market tools allowlisted — **no
 order-placing tools**.
@@ -482,13 +471,11 @@ order-placing tools**.
 ## Product guardrails
 
 Stock Portfolio Viewer is a **standalone, single-user, local-first desktop application** for
-personal portfolio analytics. It runs on the owner's machine, stores data locally, and is not
-hosted or shared. It is **analytics-first, not advice-first**.
+personal portfolio analytics, **analytics-first, not advice-first**.
 
 AI features (a later milestone) may explain changes, summarize performance, compare periods and
 answer questions. AI must **never** recommend investments, suggest trades, decide allocations, or
-execute transactions. Also out of scope: order execution and robo-advisor functionality. The user
-remains the decision maker.
+execute transactions. Robo-advisor functionality is out of scope; the owner decides.
 
 ## Current Priority
 
