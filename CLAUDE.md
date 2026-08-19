@@ -2,1144 +2,488 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+> **Budget: keep this file under 35 KB.** It is loaded into every session, so its cost is paid
+> before any work starts. It grew 10 KB → 84 KB between 2026-06-25 and 2026-08-19, and a
+> compaction on 2026-08-11 was fully reversed within eight days.
+>
+> The failure mode is re-narrating a decision this repo already records: **every ADR and DDR is
+> 8–20 KB and carries its own reasoning**, and `docs/design-decisions/README.md` indexes all of
+> them in one line each. When a story lands, add *the trap* here in a sentence with its DDR number
+> — never the argument. 35 KB is what remains when every trap below is stated once and nothing is
+> justified twice; if it is exceeded, the fix is to find the paragraph that argues a case rather
+> than to drop a trap.
+
 ## Current Repository State
 
-**M0–M4 are delivered; work is now under M5 — Visual redesign.** Scaffolding (M0), the
-read-only portfolio dashboard (M1), historical snapshots (M2), the performance & allocation
-analytics (M3) and the analytics-refinement milestone (M4) are all on `main`. The app boots,
-connects to the Interactive Brokers Client Portal Gateway, renders live
-holdings/balances/allocation in a user-selected display currency, captures immutable snapshots
-(on open + on demand), imports IBKR Flex Query statements into local history, and renders four
-analytics views over that imported data (performance, allocation, dividends, realized gains &
-trade history). A tab shell switches between the live Portfolio dashboard and the analytics
-views.
+M0–M4 are delivered; work is under **M5 — Visual redesign**, which restyles every view against a
+Figma Make proposal and is **presentation-only**. The app boots, connects to the Interactive
+Brokers Client Portal Gateway, renders live holdings/balances/allocation in a display currency,
+captures immutable snapshots (on open + on demand), imports IBKR Flex Query statements, and
+renders four analytics views over that imported data. A vertical sidebar switches between the
+live Portfolio dashboard and the four analytics views.
 
-**M5 restyles all of that** — it adopts a Figma Make proposal across every view, and its
-foundation stories have landed: bundled typefaces with a figure role (#180, DDR-0053), the
-navy/indigo palette re-key (#181, DDR-0054), and the **vertical sidebar** that replaced the
-horizontal tab strip (#182, DDR-0055). The WAI-ARIA tabs pattern described below was kept, not
-dropped — the rotation cost `aria-orientation` and Up/Down and nothing else. Its **context rail**
-followed (#183, DDR-0056): a brand mark, a gateway badge derived from the Portfolio view's own read,
-and the display currency, which is now the *app's* selection rather than the dashboard's. The
-sidebar shell is now finished: #184 (DDR-0057) **collapses** it to a 56px icon rail, so the column
-has two widths and 220px is only one of them. The first of the **shared surfaces** has landed with
-it: #185 (DDR-0058) gives all five views **one page header**, owned by `AnalyticsShell` rather than
-by `App.tsx` — which is where the second copy of the dashboard's header actually lived, not the
-"no heading at all" the story was filed on. #186 (DDR-0059) restyles the two surfaces every view is
-built from: the card grows a **ruled header strip** and the table an 11px column head and a CSS row
-lift. Read that DDR before restyling anything else against the proposal — most of what it asked for
-was *already true* (the 12px radius, the 20px padding, the dropped trailing row rule, the accent
-sort head), which is the second time this milestone that measuring the proposal against the scale
-found the scale already there (DDR-0054's eight unchanged hues was the first).
+Not built: AI features, multi-broker support, benchmark comparison, tax reporting.
 
-**Every view has been reworked several times, and refinement is ongoing — so read the backlog
-before assuming a view is final.** Which Epics are open is deliberately **not recorded here**:
-the backlog is the source of milestones, and a roster in this file goes stale the day an Epic
-closes (`gh issue list --state open --label epic`; see *Current Priority* below for the rest of
-the queries). What is stable is the **lifecycle rule** — an Epic closes when its stories close,
-and new refinement opens a *new* area-scoped Epic under the current milestone rather than
-reopening a delivered one, so no single Epic grows unbounded the way M3's #4 did. The **one
-narrow exception**, added 2026-08-07: an Epic may reopen when its own stated problem is provably
-unfinished, meaning its acceptance criteria under-scoped the finding in its Summary, so the new
-stories close the *original* scope rather than adding refinement. That requires a dated note on
-the Epic naming which criterion under-scoped which finding. Epic #125 (Shared UI primitives,
-reopened 2026-08-07 for Round 2 and closed 2026-08-09) is the precedent, and
-`docs/github-issues.md` holds the rule.
+**Which Epics are open is deliberately not recorded here** — the backlog is the source of
+milestones (see *Current Priority*). The stable rule is the **lifecycle**: an Epic closes when its
+stories close, and new refinement opens a *new* area-scoped Epic rather than reopening a delivered
+one. The one narrow exception — reopening when an Epic's acceptance criteria provably under-scoped
+its own Summary, requiring a dated note — is in `docs/github-issues.md`; Epic #125 is the precedent.
 
-The Stack and Commands sections below are **live**. Still **not built**: AI features,
-multi-broker support, benchmark comparison, and tax reporting — those are later milestones.
+**Views are reworked often — read the backlog before assuming one is final.**
 
-Live domains exist end-to-end as reference patterns:
+### Domains
 
-- **portfolio** — read-only overview from IBKR. `portfolioService` → `portfolioRepository`
-  → `ibkrGateway` (HTTP + Zod against the local Client Portal Gateway). No SQLite; live only.
-  `getOverview(displayCurrency?)` converts holdings/balances with **live** gateway FX rates —
-  the Flex `fxRateToBase` path does *not* apply here; unconvertible rows carry
-  `displayValue === null` and are excluded from totals/allocation (DDR-0007).
-- **snapshots** — immutable local history. `snapshotService` (capture policy: 12h de-dupe
-  on open, always-write on demand) → `snapshotRepository` → SQLite (`snapshots` /
-  `snapshot_holdings`). Reads IBKR only *through* `portfolioService`.
-- **flex** — imported IBKR Flex Query history (M3, Story #20). A **write-only**
-  `flexRepository` (parse XML + persist, two-tier de-dupe) and a **read-only**
-  `flexReadRepository` (the only new `flex_*` read layer) fronting the immutable `flex_*`
-  tables. The services mirror that split: `flexImportService` writes (import + whole-store
-  clear), `flexStatementsService` reads the store's *shape* — which statements are held and the
-  span they cover — behind `flex:listStatements`, so the Portfolio tab can answer "what are my
-  analytics built from?" on launch with no import. Coverage is a **min/max** over all
-  statements, computed in the service, because statements may overlap or be imported out of
-  order; an empty store is an empty list, not a result variant (DDR-0026). `flex_prior_period_positions` holds the per-instrument daily MTM series that backs
-  day-by-day performance; `flex_open_dividend_accruals` holds declared-but-unpaid dividends
-  (Story #31) — an **optional** Flex section, so an export without it degrades to an empty
-  list rather than failing; `flex_fifo_summaries` holds IBKR's own FIFO performance summary,
-  which backs realized/unrealized gains. `flex_equity_summaries` holds IBKR's **daily NAV by
-  category** (`EquitySummaryInBase`, Story #171) — the only genuine daily NAV in the export, and
-  the one table that is **statement-scoped *and* daily**, so overlapping statements duplicate a
-  calendar day and the caller keeps the row whose statement ends latest (`latestPerDay`). That is
-  the daily analogue of Bug #103 and the failure is worse: duplicates put two points on one date
-  rather than doubling a total, so the curve doubles back on itself. It carries **no
-  `fxRateToBase`** (reported in base already) and every category attribute is optional — an asset
-  class the query does not select is *absent*, not zero, which is why `options` never appears.
-  Real sample exports and a field reference live in `docs/flex-queries/`, which is **gitignored**
-  — it is real account data, so a fresh clone has none of it and the parser's own tests fall back
-  to a compact inline fixture. Check them before guessing at Flex XML shapes, and before
-  concluding a section is *missing*: Story #171 opened by declaring a daily NAV unavailable when
-  section 13 was already exported and simply unparsed. See ADR-0005, DDR-0004, DDR-0008,
-  DDR-0010, DDR-0050.
-- **analytics / dividends** — read-only analytics over the imported Flex data (M3, Stories
-  #21–#24). `performanceService` / `allocationService` / `realizedGainsService` (analytics)
-  and `dividendService` (dividends) read *only* through `flexReadRepository`, convert to base
-  currency (EUR) in the service, and each return an `ok | needs_import` result. Statement-scoped
-  reads (`getLatestOpenPositions`, `getLatestOpenDividendAccruals`) deliberately use the
-  **latest statement only** — older as-of rows describe state that has since changed and would
-  double-count. Three traps worth knowing before touching these services. IBKR's FIFO summary
-  carries a **"Total (All Assets)" aggregate row** (blank symbol) that must be filtered out or
-  it doubles every total — use `isInstrumentSummary` (`repositories/flex/fifoSummary.ts`, kept
-  DB-free so services and their tests share the real predicate). The same FIFO summary mixes
-  **a flow and a balance in one row**: realized P&L is per-period and *must* be summed across
-  statements, while unrealized P&L is an as-of balance that must *not* be — an instrument held
-  through two statements reports its unrealized gain in both. Scope that half with
-  `fromLatestStatement` (same module); `getFifoSummaries()` therefore returns each row's
-  `statementId` + `statementToDate`, and "latest" means the largest **end date**, not the
-  largest id (ids follow import order). This shipped broken once, 25% overstated (#103).
-  Finally, allocation's **cash slice is the NAV residual**
-  (`ChangeInNAV.endingValue − Σ invested market value`), *not* the `percentOfNAV` shortfall,
-  because Flex's `percentOfNAV` sums to 100% across positions and excludes cash — the
-  shortfall approach shipped broken once already. See DDR-0005, DDR-0010, DDR-0015.
-- **classification** — instrument sector/industry (M3, Story #30). Flex carries **no sector
-  field**, so `classificationRepository` fronts *two* sources — the mutable SQLite cache
-  `instrument_classifications` and `ibkrGateway` — and `classificationService` decides which
-  conids to fetch (latest statement's positions, uncached only, sequential). `allocationService`
-  joins the cache with a plain sync read, so Allocation still renders with the gateway closed;
-  unclassified positions form their own slice. The `analytics:classifyInstruments` channel is the
-  only analytics channel that reaches IBKR. A refresh is **resumable, not transactional**: the
-  fetch loop's failure is captured, the rows already fetched are written, and only then is the
-  outcome mapped — so a run that dies on instrument 30 of 40 keeps 29, and the next run re-derives
-  its work list from the cache and asks only for the rest. Every failure variant therefore carries
-  `partial: { fetched, classified, remaining }`, and the run pushes `analytics:classifyProgress`
-  events (`{ completed, total }`, where `total` counts *uncached* instruments) so the sequential
-  loop isn't silent. See DDR-0009, DDR-0023.
+Each exists end-to-end and is the reference pattern for its shape.
 
-> **Project name:** This project is **Stock Portfolio Viewer**, a **standalone,
-> single-user desktop application** for personal stock portfolio analytics. It is
-> **local-first and private** — it runs on the owner's machine, stores data locally, and
-> is not hosted or shared. Treat the workflow *structure* of the `.claude/skills/` library
-> as authoritative.
+- **portfolio** — live IBKR read, no SQLite. `portfolioService` → `portfolioRepository` →
+  `ibkrGateway` (HTTP + Zod). Converts with **live gateway FX**, not Flex `fxRateToBase`;
+  unconvertible rows carry `displayValue === null` and leave totals/allocation (DDR-0007).
+- **snapshots** — immutable local history. `snapshotService` (12h de-dupe on open, always-write on
+  demand) → `snapshotRepository` → SQLite. Reads IBKR only *through* `portfolioService` (DDR-0003).
+- **flex** — imported Flex history, split **write-only** `flexRepository` / **read-only**
+  `flexReadRepository` over immutable `flex_*` tables; services mirror the split
+  (`flexImportService` / `flexStatementsService`). See ADR-0005, DDR-0004, DDR-0026.
+- **analytics / dividends** — read-only over Flex through `flexReadRepository`, converting to base
+  (EUR) **in the service**, each returning `ok | needs_import`. See DDR-0005, DDR-0010, DDR-0015.
+- **classification** — sector/industry. `classificationRepository` fronts *both* the mutable
+  SQLite cache and `ibkrGateway`; `analytics:classifyInstruments` is the only analytics channel
+  reaching IBKR. Refreshes are **resumable, not transactional** — a run that dies at 30 of 40 keeps
+  29 and the next re-derives its work list. See DDR-0009, DDR-0023.
 
-### As-built layout & reference slice
+### Flex data traps
 
-The current source tree (mirror it when adding features):
+These have each shipped broken at least once. Read them before touching analytics.
+
+- **The FIFO summary carries a "Total (All Assets)" aggregate row** (blank symbol) that doubles
+  every total — filter with `isInstrumentSummary` (`repositories/flex/fifoSummary.ts`, kept DB-free
+  so services and tests share the real predicate).
+- **The same FIFO row mixes a flow and a balance**: realized P&L is per-period and *must* be summed
+  across statements; unrealized is an as-of balance that must *not* be. Scope it with
+  `fromLatestStatement`; "latest" is the largest **end date**, never the largest id. Shipped 25%
+  overstated once (#103).
+- **Allocation's cash slice is the NAV residual** (`ChangeInNAV.endingValue − Σ invested market
+  value`), *not* the `percentOfNAV` shortfall — `percentOfNAV` sums to 100% across positions and
+  excludes cash (DDR-0015).
+- **`flex_equity_summaries` is statement-scoped *and* daily**, so overlapping statements duplicate a
+  calendar day — keep the row whose statement ends latest (`latestPerDay`). Duplicates put two
+  points on one date, so the curve doubles back on itself. Carries no `fxRateToBase`, and every
+  category attribute is optional: an unselected asset class is *absent*, not zero (DDR-0050).
+- **Statement-scoped reads use the latest statement only** (`getLatestOpenPositions`,
+  `getLatestOpenDividendAccruals`) — older as-of rows describe state that has since changed.
+- **Optional sections degrade, never fail** — `flex_open_dividend_accruals` is absent from some
+  exports and becomes an empty list.
+- **Check `docs/flex-queries/` before guessing at XML shapes — or before concluding a section is
+  missing.** Story #171 opened by declaring a daily NAV unavailable when it was already exported
+  and simply unparsed. The directory is **gitignored** (real account data), so a fresh clone has
+  none of it and the parser's tests fall back to an inline fixture.
+
+### As-built layout
 
 ```text
 src/
-  main/          Electron main: entry (index.ts) + ipc/handlers.ts (thin, Zod-validated)
-  preload/       contextBridge bridge → window.api (types + channel names only, no Zod)
-  renderer/      React + Vite UI (src/renderer/src/*; App sidebar shell under a custom
-                 TitleBar, components/ + components/analytics/ (views, their use*
-                 hooks, shared filter controls) + components/charts/ +
-                 components/ui/ (shared primitives, Epic #125) +
-                 lib/ — pure, unit-tested helpers extracted out of components +
-                 assets/fonts/ — the two bundled woff2 faces, DDR-0053)
-  services/      pure business logic — primary unit-test target (system/, meta/, window/,
-                 portfolio/, snapshots/, flex/, analytics/, dividends/, classification/)
-  repositories/  the ONLY layer that touches a data source: SQLite (meta/, snapshots/,
-                 flex/), the IBKR gateway (portfolio/portfolioRepository.ts + ibkrGateway.ts),
-                 or both (classification/)
+  main/          Electron main: index.ts + ipc/handlers.ts (thin, Zod-validated)
+  preload/       contextBridge → window.api (types + channel names only, no Zod)
+  renderer/      React + Vite (src/renderer/src/*): App sidebar shell under a custom TitleBar,
+                 components/{analytics,charts,ui}/, lib/ (pure, unit-tested), assets/fonts/
+  services/      pure business logic — primary unit-test target
+  repositories/  the ONLY layer touching a data source (SQLite, the IBKR gateway, or both)
   db/            client.ts (better-sqlite3 + Drizzle singleton), migrate.ts, schema.ts
-  shared/        ipc/contract.ts (Zod schemas + inferred types), ipc/channels.ts,
-                 domain/ (portfolio.ts, snapshot.ts, flex.ts, performance.ts,
-                 allocation.ts, dividends.ts, realizedGains.ts,
-                 classification.ts), errors.ts
+  shared/        ipc/contract.ts (Zod + inferred types), ipc/channels.ts, domain/, errors.ts
 drizzle/         generated SQL migrations + meta journal
-e2e/             Playwright specs that launch the built Electron app
-docs/flex-queries/  real IBKR Flex exports + field reference (parser ground truth) — gitignored
-docs/figma_design/  Epic #179's Figma Make export — a gitignored local copy of the proposal
+e2e/             Playwright specs launching the built app
+docs/flex-queries/  real Flex exports (parser ground truth) — gitignored
+docs/figma_design/  Epic #179's Figma Make export — gitignored
 ```
 
-Canonical flows to copy when adding a feature:
+### Reference slices to copy
 
-- **Minimal slice / test pattern:** `app:ping` (`contract.ts` → `preload` → `handlers.ts`
-  → `systemService`) and `metaService.getInstallId()` (service → `metaRepository` →
-  `app_meta`) show the layering and the repository-mocking test style
-  (`services/meta/metaService.test.ts`).
-- **External data source:** `portfolio:getOverview` shows a repository fronting IBKR
-  (`ibkrGateway` validates every response with Zod at ingress) and **connection state
-  modelled as data** — the handler maps `IbkrNotConnectedError` to a `not_connected`
-  result variant instead of throwing, so the renderer renders it as a first-class state
-  (ADR-0004, DDR-0002).
-- **Local persistence + policy:** the `snapshot:*` channels show a service owning a
-  capture policy over an append-only, immutable table, plus a main→renderer event
-  (`snapshot:captured`) pushed after an on-open capture (DDR-0003).
-- **Read-only analytics over local data:** the `analytics:*` channels show services
-  reading imported history through a dedicated read-only repository (`flexReadRepository`),
-  doing base-currency conversion and calculation in the service, and returning an
-  `ok | needs_import` result the renderer renders as a first-class empty state. Charts are
-  dependency-free inline SVG (`components/charts/`) — including the allocation donuts and the
-  performance view's cumulative **TWR** curve, chosen over a value curve so deposits and
-  withdrawals don't move it (DDR-0013). They are sized by **aspect ratio** (the `viewBox`), never
-  a pixel width, because they scale to a shared `--content-max` column (DDR-0018). The Performance
-  view's four charts render **together, in a 2×2 grid** under one `RangeFilter` (Story #172,
-  DDR-0051, breakpoint amended by DDR-0055) — they answer one question between them, so the switcher that showed one at a time is
-  gone, and with it `chartTab`. That grid is what pulled DDR-0018's lever for the first time: an
-  axis label is 11 *viewBox units*, so halving the column halves the label, and 1080×240 in a
-  half-width card puts an 8.3px number on the axis. The three time-series charts therefore share
-  **one** geometry — `lib/chartGeometry`, 500×180 (≈2.78:1), the width halved so a unit keeps its
-  size and the ratio shortened so the plot keeps its height — and the padding stays put, because
-  `pad.left: 64` is an allowance for a currency label, not a fraction of the plot. Three things
-  follow. The grid **collapses to one column at 1420px of viewport**, which is the same 1200px *content
-  column* the legibility floor picked — since #182 the column is the window minus a 220px sidebar,
-  so `chartGeometry` subtracts `--sidebar-width` before the measure caps anything, and the media
-  query has to add it back. What that cost is DDR-0051's second property: 1200px sat below the
-  1280px default window so a fresh install opened on the grid, and **it no longer does with the
-  column open** — at 1280px a half column renders a 9.7px axis label, under the floor, so a default
-  window opens Performance stacked and the 2×2 grid wants ≥1421px. Don't "restore" it by lowering
-  the breakpoint; that ships illegible labels. **Collapsing the sidebar is what restores it**
-  (#184, DDR-0057), and legitimately: the rail hands 164px back, so the same 1200px column arrives
-  at 1257px of viewport and a half column at 1280px renders 11.4px. Both thresholds are therefore
-  derived from **one** number — `GRID_CONTENT_BREAKPOINT_PX` (1200) — and `gridColumns` /
-  `chartWidthPx` take the sidebar width as a defaulted parameter, so neither can be tuned alone.
-  The label
-  size is **checked, not asserted** (`chartGeometry.test.ts` mirrors the layout tokens, reads each
-  back out of `app.css`, and walks the layout to `--content-max`); and capping a chart's width to
-  bound the collapsed column stays **rejected** — DDR-0018 tried it and it reads as a rendering
-  bug. `ColumnChart`, `PieChart` and the map are not in the grid and keep their own aspect. The
-  **daily-return bars** are that same rule under density (DDR-0049): the ratio is fixed and
-  the *bars* thin with the series, because aggregating days into weeks would destroy the volatility
-  the chart exists to show. Three traps — the returns are **chain-linked** from the cumulative TWR
-  series (`lib/dailyReturns`, reusing `performanceRange`'s exported `chainLink`), never differenced
-  from `valueSeries`, or a deposit draws as a spectacular day; the maths takes the
-  **unwindowed** curve, so the window's opening bar measures against the day that really preceded
-  it rather than against the synthetic point `sliceSeries` anchors at the edge; and the hover
-  target is the **band, not the drawn bar** (`bandIndexAt` in `lib/column`, DDR-0052) — at ~190
-  days a bar is ~1 viewBox unit, so hit-testing the rectangle asks the reader to aim at a hairline,
-  and x outside the plot **clamps** rather than blanking, since the padding is label allowance and
-  not a gap between days. The scrubbed bar is **outlined, never recoloured** (hue is sign here),
-  with `non-scaling-stroke` so the outline survives the thinning. `BarChart` is its
-  own component rather than a `ColumnChart` flag — that one stacks two series, legends them, and
-  labels every column, which at 191 trading days is a 45:1 strip under 191 overlapping labels. The
-  fourth chart, **composition over time** (`StackedAreaChart`, DDR-0050), is **cumulative in base
-  currency** since DDR-0052 — bands stack from zero and the top edge is the day's NAV. It was
-  100%-stacked first, and DDR-0050's two reasons for that (proportion is the question; an absolute
-  version echoes the value curve) are *costs the current version pays*, not mistakes — read
-  DDR-0052 before proposing either direction again. Its maths is `lib/composition`, and four rules
-  there are load-bearing: a **negative band hangs below the zero line** rather than being clamped or
-  folded away (stacking `Σ|value|` would draw a margin position as an asset); a **zero-NAV day**
-  pinches to the baseline and `shares` still guards the division, because the readout quotes a
-  percentage beside each amount — the real 2025 export opens on such a day; the `other` band is
-  the **residual** `total − Σ components`, surfaced and never redistributed, because the Flex query
-  selects NAV categories per asset class held (the DDR-0015 lesson, a second time); and the top
-  edge is NAV **only because the bands are exhaustive** — the normalised chart divided by `total`
-  and drew a flat 100% regardless, so `composition.test.ts` now asserts the stack's top against
-  `point.total` directly. Drop a category instead of folding it into `other` and nothing will look
-  wrong. The window is
-  **sliced, not carried forward** — a composition point is a simultaneous observation of every
-  band, so a synthetic edge point would draw a shape that was never measured. Palette: **all eight
-  slots**, since `SECTOR_SLOT_OFFSET` is a *sector* reservation and asset class is not sector, but
-  **softened in this chart alone** — `.stack-band` drops `fill-opacity` to 0.5 (and
-  `.composition-legend`'s swatches with it) because `--series-*` is tuned for donut wedges and map
-  marks, small shapes that need the saturation, while the same hues as card-filling slabs shout down
-  the curves beside them. Same classes, same hue, further back; retuning the tokens globally was
-  declined (DDR-0052), and a second such override is the moment to ask for a quieter *scale*
-  instead. Both the chart and its legend take their slots from **`compositionColors`**, because the
-  legend is no longer inside the chart: it renders into the card's **header**, at the top right, so
-  `StackedAreaChart` emits a bare `<svg>` like the other two and **all four cards are exactly the
-  same height**. That equality is guarded, not observed (`chartGeometry.test.ts`) — a shared
-  `viewBox` makes the *plots* identical and says nothing about the *cards*, and a `<figcaption>`
-  under one plot is what made this card the odd one out. Three rules hold it: every `ChartCard`
-  renders a `CardHeader` including the three with nothing in it, `.chart-card-header` never wraps
-  (just above the collapse a four-band legend is within a few dozen pixels of the column),
-  and when it is tight the **title** ellipsizes rather than the legend. Those component scans strip
-  comments first — the charts name `<svg>` and `<figcaption>` in their own prose, the DDR-0042
-  trap again. The
-  **Allocation map is the one scoped exception**: a Mapbox GL JS basemap (ADR-0007) carrying, per
-  issuer country, **two donuts side by side** — left, the country's weight in the portfolio (its
-  share of NAV in blue against a muted remainder, on an **absolute 0–100% scale**); right, one
-  slice per sector — with the pair's area proportional to the country's market value and anchored
-  to ISO-3166 alpha-2 centroids, which makes the map deliberately *approximate*: positioned by
-  issuer country, not by company (DDR-0030, superseding DDR-0020). All of its geometry and colour
-  lives in `lib/countryDonuts`, testable under Node because it emits palette *classes* rather than
-  values. Six things to know before touching it.
+- **Minimal slice / test style** — `app:ping` and `metaService.getInstallId()`; see
+  `services/meta/metaService.test.ts` for the repository-mocking pattern.
+- **External data source** — `portfolio:getOverview`: a repository fronting IBKR with Zod at
+  ingress, and **connection state modelled as data** (`not_connected` as a result variant, not a
+  throw). ADR-0004, DDR-0002.
+- **Local persistence + policy** — the `snapshot:*` channels: a service owning a capture policy
+  over an append-only table, plus a main→renderer event. DDR-0003.
+- **Read-only analytics** — the `analytics:*` channels: read through a read-only repository,
+  convert in the service, return a variant the renderer renders as a first-class state.
+- **Fire-and-forget command + state event** — the `window:*` channels. DDR-0011.
+- **Destructive action** — `flex:clear` / `snapshot:clear`: the sanctioned reset behind the
+  in-place `ConfirmAction` control — no modal, no `window.confirm`. ADR-0006, DDR-0012.
 
-  - The marks are **SVG carried by `mapboxgl.Marker`, not painted into the canvas** — a circle
-    layer paints one flat fill per feature, so donut slices have no canvas equivalent. A palette
-    class on a `<path>` *is* the fill, so colour needs no `getComputedStyle` and a colour change is
-    an ordinary re-render, not `setPaintProperty`. A country under an **8px radius collapses to a
-    single disc** in its largest sector's hue, and an SVG `<g>` is only ever hit *through its
-    children* — grouping slices and putting `pointer-events: auto` on the group catches nothing.
-  - **`pie-series-1` — the palette's only blue — is reserved for the country weight, so the
-    *sector* dimension starts at slot 2** (`SECTOR_SLOT_OFFSET` in `lib/pie`), applied everywhere a
-    sector appears (map, legend, Sector donut, its table), because the invariant is one sector/one
-    hue *everywhere*. Only sectors pay it; asset class, currency and country keep all eight slots.
-    Don't place a new chart using slot 1 beside sectors, and don't un-reserve the blue — widen the
-    palette instead.
-  - **Holdings are not on the map at all**, which retires DDR-0020's per-holding granularity: the
-    Positions table is where one company is read, and the `aria-label` says so. A losing holding
-    inside a winning country is aggregated away before anything colours it, so a portfolio can hold
-    several losers and show one red mark — that is granularity, not colour.
-  - **The 2% slice floor applies to sectors only** — applying it to the weight donut would
-    overstate every small country, the one thing a proportion chart must not do.
-  - **One view, coloured by sector** (DDR-0045). The gain/loss mode was withdrawn in Story #160,
-    taking `--diverge-1..7` and `.map-diverge-*` with it; `designTokens.test.ts` pins that
-    **absence**. Don't "simplify" the map by painting wedges green and red — DDR-0021 stays
-    *Superseded-but-applicable* as the record of when `--pos` / `--neg` may be spent (never as the
-    only channel on a mark, since green/red measures ΔE 4.1 under deuteranopia against the basemap;
-    freely where a figure accompanies the colour), and `mapPopupTint.test.ts` fails if any
-    `.country-mark*` rule references those tokens. The **popup** is the carved-out case: it *is*
-    tinted by the hovered subject's return, with a figure two rows below the tint.
-  - **That tint is banked into the popup's top and bottom edges, and the geometry is what lets it
-    be loud** (DDR-0041): a `linear-gradient` `--popup-edge` → `--card` → `--popup-edge` whose two
-    inner stops sit at `--popup-pad-y`, the content's own vertical padding, so the coloured band is
-    exactly the gutter above the first line and below the last and no glyph is ever on it. Four
-    things to keep — the stops are an **absolute length, not a percentage** (a percentage band
-    creeps under the text of the taller six-row sector popups); `--popup-edge-hold` must stay
-    **strictly below** `--popup-pad-y`, or the first line lands on undiluted `--pos`; the **tip
-    takes `--popup-edge`**, because Mapbox flips the popup onto whichever edge is loud; and both
-    tones carry the same percentage, since a stronger "up" than "down" would encode degree on top
-    of sign. `lib/mapPopupTint.test.ts` pins the *geometry* — the stops are the padding — rather
-    than the colour that depends on it.
+## Enforced boundaries & gotchas
 
-  See DDR-0005, DDR-0006.
-- **A view that outlives its tab:** an analytics tab mounts on **first visit and then stays
-  mounted**, hidden rather than unmounted, so returning to it keeps both the report and every
-  bit of view-local state (time range, type chips, chart tab, map colour mode) — nothing is
-  restored because nothing was discarded. Unvisited tabs still issue no IPC. The consequence to
-  respect: a mounted view can go stale, so both Flex write paths (`FlexImport`'s import and
-  clear, the inline `NeedsImport` action) bump `renderer/src/lib/dataVersion`, and every
-  `useAnalytics` re-reads on a bump. `loading` therefore means the **first** load only — a
-  reload keeps the current report on screen and reports itself through `refreshing`, which is
-  what makes the page header's reading time + Refresh non-destructive (a `RefreshBar` of its own
-  until #185 folded it into the header, DDR-0058). The **Portfolio
-  tab is deliberately excluded** and still re-reads on every visit: it shows live IBKR data,
-  which changes with no event to signal it. See DDR-0027 (extends DDR-0006).
-- **The view list is the full WAI-ARIA tabs pattern**, not a styled column of buttons (DDR-0029),
-  and since Story #182 it is a **vertical 220px sidebar** rather than a horizontal strip
-  (DDR-0055). The rotation changed exactly two things about the pattern — the tablist declares
-  `aria-orientation="vertical"`, and `lib/tabKeyboard.ts` moves on **Up/Down**; Left/Right are
-  deliberately *inert*, because a tablist answering to both axes describes neither. Everything in
-  the rest of this bullet is unchanged. Four things about the shell around it are worth knowing.
-  `.app-body` is a flex row of `.app-sidebar` and `.app-content` under the full-width title bar,
-  with `align-items: flex-start` (a stretched item is as tall as the document and cannot stick)
-  and `min-width: 0` on the content column (without it one wide table scrolls the whole page
-  sideways). The document still scrolls — no second scroll container, so the sticky title bar and
-  the capped tables' scroll-driven fade are untouched. The active row's non-colour cue **rotated
-  with it**: the 2px underline is a 3px leading-edge `::after` bar at `--radius-pill`, plus a
-  500→600 weight step the strip had no room for. And `.app-tab:hover` is scoped
-  **`:not(.app-tab-active)`** — a pseudo-class counts as a class, so `:hover` out-specifies
-  `.app-tab-active` regardless of source order and a pointer on the current view would repaint it
-  as unselected. `--titlebar-height`, `--sidebar-width` and `--sidebar-width-collapsed` are `:root`
-  tokens because each is now quoted in more than one rule.
-  Every view — the Portfolio dashboard included — is wrapped in a `TabPanel` (`role="tabpanel"`,
-  `id="panel-<tab>"`, `aria-labelledby="tab-<tab>"`, `tabIndex={0}`) and its tab points back with
-  `aria-controls`, **set only on the selected tab** because an unvisited tab has no panel in the
-  tree to name. A roving `tabindex` (selected `0`, the rest `-1`) makes the tablist one Tab stop,
-  so a keyboard move must `focus()` the new tab through the ref map — the tab being left stops
-  being focusable. Arrow/Home/End use **automatic activation** (focus selects), which is why
-  arrowing past an analytics tab mounts it exactly as clicking would; the index arithmetic sits
-  in `renderer/src/lib/tabKeyboard.ts` because nothing inside a component is testable under
-  Vitest's Node environment, and the attributes and focus moves are pinned by
-  `e2e/tab-navigation.spec.ts`. The active tab carries a 2px bar under its label as well as the
-  accent colour: accent-on-pill is two cues but both are colour. Don't drop the bar. **Each tab
-  also carries an icon, and it is a second channel rather than a name** (Story #168, DDR-0048).
-  The five glyphs live in `components/TabIcons.tsx` — not at the bottom of `App.tsx`, where
-  seventy lines of path data would sit between a reader and the invariants above — and every one
-  renders through a private `Glyph` wrapper, so the module declares **exactly one `<svg>`** and a
-  sixth icon inherits `aria-hidden`, `focusable="false"` and `stroke="currentColor"` by
-  construction rather than by remembering. Three things follow. The label stays a **bare text
-  node** beside the icon, which is why `e2e/tab-navigation.spec.ts` passes unmodified: an SVG
-  contributes no text node, so the tabs still read exactly their five names. `currentColor` is the
-  whole colour decision — the glyph follows the tab through `--muted` → `--text` → `--accent` and
-  adds **no pairing** for `lib/contrast.ts` to cover (DDR-0046), so a literal hex or a palette
-  token in an icon is a colour nothing measures. And the size is **`1em`, not a step**: an icon
-  sitting *in* a line of page text must track `--text-sm`, which is the mirror of DDR-0018's rule
-  that an SVG `<text>` label scaling from a `viewBox` must stay *off* the page scale.
-  `lib/tokenAdoption.ts` guards neither `width` nor `height`, so `lib/tabIcons.test.ts` is the
-  only thing that catches a px icon — it strips comments first, the trap DDR-0042 and DDR-0047
-  both record. Icons stop at the tablist: the analytics sub-tabs, the breakdown strip and the
-  `RangeFilter` presets are `ToggleGroup`s, not tabs (DDR-0036), and giving them icons is a
-  separate judgement.
-- **The sidebar also carries the app's standing context, and the gateway badge is derived rather
-  than polled** (Story #183, DDR-0056). Its source of truth is the last `portfolio:getOverview`
-  result, which the Portfolio view reports up to `App` — that tab re-reads on every visit because it
-  is the one excluded from stay-mounted (DDR-0027), so **nothing polls**: a timer would contradict
-  "one bounded attempt, never a retry loop" (DDR-0022) and would mostly be answered from
-  `gatewayCache` anyway (DDR-0024). The cost of deriving is that a reading **ages**, so a live one
-  expires after five minutes — `Live · 14:32` becomes `Last seen 14:32` — mirroring `SESSION_TTL_MS`,
-  *restated* in `lib/gatewayStatus.ts` rather than imported, since the renderer may not reach
-  `@repositories`. Only `live` ages out; the three unhappy outcomes are already the absence of a
-  gateway. There are **five outcomes, five wordings and three tones**, in that order of importance:
-  two pairs share a tone, so no pair is separated by colour alone, and `--gateway-mark` /
-  `--gateway-ink` declare the dot's fill (`--neg`) and its detail line's text (`--neg-text`) once
-  each so the DDR-0046 split cannot be swapped. The one `setTimeout` in `SidebarRail.tsx` is a clock,
-  not a poll — armed for the moment a live reading goes stale, never an interval. Three things moved
-  with it. `displayCurrency` is now the **app's** selection, held in `App`: it survives a switch away
-  and back, where it used to reset to EUR, and the control is **never disabled** (it must work while
-  the view it converts is unmounted), so the overlapping-read race it used to prevent is handled by a
-  request sequence in `PortfolioDashboard` instead. The callbacks `App` hands the dashboard must stay
-  **stable**, or its load effect re-runs the read that caused the render. And the prototype's account
-  number is deliberately **not** shown — `PortfolioOverview` carries none, and Epic #179 holds this
-  milestone to presentation-only changes, so that is a new figure needing its own story. One
-  consequence to expect: Tab from the selected tab now reaches the currency control before the panel,
-  which `e2e/tab-navigation.spec.ts` was adapted for.
-- **The sidebar collapses to a 56px icon rail, and collapse is one flag rather than a prop**
-  (Story #184, DDR-0057). `shellClassName` puts `app-collapsed` on the app's root and every
-  collapsed rule in `app.css` hangs off it — nothing in the rail takes a `collapsed` prop, which is
-  what keeps the tabs pattern *the same code* in both states and makes "selecting a view must not
-  reopen the column" unexpressible rather than merely untrue. Six things to know. The **title bar
-  still spans the window above the sidebar**, and that is now a decision: with no OS frame the bar
-  is the window's only grab handle, and DDR-0028 judges a restored window's reachability on it, so
-  a full-height sidebar beside it would make the drag region's width depend on a *navigation*
-  preference. A **collapsed label is clipped, never removed** — one rule, four selectors, the same
-  `position: absolute` + `clip` technique `.sr-only` uses — so a nav row is still named by its own
-  text and the currency select by its own `<label for>`; `title` is an addition, which is the
-  distinction the prototype gets wrong. That needs a `<span>` around each tab's label, and the
-  tab's `textContent` is unchanged, which is why `e2e/tab-navigation.spec.ts` still reads five
-  names. The **status dot grows a shape channel on the rail** (filled = live, hollow = idle, haloed
-  = the two unhappy outcomes), because DDR-0056 made the *wording* the channel and the rail clips
-  it — three tones separated by hue alone is the one thing DDR-0021 forbids. The **transition is
-  armed a frame after the stored state arrives**, so a rail left collapsed is simply collapsed on
-  launch instead of sliding shut in front of the reader; the width itself is `--duration-base`,
-  which is what puts it inside the one reduced-motion rule (DDR-0044). The state is **one
-  overwritten `app_meta` value** (`sidebar_state`) beside the window's own, read over
-  `window:getSidebarState` / `window:setSidebarState` — `invoke`, not `send`, because there is a
-  payload to validate. And the toggle sits **last in the column, not beside the brand**: 220px
-  minus the brand tile ellipsises "Stock Portfolio Viewer", so the cost is one more Tab stop
-  between the selected tab and its panel, which `e2e/tab-navigation.spec.ts` records.
-- **Fire-and-forget command + state event:** the `window:*` channels show the *other* IPC
-  shape — `ipcRenderer.send` / `ipcMain.on` with no payload and no Zod (there is nothing to
-  validate), plus one `invoke` query (`window:isMaximized`) and one main→renderer event
-  (`window:maximizeChanged`) carrying a bare boolean. See DDR-0011.
-- **Destructive action:** `flex:clear` / `snapshot:clear` show the sanctioned full-reset
-  exception to immutability (ADR-0006) behind the reusable in-place `ConfirmAction` control —
-  expand-in-place warning, no modal, no `window.confirm`. See DDR-0012.
+### Enforced by the platform, not by convention
 
-### Enforced boundaries & gotchas
+This repo's habit is to make invariants *unexpressible* rather than documented. Four examples, and
+you should reach for the same instinct: **ESLint layer boundaries** (`eslint.config.mjs`, ADR-0002/
+0003) — the renderer may not import `@services`/`@repositories`/`@db`/`@main`/`electron`, services
+may not import `@db` or `electron`; the **CSP's omitted telemetry origin** (below); the
+**zero-specificity `:where()` focus ring** (below); and the **token adoption ratchet** (below).
 
-- **Layer boundaries are ESLint-enforced** (`eslint.config.mjs`, via ADR-0002/0003), not
-  just conventional. The **renderer** may not import `@services`/`@repositories`/`@db`/
-  `@main`/`electron` — only `window.api`. **Services** may not import `@db` or `electron` —
-  they go through a repository. Adding a feature the wrong way fails `npm run lint`.
-- **Path aliases** (`@main`, `@renderer`, `@services`, `@repositories`, `@db`, `@shared`)
-  are declared in **three** places that must stay in sync: `tsconfig.json`,
-  `electron.vite.config.ts`, and `vitest.config.ts`.
-- **`better-sqlite3` is a native module** rebuilt for Electron via the `postinstall`
-  (`electron-rebuild`) hook. If it errors with a Node/Electron ABI mismatch, re-run
-  `npm install` or `npx electron-rebuild -f -w better-sqlite3`.
-- **Runtime DB vs. tooling DB**: the app opens the database at
-  `app.getPath('userData')/portfolio.db`; drizzle-kit (`db:*` scripts) runs *outside*
-  Electron against `./local.dev.db` (override with `DATABASE_URL`). Migrations are applied
-  automatically on launch (`runMigrations()` in `main/index.ts`) and shipped under
-  `extraResources` when packaged.
-- **Electron security is locked down**: `sandbox: true`, `contextIsolation: true`,
-  `nodeIntegration: false`. Keep it that way; reach the main process only over IPC. The window
-  also runs **frameless** (`frame: false`) with an in-app `TitleBar` supplying minimize /
-  maximize / close — window chrome is app code, not OS chrome (DDR-0011).
-- **So is the window's size, position and maximized state** (DDR-0028): with no OS frame,
-  nothing restores it for you. `windowStateService` keeps one overwritten JSON value under the
-  `app_meta` key `window_state` — metadata, not history, so no new table. Three traps: the
-  service may not import `electron`, so `main` passes display geometry **in** as plain
-  rectangles and the off-screen recovery stays a pure function; what is persisted is
-  **`getNormalBounds()`**, never the maximized bounds (a **minimized** window is skipped
-  entirely — it reports neither useful bounds nor, on Windows, its maximized state); and a
-  restored rectangle is re-applied with **`setBounds()`, not the constructor**, because only
-  `setBounds` inverts `getNormalBounds()` past the invisible resize border Windows adds to a
-  frameless window — a constructor round-trip grows the window a few pixels *every launch*.
-  `e2e/window-state.spec.ts` opens the app three times to pin that. Reachability is judged on
-  the 40px **title bar**, not the window's area.
-- **Exactly one instance runs at a time.** `main/index.ts` requests
-  `app.requestSingleInstanceLock()` at **module load**, before any `whenReady` work is
-  registered, so the losing process quits without running migrations, capturing a snapshot, or
-  opening the database (`getDb()` is lazy — nothing before the lock request touches it); the
-  winner focuses its existing window on `second-instance`. That ordering is the point: every
-  write path assumes it is the only writer, and two processes on one SQLite file would
-  duplicate history silently rather than error. The lock is scoped to the user-data directory,
-  which is why the e2e suite's second app — its own `--user-data-dir` — still starts
-  (DDR-0025).
-- **Adding an IPC channel touches four files, in this order**: `shared/ipc/channels.ts`
-  (name) → `shared/ipc/contract.ts` (Zod request/response schema + the `RendererApi` method)
-  → `preload/index.ts` (bridge impl) → `main/ipc/handlers.ts` (parse input, delegate to a
-  service). `contract.ts` is the single source of truth for the wire shape; the renderer and
-  preload import only *types* from it so Zod never lands in those bundles. Domain result
-  schemas themselves live in `shared/domain/*.ts` (that is where every analytics
-  `ok | needs_import` union is declared) and `contract.ts` composes them — put a new one there,
-  not inline. Failures cross IPC **as result variants, not exceptions** (`not_connected`,
-  `not_responding`, `needs_import`, `canceled`, `invalid`, `error`) so the renderer can render
-  each as a first-class state. `not_connected` and `not_responding` are **not**
-  interchangeable: the first is a gateway that isn't running, the second one that accepted the
-  request and then stalled past its bounded wait, and `IbkrTimeoutError` is deliberately not a
-  subclass of `IbkrNotConnectedError` so no `instanceof` check can quietly merge them
-  (DDR-0022). Success is *not* uniformly `ok`: capture returns `captured`, import
-  `imported`, and both clears `cleared`.
-- **That four-file recipe assumes a request/response channel** (`invoke`/`handle`), which is
-  almost all of them. The exception is the three payload-free `window:minimize |
-  toggleMaximize | close` commands: they use `ipcRenderer.send` / `ipcMain.on` and skip
-  `contract.ts` entirely, since with no payload there is nothing to Zod-validate. Main→renderer
-  events (`snapshot:captured`, `window:maximizeChanged`, `analytics:classifyProgress`) are
-  `ipcRenderer.on` subscriptions that return an unsubscribe function (DDR-0011). A service that
-  needs to emit one takes a **callback** and lets the handler send it — services may not import
-  `electron` (DDR-0023).
-- **`instrument_classifications` is the one mutable table** — it's a *cache* of derived
-  reference data (upserted by conid), not history (DDR-0009). Every other table is append-only
-  **during normal operation**: no record is ever edited, partially deleted, or silently
-  mutated by the app's data flow. There is exactly **one sanctioned exception** — a
-  whole-store, owner-confirmed reset per domain (`flexRepository.clearAll()` /
-  `snapshotRepository.clearAll()`), so bad imports can be discarded wholesale and rebuilt.
-  Deliberately no delete-by-id/date/statement variant; don't add one (ADR-0006).
-- **Renderer styling is being consolidated in-house, and shadcn/ui was deliberately declined**
-  (Epic #125, scoped 2026-07-31). The `shadcn` CLI sits in devDependencies and its MCP server is
-  enabled — as a *reference* for the component API, not as a dependency to install. Do not run
-  `shadcn add`, and do not propose adopting the package again without new reasons: it would pull
-  Tailwind v4 + PostCSS into the renderer build plus `radix-ui`, `cva`, `clsx`, `tailwind-merge`
-  and `lucide-react`; a large share of `renderer/src/app.css` is chart/donut/map styling
-  shadcn has no equivalent for (so the app would run two styling systems); Radix Tabs
-  would displace `lib/tabKeyboard.ts`, which exists precisely because Vitest is Node-only
-  (DDR-0029); and DDR-0012 already rules out the modal components carrying much of shadcn's
-  value. What *is* adopted is the API shape — a `variant`/`size` prop contract and
-  `Card`/`CardHeader`/`CardContent` composition — for primitives under
-  `renderer/src/components/ui/` styled by the existing CSS custom properties. Recorded as
-  **ADR-0008**, so it is overridden by a superseding ADR, not by a pull request. The CVD-safe
-  palettes stay untouched (DDR-0030).
-- **`app.css` has a full token scale, and a rule uses a step rather than a raw length**
-  (DDR-0031): `--space-1..8` (a 4px grid with a deliberate 6px half-step at `--space-2`, where
-  the app's dense controls sit), composite `--control-pad-*` / `--surface-pad-*` in `sm|md|lg`
-  (the same vocabulary as the primitives' `size` prop, so CSS and component API agree by
-  construction), `--radius-sm|md|lg|pill` in **px** so a corner doesn't grow with the type
-  scale, and `--text-2xs..2xl` + `--leading-tight|normal`. Deliberately *off* the scale: chart
-  and map SVG label sizes, which scale from a `viewBox` rather than the page (DDR-0018), and
-  sub-6px radii, which are chart geometry. One collision to know — `--text-xl` is **1.4rem, not
-  1.5rem**, because `.stat-row` packs tiles into `minmax(11rem, 1fr)` columns where a bigger
-  figure wraps.
-- **The scale also names two families, and a figure is a role rather than a font** (Story #180,
-  DDR-0053). `--font-sans` (Inter) is applied once, on `body`; `--font-figure` (JetBrains Mono)
-  and `--tracking-figure` (`-0.02em`) belong to the **figure role**, which is deliberately **one
-  rule** listing eleven selectors and declaring family + `font-variant-numeric: tabular-nums` +
-  the tracking *together* — the three only work as a set, and eleven copies is eleven chances for
-  one to drift, the same argument as the `:where()` focus ring and the reduced-motion block.
-  Membership is not invented: it is the set of rules that already declared `tabular-nums`, **plus**
-  `.chart-axis-label` and **minus four that render prose containing a figure** (`.badge`,
-  `.view-updated`, `.map-popup-title`, `.country-map-unknown`), which keep their tabular digits and
-  stay in `--font-sans`. Four things to know. Both faces are **variable `woff2` files checked into
-  `renderer/src/assets/fonts/`** (86.6 KB the pair, against ~240 KB for the nine static cuts the
-  proposal asked for) — **not a dependency**, extracted from Fontsource with `npm pack`; the
-  redesign's `@import url('https://fonts.googleapis.com/…')` **cannot ship**, and needed no CSP
-  change either, since `default-src 'self'` already covers `font-src`. `font-display` is **`block`,
-  not `swap`**: there is no download to hide, only a reflow of every table to avoid. The role
-  declares **no `font-size`**, which is what keeps DDR-0018 intact where it reaches four SVG
-  `<text>` selectors — family and tracking are relative and cross a `viewBox` unchanged. And the
-  guard is `lib/figureRole.test.ts` + the shared reader `lib/figureRole.ts`, which **throws rather
-  than merging** if a second rule ever applies `--font-figure`; `statTileVariants.test.ts` and
-  `dataTableVariants.test.ts` now assert *membership* where they used to assert the property.
-  Mono is ~20% wider than Inter for digits, so a view story that adds a column should re-measure.
-- **Adoption is held by a ratchet; don't re-baseline it** (DDR-0042). `lib/tokenAdoption.ts`
-  carries `BASELINE` (may only shrink — currently **empty, and must stay empty**) and
-  `EXEMPTIONS` (permanent, **eight** entries, each with a reason — #182 retired the ninth, the
-  active tab's `1px` bar radius, when `--radius-pill` turned out to express it). `tokenAdoption.test.ts` fails
-  three ways: a raw value in neither list, a *baseline* entry that stopped matching, and an
-  *exemption* that stopped matching — the second is what makes it a ratchet rather than a
-  suppression file. Two traps: the scanner (`lib/cssDeclarations.ts`) is text-based and
-  **blanks comments in place** so line numbers survive, because `app.css` quotes lengths in
-  prose; and **the exemptions are enumerated by hand, never derived from a rule** — a selector
-  prefix and a "sub-6px radius" rule were both tried and both leaked.
-- **Motion is two durations and two easings, and reduced motion zeroes the durations rather
-  than listing what moves** (DDR-0044). `--duration-fast` (90ms, feedback on something the
-  pointer is already on) · `--duration-base` (120ms, something arriving or a value moving under
-  its own steam) · `--ease-out` · `--ease-linear` (for a width that *reports a number* — easing
-  `.classify-progress-bar` would claim the classification sped up). One
-  `@media (prefers-reduced-motion: reduce) { :root { --duration-*: 0ms } }` covers animations
-  added later too, which a selector list never does. Three things to keep: **source order is the
-  mechanism** (same specificity, no media-query bonus), so the block sits directly under
-  `:root` and `designTokens.test.ts` fails if it moves; a **raw duration is the only way out**,
-  which `lib/motionTokens.ts` guards; and the scroll-driven table fade is the one structural
-  exemption (`animation-timeline: scroll(self block)` has no duration to zero and is the "more
-  rows below" affordance), which is why the blanket `*{animation-duration:0.01ms!important}`
-  reset was rejected. The cascade itself is pinned in a real browser by
-  `e2e/reduced-motion.spec.ts` (Story #154), because `designTokens.test.ts` can see that a token
-  is zeroed but not that the media query wins over `:root` — nor that the three animations which
-  used to escape (`.country-mark-slice`, `.classify-progress-bar`, `.map-popup-shell`) now stop.
-  Mapbox's own camera is already honoured — `respectPrefersReducedMotion` defaults true and
-  `CountryMap.tsx` passes no `essential: true` — so **don't file a story for it**; what's missing
-  is only a guard on that one call site, since `motionTokens.ts` reads `app.css` and the opt-out
-  would live in a `.tsx`.
-- **The renderer has one of each control, and adding a variant means naming a role rather than
-  writing CSS** (Epic #125, Stories #127–#134). Each primitive under `components/ui/` replaced
-  several hand-rolled class families, and each has a guard test in `lib/*Variants.test.ts` that
-  fails the same three ways: a superseded selector reappears, an axis value has no rule in
-  `app.css`, or the primitive re-declares something the shared rules own (a focus ring,
-  `:disabled`, `outline`). **Read the DDR before changing an axis** — each one records call
-  sites and rejected alternatives this table can only name.
+### Build, runtime, environment
+
+- **Path aliases live in three files that must stay in sync**: `tsconfig.json`,
+  `electron.vite.config.ts`, `vitest.config.ts`.
+- **`better-sqlite3` is native**, rebuilt for Electron by the `postinstall` hook. On an ABI
+  mismatch: `npm install` or `npx electron-rebuild -f -w better-sqlite3`.
+- **Runtime DB vs tooling DB** — the app opens `app.getPath('userData')/portfolio.db` and applies
+  migrations on launch; drizzle-kit (`db:*`) runs *outside* Electron against `./local.dev.db`.
+- **A fresh clone needs `.env`** (copy `.env.example`). electron-vite splits by prefix:
+  `MAIN_VITE_*` / `PRELOAD_VITE_*` / `RENDERER_VITE_*` are inlined at **build** time; unprefixed
+  (`IBKR_GATEWAY_URL`) stays in `process.env`, main-process only. Without
+  `RENDERER_VITE_MAPBOX_TOKEN` the map renders a placeholder; nothing else is affected.
+- **Electron security is locked down** — `sandbox: true`, `contextIsolation: true`,
+  `nodeIntegration: false`, and `frame: false` with an in-app `TitleBar` (DDR-0011). Keep it.
+- **The renderer's CSP admits exactly one external origin** (`https://api.mapbox.com`);
+  `events.mapbox.com` is **omitted on purpose**, so the platform blocks Mapbox telemetry however
+  the library is configured. It looks like an oversight; it is the enforcement mechanism. Only
+  tiles and the viewport leave the machine — no portfolio data (ADR-0007).
+- **Exactly one instance runs at a time** — `app.requestSingleInstanceLock()` at **module load**,
+  before any `whenReady` work, so the loser quits without migrating, capturing, or opening the DB.
+  Every write path assumes it is the only writer. Scoped to the user-data dir, which is why the
+  e2e suite's second app still starts (DDR-0025).
+- **The window's own size/position/maximized state is app code** (DDR-0028): one overwritten
+  `app_meta` value. Three traps — `windowStateService` may not import `electron` (main passes
+  geometry in as plain rectangles); persist **`getNormalBounds()`**, never maximized bounds, and
+  skip a **minimized** window entirely; re-apply with **`setBounds()`, not the constructor**, or a
+  frameless window grows a few pixels every launch. Pinned by `e2e/window-state.spec.ts`.
+
+### IPC
+
+- **Adding a channel touches four files, in order**: `shared/ipc/channels.ts` →
+  `shared/ipc/contract.ts` (Zod schema + `RendererApi` method) → `preload/index.ts` →
+  `main/ipc/handlers.ts`. `contract.ts` is the single source of truth for the wire shape; renderer
+  and preload import **types only**, so Zod never lands in those bundles. Domain result schemas go
+  in `shared/domain/*.ts` and `contract.ts` composes them — not inline.
+- **Failures cross IPC as result variants, not exceptions** (`not_connected`, `not_responding`,
+  `needs_import`, `canceled`, `invalid`, `error`). `not_connected` (gateway isn't running) and
+  `not_responding` (accepted, then stalled) are **not interchangeable** — `IbkrTimeoutError` is
+  deliberately not a subclass of `IbkrNotConnectedError` (DDR-0022). Success is **not** uniformly
+  `ok`: capture returns `captured`, import `imported`, both clears `cleared`.
+- **The four-file recipe assumes `invoke`/`handle`.** The exception is the payload-free
+  `window:minimize | toggleMaximize | close`, which use `send`/`on` and skip `contract.ts`
+  entirely. Main→renderer events return an unsubscribe function; **a service that emits one takes
+  a callback**, because services may not import `electron` (DDR-0011, DDR-0023).
+
+### Data
+
+- **`instrument_classifications` is the one mutable table** — a *cache* of derived reference data,
+  upserted by conid (DDR-0009). Everything else is append-only, with exactly **one** sanctioned
+  exception: a whole-store, owner-confirmed reset per domain (`clearAll()`). Deliberately no
+  delete-by-id/date/statement variant; don't add one (ADR-0006).
+- **Two money conventions coexist — don't mix them.** `snapshots` / `snapshot_holdings` store
+  **integer minor units** plus a currency (DDR-0003); `flex_*` tables store **`real`**, because
+  Flex is multi-currency and high-precision (DDR-0004). All timestamps are epoch-ms UTC integers.
+- **Base-currency conversion happens in the service** — never the repository, never the renderer.
+
+### The IBKR gateway
+
+- **`https://localhost:5000`** (override `IBKR_GATEWAY_URL`). Its **self-signed certificate is
+  accepted deliberately** — not a TLS bug to fix.
+- **Every request is bounded by a whole-request deadline** (`IBKR_GATEWAY_TIMEOUT_MS`, 15s),
+  defined once in `ibkrGateway`. Deliberately *not* `request.setTimeout` (socket inactivity, reset
+  by every byte) — the gateway's usual failure is accepting the connection and then going quiet,
+  which emits no error code and once hung the dashboard forever.
+- **One bounded attempt, never a retry loop**, and **no per-item loop may pay the timeout once per
+  item** (DDR-0022). Classification stops at the first timeout; `getExchangeRates` instead issues
+  every pair **concurrently**, bounding the wait the same way while keeping rates that answered
+  (DDR-0024).
+- **Portfolio reads are coalesced** by `gatewayCache` between repository and gateway, so one
+  overview costs one of each call however many service methods run. A failed read is never cached,
+  and a not-connected *or* timeout error drops **every** entry. The policy stops at the repository
+  — no cache-control parameter reaches services or the renderer (DDR-0024).
+
+### Renderer: styling and design tokens
+
+- **Never write a focus rule.** One ring (`--focus-ring` / `--focus-ring-offset`, always
+  `--accent`, destructive controls included) is applied by a **zero-specificity `:where(...)` base
+  rule** at the top of `app.css`, so an element is ringed by default and can't ship without one.
+  `:where()` is the mechanism: every existing rule still wins, so deleting a per-class focus rule
+  makes it *fall through* rather than lose its ring. `--focus-ring-offset-inset` is for the two
+  controls whose ring an ancestor would clip.
+- **Use a scale step, not a raw length** (DDR-0031): `--space-1..8`, composite `--control-pad-*` /
+  `--surface-pad-*` in `sm|md|lg` (the same vocabulary as the primitives' `size` prop),
+  `--radius-*` in **px**, `--text-2xs..2xl`, `--leading-*`. Deliberately off-scale: chart/map SVG
+  label sizes (DDR-0018) and sub-6px radii. One collision: **`--text-xl` is 1.4rem, not 1.5rem**,
+  because `.stat-row` packs `minmax(11rem, 1fr)` columns where a bigger figure wraps.
+- **Adoption is held by a ratchet; don't re-baseline it** (DDR-0042). `lib/tokenAdoption.ts` has
+  `BASELINE` (may only shrink — **currently empty and must stay empty**) and `EXEMPTIONS`
+  (permanent, **eight**, each with a reason). The test fails three ways, including on a *dead*
+  entry — that is what makes it a ratchet rather than a suppression file.
+- **A figure is a role, not a font** (DDR-0053). `--font-figure` + `--tracking-figure` +
+  `font-variant-numeric: tabular-nums` are **one rule** listing its selectors, because the three
+  only work as a set. It declares no `font-size`, which is what keeps DDR-0018 intact where it
+  reaches SVG `<text>`. `lib/figureRole.ts` **throws rather than merging** if a second rule applies
+  the family. Mono is ~20% wider for digits — a story adding a column should re-measure.
+- **Motion is two durations and two easings** (DDR-0044): `--duration-fast` (90ms) ·
+  `--duration-base` (120ms) · `--ease-out` · `--ease-linear` (for a width *reporting a number*).
+  One `prefers-reduced-motion` block **zeroes the tokens** rather than listing what moves, so later
+  additions are covered. **Source order is the mechanism** — the block sits directly under `:root`
+  and `designTokens.test.ts` fails if it moves. A raw duration is the only way out.
+- **The loss tone is two tokens and picking the wrong one is silent** (DDR-0046, DDR-0054): `--neg`
+  is **fill only**, `--neg-text` **text only**; same shape for `--accent` (labels + ring) vs
+  `--accent-strong` (the primary button's fill alone). The *shape* is durable — the split
+  **inverted** in the #181 re-key. `--neg-text`'s constraint is **not** 4.5:1 but `--pos − 0.5`,
+  because the finding was that losses read weaker than gains. `contrast.ts` **enumerates pairings
+  by hand** (Node has no layout engine), lists *passing* ones too, and models
+  `.btn-primary:hover`'s `brightness(1.08)` — which *lowers* contrast where axe tests resting state
+  only. A tint mixed into a surface is a **measured** number, never eyeballed (the sidebar's active
+  row passes at 4.95:1; 22% fails).
+- **The palette is navy/indigo and was re-derived, not pasted** (DDR-0054) — four of the proposal's
+  eleven values failed a guard, and the **eight `--series-*` slots did not move**, because CVD
+  separation is measured mark-against-mark and doesn't care about the ground.
+  `designTokens.test.ts` guards the stylesheet itself: it fails if `outline` gains a second value,
+  a scale stops ascending, or a validated colour moves.
+- **A text-scanning guard must strip comments first.** This trap has now bitten four times
+  (DDR-0042, DDR-0047, DDR-0048, DDR-0058) — `app.css` and the components quote their own values in
+  prose, so an assertion can pass off the commentary alone.
+
+### Renderer: structure and behaviour
+
+- **shadcn/ui was deliberately declined** (ADR-0008, Epic #125). The CLI and MCP server are there
+  to *read* the component API, not to install. Do not run `shadcn add`; do not re-propose the
+  package without new reasons. What is adopted is the API *shape* — `variant`/`size` and
+  `Card`/`CardHeader`/`CardContent` composition — over the existing custom properties.
+- **The view list is the full WAI-ARIA tabs pattern**, not styled buttons (DDR-0029), rotated into
+  a **vertical sidebar** (DDR-0055) that **collapses to a 56px rail** (DDR-0057). Every view
+  including Portfolio is wrapped in a `TabPanel`; `aria-controls` is set **only on the selected
+  tab** (an unvisited tab has no panel to name); a roving `tabindex` makes the tablist one Tab
+  stop, so a keyboard move must `focus()` through the ref map; arrows use **automatic activation**,
+  which is why arrowing mounts a view. Index arithmetic is in `lib/tabKeyboard.ts` because nothing
+  inside a component is testable under Vitest. **Up/Down only** — Left/Right are deliberately
+  inert. Collapse is **one `app-collapsed` flag on the shell, never a `collapsed` prop**, which
+  makes "selecting a view must not reopen the column" unexpressible; a collapsed label is
+  **clipped, never removed**, so a row is still named by its own text.
+- **An analytics tab mounts on first visit and then stays mounted**, hidden rather than unmounted,
+  so view-local state survives; unvisited tabs issue no IPC (DDR-0006, DDR-0027). The consequence:
+  a mounted view can go stale, so both Flex write paths bump `lib/dataVersion` and every
+  `useAnalytics` re-reads. **`loading` means the first load only**; a reload reports through
+  `refreshing`. **Portfolio is deliberately excluded** and re-reads on every visit — it shows live
+  data that changes with no event to signal it.
+- **`AnalyticsShell` owns the four-branch guard, the `<main>`, and the page header** (DDR-0043,
+  DDR-0058). Children are a **function of the report, not elements**, because three of four states
+  have no report, and **the shell holds no state**, which is what keeps DDR-0027 intact. The status
+  row is **absent, not empty**, where there is nothing to refresh. `lib/analyticsShell.ts` holds
+  the branch mapping; its test fails if a view re-declares the guard, wrapper, or header.
+- **Charts are dependency-free inline SVG** sized by **aspect ratio, never a pixel width**
+  (DDR-0018), because an axis label is 11 *viewBox units* — halving the column halves the label.
+  Performance's four charts share one geometry (`lib/chartGeometry`), and both grid breakpoints
+  derive from **one** number (`GRID_CONTENT_BREAKPOINT_PX`, 1200) with the sidebar width as a
+  defaulted parameter, so neither can be tuned alone. Don't "restore" the old breakpoint by
+  lowering it — that ships illegible labels; capping a chart's width stays **rejected**, since it
+  reads as a rendering bug (DDR-0051, DDR-0057).
+- **Chart maths that has drawn a wrong picture before.** The performance curve is **cumulative
+  TWR**, not a value curve, so deposits and withdrawals don't move it (DDR-0013). Daily returns are
+  **chain-linked from that curve** (`lib/dailyReturns`), never differenced from `valueSeries` — a
+  deposit would draw as a spectacular day — and take the **unwindowed** series, so the opening bar
+  measures against the day that really preceded it; bars **thin rather than aggregate**, because
+  aggregating days destroys the volatility the chart exists to show (DDR-0049). Composition stacks
+  **cumulatively in base currency** with the top edge as NAV: a negative band **hangs below the
+  zero line** (never clamped or folded), and `other` is the **residual, surfaced and never
+  redistributed** — drop a category into it instead and nothing will look wrong (DDR-0052).
+- **The map popup's tint is banked into its edges, and the geometry is what lets it be loud**
+  (DDR-0041): the gradient's inner stops sit at `--popup-pad-y`, an **absolute length, not a
+  percentage** (a percentage band creeps under the text of taller popups), and
+  `--popup-edge-hold` must stay **strictly below** it or the first line lands on undiluted `--pos`.
+  `--pos`/`--neg` may never be the *only* channel on a mark; a figure must accompany them
+  (DDR-0021, superseded but still governing).
+- **The sidebar's gateway badge is derived, never polled** (DDR-0056) — its source is the last
+  `portfolio:getOverview` result, which is why that tab is excluded from stay-mounted. A timer
+  would contradict "one bounded attempt, never a retry loop". The one `setTimeout` in
+  `SidebarRail.tsx` is a **clock** arming the moment a live reading goes stale, not an interval.
+  `displayCurrency` is the **app's** selection, so the control is never disabled.
+- **One sector, one hue, everywhere.** `pie-series-1` — the palette's only blue — is reserved for
+  the map's country-weight donut, so the *sector* dimension starts at slot 2 (`SECTOR_SLOT_OFFSET`
+  in `lib/pie`) wherever a sector appears. Only sectors pay it; asset class, currency and country
+  keep all eight. Don't put a new chart on slot 1 beside sectors, and don't un-reserve the blue —
+  widen the palette instead (DDR-0030).
+- **The Allocation map is a `role="group"`, not an `img`** (DDR-0047) — it must contain Mapbox's
+  attribution links, so the graphics are made inert instead: `keyboard: false`, canvas at
+  `tabindex="-1"`, and **every marker host at `tabindex="-1"` set *before* the `Marker` is
+  constructed**, because Mapbox only assigns its own when the element lacks one. It is **one view,
+  coloured by sector** — the gain/loss mode was withdrawn and `designTokens.test.ts` pins that
+  *absence*, so don't paint wedges green and red (DDR-0045). Geometry and colour live in
+  `lib/countryDonuts`, which emits palette **classes** rather than values.
+- **The Allocation breakdown's table and donut link on the slice's `key`, never on position** — the
+  table sorts by any column, so row order and arc order have no reason to agree. Emphasis **never
+  touches `fill`**: the active wedge keeps its colour and the rest drop to 0.35 opacity (DDR-0040).
+
+### UI primitives (`components/ui/`, Epic #125)
+
+Each replaced several hand-rolled class families and has a guard test in `lib/*Variants.test.ts`
+failing the same three ways: a superseded selector reappears, an axis value has no rule in
+`app.css`, or the primitive re-declares something the shared rules own (focus ring, `:disabled`,
+`outline`). **Read the DDR before changing an axis** — each records call sites and rejected
+alternatives this table can only name.
 
 | Primitive | Axes | The rule that isn't obvious |
 | --- | --- | --- |
-| `Button` (DDR-0032) | `variant` = colour + border (`outline` default · `primary` · `secondary` · `danger` · `ghost` **borderless** · `link` · `surface`) × `size` (`sm\|md\|lg` are the `--control-pad-*` steps; `icon` is a *shape*) | `ghost` changed meaning — the old `.ghost-button` had a border and is now `secondary`. `type` defaults to `"button"`. `className` is appended for **placement, not colour**. `.btn` declares no `line-height` on purpose. |
-| `Card` / `CardHeader` / `CardTitle` / `CardContent` (DDR-0033, restyled DDR-0059) | `variant` = surface colour (`default` `--card` · `nested` `--bg`) × `size` = the `--surface-pad-*` steps | `CardContent` is a **scope**: the rules `.panel` declared on its descendants hang off `.card-content`, not `.card`, which keeps a state panel's prose out of their reach — and it is why the #186 strip is declared on the *header* only, so no `StatePanel` moved. `as` is a prop, because the superseded surfaces weren't one element. The **ruled header strip** is one rule over `.card-header` *and* a bare `.card > .card-title`, because nine of the sixteen titles have nothing beside them and both must read alike; it bleeds to the card's edges by negating `--card-pad`, which each size restates beside its `padding` (change one, change both). `.card-header:last-child` gives the strip back — a header with no body divides nothing. |
-| `StatTile` / `StatRow` (DDR-0034) | `tone` only — a headline figure is always a panel-level tile, so `variant`/`size` would each have one value | A tile **is** a `Card`, so it declares no surface of its own. **Neutral is the absence of a rule** (`toneClassName('neutral')` returns `''`); `.stat-positive` / `.stat-negative` are the app's tone semantic, worn by a table cell and the map popup too. |
-| `Field` + `Select` + `DateInput` (DDR-0035) | `kind` (`select \| date`) only — both call sites are the same dense box | **`Field` generates the id with `useId()` and takes no `id` prop**: analytics tabs stay mounted (DDR-0027), so all three `RangeFilter`s can be in the document at once and a fixed id would name only the first. The control is passed as a function of that id. |
-| `ToggleGroup` (DDR-0036) | `mode` (`single \| multiple`), and the mode is **worn** — `--radius-md` vs `--radius-pill` | **Never a tablist**: `aria-pressed`, not `role="tab"` — only `.app-tab` is a real tablist (DDR-0029). The active item carries a doubled stroke (`box-shadow: inset 0 0 0 1px`) as well as the accent. `ToggleOption.title` is a tooltip. |
-| `Badge` (DDR-0037) | `variant` = boundary + ink (`neutral` · `accent` · `plain`) × `size` = type + box padding | **Never a pill** — that corner means multi-select (DDR-0036) — and **never a background**. `sm` carries no vertical padding: an inline-block with it grows every holdings row by ~7px. |
-| `StatePanel` (DDR-0038) | `variant` = the state (`loading \| empty \| notice \| error`) × `surface` (`panel` = a `Card` at `lg` · `inline`) | Only `error` paints; the other three declare no CSS — the axis exists because the copy and the *announcement* differ. `role` is derived (`error` → `alert`, else `status`); no heading → the panel **is** a `<p>`. Parts render in a fixed order, recovery action last. |
-| `DataTable` (DDR-0039, restyled DDR-0059) | the *container's* axes: `surface` (`inline \| card`) × `height` (`auto \| capped`) | Sorting is **opt-in per column** (a `sortValue` gets a header button). A **missing value sorts last in both directions**. It composes with the view's filters rather than replacing them, so the "N of M shown" count is untouched. The sort control is not a `Button` — the header cell already is the box. The column head is `--text-2xs` at `0.06em` and the two are a **pair** — 11px uppercase at a body face's tracking is the thing that fails. Every table lifts the row under the pointer in **CSS** (`--duration-fast`, so reduced motion zeroes it); the linked row's stronger lift is scoped `.data-table tbody tr.data-table-row-active` to match the hover's specificity and win on source order — unscoped, `tr:hover > th` silently out-specifies it and the DDR-0040 link disappears in the pointer case. |
-
-- **An analytics view is a subject noun and a function of its report** (DDR-0043).
-  `components/analytics/AnalyticsShell.tsx` owns the four-branch guard all four views had spelled
-  out byte-for-byte — loading, error + Retry, `NeedsImport`, then the `.analytics-view` wrapper
-  and the freshness line. Three things to know. The children are a **function of the report, not
-  elements**: three of the four states have no report, so a `ReactNode` shell would force every
-  view to guard *again*. **The shell holds no state whatsoever**, which is what keeps DDR-0027
-  intact — range selection, chart tab, type chips and map colour mode stay in the view *above*
-  it, so `loading` still means the first load. And the `<Report>` type argument is written
-  **explicitly** at all four call sites, because inferring it out of a union member is where
-  TypeScript is weakest. `lib/analyticsShell.ts` holds the branch mapping and the wording; its
-  test reads the four views as text and fails if one re-declares the guard, the wrapper or the bar.
-- **Since #185 the shell also owns the page box and the header, and the header is one component for
-  all five views** (DDR-0058). `components/ui/PageHeader.tsx` — title left; provenance right, over
-  the reading time and the primary action — replaces *two* implementations of the same block:
-  `PortfolioDashboard`'s `.dashboard-header` and an `AnalyticsPage` wrapper that lived in `App.tsx`
-  (so the story's premise that the analytics views had "no heading at all" was wrong; they had a
-  second copy of the dashboard's). Six things follow. The shell renders `<main className="dashboard">`
-  and the header **above** its four-way switch, which is what makes "the title renders in every
-  branch" a mechanism rather than a convention — an error state still says which view it is. The
-  **status row is absent, not empty**, in the three unloaded branches: `error` already carries Retry
-  inside its `StatePanel` and `needs_import` its own import action, so a header action there would be
-  a second control for one job (DDR-0038). `RefreshBar` is **gone**, dissolved into the header's
-  status row with its `role="status"` live region, its `aria-label` and its `disabled={refreshing}`
-  intact — `.view-toolbar` and the negative margin holding it against the content went with it. The
-  shell now takes **three nouns** (`title`, `subject`, `refreshLabel`), because `TradeHistoryView`
-  disagrees with itself three ways. `readingLine` (`lib/pageHeader.ts`) tests **`loadedAt` before
-  `refreshing`**, which the analytics views cannot tell apart but Portfolio can: it renders one
-  header over all five of its own states, so it is busy before anything has been read, and Portfolio
-  gained a `loadedAt` of its own — written only where the state is set to `ok`, the rule
-  `useAnalytics` already follows. And the prototype's `STOCK PORTFOLIO VIEWER` **eyebrow is dropped**
-  (`.eyebrow` is out of `app.css`): the title bar and the sidebar's brand tile already name the app,
-  and a third copy names it three times per screen against the view's once. The `analyticsShell`
-  guard grew `<PageHeader`, `<main`, `<h1>` and `className="dashboard"` — over the four views **and
-  `App.tsx`** — and **now strips comments first**, which it did not before and which it needed the
-  moment those were added (the DDR-0042 / DDR-0047 trap, a third time). `e2e/page-header.spec.ts`
-  holds what no Node test can see: one header per view, the title surviving a report-less branch,
-  and exactly one exposed `<h1>`.
-- **The Allocation breakdown's table and donut are linked, and the link is keyed on the slice's
-  `key`, never on position** (DDR-0040) — the table sorts by any column (DDR-0039), so row order
-  and arc order have no reason to agree. The emphasis **never touches `fill`** (hue is identity,
-  DDR-0030): the active wedge keeps its colour and gains a `--text` stroke while the rest drop to
-  0.35 opacity — muting the others is what makes the active one read. `DataTable` carries
-  `activeRowKey` + `onRowActivate` for this, and supplying `onRowActivate` is also what makes rows
-  focusable, so an ordinary table adds nothing to the tab order. `.data-table-row-active` is
-  **neutral, not accent** — the row is pointed at, not selected, and the accent already means
-  "this column holds the sort".
-- **The Allocation map is a `group`, not an `img`, and its graphics are deliberately inert**
-  (DDR-0047). `role="img"` over a subtree holding a focusable canvas, six markers and Mapbox's
-  **attribution control** is what axe reported as `nested-interactive`; making the subtree inert
-  **cannot work**, because `attributionControl: true` is required by Mapbox's terms and its links
-  must stay reachable. Hence `role="group"` keeping its `aria-label`, `keyboard: false`, the
-  canvas at `tabindex="-1"`, and **every marker host at `tabindex="-1"` set *before* the `Marker`
-  is constructed** — Mapbox assigns its own `tabindex="0"` only when the element doesn't already
-  carry one, so setting it afterwards is silently undone. The zoom buttons are **siblings** in
-  their own labelled group; don't move them inside. `lib/mapAccessibility.test.ts` guards this and
-  **strips comments before matching** — the component explains itself in prose, and deleting the
-  real `keyboard: false` left the assertion green off the commentary alone (the trap DDR-0042
-  also records for `app.css`).
-- **The palette is navy/indigo, and it was re-derived rather than pasted** (Story #181, DDR-0054).
-  `--bg #080b18` · `--card #0f1320` · `--border #1f2644` · `--text #e2e8f0` are the Figma proposal's
-  own values; **four of its eleven are not**, because they failed a guard. `--muted` is `#8690aa`,
-  not the proposal's `#64748b` (3.89:1 on `--card` — and this token carries every label, hint,
-  table header and tab in the app). `--accent` is `#818cf8`, not the headline `#6366f1` (4.14:1 as
-  text, and **seven of `--accent`'s nine call sites are a `color`** — it is a text token before it
-  is a ring). And the proposal's single rose `#f43f5e` is right for *neither* loss role: 3.67:1
-  under white as a fill, and as text it passes at 5.04:1 while `--pos` sits at 7.30:1, which is the
-  imbalance Story #163 existed to end. Three consequences. **The eight `--series-*` slots did not
-  move** — re-validated on the new ground and every check still passes, because CVD separation is
-  measured mark-against-mark and does not care about the ground; re-cutting them for appearance
-  would spend DDR-0030's one-sector-one-hue invariant on nothing measurable, so the proposal's seven
-  ad-hoc chart colours stay out. **What did move is achromatic**: `--series-neutral`, `--chart-axis`
-  and `--chart-grid` were *warm* greys, and a warm grey on a blue-black ground reads as brown rather
-  than as "no hue" — `designTokens.test.ts` now asserts blue exceeds red in all three. And **five
-  rules hard-coded a colour outside `:root`** (`.app-nav`'s `rgba(15,17,21,.85)` was the old ground
-  spelled out; the two track tints were the old `--accent` and `--series-1`; two error borders shared
-  a `#5a2b2b`); all five now `color-mix()` from their token, so the next re-key is a `:root` edit.
-  Deliberately **not** added: the proposal's tint backgrounds, `--surface-2/3`, `--border-2` and its
-  `#3d4f6b` dim ink — no call site until #182–#187, and `#3d4f6b` is 2.23:1, a token that cannot
-  legally carry text sitting in the scale waiting to.
-- **The loss tone is two tokens, and picking the wrong one is silent** (DDR-0046, re-derived by
-  DDR-0054). `--neg` `#e11d48` is a **fill only** (`.btn-danger:hover`, `.chart-bar-loss`,
-  `.chart-bar-upper`, `.legend-swatch-upper`, the map popup's tint) and `--neg-text` `#fb7185` is
-  **text only** (`.btn-danger`, `.stat-negative`). The split **inverted** in the re-key — before
-  #181 `--neg` was the fill-safe value and its text half was the problem; now the proposal's rose is
-  text-safe and fails as a fill — so the *shape* is the durable part, not which half is loose. Same
-  shape for the accent: `--accent-strong` `#4f46e5` fills `.btn-primary` alone, while `--accent`
-  stays the focus ring, the active-tab bar, the sort arrow **and every accent label**. Four things
-  to know. The binding constraint on `--neg-text` is **not** 4.5:1 but `--pos - 0.5`: the finding
-  was that losses read weaker than gains, so `contrast.test.ts` pins the *balance*, and it is what
-  rejected the proposal's rose. **The hover is the binding
-  measurement** — `.btn-primary:hover` applies `brightness(1.08)`, which *lowers* contrast against
-  a white label (6.29:1 → 5.58:1) where axe tests resting state only, so `lib/contrast.ts` models
-  the filter. `contrast.test.ts` pins the **split** as well as the ratios: a fill adopting
-  `--neg-text`, or a text rule going back to `--neg`, fails even though both still pass. And the
-  pairing list is **enumerated by hand** (resolving a colour against its inherited background
-  needs a layout engine, which Node-only Vitest lacks), so it lists passing pairs too — a guard
-  listing only what once failed would have missed this finding — #181 grew it from ten pairings to
-  fifteen, and four of the five additions were always rendered and never listed. #182 added the
-  seventeenth form: a colour can now be named as a **token mixed into a surface**, because
-  DDR-0054 made `color-mix()` the way a rule tints something and nothing measured the results. The
-  sidebar's active row is the first such pairing (accent text on a 16% accent wash, 4.95:1) and
-  the ceiling is near — 22% fails — so a tint is a measured number, never an eyeballed one. #186
-  added three more of that form, for the table row's lift, and they say where the *neutral* tint's
-  ceiling is: `--muted` measures 5.34:1 on the 4% hover and 4.97:1 on the linked row's 7%, and 10%
-  would be 4.60:1. The muted half is the binding one in a table and has no counterpart in the
-  sidebar, where a row's label is `--muted` or `--accent` and never both. #183
-  added the first pairings that are **not text at all** — the gateway dot in each of its three
-  tones — and with them `NON_TEXT` (3:1, WCAG 1.4.11), a separate name for the same number
-  `AA_LARGE` carries, because reading "large" beside a dot invites someone to "fix" a failure by
-  making the dot bigger. Known and deliberately open: the
-  tab panels sit outside a landmark (axe `region`, best-practice), because `.tab-panel` wraps the
-  view's `<main>` and unpicking that means restructuring DDR-0029 across every view.
-- **Never write a focus rule.** One ring — `--focus-ring` / `--focus-ring-offset`, always
-  `--accent`, destructive controls included — is applied by a **zero-specificity `:where(...)`
-  base rule** at the top of `app.css`, so an interactive element is ringed by default and can't
-  ship without one. `:where()` is the mechanism, not a style choice: it means every existing rule
-  still wins, so deleting a per-class focus rule during #125 makes it *fall through* to the base
-  rather than lose its ring. Same instinct as the ESLint layer boundaries and the CSP's omitted
-  telemetry origin — the invariant is enforced by the platform. `--focus-ring-offset-inset`
-  (`-2px`) is for the two controls whose ring an ancestor would clip (the title bar's window
-  controls, now `.titlebar-controls .btn`, and `.tab-panel`). `src/renderer/src/lib/designTokens.test.ts` fails if `outline` ever appears in
-  the stylesheet with a second value, if a scale stops ascending, or if a validated palette colour
-  moves — it's a test with no module under test, guarding the stylesheet itself.
-- **Two money-storage conventions coexist** — don't mix them. `snapshots` /
-  `snapshot_holdings` store **integer minor units** (cents) plus a currency (DDR-0003);
-  the `flex_*` tables store **`real`** for money, prices, FX rates and P&L, because Flex is
-  multi-currency and high-precision (DDR-0004). All timestamps everywhere are epoch-ms UTC
-  integers.
-- **Base-currency conversion happens in the service, never the repository or the renderer.**
-  Analytics converts per record with the Flex row's own `fxRateToBase`; the live Portfolio
-  view uses gateway FX (DDR-0005, DDR-0007).
-- **The IBKR gateway is `https://localhost:5000`**, overridable via the `IBKR_GATEWAY_URL` env
-  var. It serves a **self-signed certificate** that `ibkrGateway` accepts deliberately — that
-  is not a TLS bug to fix. **Every** request is bounded by a whole-request deadline
-  (`IBKR_GATEWAY_TIMEOUT_MS`, default 15s) defined once in `ibkrGateway`, because the gateway's
-  usual failure is accepting the connection and *then* going quiet — which emits no error code
-  at all and once hung the dashboard forever. It is deliberately not `request.setTimeout`
-  (socket inactivity, reset by every byte). One bounded attempt, never a retry loop: a timed-out
-  FX rate degrades to *rate unavailable* (DDR-0007), and no per-item loop over the gateway may
-  pay the timeout once per currency/instrument (DDR-0022) — the sequential classification
-  refresh stops at the first timeout, while `getExchangeRates` instead issues every pair
-  **concurrently**, which bounds the wait the same way *and* keeps the rates that did answer
-  (DDR-0024).
-- **Portfolio gateway reads are coalesced and briefly reusable** — `gatewayCache` (DDR-0024)
-  sits between `portfolioRepository` and `ibkrGateway`, so one overview costs one auth check,
-  one account-id resolution, one positions read and one ledger read no matter how many methods
-  the service calls, and a display-currency switch reuses figures fetched moments earlier
-  (`SESSION_TTL_MS` 5min for auth/account, `LIVE_TTL_MS` 30s for positions/ledger/FX). A failed
-  read is never cached, and an `IbkrNotConnectedError` *or* `IbkrTimeoutError` drops **every**
-  entry — a memoized "authenticated" is exactly what a stalled gateway invalidates. The policy
-  stops at the repository: services and the renderer get no cache-control parameter, and cached
-  DTOs are re-mapped per call so no caller can mutate another's data.
-- **A fresh clone needs `.env`** (copy `.env.example`; `.env` is gitignored). electron-vite
-  splits variables by prefix: `MAIN_VITE_*` / `PRELOAD_VITE_*` / `RENDERER_VITE_*` are inlined
-  into that bundle's `import.meta.env` at **build** time (renderer types live in
-  `renderer/src/env.d.ts`); anything unprefixed — `IBKR_GATEWAY_URL` — stays in `process.env`
-  and is main-process only. Without `RENDERER_VITE_MAPBOX_TOKEN` (a public `pk.` token) the
-  Allocation map renders its own `no-token` placeholder rather than failing; every other view is
-  unaffected.
-- **The renderer's CSP admits exactly one external origin** (`https://api.mapbox.com`) and
-  `events.mapbox.com` is **omitted on purpose**, so the platform blocks Mapbox telemetry no
-  matter how the library is configured or upgraded. It looks like an oversight; it is the
-  enforcement mechanism. Only basemap tiles and the viewport leave the machine — no portfolio
-  data (ADR-0007).
-
-## Skills System (`.claude/skills/`)
-
-The artifact-driven workflow in this file is implemented as concrete skills in four tiers.
-Each stage produces an artifact that becomes the input to the next; execution skills only
-consume *approved* artifacts and must not redefine requirements, design, or architecture.
-
-They are **plain `SKILL.md` files, not `Skill`-tool skills** — read the one you need directly
-at `.claude/skills/<tier>/<name>/SKILL.md` and follow it; invoking it by name resolves nothing.
-
-**workflow-skills** — planning, each produces a review artifact:
-`product-manager` (Product Review) → `ui-designer` (UI Review) → `architect`
-(Architecture Review) → `database-designer` (Database Review) → `implementation-engineer`
-(Implementation Plan) → `testing` (Testing Report).
-
-**execution-skills** — implement an approved Implementation Plan:
-`feature-implementer` (vertical slices), `repository-builder`, `service-builder`,
-`api-builder` (thin IPC handlers between renderer and main), `ui-builder`,
-`storage-builder` (local file storage), `assistant-builder` (AI tools/orchestration).
-The Implementation Engineer selects the minimum set of execution skills needed.
-
-**governance-skills** — record/guard long-term decisions:
-`adr-writer` (ADRs → `docs/decisions/`), `design-recorder` (DDRs → `docs/design-decisions/`),
-`refactoring-reviewer` (Refactoring Review, required before significant restructuring).
-
-**project-management** — the GitHub backlog (Epics, User Stories, Bugs only) is the
-**source of milestones**, authored by the owner and **read before planning**, not written
-after implementation: `issue-writer` helps the owner *draft* backlog issues that follow the
-repo templates; `project-historian` (secondary) backfills the tracker with historical issues
-from git history, ADRs, and DDRs for work that predates it. The `product-manager`
-workflow skill reads these issues to begin planning. These skills track work; they never
-design features, architecture, or implementation.
-
-Small bug fixes may skip planning artifacts. Any change to an already-approved decision
-must stop and return to the owning workflow skill rather than being made inline.
-
-## Enabled MCP Servers
-
-`.claude/settings.local.json` enables `context7`, `filesystem`, `playwright`,
-`interactive-brokers`, and `shadcn` (the `postgres` server has been retired following the move
-to SQLite). The `shadcn` server is there to *read* component APIs for Epic #125 — the package is
-not adopted; see the styling gotcha above before reaching for it.
-Note that the `interactive-brokers` entry in `.mcp.json` still uses a **placeholder runtime**
-(`REPLACE_WITH_RUNTIME`), so enabling it does not make it functional until the runtime is
-finalized. Separately, a connected `Interactive_Brokers_IBKR` MCP is available with read-only
-account/market tools allowlisted (positions, balances, price history, etc.) — no order-placing
-tools are allowlisted, in keeping with the analytics-first, no-trading stance.
-
-Prefer Context7 over model memory when consulting framework or library documentation.
-Setup and usage notes live in `docs/mcp.md`.
-
-## Project Overview
-
-Stock Portfolio Viewer is a personal, single-user desktop application for understanding and
-analyzing investment portfolios.
-
-Current capabilities:
-
-* Portfolio dashboard
-* Holdings visualization
-* Historical portfolio snapshots
-* Performance analytics
-* Allocation analysis
-* Dividend tracking
-
-Future capabilities:
-
-* AI-assisted portfolio analysis
-* Multi-broker support
-* Benchmark comparison
-* Tax reporting
-
-Out of scope:
-
-* Investment recommendations
-* Automated trading
-* Order execution
-* Robo-advisor functionality
-
-The application is **analytics-first**, not advice-first.
-
----
-
-## Stack
-
-* Node ≥22.12 (`@electron/rebuild` / `node-abi` require it; CI runs Node 24)
-* npm
-* Electron (desktop shell)
-* React + Vite (renderer / UI)
-* TypeScript (everywhere — renderer **and** main process)
-* SQLite (embedded, local) via Drizzle ORM
-* Zod
-* Interactive Brokers (local Client Portal Gateway / MCP)
-* Vitest
-* Playwright
-
-The full runtime dependency list is deliberately short — `better-sqlite3`, `drizzle-orm`,
-`fast-xml-parser` (Flex statement parsing), `mapbox-gl` (the Allocation basemap only, ADR-0007),
-`react`, `react-dom`, `zod`. Charts are hand-written SVG rather than a charting library.
-
-The app is **local-first**: business logic and data access run in the Electron **main
-process** (TypeScript); the React **renderer** talks to it over IPC and never reaches data
-sources directly.
-
-Avoid introducing additional dependencies unless they provide clear long-term value.
-
----
-
-## Commands
-
-```bash
-npm install            # also runs postinstall: electron-rebuild for better-sqlite3 (native)
-
-npm run dev            # launch Electron + Vite dev server (hot reload) — electron-vite dev
-npm run build          # build main + preload + renderer bundles into out/ — electron-vite build
-npm start              # preview the built app — electron-vite preview
-npm run package        # build + produce a distributable via electron-builder
-
-npm run lint           # eslint . (also enforces the layer-boundary import rules)
-npm run typecheck      # tsc --noEmit (no emit; electron-vite/esbuild does the transpiling)
-
-npm test               # vitest run — unit tests (services), Node env, *.test.ts under src/
-npm run test:watch     # vitest (watch mode)
-npm run test:e2e       # build (electron-vite → out/), then Playwright launches the built app (e2e/*.spec.ts)
-
-# Run a single unit test:
-npx vitest run src/services/meta/metaService.test.ts
-npx vitest run -t "generates and persists"   # by test-name substring
-
-# Run a single e2e spec (Playwright launches out/, so build first — test:e2e always rebuilds):
-npm run build && npx playwright test e2e/tab-navigation.spec.ts
-
-npm run db:generate    # drizzle-kit generate — emit SQL migration from schema.ts changes
-npm run db:migrate      # drizzle-kit migrate — apply to ./local.dev.db (dev tooling only; override with DATABASE_URL)
-npm run db:studio      # drizzle-kit studio — inspect the dev DB
-```
-
-> The app also applies migrations automatically on every launch; `db:migrate` is for the
-> standalone dev DB. There is no local lint/format-fix or aggregate `check` script — run
-> `lint`, `typecheck`, and `test` individually. **CI** (`.github/workflows/ci.yml`) runs
-> exactly those three plus `npm run build` on every push to `main` and every PR (on Node 24,
-> Ubuntu); the Playwright e2e suite is intentionally excluded from CI (needs a display server —
-> run `npm run test:e2e` locally). Run the four locally before opening a PR to match CI.
-
----
+| `Button` (DDR-0032) | `variant` × `size` (`icon` is a *shape*) | `ghost` changed meaning — the old `.ghost-button` is now `secondary`. `type` defaults to `"button"`. `className` is for **placement, not colour**. |
+| `Card` (DDR-0033, DDR-0059) | `variant` (surface colour) × `size` (`--surface-pad-*`) | `CardContent` is a **scope** — descendant rules hang off it, keeping a state panel's prose out of reach. The ruled header strip bleeds to the edges by negating `--card-pad`, which each size **restates beside its `padding`** (change one, change both). `.card-header:last-child` gives the strip back. |
+| `StatTile` / `StatRow` (DDR-0034) | `tone` only | A tile **is** a `Card`, so it declares no surface. **Neutral is the absence of a rule.** |
+| `Field` + `Select` + `DateInput` (DDR-0035) | `kind` only | **`Field` generates its id with `useId()` and takes no `id` prop** — tabs stay mounted, so all three `RangeFilter`s can be in the document at once and a fixed id would name only the first. |
+| `ToggleGroup` (DDR-0036) | `mode`, which is **worn** (`--radius-md` vs `--radius-pill`) | **Never a tablist**: `aria-pressed`, not `role="tab"`. Only `.app-tab` is a real tablist. |
+| `Badge` (DDR-0037) | `variant` × `size` | **Never a pill** (that corner means multi-select) and **never a background**. `sm` carries no vertical padding — with it, every holdings row grows ~7px. |
+| `StatePanel` (DDR-0038) | `variant` (the state) × `surface` | Only `error` paints; the axis exists because the copy and the *announcement* differ. `role` is derived. No heading → the panel **is** a `<p>`. |
+| `DataTable` (DDR-0039, DDR-0059) | the *container's* `surface` × `height` | Sorting is **opt-in per column**; a **missing value sorts last in both directions**. The 11px column head and its `0.06em` tracking are a **pair**. The linked row's lift is scoped to match the hover's specificity and win on source order — unscoped, `tr:hover > th` silently out-specifies it. |
 
 ## Architecture
 
-Dependencies point downward only, and the boundary is **ESLint-enforced rather than
-conventional** — see *Enforced boundaries & gotchas* above; adding a feature the wrong way
-fails `npm run lint`.
+Dependencies point downward only, and the boundary is **ESLint-enforced**.
 
 ```text
-src/renderer      React UI — rendering, navigation, forms. No business logic, no data source.
+src/renderer      React UI. No business logic, no data source.
         ↓ IPC     (window.api only)
-src/main          thin IPC handlers: validate input with Zod, delegate to a service
+src/main          thin handlers: validate with Zod, delegate to a service
         ↓
-src/services      business logic, calculations, orchestration; independent of UI and infra
+src/services      business logic, calculations, orchestration
         ↓
 src/repositories  the only layer that touches a data source
         ↓
 SQLite / Interactive Brokers Gateway
 ```
 
-Repositories expose **domain-oriented** methods, so a service never knows where data
-originates — `portfolioRepository` fronts the IBKR gateway, `flexReadRepository` fronts SQLite,
-`classificationRepository` fronts both — which is what keeps analytics independent of any one
-provider. `src/repositories/README.md` lists them by data source; keep it in step when adding
-one. The database holds local history, application metadata and cached derived data: don't
-duplicate live brokerage data there unless analytics needs it. Full detail lives in
-`docs/architecture.md`, which keeps the longer *Layer Responsibilities* and *Repository
-Pattern* treatments several ADRs cite by those names — this section absorbed CLAUDE.md's own
-copies of them.
+Repositories expose **domain-oriented** methods, so a service never knows where data originates.
+Keep `src/repositories/README.md` in step when adding one. The database holds local history, app
+metadata and cached derived data — don't duplicate live brokerage data there unless analytics needs
+it. Longer treatments (*Layer Responsibilities*, *Repository Pattern*) are in `docs/architecture.md`.
 
----
+## Stack
 
-## Historical Snapshots
+Node ≥22.12 (CI runs 24) · npm · Electron · React + Vite · TypeScript (renderer **and** main) ·
+SQLite via Drizzle · Zod · IBKR Client Portal Gateway · Vitest · Playwright.
 
-Interactive Brokers is the live source of truth; historical portfolio snapshots are stored
-locally for analytics, append-only and immutable (ADR-0006).
+Runtime dependencies are deliberately few — `better-sqlite3`, `drizzle-orm`, `fast-xml-parser`,
+`mapbox-gl` (the Allocation basemap only), `react`, `react-dom`, `zod`. Charts are hand-written SVG,
+not a charting library. **Avoid adding dependencies without clear long-term value.**
 
-Because the app is a desktop application that only runs when launched, snapshots are
-**captured on app open** (and on demand). A background scheduler (e.g. a Windows Task
-Scheduler job invoking a headless capture) is a possible future enhancement for regular,
-unattended history.
+## Commands
 
-Analytics operates from **locally stored history**, never by repeatedly querying Interactive
-Brokers. As built there are two such stores, and they are not interchangeable: the **snapshots**
-tables back the Portfolio view's history section, while the four analytics views (performance,
-allocation, dividends, realized gains) read **imported Flex statements** through
-`flexReadRepository` — Flex carries the dated, multi-currency, per-instrument detail that
-on-open snapshots cannot reconstruct. The one analytics path that reaches IBKR at all is
-`analytics:classifyInstruments`, which fetches sector data the Flex export omits (DDR-0009).
+```bash
+npm install            # postinstall: electron-rebuild for better-sqlite3 (native)
 
----
+npm run dev            # Electron + Vite dev server (hot reload)
+npm run build          # build main + preload + renderer into out/
+npm start              # preview the built app
+npm run package        # build + distributable via electron-builder
 
-## Domain Structure
+npm run lint           # eslint . (also enforces the layer-boundary import rules)
+npm run typecheck      # tsc --noEmit
+npm test               # vitest run — Node env, *.test.ts under src/
+npm run test:watch
+npm run test:e2e       # builds, then Playwright launches the built app
 
-Keep domains cohesive. The live ones — **portfolio**, **holdings**, **snapshots**, **flex**,
-**analytics**, **dividends**, **classification** — are described under *Current Repository
-State* above; **benchmarks**, **taxes**, **brokers** and **AI** are future domains.
+npx vitest run src/services/meta/metaService.test.ts   # a single unit test
+npx vitest run -t "generates and persists"             # by test-name substring
+npm run build && npx playwright test e2e/tab-navigation.spec.ts   # a single e2e spec
 
----
-
-## AI Principles
-
-AI enhances portfolio understanding.
-
-Examples:
-
-* explain portfolio changes
-* summarize performance
-* compare historical periods
-* answer portfolio questions
-
-AI must never:
-
-* recommend investments
-* suggest trades
-* decide allocations
-* execute transactions
-
-The user remains the decision maker.
-
----
-
-## Development Workflow
-
-Stock Portfolio Viewer follows an artifact-driven workflow. Work **originates in GitHub
-Issues** — the owner authors Epics and User Stories (grouped under GitHub Milestones), and
-the Product Manager **reads them before planning**. Issues are never created after
-implementation to record work already done.
-
-Planning
-
-```text
-GitHub Issues (Epics / User Stories)   ← owner-authored backlog = source of milestones
-        ↓  (read before planning)
-Product Manager
-        ↓
-Product Review
-        ↓
-UI Designer      Architect
-        ↓             ↓
-UI Review   Architecture Review
-                     ↓
-             Database Designer
-                     ↓
-             Database Review
-                     ↓
-      Implementation Engineer
-                     ↓
-        Implementation Plan
-                     ↓
-          Execution Skills
-                     ↓
-               Testing
-                     ↓
-           Testing Report
+npm run db:generate    # emit SQL migration from schema.ts changes
+npm run db:migrate     # apply to ./local.dev.db (dev tooling only; override with DATABASE_URL)
+npm run db:studio
 ```
 
-Small bug fixes may skip planning artifacts.
-
----
-
-## Workflow Artifacts
-
-Workflow skills communicate through artifacts.
-
-Artifacts become the input to subsequent stages.
-
-Core artifacts:
-
-* Product Review
-* UI Review
-* Architecture Review
-* Database Review
-* Implementation Plan
-* Testing Report
-
-Execution skills consume approved artifacts.
-
-They do not redefine requirements or architecture.
-
----
-
-## Documentation
-
-Project documentation lives under `docs/`.
-
-Core documents:
-
-* architecture.md
-* database.md
-* product.md
-* mcp.md (MCP server setup and usage notes)
-* github-issues.md (backlog conventions — Epics / User Stories / Bugs)
-
-Two directories under `docs/` are **gitignored and local-only**, so a fresh clone has neither:
-`flex-queries/` (real IBKR exports — the parser's ground truth) and `figma_design/` (the Figma
-Make export Epic #179 adopts, which carries its own CLAUDE.md and AGENTS.md). Every redesign
-story states its own values rather than pointing at the latter, so it can go at any time.
-
-Project history and milestones are **not** kept in local files. Milestones and work items
-live in GitHub Issues (Epics / User Stories, grouped under GitHub Milestones); the record of
-completed work is the git history and closed issues.
-
-Accepted decisions live in:
-
-```text
-docs/decisions/
-```
-
-Design decisions live in:
-
-```text
-docs/design-decisions/
-```
-
-CLAUDE.md contains project rules.
-
-Detailed documentation belongs in `docs/`.
-
----
-
-## Documentation Hierarchy
-
-When making decisions, consult documentation in this order:
-
-1. docs/decisions/
-2. docs/design-decisions/
-3. docs/product.md
-4. GitHub Issues (Epics / User Stories — current milestones and work items)
-5. docs/architecture.md
-6. docs/database.md
-
-If documentation conflicts:
-
-1. Identify the conflict.
-2. Explain the tradeoffs.
-3. Request clarification or propose a new ADR.
-
-Never silently override accepted decisions.
-
----
-
-## Before Implementing
-
-Before implementing any non-trivial feature:
-
-1. Review relevant documentation.
-2. Identify affected domains.
-3. Produce the required planning artifacts.
-4. Follow the approved Implementation Plan.
-
----
+Migrations apply automatically on launch; `db:migrate` is for the standalone dev DB. There is no
+lint-fix or aggregate `check` script. **CI** runs exactly `lint`, `typecheck`, `test` and `build`
+on every push to `main` and every PR (Node 24, Ubuntu). The Playwright suite is **intentionally
+excluded from CI** (needs a display server) — run `npm run test:e2e` locally. Run all four before
+opening a PR.
 
 ## Testing
 
-Services are the primary unit-test target.
+Services are the primary unit-test target; mock repositories and external providers.
 
-Mock repositories and external providers.
+**Vitest runs every test under `src/` in a Node environment with no jsdom, so no test may render a
+React component.** This shapes the renderer: chart maths, filtering, sorting, formatting and state
+are **extracted into pure modules under `renderer/src/lib/`** precisely so they can be tested.
+Follow that split when adding a component with real logic. The map is the sharpest case —
+`countryDonuts` emits palette *classes*, so the whole of the map's geometry and colour is testable
+under Node while the component keeps only what needs a DOM. `dataVersion` is the same move applied
+to state: a plain subscribable store read with `useSyncExternalStore`. Pure repository helpers that
+touch no data source (`flexStatementParser`, `snapshotMapping`, `fifoSummary`) are tested the same way.
 
-Vitest picks up every `src/**/*.test.ts` and runs it in a **Node** environment (**no jsdom**),
-so no test may render a React component. This shapes the renderer: chart maths, filtering,
-sorting and formatting are **extracted out of components into pure modules under
-`renderer/src/lib/`** (`format`, `pie`, `worldGeo`, `countryDonuts`, `gainLoss`, `tableFilter`,
-`column`, `dateRange`, `sectorMap`, `performanceRange`, `dailyReturns`, `composition`, `chartGeometry`, `classifyProgress`, `dataVersion`,
-`gatewayStatus`, `sidebarCollapse`, `tabKeyboard`, `pageHeader`, `buttonVariants`, `cardVariants`, `statTileVariants`, `fieldVariants`,
-`toggleGroupVariants`, `badgeVariants`, `statePanelVariants`, `tableSort`, `dataTableVariants`,
-`sliceHighlight`, `mapPopupTint`, `cssDeclarations`, `tokenAdoption`, `motionTokens`, `contrast`,
-`figureRole`, `analyticsShell`)
-precisely so they can be tested — follow
-that split when adding a component with real logic in it. `dataVersion` is the same move applied
-to state rather than maths: the cross-view staleness signal is a plain subscribable store a hook
-reads with `useSyncExternalStore`, so the part worth testing is testable without a renderer. The
-map is the sharpest case: `countryDonuts` emits palette *classes* rather than values, and every
-slice path, share normalization and disc threshold falls out of that — the whole
-of the map's geometry and colour is testable under Node while the component keeps only the
-parts that need a DOM (DDR-0030). `gainLoss` is what remains of the withdrawn gain/loss scale: one
-function, `returnPercent`, for the popup's return row (DDR-0045). Pure repository helpers that touch no data source
-(`flexStatementParser`, `snapshotMapping`, `fifoSummary`) are unit-tested the same way.
+Several `lib/*.test.ts` files have **no module under test** — they guard `app.css`, the components,
+or accessibility by scanning source text (`designTokens`, `tokenAdoption`, `contrast`, `motionTokens`,
+`figureRole`, `mapAccessibility`, `tabIcons`, `sidebarRail`, `analyticsShell`, `chartGeometry`).
+**They must strip comments before matching.** What no Node test can see is pinned by Playwright:
+`e2e/page-header.spec.ts`, `e2e/tab-navigation.spec.ts`, `e2e/reduced-motion.spec.ts` (that the
+media query actually wins the cascade), `e2e/window-state.spec.ts`, `e2e/sidebar-collapse.spec.ts`.
 
-Every completed feature should include:
+Every completed feature should include unit tests, regression review, edge-case validation, and a
+Testing Report.
 
-* unit tests
-* regression review
-* edge-case validation
-* Testing Report
+## Skills System (`.claude/skills/`)
 
----
+The artifact-driven workflow is implemented as skills in four tiers. Each stage produces an
+artifact that is the input to the next; execution skills consume only *approved* artifacts and must
+not redefine requirements, design, or architecture.
+
+They are **plain `SKILL.md` files, not `Skill`-tool skills** — read
+`.claude/skills/<tier>/<name>/SKILL.md` directly; invoking one by name resolves nothing.
+
+- **workflow-skills** (planning) — `product-manager` → `ui-designer` / `architect` →
+  `database-designer` → `implementation-engineer` → `testing`.
+- **execution-skills** — `feature-implementer`, `repository-builder`, `service-builder`,
+  `api-builder`, `ui-builder`, `storage-builder`, `assistant-builder`. The Implementation Engineer
+  selects the minimum set.
+- **governance-skills** — `adr-writer` (→ `docs/decisions/`), `design-recorder`
+  (→ `docs/design-decisions/`), `refactoring-reviewer` (required before significant restructuring).
+- **project-management** — `issue-writer` helps the owner *draft* backlog issues;
+  `project-historian` backfills historical ones. These track work; they never design it.
+
+Work **originates in GitHub Issues** — the owner authors Epics and Stories, and the Product Manager
+**reads them before planning**. Issues are never created after implementation to record work done.
+
+Small bug fixes may skip planning artifacts. **Any change to an already-approved decision must stop
+and return to the owning workflow skill rather than being made inline.**
+
+## Documentation
+
+`docs/` holds `architecture.md`, `database.md`, `product.md`, `mcp.md`, `github-issues.md`, plus
+`decisions/` (ADRs) and `design-decisions/` (DDRs), each with a README indexing every record in one
+line. Two directories are **gitignored and local-only**, so a fresh clone has neither:
+`flex-queries/` and `figma_design/`. Every redesign story states its own values rather than pointing
+at the latter, so it can go at any time.
+
+Project history is **not** kept in local files — milestones and work items live in GitHub Issues;
+the record of completed work is the git history and closed issues.
+
+Consult documentation in this order: **`docs/decisions/` → `docs/design-decisions/` →
+`docs/product.md` → GitHub Issues → `docs/architecture.md` → `docs/database.md`.** On a conflict:
+identify it, explain the tradeoffs, and request clarification or propose a new ADR. **Never silently
+override an accepted decision.**
+
+Before implementing anything non-trivial: review the relevant docs, identify affected domains,
+produce the required planning artifacts, follow the approved plan.
+
+## MCP Servers
+
+`.claude/settings.local.json` enables `context7`, `filesystem`, `playwright`, `interactive-brokers`
+and `shadcn` (`postgres` was retired with the move to SQLite). The `shadcn` server is for *reading*
+component APIs — see ADR-0008 before reaching for it. The `interactive-brokers` entry in `.mcp.json`
+still has a **placeholder runtime** (`REPLACE_WITH_RUNTIME`), so enabling it does not make it
+functional. A connected `Interactive_Brokers_IBKR` MCP has read-only account/market tools
+allowlisted — **no order-placing tools**, in keeping with the analytics-first, no-trading stance.
+
+**Prefer Context7 over model memory** for framework or library documentation. Setup notes: `docs/mcp.md`.
+
+## Product guardrails
+
+Stock Portfolio Viewer is a **standalone, single-user, local-first desktop application** for
+personal portfolio analytics. It runs on the owner's machine, stores data locally, and is not
+hosted or shared. It is **analytics-first, not advice-first**.
+
+AI features (a later milestone) may explain changes, summarize performance, compare periods and
+answer questions. AI must **never** recommend investments, suggest trades, decide allocations, or
+execute transactions. Also out of scope: order execution and robo-advisor functionality. The user
+remains the decision maker.
 
 ## Current Priority
 
-Milestones live in **GitHub Issues**, grouped under GitHub Milestones. Read the backlog to
-find the active milestone and its work items:
+Milestones live in GitHub Issues. Read the backlog to find the active milestone and its work items:
 
 ```bash
-gh issue list --state open --label epic        # milestone-sized Epics
+gh issue list --state open --label epic
 gh issue list --state open --milestone "<milestone title>"
 gh api repos/:owner/:repo/milestones --jq '.[].title'
 ```
