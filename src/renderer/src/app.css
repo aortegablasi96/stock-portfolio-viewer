@@ -1371,6 +1371,22 @@ html {
   text-overflow: ellipsis;
 }
 
+/* The cell whose value is absent rather than zero, standing in as an em dash
+   (Story #193). It was `.flex-import-dim`, written for the one table that had
+   such a cell — a count that was not re-imported — and the Realized P&L column
+   needs the same thing for an opening trade that closed nothing. A second copy
+   under a second view's prefix is the half-done consolidation Epic #125 names
+   as its own standing risk, so the rule moves into the namespace the other
+   three cell shapes already share instead.
+
+   Muted rather than neutral ink, and that is the whole point: `toneClassName`
+   emits no class for a neutral figure, so an untoned cell keeps `--text` and an
+   em dash would sit at the same weight as the figures around it. Absent is a
+   quieter thing than zero. */
+.data-table .data-table-dim {
+  color: var(--muted);
+}
+
 /* A swatch inline with the row's name, tying an allocation row to its donut
    segment. The one cell shape a column asks for by name. */
 .data-table-swatch {
@@ -1556,13 +1572,6 @@ html {
   margin-top: 0.15rem;
   font-weight: 400;
   font-size: var(--text-xs);
-  color: var(--muted);
-}
-
-/* The em dash standing in for a count that was not re-imported. A cell colour
-   rather than a label, which is why it stays a rule of its own beside the
-   badges that replaced its neighbours (Story #132). */
-.flex-import-dim {
   color: var(--muted);
 }
 
@@ -2107,17 +2116,27 @@ html {
    and now wears that rule instead. The card itself is not a StatTile: a symbol
    line sits between its label and its figure, and the figure is deliberately
    secondary (`--text-lg`), since it annotates the table beside it rather than
-   heading the view. */
+   heading the view.
+
+   Story #193 gives the ticker the redesign's own emphasis — the prototype sets
+   it at 16px/700 against a 12px name, and this card's three lines are read top
+   to bottom as label, *subject*, figure. `--text-md` is the scale's 17.6px and
+   the nearest step; a new one for 0.4px is what DDR-0031 exists to refuse. The
+   figure takes the same 700 for the same reason `.stat-value` does, and stays
+   at `--text-lg`: it annotates the table beside it rather than heading the
+   view, which is the one thing about this card that has not changed. */
 .highlight-symbol {
   margin: 0;
-  font-weight: 600;
+  font-size: var(--text-md);
+  font-weight: 700;
+  line-height: var(--leading-tight);
   color: var(--text);
 }
 
 .highlight-value {
   margin: var(--space-3) 0 0;
   font-size: var(--text-lg);
-  font-weight: 600;
+  font-weight: 700;
 }
 
 /* Stack the highlights below the table on narrow widths. */

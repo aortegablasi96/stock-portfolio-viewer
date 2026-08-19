@@ -18,6 +18,8 @@ import { AnalyticsShell } from './AnalyticsShell'
 import { RangeFilter } from './RangeFilter'
 import { StatRow, StatTile } from '../ui/StatTile'
 import { statPartClassName, toneClassName, toneOf } from '../../lib/statTileVariants'
+import { BADGE_CELL_CLASS } from '../../lib/badgeVariants'
+import { Badge } from '../ui/Badge'
 import { TypeFilter } from './TypeFilter'
 import { useRangeSelection } from './useRangeSelection'
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card'
@@ -162,6 +164,17 @@ function RealizedHighlights({
  * figure is deliberately secondary — it annotates the table beside it rather than heading the
  * view. What it does share is the label treatment, which was a byte-identical third copy of
  * `.stat-label`, and the tone.
+ *
+ * Story #193 gives the label that tone too, which is the redesign's own treatment for this card
+ * (DDR-0065). It is composed rather than declared: `.stat-label` stays the app's one micro-label
+ * (DDR-0034) and picks up `.stat-positive` / `.stat-negative`, the same two rules the figure
+ * below already wears. Source order settles the two `color`s — the tones are declared after the
+ * label — so no specificity is spent and no third rule appears.
+ *
+ * The tone comes from **the item's own figure**, not from which card this is. Painting `Worst`
+ * red unconditionally would state a loss on a portfolio whose weakest position still gained; the
+ * words `Best` and `Worst` are what carry the ranking, and the colour carries the polarity, the
+ * same thing it carries everywhere else in the app.
  */
 function HighlightCard({
   label,
@@ -172,16 +185,15 @@ function HighlightCard({
   item: RealizedBySymbol
   sc: (v: number) => string
 }): React.JSX.Element {
+  const tone = toneOf(item.totalRealized)
   return (
     <Card as="div" variant="nested" size="sm">
-      <p className={statPartClassName('label')}>{label}</p>
+      <p className={toneClassName(tone, statPartClassName('label'))}>{label}</p>
       <p className="highlight-symbol">
         {item.symbol}
         <span className="flex-import-file">{item.description}</span>
       </p>
-      <p className={toneClassName(toneOf(item.totalRealized), 'highlight-value')}>
-        {sc(item.totalRealized)}
-      </p>
+      <p className={toneClassName(tone, 'highlight-value')}>{sc(item.totalRealized)}</p>
     </Card>
   )
 }
@@ -257,13 +269,31 @@ function TradeHistory({
 }
 
 /**
+ * A trade closed something iff it reports realized P&L. An opening buy has *no* realized P&L,
+ * which is not the same as having realized zero — the one predicate the Realized P&L column asks
+ * three times over, for its tone, its text and its sort order, and which has to answer the same
+ * way in all three or the column tones a row it renders as an em dash.
+ */
+function closedSomething(t: TradeRow): boolean {
+  return t.realizedNative !== 0
+}
+
+/**
  * The trade columns. Sorting composes with the period and the type chips rather than replacing
  * them (DDR-0017, DDR-0039) — the filters choose the rows, the table chooses the order — so the
  * chips' "N of M shown" count is untouched by it.
  *
  * Realized P&L renders an em dash where a trade closed nothing, and hands the comparator `null`
  * for it: an opening buy has no realized P&L, which is not the same as having realized zero and
- * should not sit between the small gains and the small losses.
+ * should not sit between the small gains and the small losses. Story #193 gives that dash the
+ * muted ink as well — `toneClassName` emits *no* class for a neutral figure, so without it the
+ * dash inherits `--text` and sits at the same weight as the figures above and below it.
+ *
+ * The side is a badge rather than bare text, and a deliberately **untoned** one (DDR-0065): the
+ * redesign paints `Buy` in the gain tone and `Sell` in the loss tone, and those two hues already
+ * mean gain and loss in this row's own last cell. Rendering a red `Sell` beside a red figure
+ * reads as though the side caused the number. What the badge is here for is the boundary — a run
+ * of boxes at one x-position, where a bare word left the column ragged.
  */
 function tradeColumns(sc: (v: number) => string): DataColumn<TradeRow>[] {
   return [
@@ -285,7 +315,16 @@ function tradeColumns(sc: (v: number) => string): DataColumn<TradeRow>[] {
       ),
       sortValue: (t) => t.symbol,
     },
-    { key: 'side', header: 'Side', cell: (t) => t.side, sortValue: (t) => t.side },
+    {
+      key: 'side',
+      header: 'Side',
+      cell: (t) => (
+        <Badge size="sm" className={BADGE_CELL_CLASS}>
+          {t.side}
+        </Badge>
+      ),
+      sortValue: (t) => t.side,
+    },
     {
       key: 'quantity',
       header: 'Quantity',
@@ -318,9 +357,10 @@ function tradeColumns(sc: (v: number) => string): DataColumn<TradeRow>[] {
       key: 'realized',
       header: 'Realized P&L',
       numeric: true,
-      cellClassName: (t) => toneClassName(toneOf(t.realizedBase)),
-      cell: (t) => (t.realizedNative !== 0 ? sc(t.realizedBase) : '—'),
-      sortValue: (t) => (t.realizedNative !== 0 ? t.realizedBase : null),
+      cellClassName: (t) =>
+        closedSomething(t) ? toneClassName(toneOf(t.realizedBase)) : 'data-table-dim',
+      cell: (t) => (closedSomething(t) ? sc(t.realizedBase) : '—'),
+      sortValue: (t) => (closedSomething(t) ? t.realizedBase : null),
     },
   ]
 }
