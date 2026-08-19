@@ -71,6 +71,9 @@ These have each shipped broken at least once. Read them before touching analytic
   `getLatestOpenDividendAccruals`) — older as-of rows describe state that has since changed.
 - **Optional sections degrade, never fail** — `flex_open_dividend_accruals` is absent from some
   exports and becomes an empty list.
+- **A description that repeats the symbol is not a name** — IBKR writes the identifier again where
+  an instrument has none: `EUR.CHF` in trades, bare `CAD` in the FIFO summary. Views go through
+  `instrumentName`, never `formatCompanyName`, which title-cases (`Cad`) (DDR-0066).
 - **Check `docs/flex-queries/` before guessing at XML shapes — or before concluding a section is
   missing** (#171). The directory is **gitignored** (real account data), so a fresh clone has
   none of it and the parser's tests fall back to an inline fixture.
@@ -102,10 +105,10 @@ docs/figma_design/  Epic #179's Figma Make export — gitignored
 - **Local persistence + policy** — the `snapshot:*` channels: a service owning a capture policy
   over an append-only table, plus a main→renderer event. DDR-0003.
 - **Read-only analytics** — the `analytics:*` channels: read through a read-only repository,
-  convert in the service, return a variant the renderer renders as a first-class state.
+  convert in the service.
 - **Fire-and-forget command + state event** — the `window:*` channels. DDR-0011.
-- **Destructive action** — `flex:clear` / `snapshot:clear`: the sanctioned reset behind the
-  in-place `ConfirmAction` control — no modal, no `window.confirm`. ADR-0006, DDR-0012.
+- **Destructive action** — `flex:clear` / `snapshot:clear`: the in-place `ConfirmAction` control —
+  no modal, no `window.confirm`. ADR-0006, DDR-0012.
 
 ## Enforced boundaries & gotchas
 
@@ -133,8 +136,8 @@ below are the same move.
   `nodeIntegration: false`, and `frame: false` with an in-app `TitleBar` (DDR-0011). Keep it.
 - **The renderer's CSP admits exactly one external origin** (`https://api.mapbox.com`);
   `events.mapbox.com` is **omitted on purpose**, so the platform blocks Mapbox telemetry however
-  the library is configured. It looks like an oversight; it is the enforcement mechanism. Only
-  tiles and the viewport leave the machine — no portfolio data (ADR-0007).
+  the library is configured. Only tiles and the viewport leave the machine — no portfolio data
+  (ADR-0007).
 - **Exactly one instance runs at a time** — `app.requestSingleInstanceLock()` at **module load**,
   before any `whenReady` work, so the loser quits without migrating, capturing, or opening the DB.
   Every write path assumes it is the only writer. Scoped to the user-data dir, which is why the
@@ -169,8 +172,8 @@ below are the same move.
   exception: a whole-store, owner-confirmed reset per domain (`clearAll()`). Deliberately no
   delete-by-id/date/statement variant; don't add one (ADR-0006).
 - **Two money conventions coexist — don't mix them.** `snapshots` / `snapshot_holdings` store
-  **integer minor units** plus a currency (DDR-0003); `flex_*` tables store **`real`**, because
-  Flex is multi-currency and high-precision (DDR-0004). All timestamps are epoch-ms UTC integers.
+  **integer minor units** plus a currency (DDR-0003); `flex_*` tables store **`real`** (DDR-0004).
+  All timestamps are epoch-ms UTC integers.
 - **Base-currency conversion happens in the service** — never the repository, never the renderer.
 
 ### The IBKR gateway
@@ -229,8 +232,7 @@ below are the same move.
   row passes at 4.95:1; 22% fails), and a tone rendered on a **hovered row** is measured on the
   lift, not on `--card` (DDR-0064).
 - **The palette is navy/indigo and was re-derived, not pasted** (DDR-0054) — four of the proposal's
-  eleven values failed a guard, and the **eight `--series-*` slots did not move**, because CVD
-  separation is measured mark-against-mark and doesn't care about the ground.
+  eleven values failed a guard, and the **eight `--series-*` slots did not move**.
   `designTokens.test.ts` guards the stylesheet itself: it fails if `outline` gains a second value,
   a scale stops ascending, or a validated colour moves.
 - **A text-scanning guard must strip comments first.** This trap has now bitten four times

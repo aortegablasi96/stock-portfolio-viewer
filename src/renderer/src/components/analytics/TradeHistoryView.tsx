@@ -20,6 +20,7 @@ import { StatRow, StatTile } from '../ui/StatTile'
 import { statPartClassName, toneClassName, toneOf } from '../../lib/statTileVariants'
 import { BADGE_CELL_CLASS } from '../../lib/badgeVariants'
 import { Badge } from '../ui/Badge'
+import { InstrumentName } from './InstrumentName'
 import { TypeFilter } from './TypeFilter'
 import { useRangeSelection } from './useRangeSelection'
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card'
@@ -100,7 +101,7 @@ function realizedColumns(sc: (v: number) => string): DataColumn<RealizedBySymbol
       cell: (s) => (
         <>
           {s.symbol}
-          <span className="flex-import-file">{s.description}</span>
+          <InstrumentName symbol={s.symbol} description={s.description} />
         </>
       ),
       sortValue: (s) => s.symbol,
@@ -191,7 +192,7 @@ function HighlightCard({
       <p className={toneClassName(tone, statPartClassName('label'))}>{label}</p>
       <p className="highlight-symbol">
         {item.symbol}
-        <span className="flex-import-file">{item.description}</span>
+        <InstrumentName symbol={item.symbol} description={item.description} />
       </p>
       <p className={toneClassName(tone, 'highlight-value')}>{sc(item.totalRealized)}</p>
     </Card>
@@ -310,7 +311,7 @@ function tradeColumns(sc: (v: number) => string): DataColumn<TradeRow>[] {
       cell: (t) => (
         <>
           {t.symbol}
-          <span className="flex-import-file">{t.description}</span>
+          <InstrumentName symbol={t.symbol} description={t.description} />
         </>
       ),
       sortValue: (t) => t.symbol,

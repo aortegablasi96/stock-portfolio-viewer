@@ -128,11 +128,16 @@ function titleCaseWords(s: string): string {
 }
 
 /**
- * Shorten a raw IBKR instrument name into a readable company name for the dividend
- * tables — e.g. "INTERACTIVE BROKERS GRO-CL A" → "Interactive Brokers",
- * "SERABI GOLD PLC" → "Serabi Gold", "GLOBAL PAYMENTS INC" → "Global Payments".
- * Strips a trailing share-class descriptor and any legal-form suffixes, then
- * title-cases. Falls back to the trimmed input if stripping would empty it.
+ * Shorten a raw IBKR instrument name into a readable company name — e.g.
+ * "INTERACTIVE BROKERS GRO-CL A" → "Interactive Brokers", "SERABI GOLD PLC" → "Serabi Gold",
+ * "GLOBAL PAYMENTS INC" → "Global Payments". Strips a trailing share-class descriptor and any
+ * legal-form suffixes, then title-cases. Falls back to the trimmed input if stripping would
+ * empty it.
+ *
+ * It assumes its input **is** a company name, and title-casing is where that assumption bites:
+ * `"EUR.CHF"` becomes `"Eur.chf"` and `"CAD"` becomes `"Cad"`. Every view therefore reaches it
+ * through {@link instrumentName}, which is the function that decides whether a description is a
+ * name at all (Story #211, DDR-0066). Call this one directly only if you already know.
  */
 export function formatCompanyName(raw: string): string {
   const trimmed = raw.trim()
@@ -158,4 +163,38 @@ export function formatMonth(key: string): string {
     year: 'numeric',
     timeZone: 'UTC',
   }).format(date)
+}
+
+/**
+ * The readable name for an instrument, or `null` where the import carries none (Story #211,
+ * DDR-0066).
+ *
+ * Three of the five views draw a ticker with a secondary line under it, and the line is the
+ * instrument's `description` as IBKR exported it. For a stock that description is a company name
+ * and {@link formatCompanyName} makes it readable. For everything else it is **the identifier
+ * again**, which is what IBKR writes when an instrument has no name of its own:
+ *
+ * ```text
+ *   flex_trades          CASH   "EUR.CHF"  ->  "EUR.CHF"     a currency pair
+ *   flex_fifo_summaries  CASH   "CAD"      ->  "CAD"         a bare currency code
+ *   flex_securities      STK    "SBI"      ->  "SERABI GOLD PLC"
+ * ```
+ *
+ * So the test is not the shape of the string — a regex for `XXX.YYY` would have caught the
+ * currency pairs in the trade history and missed the bare codes in the realized-gains table, and
+ * both were already on screen. It is whether the description **says anything the symbol does
+ * not**. That answer comes from the row itself rather than from `assetCategory`, which is the
+ * same reason Story #192 keyed a badge's tone off an amount instead of a list of type strings
+ * (DDR-0064): a category is a vocabulary that grows, and `RealizedBySymbol` does not carry one
+ * anyway.
+ *
+ * `null` rather than the raw string, because a secondary line repeating the ticker above it is
+ * not a quieter name — it is the same text twice, and it read as a rendering fault on the FX rows
+ * of the trade history. The caller renders nothing.
+ */
+export function instrumentName(symbol: string, description: string): string | null {
+  const name = description.trim()
+  if (name === '') return null
+  if (name.toUpperCase() === symbol.trim().toUpperCase()) return null
+  return formatCompanyName(name)
 }
