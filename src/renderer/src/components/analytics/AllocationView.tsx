@@ -9,6 +9,7 @@ import { formatCurrency, formatDate, formatSignedCurrency } from '../../lib/form
 import { SECTOR_SLOT_OFFSET } from '../../lib/pie'
 import { CountryMap } from '../charts/CountryMap'
 import { AllocationBreakdown } from './AllocationBreakdown'
+import { InstrumentName } from './InstrumentName'
 import { useAnalytics } from './useAnalytics'
 import { AnalyticsShell } from './AnalyticsShell'
 import { ClassifySectors } from './ClassifySectors'
@@ -173,7 +174,7 @@ function PositionsTable({
       cell: (p) => (
         <>
           {p.symbol}
-          <span className="flex-import-file">{p.description}</span>
+          <InstrumentName symbol={p.symbol} description={p.description} />
         </>
       ),
       sortValue: (p) => p.symbol,

@@ -12,6 +12,7 @@ import {
   formatSignedCurrency,
   formatSignedPercent,
   formatUpdatedAt,
+  instrumentName,
 } from './format'
 
 describe('formatCurrency', () => {
@@ -139,6 +140,70 @@ describe('formatCompanyName', () => {
   it('returns the trimmed input unchanged when there is nothing to strip', () => {
     expect(formatCompanyName('  apple  ')).toBe('Apple')
     expect(formatCompanyName('')).toBe('')
+  })
+
+  /**
+   * The assumption the function makes, kept visible: it takes a company name, and title-casing a
+   * string that is not one destroys it. Both of these were rendered by a view before Story #211 —
+   * which is why `instrumentName` below exists and why every call site goes through it.
+   */
+  it('mangles an identifier, which is what instrumentName exists to keep away from it', () => {
+    expect(formatCompanyName('EUR.CHF')).toBe('Eur.chf')
+    expect(formatCompanyName('CAD')).toBe('Cad')
+  })
+})
+
+/**
+ * Every value here is a real `(symbol, description)` pair from the owner's imported statements,
+ * taken from `flex_trades`, `flex_fifo_summaries` and `flex_securities` (Story #211, DDR-0066).
+ * The two non-company shapes are different — a currency *pair* in the trade history, a *bare*
+ * currency code in the realized-gains rollup — and a guard written against either one alone
+ * would have shipped the other.
+ */
+describe('instrumentName', () => {
+  it('shortens a company name, exactly as the dividend tables always did', () => {
+    expect(instrumentName('SBI', 'SERABI GOLD PLC')).toBe('Serabi Gold')
+    expect(instrumentName('IBKR', 'INTERACTIVE BROKERS GRO-CL A')).toBe('Interactive Brokers')
+    expect(instrumentName('LNF', "LEON'S FURNITURE LTD")).toBe("Leon's Furniture")
+    expect(instrumentName('NXT', 'NUEVA EXPRESION TEXTIL SA')).toBe('Nueva Expresion Textil')
+  })
+
+  /** `flex_trades`, asset category CASH: IBKR writes the pair as both symbol and description. */
+  it('finds no name in a currency pair, rather than title-casing it', () => {
+    expect(instrumentName('EUR.CHF', 'EUR.CHF')).toBeNull()
+    expect(instrumentName('USD.CAD', 'USD.CAD')).toBeNull()
+    expect(instrumentName('CHF.JPY', 'CHF.JPY')).toBeNull()
+  })
+
+  /**
+   * `flex_fifo_summaries`, asset category CASH: a *bare* code, not a pair. These carry realized
+   * P&L, so they are rows in the Realized gains by Ticker table and candidates for Best/Worst —
+   * a shape-based guard for `XXX.YYY` would have rendered every one of them as "Cad".
+   */
+  it('finds no name in a bare currency code either', () => {
+    expect(instrumentName('CAD', 'CAD')).toBeNull()
+    expect(instrumentName('CHF', 'CHF')).toBeNull()
+    expect(instrumentName('USD', 'USD')).toBeNull()
+  })
+
+  it('finds no name in an absent or blank description', () => {
+    expect(instrumentName('GSY', '')).toBeNull()
+    expect(instrumentName('GSY', '   ')).toBeNull()
+  })
+
+  /** The comparison is on the text, not on its casing or padding. */
+  it('ignores case and surrounding space when deciding the description repeats the symbol', () => {
+    expect(instrumentName('eur.chf', 'EUR.CHF')).toBeNull()
+    expect(instrumentName('CAD', '  cad  ')).toBeNull()
+  })
+
+  /**
+   * A ticker is not a prefix test: `NWLm` and `NWL` both describe NEWPRINCES, and a symbol that
+   * merely *starts* the description is still a name worth showing.
+   */
+  it('keeps a name that only resembles the symbol', () => {
+    expect(instrumentName('NWLm', 'NEWPRINCES SPA')).toBe('Newprinces')
+    expect(instrumentName('VBNK', 'VERSABANK')).toBe('Versabank')
   })
 })
 

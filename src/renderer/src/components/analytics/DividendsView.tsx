@@ -7,7 +7,6 @@ import type {
   DividendResult,
 } from '@shared/domain/dividends'
 import {
-  formatCompanyName,
   formatCurrency,
   formatDate,
   formatMonth,
@@ -21,6 +20,7 @@ import { ColumnChart, IncomeLegend, type StackedColumn } from '../charts/ColumnC
 import { toneClassName, toneOf } from '../../lib/statTileVariants'
 import { BADGE_CELL_CLASS } from '../../lib/badgeVariants'
 import { Badge } from '../ui/Badge'
+import { InstrumentName } from './InstrumentName'
 import { useAnalytics } from './useAnalytics'
 import { AnalyticsShell } from './AnalyticsShell'
 import { RangeFilter } from './RangeFilter'
@@ -126,9 +126,7 @@ function UpcomingTable({
       cell: (i) => (
         <>
           {i.symbol || '—'}
-          {i.description && (
-            <span className="flex-import-file">{formatCompanyName(i.description)}</span>
-          )}
+          <InstrumentName symbol={i.symbol} description={i.description} />
         </>
       ),
       sortValue: (i) => i.symbol || null,
@@ -285,9 +283,7 @@ function BySymbolTable({
       cell: (s) => (
         <>
           {s.label}
-          {s.description && (
-            <span className="flex-import-file">{formatCompanyName(s.description)}</span>
-          )}
+          <InstrumentName symbol={s.label} description={s.description ?? ''} />
         </>
       ),
       sortValue: (s) => s.label,
@@ -446,9 +442,7 @@ function transactionColumns(
       cell: (e) => (
         <>
           {e.symbol || '—'}
-          {e.description && (
-            <span className="flex-import-file">{formatCompanyName(e.description)}</span>
-          )}
+          <InstrumentName symbol={e.symbol} description={e.description} />
         </>
       ),
       sortValue: (e) => e.symbol || null,
