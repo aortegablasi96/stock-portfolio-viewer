@@ -18,6 +18,11 @@ import { Card } from './Card'
  * The tile is a `Card` (DDR-0033) carrying a label, a figure and an optional hint. Its surface
  * is the card's default at `md`, fixed: what varies about a headline figure is its **polarity**,
  * not its surface, so `tone` is the tile's only axis.
+ *
+ * Story #187 restyled the three lines to the redesign's KPI tile — an 11px micro-label over a 26px
+ * monospaced figure — and added no axis doing it (DDR-0060). The markup did not move: the parts
+ * were already the redesign's three, which is why this is a stylesheet change with a component
+ * comment rather than the reverse.
  */
 export function StatTile({
   label,
@@ -40,10 +45,13 @@ export function StatTile({
 }
 
 /**
- * The row the tiles sit in: one responsive grid for both callers, `auto-fit` over `minmax(11rem,
+ * The row the tiles sit in: one responsive grid for both callers, `auto-fit` over `minmax(14.5rem,
  * 1fr)`. The dashboard's three balances previously used a fixed `repeat(3, 1fr)` plus a 720px
  * media query to collapse them; `auto-fit` reflows on the space actually available, which is why
  * the grid needs no breakpoint of its own and the analytics rows of three and four tiles share it.
+ *
+ * The column minimum is set by the figure, not by the label — see `app.css`, where the arithmetic
+ * that ties 14.5rem to `--text-xl`'s 26px is written down (Story #187, DDR-0060).
  *
  * `as` exists for the same reason the card's does: the balances row is a labelled `<section>`
  * (`aria-label="Account balances"`), while an analytics stat row is an unlabelled `<div>` under

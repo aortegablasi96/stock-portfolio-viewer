@@ -101,7 +101,30 @@ describe('the stylesheet backs every declared part and tone', () => {
   })
 
   it('declares the row grid', () => {
-    expect(ruleBody('.stat-row')).toContain('repeat(auto-fit, minmax(11rem, 1fr))')
+    expect(ruleBody('.stat-row')).toContain('repeat(auto-fit, minmax(14.5rem, 1fr))')
+  })
+
+  /**
+   * The column minimum and the figure step are one decision, not two (Story #187, DDR-0060):
+   * `--text-xl` is 26px, a monospaced digit is 0.6em, and the card spends two `--surface-pad-md`
+   * on its own padding — so the widest figure a column may promise to hold is what sets 14rem.
+   * Raising the figure without raising the column overruns the card, and this arithmetic is the
+   * only thing that says so. It is asserted rather than commented so the pair cannot be split.
+   */
+  it('keeps the column minimum wide enough for the figure it advertises', () => {
+    const REM = 16
+    const MONO_ADVANCE = 0.6 // JetBrains Mono, and every fallback in `--font-figure`, is 600/1000.
+    const LONGEST_FIGURE = '-€123,456.78'.length // Longer than any real value in the five views.
+    const CARD_PAD_MD = 20 // `--surface-pad-md` is `--space-6`, 1.25rem.
+
+    const columnMin = REM * Number(/minmax\((\d*\.?\d+)rem/.exec(ruleBody('.stat-row'))?.[1])
+    const figureSize = REM * Number(/--text-xl:\s*([\d.]+)rem/.exec(CSS)?.[1])
+
+    expect(ruleBody('.stat-value')).toContain('font-size: var(--text-xl)')
+    expect(figureSize).toBeCloseTo(26, 1)
+    expect(columnMin - 2 * CARD_PAD_MD).toBeGreaterThanOrEqual(
+      LONGEST_FIGURE * MONO_ADVANCE * figureSize,
+    )
   })
 
   it('leaves the neutral tone without a rule — it is the absence of a tone, not a colour', () => {
@@ -132,8 +155,34 @@ describe('the stylesheet backs every declared part and tone', () => {
 
   it('sizes every line from the type scale, never a raw length', () => {
     expect(ruleBody('.stat-value')).toContain('font-size: var(--text-xl)')
-    expect(ruleBody('.stat-label')).toContain('font-size: var(--text-xs)')
+    expect(ruleBody('.stat-label')).toContain('font-size: var(--text-2xs)')
     expect(ruleBody('.stat-hint')).toContain('font-size: var(--text-xs)')
+  })
+
+  /**
+   * The micro-label is three properties or it is nothing (Story #187, DDR-0060, following
+   * DDR-0059's argument for the table's column head): 11px capitals at a body face's tracking
+   * are what fails to read, and dropping the weight with the size makes them faint as well as
+   * small. The tile's label and the table's head are asserted to be the *same* treatment — the
+   * app has one micro-label, not one per surface.
+   */
+  it('sets the label as the app-wide micro-label, and the table head to match', () => {
+    for (const selector of ['.stat-label', '.data-table thead th']) {
+      const body = ruleBody(selector)
+      expect(body, selector).toContain('font-size: var(--text-2xs)')
+      expect(body, selector).toContain('letter-spacing: 0.06em')
+      expect(body, selector).toContain('font-weight: 600')
+      expect(body, selector).toContain('text-transform: uppercase')
+    }
+  })
+
+  /**
+   * `--leading-tight` on the figure. At 26px the inherited body ratio opens a gap under the
+   * label that reads as a dropped line, and it is the kind of thing only a screenshot catches —
+   * so it is pinned here instead.
+   */
+  it('sets the figure on the tight leading, from the scale', () => {
+    expect(ruleBody('.stat-value')).toContain('line-height: var(--leading-tight)')
   })
 
   it('leaves the surface to the card: no stat rule redeclares one', () => {

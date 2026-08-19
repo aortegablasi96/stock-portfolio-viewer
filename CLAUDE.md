@@ -205,8 +205,10 @@ may not import `@db` or `electron`; the **CSP's omitted telemetry origin** (belo
 - **Use a scale step, not a raw length** (DDR-0031): `--space-1..8`, composite `--control-pad-*` /
   `--surface-pad-*` in `sm|md|lg` (the same vocabulary as the primitives' `size` prop),
   `--radius-*` in **px**, `--text-2xs..2xl`, `--leading-*`. Deliberately off-scale: chart/map SVG
-  label sizes (DDR-0018) and sub-6px radii. One collision: **`--text-xl` is 1.4rem, not 1.5rem**,
-  because `.stat-row` packs `minmax(11rem, 1fr)` columns where a bigger figure wraps.
+  label sizes (DDR-0018) and sub-6px radii. One collision, re-decided: **`--text-xl` (26px) and
+  `.stat-row`'s `minmax(14.5rem, 1fr)` are one number** — the column holds a twelve-character
+  figure at 0.6em per digit, asserted in `statTileVariants.test.ts`. Both ends bind: narrower
+  overruns the card, wider drops Trades to two rows at 1280px (DDR-0060).
 - **Adoption is held by a ratchet; don't re-baseline it** (DDR-0042). `lib/tokenAdoption.ts` has
   `BASELINE` (may only shrink — **currently empty and must stay empty**) and `EXEMPTIONS`
   (permanent, **eight**, each with a reason). The test fails three ways, including on a *dead*
@@ -321,7 +323,7 @@ alternatives this table can only name.
 | --- | --- | --- |
 | `Button` (DDR-0032) | `variant` × `size` (`icon` is a *shape*) | `ghost` changed meaning — the old `.ghost-button` is now `secondary`. `type` defaults to `"button"`. `className` is for **placement, not colour**. |
 | `Card` (DDR-0033, DDR-0059) | `variant` (surface colour) × `size` (`--surface-pad-*`) | `CardContent` is a **scope** — descendant rules hang off it, keeping a state panel's prose out of reach. The ruled header strip bleeds to the edges by negating `--card-pad`, which each size **restates beside its `padding`** (change one, change both). `.card-header:last-child` gives the strip back. |
-| `StatTile` / `StatRow` (DDR-0034) | `tone` only | A tile **is** a `Card`, so it declares no surface. **Neutral is the absence of a rule.** |
+| `StatTile` / `StatRow` (DDR-0034, DDR-0060) | `tone` only | A tile **is** a `Card`, so it declares no surface. **Neutral is the absence of a rule.** Its label is the app's *one* micro-label — the same four declarations as `.data-table thead th`; don't grow a second. |
 | `Field` + `Select` + `DateInput` (DDR-0035) | `kind` only | **`Field` generates its id with `useId()` and takes no `id` prop** — tabs stay mounted, so all three `RangeFilter`s can be in the document at once and a fixed id would name only the first. |
 | `ToggleGroup` (DDR-0036) | `mode`, which is **worn** (`--radius-md` vs `--radius-pill`) | **Never a tablist**: `aria-pressed`, not `role="tab"`. Only `.app-tab` is a real tablist. |
 | `Badge` (DDR-0037) | `variant` × `size` | **Never a pill** (that corner means multi-select) and **never a background**. `sm` carries no vertical padding — with it, every holdings row grows ~7px. |
