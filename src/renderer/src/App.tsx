@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { TitleBar } from './components/TitleBar'
 import { PortfolioDashboard } from './components/PortfolioDashboard'
-import { FlexImport } from './components/FlexImport'
 import { CurrencySelector } from './components/CurrencySelector'
 import { GatewayBadge, SidebarBrand, SidebarToggle } from './components/SidebarRail'
 import { PerformanceView } from './components/analytics/PerformanceView'
@@ -21,7 +20,7 @@ import type { GatewayReading } from './lib/gatewayStatus'
 
 /**
  * Application root. A lightweight tab shell (Milestone M3) switches between the live
- * Portfolio dashboard (M1/M2, with the Flex import panel) and the four analytics views
+ * Portfolio dashboard (M1/M2, which carries the Flex import controls) and the four analytics views
  * built on imported Flex data (Stories #21–#24). All data flows over the typed IPC
  * bridge (`window.api`); the renderer holds no business logic and never reaches data
  * sources directly. See DDR-0006 for the navigation model.
@@ -310,12 +309,15 @@ export function App(): React.JSX.Element {
         <div className="app-content">
           {tab === 'portfolio' && (
             <TabPanel id="portfolio">
+              {/* One block, not two. The Flex import panel used to sit here as a second
+                  `.dashboard` beside the dashboard's own — which is why this panel was the one
+                  place in the app with two page-length columns stacked. Story #189 folded it into
+                  the view, where the redesign puts it. */}
               <PortfolioDashboard
                 displayCurrency={displayCurrency}
                 onCurrenciesFound={onCurrenciesFound}
                 onGatewayReading={setGateway}
               />
-              <FlexImport />
             </TabPanel>
           )}
           {panel('performance', <PerformanceView />)}

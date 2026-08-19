@@ -1,5 +1,6 @@
 import type { AllocationSlice, Holding } from '@shared/domain/portfolio'
 import { formatCurrency, formatPercent, formatQuantity } from '../lib/format'
+import { weightBarFill, weightBarScale } from '../lib/weightBars'
 import { Badge } from './ui/Badge'
 import { DataTable, type DataColumn } from './ui/DataTable'
 
@@ -19,6 +20,13 @@ import { DataTable, type DataColumn } from './ui/DataTable'
  * own surface (Story #134). Market value sorts on the figure actually shown, so a position with
  * no rate — the `displayValue === null` case above — is the missing value the comparator parks
  * at the bottom rather than treating as zero.
+ *
+ * Story #189 draws a micro-bar under each Weight figure — the same fact the rail's allocation
+ * list draws, on the same scale, because both go through `lib/weightBars`. It is keyed by
+ * `conid` rather than by row order: this table sorts, so its rows and the rail's have no reason
+ * to agree (the same rule the Allocation breakdown's donut link follows, DDR-0040). The bar is a
+ * second channel on a figure that is already there, never the only one — a row whose weight is
+ * unknown shows the em dash it always did and no track at all.
  */
 export function HoldingsTable({
   holdings,
@@ -30,6 +38,9 @@ export function HoldingsTable({
   displayCurrency?: string
 }): React.JSX.Element {
   const weightByConid = new Map(allocation.map((a) => [a.conid, a.weight]))
+  // One scale for the whole column, derived from the allocation rather than from the rows on
+  // screen: filtering or re-sorting the table must not silently rescale the bars.
+  const barScale = weightBarScale(allocation.map((a) => a.weight))
   const hasUnconverted = displayCurrency != null && holdings.some((h) => h.displayValue === null)
   const valueOf = (h: Holding): number | null =>
     displayCurrency != null ? (h.displayValue ?? null) : h.marketValue
@@ -76,7 +87,18 @@ export function HoldingsTable({
       numeric: true,
       cell: (h) => {
         const weight = weightByConid.get(h.conid)
-        return weight === undefined ? '—' : formatPercent(weight)
+        if (weight === undefined) return '—'
+        return (
+          <>
+            {formatPercent(weight)}
+            <span className="weight-track weight-track-micro" aria-hidden="true">
+              <span
+                className="weight-fill"
+                style={{ width: `${weightBarFill(weight, barScale)}%` }}
+              />
+            </span>
+          </>
+        )
       },
       sortValue: (h) => weightByConid.get(h.conid) ?? null,
     },

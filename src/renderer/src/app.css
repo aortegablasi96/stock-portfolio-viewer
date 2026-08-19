@@ -137,6 +137,10 @@
      column's --space-3 gutter on each side is exactly 48px of content in a 56px rail with
      8px to spare for the focus ring. Narrower clips the tile; wider stops reading as a rail. */
   --sidebar-width-collapsed: 56px;
+  /* The Portfolio view's right rail (Story #189), a structural measure for the same reason
+     the two above are: it is the redesign's own 260px, and it is quoted by the grid that
+     places it and by the media query that decides when it stops fitting. */
+  --rail-width: 260px;
 
   /* ---- Spacing scale (Story #126, DDR-0031) -------------------------------
      A 4px grid with one 6px half-step, derived from the values already in the
@@ -1097,17 +1101,42 @@ html {
   margin-top: var(--space-5);
 }
 
-/* ---- Two-column region: holdings + allocation ---------------------------- */
+/* ---- The holdings table and its rail (Story #189) -------------------------
+   The redesign's pair: the table takes the space, the rail is a fixed 260px carrying the
+   allocation weights and the data-sources card. Fixed rather than fractional because both
+   cards in it are read at a glance rather than scanned — a coverage sentence and a column
+   of tickers — and a fraction would widen them on a large monitor to no purpose while
+   squeezing the six-column table on a small one. */
 
 .dashboard-columns {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 20rem;
+  grid-template-columns: minmax(0, 1fr) var(--rail-width);
   gap: var(--space-7);
   align-items: start;
 }
 
 .col-main {
   min-width: 0;
+}
+
+/* The rail's cards stack; the gap is the dashboard's own, so the rail's second card lines
+   up with nothing in particular and simply follows its first. */
+.col-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-7);
+}
+
+/* Below this the rail goes under the table rather than beside it. The number is derived
+   rather than chosen, and `portfolioLayout.test.ts` does the arithmetic rather than trusting
+   this comment: the sidebar at its expanded 220px + 2rem of content padding each side + the
+   260px rail + the --space-7 gap + 560px left for the holdings table, which is what its six
+   columns need before the table starts scrolling inside itself. 220 + 64 + 260 + 24 + 560.
+   Collapsing the sidebar buys 164px of it back, so the rail returns before the window grows. */
+@media (max-width: 1128px) {
+  .dashboard-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 /* ---- Allocation panel (Story #16) ---------------------------------------- */
@@ -1136,27 +1165,39 @@ html {
   color: var(--muted);
 }
 
-/* The track behind a weight bar: the bar's own colour at 12%, so the empty part of the
-   track reads as the same measure unfilled. Mixed from --accent since #181, where it was
-   `rgba(76, 141, 255, 0.12)` — the old accent, spelled out, which no longer matched the
-   `var(--accent)` fill sitting in it. */
-.allocation-track {
+/* ---- Weight bars (Story #189) --------------------------------------------
+   One track and one fill, drawn twice on the Portfolio view: down the rail's allocation
+   list, and under each Weight figure in the holdings table. They were `.allocation-track`
+   / `.allocation-bar` when only the rail drew them; the names lost the panel because the
+   table draws the same fact on the same scale (`lib/weightBars`), and two class families
+   for one measure is how the app ended up with the families Epic #125 spent nine stories
+   consolidating.
+
+   The track is the bar's own colour at 12%, so the empty part reads as the same measure
+   unfilled. Mixed from --accent since #181, where it was `rgba(76, 141, 255, 0.12)` — the
+   old accent, spelled out, which no longer matched the `var(--accent)` fill sitting in it. */
+.weight-track {
   height: 8px;
   background: color-mix(in srgb, var(--accent) 12%, transparent);
   border-radius: var(--radius-pill);
   overflow: hidden;
 }
 
-.allocation-bar {
+.weight-fill {
+  display: block;
   height: 100%;
   background: var(--accent);
   border-radius: var(--radius-pill);
 }
 
-@media (max-width: 720px) {
-  .dashboard-columns {
-    grid-template-columns: 1fr;
-  }
+/* The in-table copy: a hairline under a figure rather than a bar beside a label, and a
+   block so it takes the cell's width under the right-aligned number it belongs to. It is
+   `aria-hidden` at the call site — the percentage above it is the accessible fact, and a
+   second `meter` per row would make the table twice as long to hear. */
+.weight-track-micro {
+  display: block;
+  height: 3px;
+  margin-top: var(--space-1);
 }
 
 /* ---- DataTable primitive (Story #134, DDR-0039) --------------------------
@@ -1435,26 +1476,33 @@ html {
 
 /* ---- Flex Query import (M3, Story #20) ----------------------------------- */
 
+/* The data-sources card's two controls (Story #189). They were a right-aligned column in a
+   card header, beside a title and a paragraph of intro copy; in a 260px rail there is no
+   "beside", so they stretch and stack. `.flex-import-intro` went with the header — the card
+   opens with the coverage sentence now, which says the same thing in one line — and
+   `.flex-import-summary` went with it, the import receipt having become a card of its own. */
 .flex-import-actions {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
+  align-items: stretch;
   gap: var(--space-3);
 }
 
-.flex-import-intro {
-  margin: var(--space-2) 0 0;
-  max-width: 42rem;
-  color: var(--muted);
-  font-size: var(--text-sm);
-  text-transform: none;
-  letter-spacing: normal;
+/* The rail's copy of the shared confirm (DDR-0012). Only its alignment changes: the control
+   is right-aligned and capped at 26rem where it sits in a card header, and both of those are
+   wrong against a rail narrower than the cap. The buttons, the tone and the interaction are
+   the primitive's and are not touched here. */
+.flex-import-actions .confirm-action {
+  align-items: stretch;
+  max-width: none;
 }
 
-.flex-import-summary {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-5);
+.flex-import-actions .confirm-warning {
+  text-align: left;
+}
+
+.flex-import-actions .confirm-buttons .btn {
+  flex: 1;
 }
 
 .flex-import-file {
@@ -1474,12 +1522,14 @@ html {
 
 /* ---- Stored Flex statements (Story #108) --------------------------------- */
 
-/* The span the imported history covers, above the per-statement rows. The dates carry
-   the emphasis — they are what tells the owner whether the newest statement is stale. */
+/* The span the imported history covers — the data-sources card's opening line since Story
+   #189, where it used to sit above the per-statement rows. The dates carry the emphasis:
+   they are what tells the owner whether the newest statement is stale. */
 .flex-store-coverage {
   margin: 0 0 var(--space-5);
   color: var(--muted);
   font-size: var(--text-sm);
+  line-height: var(--leading-normal);
 }
 
 .flex-store-coverage strong {
@@ -2985,7 +3035,7 @@ html {
   color: var(--text);
 }
 
-/* Same pattern as `.allocation-track`, over the series hue this bar is filled with
+/* Same pattern as `.weight-track`, over the series hue this bar is filled with
    (`.bar-fill` is --series-1). Was `rgba(57, 135, 229, 0.14)`: --series-1 spelled out. */
 .bar-track {
   height: 8px;
