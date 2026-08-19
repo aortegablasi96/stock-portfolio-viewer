@@ -212,7 +212,7 @@ may not import `@db` or `electron`; the **CSP's omitted telemetry origin** (belo
 - **Adoption is held by a ratchet; don't re-baseline it** (DDR-0042). `lib/tokenAdoption.ts` has
   `BASELINE` (may only shrink — **currently empty and must stay empty**) and `EXEMPTIONS`
   (permanent, **eight**, each with a reason). The test fails three ways, including on a *dead*
-  entry — that is what makes it a ratchet rather than a suppression file.
+  entry.
 - **A figure is a role, not a font** (DDR-0053). `--font-figure` + `--tracking-figure` +
   `font-variant-numeric: tabular-nums` are **one rule** listing its selectors, because the three
   only work as a set. It declares no `font-size`, which is what keeps DDR-0018 intact where it
@@ -226,12 +226,12 @@ may not import `@db` or `electron`; the **CSP's omitted telemetry origin** (belo
 - **The loss tone is two tokens and picking the wrong one is silent** (DDR-0046, DDR-0054): `--neg`
   is **fill only**, `--neg-text` **text only**; same shape for `--accent` (labels + ring) vs
   `--accent-strong` (the primary button's fill alone). The *shape* is durable — the split
-  **inverted** in the #181 re-key. `--neg-text`'s constraint is **not** 4.5:1 but `--pos − 0.5`,
-  because the finding was that losses read weaker than gains. `contrast.ts` **enumerates pairings
-  by hand** (Node has no layout engine), lists *passing* ones too, and models
+  **inverted** in the #181 re-key. `--neg-text`'s constraint is **not** 4.5:1 but `--pos − 0.5`.
+  `contrast.ts` **enumerates pairings by hand**, lists *passing* ones too, and models
   `.btn-primary:hover`'s `brightness(1.08)` — which *lowers* contrast where axe tests resting state
   only. A tint mixed into a surface is a **measured** number, never eyeballed (the sidebar's active
-  row passes at 4.95:1; 22% fails).
+  row passes at 4.95:1; 22% fails), and a tone rendered on a **hovered row** is measured on the
+  lift, not on `--card` (DDR-0064).
 - **The palette is navy/indigo and was re-derived, not pasted** (DDR-0054) — four of the proposal's
   eleven values failed a guard, and the **eight `--series-*` slots did not move**, because CVD
   separation is measured mark-against-mark and doesn't care about the ground.
@@ -274,13 +274,14 @@ may not import `@db` or `electron`; the **CSP's omitted telemetry origin** (belo
   defaulted parameter, so neither can be tuned alone. Don't "restore" the old breakpoint by
   lowering it — that ships illegible labels; capping a chart's width stays **rejected**, since it
   reads as a rendering bug (DDR-0051, DDR-0057). **A `viewBox` clips an overflowing label in
-  silence**, so `pad.left` is *derived* from a measured glyph advance and a character budget — 64
-  cut the `€` off every value tick for two milestones (DDR-0051 §#190).
+  silence**, so `pad.left` is *derived* from a measured glyph advance and a character budget
+  (DDR-0051 §#190). A stacked chart's key lives in the **card header**, not a `<figcaption>` —
+  `ColumnChart` and `StackedAreaChart` both emit a bare `<svg>` (DDR-0052, DDR-0064).
 - **One chart tooltip, drawn inside the `viewBox`** (DDR-0061). Three `HoverReadout`s became
   `ChartTooltip` over `lib/chartTooltip`, in the plot's own space — so it **cannot** cover the
-  neighbouring chart — and **pinned to the plot's top** in all three, since a one-unit-tall daily
-  bar would throw a mark-tracking card the height of the plot between two days. A row's label is
-  prose (sans), its date a figure; sharing one rule is why `tokenAdoption` stays at **eight**. The
+  neighbouring chart — and **pinned to the plot's top** in all three, never tracking the mark. A
+  row's label is prose (sans), its date a figure; sharing one rule keeps `tokenAdoption` at
+  **eight**. The
   area fill is a `<linearGradient>` with **stops in `app.css`, `fill` per element** (`useId()` —
   two curves, one page); `LineChart` draws a zero line only where the series *crosses* zero. Bars,
   `.stack-band` and the donut's native tooltip are untouched.
@@ -288,8 +289,8 @@ may not import `@db` or `electron`; the **CSP's omitted telemetry origin** (belo
   TWR**, not a value curve, so deposits and withdrawals don't move it (DDR-0013). Daily returns are
   **chain-linked from that curve** (`lib/dailyReturns`), never differenced from `valueSeries` — a
   deposit would draw as a spectacular day — and take the **unwindowed** series, so the opening bar
-  measures against the day that really preceded it; bars **thin rather than aggregate**, because
-  aggregating days destroys the volatility the chart exists to show (DDR-0049). Composition stacks
+  measures against the day that really preceded it; bars **thin rather than aggregate** (DDR-0049).
+  Composition stacks
   **cumulatively in base currency** with the top edge as NAV: a negative band **hangs below the
   zero line** (never clamped or folded), and `other` is the **residual, surfaced and never
   redistributed** — drop a category into it instead and nothing will look wrong (DDR-0052).
@@ -339,7 +340,7 @@ alternatives this table can only name.
 | `StatTile` / `StatRow` (DDR-0034, DDR-0060) | `tone` only | A tile **is** a `Card`, so it declares no surface. **Neutral is the absence of a rule.** Its label is the app's *one* micro-label — the same four declarations as `.data-table thead th`; don't grow a second. |
 | `Field` + `Select` + `DateInput` (DDR-0035) | `kind` only | **`Field` generates its id with `useId()` and takes no `id` prop** — tabs stay mounted, so all three `RangeFilter`s can be in the document at once and a fixed id would name only the first. |
 | `ToggleGroup` (DDR-0036) | `mode`, which is **worn** (`--radius-md` vs `--radius-pill`) | **Never a tablist**: `aria-pressed`, not `role="tab"`. Only `.app-tab` is a real tablist. |
-| `Badge` (DDR-0037) | `variant` × `size` | **Never a pill** (that corner means multi-select) and **never a background**. `sm` carries no vertical padding — with it, every holdings row grows ~7px. |
+| `Badge` (DDR-0037, DDR-0064) | `variant` × `size` | **Never a pill** (that corner means multi-select) and **never a background** — the toned pair keeps both: `--pos` / `--neg-text` ink, the *borders* take the fill tokens. `BADGE_VARIANTS` ⊇ `STAT_TONES`, so `toneOf()` names a variant. `sm` carries no vertical padding — with it, every holdings row grows ~7px; alone in a cell it also needs `BADGE_CELL_CLASS`, because CSS cannot see that an inline chip follows a *text node*. |
 | `StatePanel` (DDR-0038) | `variant` (the state) × `surface` | Only `error` paints; the axis exists because the copy and the *announcement* differ. `role` is derived. No heading → the panel **is** a `<p>`. |
 | `DataTable` (DDR-0039, DDR-0059) | the *container's* `surface` × `height` | Sorting is **opt-in per column**; a **missing value sorts last in both directions**. The 11px column head and its `0.06em` tracking are a **pair**. The linked row's lift is scoped to match the hover's specificity and win on source order — unscoped, `tr:hover > th` silently out-specifies it. |
 
@@ -411,8 +412,7 @@ Services are the primary unit-test target; mock repositories and external provid
 **Vitest runs every test under `src/` in a Node environment with no jsdom, so no test may render a
 React component.** This shapes the renderer: chart maths, filtering, sorting, formatting and state
 are **extracted into pure modules under `renderer/src/lib/`** precisely so they can be tested.
-Follow that split when adding a component with real logic — `countryDonuts` emits palette
-*classes*, so even the map's geometry and colour are testable under Node. Pure repository helpers
+Follow that split when adding a component with real logic. Pure repository helpers
 touching no data source (`flexStatementParser`, `snapshotMapping`, `fifoSummary`) are tested alike.
 
 Several `lib/*.test.ts` files have **no module under test** — they guard `app.css`, the components,

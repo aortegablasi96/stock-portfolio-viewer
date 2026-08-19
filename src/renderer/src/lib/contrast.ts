@@ -389,6 +389,35 @@ export const PAIRINGS: readonly Pairing[] = [
       'The loudest lift in the family under the faintest ink in a table: the two together are ' +
       'what decides how far the linked row may be pushed (DDR-0040).',
   },
+  /**
+   * The two pairings Story #192 added: a toned badge's ink on the lift its row takes under the
+   * pointer (DDR-0064).
+   *
+   * The two tones on `--card` are already listed twice over, and neither entry covers the surface
+   * a *table* actually puts them on: the transactions table badges every row's type, so the gain
+   * and loss inks are now rendered 200 rows at a time on a surface that lightens under the
+   * pointer. Story #186's entries measured `--text` and `--muted` on that lift; these are the two
+   * inks it has no counterpart for, and they are the ones with the least headroom — `--pos` and
+   * `--neg-text` were tuned against `--card` and nothing has measured them one step lighter.
+   */
+  {
+    where: '.badge-positive — the gain ink on a hovered transaction row',
+    foreground: { token: '--pos' },
+    background: { mix: { token: '--text', percent: 4, over: '--card' } },
+    minimum: AA_NORMAL,
+    reason:
+      'A toned badge is text on the row lift, and the hovered row is the row’s worse state — the ' +
+      'same argument Story #186 made for the two inks it did measure there.',
+  },
+  {
+    where: '.badge-negative — the loss ink on a hovered transaction row',
+    foreground: { token: '--neg-text' },
+    background: { mix: { token: '--text', percent: 4, over: '--card' } },
+    minimum: AA_NORMAL,
+    reason:
+      'The half of the split that has to stay balanced against --pos (DDR-0046), on the surface ' +
+      'the Dividends transactions table renders it on hundreds of times.',
+  },
   {
     where: '.chart-axis-label — SVG <text> on a chart card',
     foreground: { token: '--chart-axis' },

@@ -23,7 +23,27 @@ export const BADGE_VARIANTS = [
   'accent',
   /** No boundary at all — a count or a qualifier, set off by being small and muted. */
   'plain',
+  /** The gain tone: a label naming something that put money in (Story #192, DDR-0064). */
+  'positive',
+  /** The loss tone, in `--neg-text` rather than the fill token (DDR-0046). */
+  'negative',
 ] as const
+
+/**
+ * The two variants that carry a polarity, and the reason this union is a *superset* of
+ * `STAT_TONES` rather than a parallel vocabulary (Story #192, DDR-0064).
+ *
+ * `toneOf()` in `statTileVariants` already answers "what is the polarity of this signed figure?"
+ * for every toned figure in the app — a tile, a table cell, a map popup row. A dividend row's
+ * type label is the same question asked of the same number, so the badge's names are the tile's
+ * names and `toneOf()` can be handed straight to `variant`. `neutral` is what makes that work:
+ * it is the default badge *and* the absence of a tone, so a zero-amount row falls through to the
+ * bordered muted label with no branch at the call site.
+ *
+ * `badgeVariants.test.ts` asserts the containment, so the two unions cannot drift apart into a
+ * pair that agrees on two names and disagrees on the third.
+ */
+export const TONED_BADGE_VARIANTS = ['positive', 'negative'] as const
 
 /**
  * `sm | md` is where a badge *sits*, and the difference is structural rather than a taste for a
@@ -34,6 +54,25 @@ export const BADGE_VARIANTS = [
  * where nothing shares its line and the padding is free.
  */
 export const BADGE_SIZES = ['sm', 'md'] as const
+
+/**
+ * The placement class for a badge that **opens its own table cell** (Story #192, DDR-0064).
+ *
+ * A badge in a dense table cell has to be `sm`: `md`'s vertical padding is 4px above and below a
+ * `--text-xs` line, which is taller than the `--text-sm` line every other cell in the row draws,
+ * so a `md` badge in the Type column grows every row of a 200-row transactions table. That is the
+ * same arithmetic the size axis was written for, arriving from the other direction.
+ *
+ * What `sm` also carries is `margin-left` — the gap from the value it follows, which is right for
+ * an inline chip and wrong for a badge that *is* the cell's contents: 6px of it would set the
+ * column's only element in from its own uppercase header. CSS cannot tell the two apart, because
+ * the inline chips follow a **text node** and `:first-child` counts elements only.
+ *
+ * So the gap stays on `sm` and the cell form is placement, which is what `className` is for
+ * (ADR-0008). It is a constant rather than a literal so the one rule in `app.css` has one name
+ * pointing at it, the way the primitives' axis values do.
+ */
+export const BADGE_CELL_CLASS = 'badge-cell'
 
 export type BadgeVariant = (typeof BADGE_VARIANTS)[number]
 export type BadgeSize = (typeof BADGE_SIZES)[number]

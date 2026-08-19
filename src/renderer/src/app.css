@@ -827,6 +827,32 @@ html {
   font-weight: 600;
 }
 
+/* The two toned variants (Story #192, DDR-0064): a label naming something that
+   put money in, or took it out. They keep the primitive's rule that a badge is
+   a boundary and an ink and **not** a fill — the redesign draws these as tinted
+   chips, and a fill here would be the one thing DDR-0037 declined, on a surface
+   (a hovered table row) that already lifts underneath it.
+
+   The boundary is the tone mixed halfway into `--border`, which is the idiom
+   `.capture-status-error` and `.state-panel-error` already use: loud enough to
+   read as this row's colour, quiet enough that 200 of them are not stripes.
+
+   The ink is the split, and picking the wrong half is silent (DDR-0046): `--pos`
+   is a text token as well as a fill, `--neg` is fill only, so the loss ink is
+   `--neg-text`. The boundaries take the fill tokens, because a border is painted
+   area rather than glyphs. Neither carries `font-weight`: the badge's text names
+   the transaction type, so the tone is a second channel here rather than the
+   only one — the case `.badge-accent`'s 600 exists to cover does not arise. */
+.badge-positive {
+  border: 1px solid color-mix(in srgb, var(--pos) 50%, var(--border));
+  color: var(--pos);
+}
+
+.badge-negative {
+  border: 1px solid color-mix(in srgb, var(--neg) 50%, var(--border));
+  color: var(--neg-text);
+}
+
 /* -- Sizes: type and box padding ----------------------------------------- */
 
 /* Inline: a chip following the value it qualifies, inside that value's line.
@@ -852,6 +878,19 @@ html {
    the size's padding whatever order these rules end up in. */
 .badge.badge-plain {
   padding: 0;
+}
+
+/* -- Placement: a badge that opens its own cell --------------------------- */
+
+/* `sm` is the size a dense table cell needs — `md`'s vertical padding makes a
+   `--text-xs` line taller than the `--text-sm` line beside it, and would grow
+   every row of a 200-row transactions table (Story #192, DDR-0064). What `sm`
+   also carries is the gap from the value in front of it, and here there is no
+   value in front of it: the badge *is* the cell. Two classes deep for the same
+   reason `plain` is — it undoes a size's declaration, and equal specificity
+   would leave it to source order. */
+.badge.badge-cell {
+  margin-left: 0;
 }
 
 /* ---- Field and form controls (Story #130, DDR-0035) ----------------------
