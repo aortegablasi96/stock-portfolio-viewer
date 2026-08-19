@@ -25,6 +25,12 @@ import { DataTable, type DataColumn } from '../ui/DataTable'
  * donut (`AllocationBreakdown`). Below, a world map locates the holdings and a positions
  * table lists each holding's base-currency market value, cost basis, and unrealized P&L.
  *
+ * **The breakdown comes before the map** (Story #191, DDR-0063), which reverses the order
+ * this view shipped in. The map is the tallest card on the page and the only approximate one
+ * — it is positioned by issuer country and says so — while the breakdown is the exact answer
+ * to the question the view is opened with. Putting a 3:1 map above it meant the figures began
+ * below the fold on the window this app opens at.
+ *
  * Sector is the one dimension not present in Flex statements; it comes from the locally
  * cached IBKR classification, so positions can legitimately be unclassified until the
  * owner runs the (opt-in, gateway-backed) classification action.
@@ -77,27 +83,6 @@ export function AllocationView(): React.JSX.Element {
 
             <Card>
               <CardHeader>
-                <CardTitle>By geography &amp; sector (world map)</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <CountryMap
-                  positions={r.positions}
-                  bySector={r.bySector}
-                  formatValue={c}
-                  formatSigned={(v) => formatSignedCurrency(v, r.baseCurrency)}
-                  // The map's marks are hover-only — they carry no text a screen reader can reach,
-                  // and keyboard operation is a separate story (#93). The map no longer draws
-                  // individual holdings at all (DDR-0030), so this label states what it totals and
-                  // points at the Positions table below, where one company's figures are read.
-                  ariaLabel={`World map of ${r.positions.length} holdings totalling ${c(
-                    r.totalMarketValueBase,
-                  )}, drawn as a pair of radial charts per issuer country — the country's weight in the portfolio, and one ring per sector — coloured by sector. Every holding is listed individually in the Positions table below.`}
-                />
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
                 <CardTitle id="allocation-breakdown-title">{activeTab.title}</CardTitle>
                 <ToggleGroup
                   label="Allocation breakdown"
@@ -126,6 +111,27 @@ export function AllocationView(): React.JSX.Element {
                     onClassified={() => void analytics.reload()}
                   />
                 )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>By geography &amp; sector (world map)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <CountryMap
+                  positions={r.positions}
+                  bySector={r.bySector}
+                  formatValue={c}
+                  formatSigned={(v) => formatSignedCurrency(v, r.baseCurrency)}
+                  // The map's marks are hover-only — they carry no text a screen reader can reach,
+                  // and keyboard operation is a separate story (#93). The map no longer draws
+                  // individual holdings at all (DDR-0030), so this label states what it totals and
+                  // points at the Positions table below, where one company's figures are read.
+                  ariaLabel={`World map of ${r.positions.length} holdings totalling ${c(
+                    r.totalMarketValueBase,
+                  )}, drawn as a pair of radial charts per issuer country — the country's weight in the portfolio, and one ring per sector — coloured by sector. Every holding is listed individually in the Positions table below.`}
+                />
               </CardContent>
             </Card>
 

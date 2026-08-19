@@ -63,8 +63,16 @@ const MAPBOX_TOKEN = import.meta.env.RENDERER_VITE_MAPBOX_TOKEN ?? ''
 /**
  * A muted monochrome basemap, chosen for legibility rather than taste (DDR-0019): the sector
  * palette is categorical, so the mark hues must stay the only strongly saturated thing on screen.
+ *
+ * **Dark since Story #191** (DDR-0063), which is the decision DDR-0054 left open when it re-keyed
+ * the app to the navy ground and noted that a `light-v11` map had become a lit panel in a dark
+ * room. The choice is `dark-v11` — the same monochrome, low-saturation family, so DDR-0019's
+ * reason is unspent — and the swap is not free: the weight donut's track was drawn as the card's
+ * own colour, which is a grey ring only when there is a white map behind it. It moves to `--muted`
+ * in the same story. Nothing else about the marks changes; the eight sector hues were validated
+ * mark-against-mark, which does not depend on the ground (DDR-0030, DDR-0054).
  */
-const MAP_STYLE = 'mapbox://styles/mapbox/light-v11'
+const MAP_STYLE = 'mapbox://styles/mapbox/dark-v11'
 
 /**
  * Flat map, not a globe. Mapbox v3 defaults to a globe at low zoom, which spends the panel's
