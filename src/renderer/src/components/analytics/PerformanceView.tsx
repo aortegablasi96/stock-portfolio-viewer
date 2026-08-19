@@ -172,6 +172,7 @@ export function PerformanceView(): React.JSX.Element {
                   formatValue={c}
                   formatDate={formatDate}
                   ariaLabel="Portfolio value over time"
+                  seriesLabel="Value"
                 />
               </ChartCard>
 
@@ -181,6 +182,7 @@ export function PerformanceView(): React.JSX.Element {
                   formatValue={formatSignedPercent}
                   formatDate={formatDate}
                   ariaLabel={returnChartLabel}
+                  seriesLabel="Return"
                 />
               </ChartCard>
 
@@ -191,6 +193,7 @@ export function PerformanceView(): React.JSX.Element {
                   formatDate={formatDate}
                   ariaLabel={dailyChartLabel}
                   emptyMessage="Not enough data points to plot daily returns yet."
+                  seriesLabel="Return"
                 />
               </ChartCard>
 

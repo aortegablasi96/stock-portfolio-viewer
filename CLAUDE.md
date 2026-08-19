@@ -244,9 +244,8 @@ may not import `@db` or `electron`; the **CSP's omitted telemetry origin** (belo
 ### Renderer: structure and behaviour
 
 - **shadcn/ui was deliberately declined** (ADR-0008, Epic #125). The CLI and MCP server are there
-  to *read* the component API, not to install. Do not run `shadcn add`; do not re-propose the
-  package without new reasons. What is adopted is the API *shape* — `variant`/`size` and
-  `Card`/`CardHeader`/`CardContent` composition — over the existing custom properties.
+  to *read* the component API, not to install: no `shadcn add`, no re-proposing the package. What
+  is adopted is the API *shape* — `variant`/`size`, `Card`/`CardHeader`/`CardContent`.
 - **The view list is the full WAI-ARIA tabs pattern**, not styled buttons (DDR-0029), rotated into
   a **vertical sidebar** (DDR-0055) that **collapses to a 56px rail** (DDR-0057). Every view
   including Portfolio is wrapped in a `TabPanel`; `aria-controls` is set **only on the selected
@@ -275,6 +274,14 @@ may not import `@db` or `electron`; the **CSP's omitted telemetry origin** (belo
   defaulted parameter, so neither can be tuned alone. Don't "restore" the old breakpoint by
   lowering it — that ships illegible labels; capping a chart's width stays **rejected**, since it
   reads as a rendering bug (DDR-0051, DDR-0057).
+- **One chart tooltip, drawn inside the `viewBox`** (DDR-0061). Three `HoverReadout`s became
+  `ChartTooltip` over `lib/chartTooltip`, in the plot's own space — so it **cannot** cover the
+  neighbouring chart — and **pinned to the plot's top** in all three, since a one-unit-tall daily
+  bar would throw a mark-tracking card the height of the plot between two days. A row's label is
+  prose (sans), its date a figure; sharing one rule is why `tokenAdoption` stays at **eight**. The
+  area fill is a `<linearGradient>` with **stops in `app.css`, `fill` per element** (`useId()` —
+  two curves, one page); `LineChart` draws a zero line only where the series *crosses* zero. Bars,
+  `.stack-band` and the donut's native tooltip are untouched.
 - **Chart maths that has drawn a wrong picture before.** The performance curve is **cumulative
   TWR**, not a value curve, so deposits and withdrawals don't move it (DDR-0013). Daily returns are
   **chain-linked from that curve** (`lib/dailyReturns`), never differenced from `valueSeries` — a

@@ -3,6 +3,7 @@ import type { ValuePoint } from '@shared/domain/performance'
 import { PERFORMANCE_PLOT } from '../../lib/chartGeometry'
 import { bandIndexAt, columnDomain } from '../../lib/column'
 import { StatePanel } from '../ui/StatePanel'
+import { ChartTooltip } from './ChartTooltip'
 
 /**
  * A dense single-series bar chart over a signed value, drawn either side of a zero baseline
@@ -30,7 +31,9 @@ import { StatePanel } from '../ui/StatePanel'
  * *aimed*, waits half a second, and at a hairline bar there is nothing left to aim at. Hit-testing
  * the band instead (`bandIndexAt`) means every x inside the plot names a day, so dragging across
  * the chart reads out the series continuously — which is how a reader finds the worst day of a
- * drawdown rather than the day they happened to click on.
+ * drawdown rather than the day they happened to click on. The card that readout is drawn in is
+ * `ChartTooltip`, shared with the two curves beside it since Story #188; the hit-testing, the
+ * clamping and the outlined active bar are unchanged by that move.
  */
 
 /* The plot's aspect ratio, shared with the two other charts in the grid (Story #172, DDR-0051).
@@ -59,6 +62,7 @@ export function BarChart({
   formatDate,
   ariaLabel,
   emptyMessage,
+  seriesLabel,
 }: {
   /** Signed values, oldest → newest. `value` is drawn against a zero baseline. */
   points: ValuePoint[]
@@ -66,6 +70,8 @@ export function BarChart({
   formatDate: (epochMs: number) => string
   ariaLabel: string
   emptyMessage: string
+  /** Names the series in the hover card. Omitted where the card's date is answer enough. */
+  seriesLabel?: string
 }): React.JSX.Element {
   const svgRef = useRef<SVGSVGElement>(null)
   const [hover, setHover] = useState<number | null>(null)
@@ -165,56 +171,12 @@ export function BarChart({
       )}
 
       {active && hover !== null && (
-        <HoverReadout
-          point={active}
-          px={PAD.left + (hover + 0.5) * band}
-          formatValue={formatValue}
-          formatDate={formatDate}
+        <ChartTooltip
+          anchorX={PAD.left + (hover + 0.5) * band}
+          title={formatDate(active.date)}
+          rows={[{ label: seriesLabel, value: formatValue(active.value) }]}
         />
       )}
     </svg>
-  )
-}
-
-/**
- * Crosshair plus a floating date/value tooltip for the scrubbed day.
- *
- * The same two-line box the value and return curves use, because the three charts sit in one grid
- * and are read against each other (DDR-0051) — a reader moving between them should not have to
- * re-learn where the date is. It is pinned to the top of the plot rather than tracked to the bar's
- * own height, though: a daily-return bar can be one unit tall, and a box anchored to it would jump
- * the full height of the plot between two adjacent days.
- */
-function HoverReadout({
-  point,
-  px,
-  formatValue,
-  formatDate,
-}: {
-  point: ValuePoint
-  px: number
-  formatValue: (v: number) => string
-  formatDate: (epochMs: number) => string
-}): React.JSX.Element {
-  const dateLabel = formatDate(point.date)
-  const valueLabel = formatValue(point.value)
-  const boxW = Math.max(dateLabel.length, valueLabel.length) * 7 + 16
-  const boxH = 36
-  // Prefer placing the box to the right of the crosshair; flip left near the edge.
-  const bx = px + 12 + boxW > W - PAD.right ? px - 12 - boxW : px + 12
-  const by = PAD.top
-  const tx = bx + 8
-
-  return (
-    <g pointerEvents="none">
-      <line className="chart-crosshair" x1={px} x2={px} y1={PAD.top} y2={H - PAD.bottom} />
-      <rect className="chart-tooltip-bg" x={bx} y={by} width={boxW} height={boxH} rx={6} />
-      <text className="chart-tooltip-date" x={tx} y={by + 14}>
-        {dateLabel}
-      </text>
-      <text className="chart-tooltip-value" x={tx} y={by + 29}>
-        {valueLabel}
-      </text>
-    </g>
   )
 }

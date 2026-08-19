@@ -45,6 +45,13 @@
  * approximating. The note above, that a "sub-6px radius" rule would have wrongly exempted this
  * very declaration, now reads as the argument it always was: the only radius in this file that a
  * mechanical rule would have hidden turned out to be one the scale could express. **Eight.**
+ *
+ * **Story #188 widened one rather than adding a ninth.** The hover card grew a second muted SVG
+ * label — a row's series name beside its figure — wanting exactly the size and tone the card's
+ * date already had, so it joined that rule instead of copying it and the exemption's key moved
+ * with the selector list. Still eight, and the count stays a fact about the list rather than a
+ * target: a key carries the whole selector context, so a rule that quietly gains a member fails
+ * here until someone comes and looks at it.
  */
 import { scanDeclarations, type CssDeclaration } from './cssDeclarations'
 
@@ -197,9 +204,9 @@ export const EXEMPTIONS: readonly ExemptEntry[] = [
     reason: 'An SVG <text> label, sized by the chart viewBox (DDR-0018).',
   },
   {
-    key: '.chart-tooltip-date | font-size',
+    key: '.chart-tooltip-date, .chart-tooltip-label | font-size',
     value: '10px',
-    reason: 'An SVG <text> label, sized by the chart viewBox.',
+    reason: 'Two SVG <text> labels sharing one rule, sized by the chart viewBox (Story #188).',
   },
   {
     key: '.chart-tooltip-value | font-size',

@@ -3,7 +3,9 @@ import type { CompositionBand, CompositionPoint } from '@shared/domain/performan
 import { PERFORMANCE_PLOT } from '../../lib/chartGeometry'
 import { formatPercent } from '../../lib/format'
 import { compositionColors, nearestIndex, shares, stackGeometry } from '../../lib/composition'
+import type { TooltipRow } from '../../lib/chartTooltip'
 import { StatePanel } from '../ui/StatePanel'
+import { ChartTooltip } from './ChartTooltip'
 
 /**
  * A dependency-free **cumulative** stacked area chart for portfolio composition over time
@@ -35,10 +37,6 @@ import { StatePanel } from '../ui/StatePanel'
    a *card* with those curves, only a row and a `RangeFilter`, which makes agreeing on the geometry
    matter more rather than less. */
 const { width: W, height: H, pad: PAD } = PERFORMANCE_PLOT
-
-/** Tooltip row metrics, in viewBox units. */
-const ROW_H = 14
-const HEAD_H = 18
 
 export function StackedAreaChart({
   bands,
@@ -135,13 +133,11 @@ export function StackedAreaChart({
         {formatDate(points[points.length - 1]?.date ?? 0)}
       </text>
 
-        {activePoint && activeIndex !== null && (
-        <HoverReadout
-          point={activePoint}
-          bands={bands}
-          px={xs[activeIndex] ?? 0}
-          formatValue={formatValue}
-          formatDate={formatDate}
+      {activePoint && activeIndex !== null && (
+        <ChartTooltip
+          anchorX={xs[activeIndex] ?? 0}
+          title={formatDate(activePoint.date)}
+          rows={compositionRows(activePoint, bands, formatValue)}
         />
       )}
     </svg>
@@ -178,67 +174,30 @@ export function CompositionLegend({ bands }: { bands: CompositionBand[] }): Reac
 }
 
 /**
- * Crosshair plus a tooltip listing every band on the hovered day. Unlike the line chart's
- * two-line readout this one grows with the band count, which is why the box height is computed
- * rather than fixed — four bands, a heading and a total do not fit a 36-unit box.
+ * One card row per band, plus the stack's total (Story #188, DDR-0061).
+ *
+ * The card itself is `ChartTooltip`, shared with the two curves this chart sits beside. The row
+ * count was the only thing that ever really differed between the three readouts, and a card that
+ * sizes to its rows absorbs that; what is left here is the part only this chart knows, which is
+ * which figures a composition day is made of.
  *
  * Each row carries **both** the amount and the share of NAV, because the chart lost one of them
  * when it stopped being normalised (DDR-0052) and neither answers the other's question: the
- * amount says what the band is worth, the share says whether it matters. The **Total** row is new
- * with the cumulative stack — the top edge of the stack is now a number a reader will want to
- * read, and on a day when a band is negative it is not the top edge of anything drawn.
+ * amount says what the band is worth, the share says whether it matters. The **Total** row is the
+ * cumulative stack's, and on a day when a band is negative it is not the top edge of anything
+ * drawn — which is why it is stated rather than left to be read off the chart.
  */
-function HoverReadout({
-  point,
-  bands,
-  px,
-  formatValue,
-  formatDate,
-}: {
-  point: CompositionPoint
-  bands: CompositionBand[]
-  px: number
-  formatValue: (v: number) => string
-  formatDate: (epochMs: number) => string
-}): React.JSX.Element {
+function compositionRows(
+  point: CompositionPoint,
+  bands: CompositionBand[],
+  formatValue: (v: number) => string,
+): TooltipRow[] {
   const pointShares = shares(point)
-  const dateLabel = formatDate(point.date)
-
-  const rows = bands.map(
-    (band, i) =>
-      `${band.label}: ${formatValue(point.values[i] ?? 0)} (${formatPercent(pointShares[i] ?? 0)})`,
-  )
-  const totalRow = `Total: ${formatValue(point.total)}`
-
-  const widest = Math.max(dateLabel.length, totalRow.length, ...rows.map((r) => r.length))
-  const boxW = widest * 7 + 16
-  const boxH = HEAD_H + (rows.length + 1) * ROW_H + 8
-  const bx = px + 12 + boxW > W - PAD.right ? px - 12 - boxW : px + 12
-  const by = PAD.top
-  const tx = bx + 8
-
-  return (
-    <g pointerEvents="none">
-      <line className="chart-crosshair" x1={px} x2={px} y1={PAD.top} y2={H - PAD.bottom} />
-      <rect className="chart-tooltip-bg" x={bx} y={by} width={boxW} height={boxH} rx={6} />
-      <text className="chart-tooltip-date" x={tx} y={by + 13}>
-        {dateLabel}
-      </text>
-      {rows.map((row, i) => (
-        <text
-          className="chart-tooltip-value"
-          key={bands[i]?.key ?? i}
-          x={tx}
-          y={by + HEAD_H + 10 + i * ROW_H}
-        >
-          {row}
-        </text>
-      ))}
-      {/* The total is separated from the bands it sums by taking the muted date treatment
-          rather than a rule — a hairline inside a 7-unit-tall row reads as a rendering seam. */}
-      <text className="chart-tooltip-date" x={tx} y={by + HEAD_H + 10 + rows.length * ROW_H}>
-        {totalRow}
-      </text>
-    </g>
-  )
+  return [
+    ...bands.map((band, i) => ({
+      label: band.label,
+      value: `${formatValue(point.values[i] ?? 0)} (${formatPercent(pointShares[i] ?? 0)})`,
+    })),
+    { label: 'Total', value: formatValue(point.total) },
+  ]
 }

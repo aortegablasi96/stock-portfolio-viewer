@@ -2182,9 +2182,23 @@ html {
   stroke-linecap: round;
 }
 
-.chart-area {
-  fill: var(--series-1);
-  opacity: 0.12;
+/* The area under a curve, as a vertical gradient rather than a flat wash (Story #188, DDR-0061).
+   The wash it replaces was one opacity all the way down, which gave it a hard edge along the
+   baseline and made it read as a second, paler series; a gradient reads as the curve's own weight.
+
+   The `fill` is not here, because a gradient is referenced by id and the two curves in the
+   Performance grid are two elements on one page — `LineChart` mints the id with `useId()` and
+   points the polygon at it. What stays here is the colour, so the stops are still tokens: the
+   chart's own series hue at the curve, fading to nothing at the baseline. `stop-opacity` rather
+   than a `color-mix()` with the card, so the gridlines below stay visible through the fill. */
+.chart-area-from {
+  stop-color: var(--series-1);
+  stop-opacity: 0.28;
+}
+
+.chart-area-to {
+  stop-color: var(--series-1);
+  stop-opacity: 0;
 }
 
 .chart-dot {
@@ -2210,13 +2224,24 @@ html {
   stroke-width: 2;
 }
 
+/* The hover card (Story #188, DDR-0061). It sits *on* the card it is drawn in, so `--card` on
+   `--card` gives it no ground of its own — the border and the shadow are the whole separation,
+   which is what "raised panel" means here. Both text tones are already-measured pairings against
+   `--card` (`--muted` 5.80:1, `--text` 15.02:1), so lifting the panel costs no contrast.
+
+   `drop-shadow()` rather than `box-shadow`: this is an SVG `<rect>`, which has no box. */
 .chart-tooltip-bg {
   fill: var(--card);
   stroke: var(--border);
   stroke-width: 1;
+  filter: drop-shadow(0 2px 6px rgb(0 0 0 / 0.5));
 }
 
-.chart-tooltip-date {
+/* The card's heading (the date) and a row's series name share a treatment, and only the heading
+   is a figure — a date is compared with a date, a series name is prose (DDR-0053). So the family
+   is applied by the figure role above and the size and tone are applied here, to both. */
+.chart-tooltip-date,
+.chart-tooltip-label {
   fill: var(--muted);
   font-size: 10px;
 }
@@ -2225,6 +2250,20 @@ html {
   fill: var(--text);
   font-size: 12px;
   font-weight: 600;
+}
+
+/* The card appears on `--duration-fast`, which is how it also *stops* appearing: the one
+   `prefers-reduced-motion` block redefines the token to 0ms, so the fade is skipped without this
+   rule naming itself there (DDR-0044). An animation rather than a transition, because the card is
+   mounted by the scrub rather than restyled — there is no previous state to transition from. */
+.chart-tooltip {
+  animation: chart-tooltip-in var(--duration-fast) var(--ease-out);
+}
+
+@keyframes chart-tooltip-in {
+  from {
+    opacity: 0;
+  }
 }
 
 /* ---- ToggleGroup primitive (Story #131, DDR-0036) ------------------------
