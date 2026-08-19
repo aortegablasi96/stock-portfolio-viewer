@@ -175,15 +175,18 @@
      three near-identical small sizes (0.78 / 0.8 / 0.82rem) collapse into
      `xs`, and the two body sizes (0.85 / 0.9rem) into `sm`. Chart and map SVG
      labels keep their own px sizes — they scale from a viewBox, not the page.
-     `xl` resolves the one real collision: `.balance-value` (1.5rem) and
-     `.stat-value` (1.4rem) do the same job, and 1.4rem wins because the stat
-     grid packs tiles into 11rem columns where the larger figure would wrap. */
-  --text-2xs: 0.72rem; /* 11.5px — inline native-currency chip */
-  --text-xs: 0.8rem; /* 12.8px — uppercase labels, hints, dense controls */
+     `xl` resolved a collision between `.balance-value` (1.5rem) and
+     `.stat-value` (1.4rem), and 1.4rem won because the stat grid packed tiles
+     into 11rem columns where the larger figure would have overrun them. Story
+     #187 raises it to the redesign's 26px and pays for it in the grid instead:
+     `.stat-row`'s column minimum moves with it, which is the half of that
+     trade DDR-0031 could not make while the two callers still disagreed. */
+  --text-2xs: 0.72rem; /* 11.5px — micro-labels, inline native-currency chip */
+  --text-xs: 0.8rem; /* 12.8px — hints, dense controls */
   --text-sm: 0.9rem; /* 14.4px — body text, table cells, panel titles */
   --text-md: 1.1rem; /* 17.6px — sub-section headings */
   --text-lg: 1.25rem; /* 20px   — secondary figures */
-  --text-xl: 1.4rem; /* 22.4px — headline figure on a tile */
+  --text-xl: 1.625rem; /* 26px   — headline figure on a tile */
   --text-2xl: 1.9rem; /* 30.4px — page title */
 
   --leading-tight: 1.2; /* headings and figures */
@@ -680,27 +683,58 @@ html {
   /* `auto-fit` rather than a fixed column count: it reflows on the space
      available, so one grid serves the dashboard's three balances and the
      analytics rows of three and four, and no breakpoint is needed to collapse
-     it. `11rem` is wide enough for a `--text-xl` currency figure. */
-  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+     it.
+
+     The minimum moved 11rem → 14.5rem with the figure in Story #187, and the
+     two are one change: `--text-xl` is now 26px, and a monospaced digit is
+     0.6em wide, so a twelve-character figure — `-€123,456.78`, longer than
+     anything Trades shows against real data — measures 187px and needs 227px
+     once the card's two `--surface-pad-md` are added. 14.5rem is 232px, which
+     holds it at the point the grid is actually at its minimum.
+
+     It is not on the 4px grid because the two ends of it are not free. Below
+     ~14.2rem the figure overruns the card; above ~14.6rem Trades' four tiles
+     stop fitting one row in a 1280px default window, which is the layout the
+     row is read in most. 14.5rem is the middle of a 0.4rem window, not a
+     hand-picked length.
+
+     What it costs is a column at the narrowest window: at `WINDOW_MIN_WIDTH`
+     with the sidebar open, Trades' four tiles fall to 2×2 where they used to
+     make three. Reflowing is what `auto-fit` is for; overrunning the card is
+     not, and the figure is the thing this row exists to show. */
+  grid-template-columns: repeat(auto-fit, minmax(14.5rem, 1fr));
   gap: var(--space-5);
 }
 
 /* The uppercase, letter-spaced treatment reserved for a label naming one
    figure — the distinction `.card-title` deliberately leaves alone (DDR-0033).
    Also worn by the realized-gains highlight card's label, which was a
-   byte-identical third copy of this rule. */
+   byte-identical third copy of this rule.
+
+   Story #187 drops it to the same 11px micro-label the table's column head took
+   in #186: `--text-2xs` at `0.06em`, weight 600. The three travel together for
+   the reason DDR-0059 gives — 11px capitals set at a body face's tracking are
+   what fails, and the weight is what keeps them from going faint on the way
+   down. One micro-label in the app, not one per surface. */
 .stat-label {
-  margin: 0 0 var(--space-2);
-  font-size: var(--text-xs);
-  letter-spacing: 0.04em;
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--muted);
 }
 
+/* The figure the tile exists for. `--leading-tight` is load-bearing at 26px:
+   the default ratio would open a gap between the label and the figure that
+   reads as a missing line. The mono family, tabular digits and the negative
+   tracking are not here — they arrive from the figure role (DDR-0053), which
+   is what makes two tiles' figures line up digit under digit. */
 .stat-value {
   margin: 0;
   font-size: var(--text-xl);
-  font-weight: 600;
+  font-weight: 700;
+  line-height: var(--leading-tight);
 }
 
 .stat-hint {
