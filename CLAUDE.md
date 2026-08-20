@@ -301,7 +301,9 @@ below are the same move.
   `portfolio:getOverview` result, which is why that tab is excluded from stay-mounted. The one
   `setTimeout` in `SidebarRail.tsx` is a **clock** arming the moment a live reading goes stale,
   not an interval. `displayCurrency` is the **app's** selection, so the control is never
-  disabled.
+  disabled. It is a **boxed chip** on `--surface-raised` — the app's one surface step that goes
+  *up*, and its only user — so every tone is measured **there**, not on `--card`; the warn dot's
+  3.63:1 is the tightest number in `contrast.ts`, and `SURFACE_EDGE` is not a WCAG bar (DDR-0069).
 - **One sector, one hue, everywhere.** `pie-series-1` — the palette's only blue — is reserved for
   the map's country-weight donut, so the *sector* dimension starts at slot 2 (`SECTOR_SLOT_OFFSET`
   in `lib/pie`) wherever a sector appears. Only sectors pay it; asset class, currency and country

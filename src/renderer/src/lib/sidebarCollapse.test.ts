@@ -113,9 +113,15 @@ describe('the toggle', () => {
   it('introduces no raw length in the row that carries it', () => {
     // The head row is the one new rule this story adds; `lib/tokenAdoption.ts` guards the
     // stylesheet at large, and this pins the selector specifically.
-    const head = rule('.app-sidebar-head-row')
+    //
+    // The 1px hairline Story #219 added is not a length this is looking for: it is the border
+    // width every rule in the stylesheet is drawn at, and the token in it is the colour. So it is
+    // struck before the scan rather than allowed through the pattern, which would also let a
+    // hand-picked `padding: 13px` past (DDR-0069).
+    const head = rule('.app-sidebar-head-row')?.replace(/^\s*border[^;]*;$/gm, '')
     expect(head, '.app-sidebar-head-row must exist').toBeDefined()
     expect(head).toMatch(/gap:\s*var\(--space-\d\)/)
+    expect(head).toMatch(/padding:\s*var\(--space-\d\) var\(--space-\d\)/)
     expect(head).not.toMatch(/\d+(\.\d+)?(px|rem)/)
   })
 

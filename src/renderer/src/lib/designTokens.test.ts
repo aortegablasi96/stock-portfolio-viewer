@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
+import { contrastRatio, relativeLuminance } from './contrast'
 import { scanDeclarations, stripComments } from './cssDeclarations'
 import { EXEMPTIONS, findMotionDeclarations, findViolations } from './motionTokens'
 
@@ -269,6 +270,25 @@ describe('colour tokens', () => {
    * measured, so moving one is a measurement invalidated. `contrast.test.ts` enforces the
    * thresholds; this pins that the split itself survives.
    */
+  /**
+   * The one surface step that goes *up* (Story #219, DDR-0069).
+   *
+   * Pinned by its ordering rather than by its value alone, because the value on its own says
+   * nothing: what makes it a raised surface is that it is lighter than the ground it stands on and
+   * still dimmer than the rule that edges it. Invert either relationship and the gateway chip
+   * stops being a box on the rail — it becomes a well, or a border that has sunk into its own
+   * fill — while `contrast.test.ts` carries on passing, since every ink on it still clears AA.
+   */
+  it('adds one raised surface, above --card and below the border that edges it', () => {
+    expect(token('--surface-raised')).toBe('#161b2e')
+    const luminance = (name: string): number => relativeLuminance(token(name))
+    expect(luminance('--surface-raised')).toBeGreaterThan(luminance('--card'))
+    expect(luminance('--surface-raised')).toBeLessThan(luminance('--border'))
+    // And it is a surface, not a second ground: it may not drift so far from --card that the two
+    // read as different materials rather than as one column with a chip standing on it.
+    expect(contrastRatio(token('--surface-raised'), token('--card'))).toBeLessThan(1.2)
+  })
+
   it('carries a text-safe loss tone and a filled-button accent, distinct from the originals', () => {
     expect(token('--neg-text')).toBe('#fb7185')
     expect(token('--accent-strong')).toBe('#4f46e5')

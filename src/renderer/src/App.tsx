@@ -242,7 +242,14 @@ export function App(): React.JSX.Element {
                 onToggle={() => setSidebarCollapsed(!collapsed)}
               />
             </div>
-            <GatewayBadge reading={gateway} />
+            {/* The badge's own section, ruled off from the brand above it (Story #219, DDR-0069).
+                What the app *is* and whether the source behind it is answering are two statements,
+                and the proposal draws them as two blocks rather than as one column of text. The
+                wrapper is what lets the rule between them span the sidebar while the boxed chip
+                inside stays inset from its edges. */}
+            <div className="app-sidebar-status">
+              <GatewayBadge reading={gateway} />
+            </div>
           </div>
 
           <div

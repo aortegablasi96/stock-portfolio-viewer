@@ -140,11 +140,89 @@ describe('the status dot is a second channel, and a tokenised one', () => {
     expect(dot).toMatch(/box-shadow:[^;]*currentColor/)
   })
 
+  it('renders on the chip’s fill, so its three tones are measured there (DDR-0069)', () => {
+    // Story #219 gave the badge a background of its own, which moved every tone off the sidebar's
+    // ground. `lib/contrast.ts`'s dot entries were re-pointed to match; this is the half of that
+    // pairing the contrast guard cannot see, since it reads tokens and not which rule uses them.
+    expect(rule('.gateway-badge')).toMatch(/background:\s*var\(--surface-raised\)/)
+    // And the chip is still the only thing standing on that surface. Not a style rule: every ink
+    // measured against `--surface-raised` is one the badge renders, so the second rule to adopt it
+    // brings inks nobody has measured there — and has to come here and say so.
+    expect(CSS.match(/var\(--surface-raised\)/g)).toHaveLength(1)
+  })
+
   it('is not announced as a live region', () => {
     // The detail quotes a clock time, so a status role would announce a re-read as if it were a
     // change of state. The Portfolio view announces the states that matter.
     expect(RAIL).not.toMatch(/role="status"/)
     expect(RAIL).not.toMatch(/aria-live/)
+  })
+})
+
+/**
+ * The chip and the rule above it (Story #219, DDR-0069).
+ *
+ * The visual result is a Playwright matter — `e2e/sidebar-collapse.spec.ts` measures the square on
+ * the rail, which needs a layout engine. What is checkable here is the part that is a decision:
+ * that the box is drawn from tokens, that the delimiter spans the column rather than sitting
+ * inside its padding, and that the head did not end up with two rules doing the same job.
+ */
+describe('the badge is a boxed chip, ruled off from the brand', () => {
+  it('draws its box entirely from tokens — surface, edge and corner', () => {
+    const badge = rule('.gateway-badge')
+    expect(badge, '.gateway-badge must exist').toBeDefined()
+    expect(badge).toMatch(/background:\s*var\(--surface-raised\)/)
+    expect(badge).toMatch(/border:\s*1px solid var\(--border\)/)
+    expect(badge).toMatch(/border-radius:\s*var\(--radius-(sm|md|lg)\)/)
+    expect(badge).toMatch(/padding:\s*var\(--space-\d\) var\(--space-\d\)/)
+    // No colour of its own: the tones are the three `--gateway-*` rules, and the surface is the
+    // one token above. A literal here is a pairing `lib/contrast.ts` does not cover (DDR-0046).
+    expect(badge).not.toMatch(/#[0-9a-fA-F]{3,8}\b/)
+  })
+
+  it('rules the brand off from the badge, and lets the rule reach both edges', () => {
+    // A 1px line inside a padded box stops short of the sidebar's edges, which is the one thing a
+    // delimiter must not do. So the head carries no padding of its own and its two children do.
+    const head = rule('.app-sidebar-head')
+    const row = rule('.app-sidebar-head-row')
+    const status = rule('.app-sidebar-status')
+    expect(head).toMatch(/border-bottom:\s*1px solid var\(--border\)/)
+    expect(head).not.toMatch(/padding/)
+    expect(row).toMatch(/border-bottom:\s*1px solid var\(--border\)/)
+    expect(row).toMatch(/padding:\s*var\(--space-\d\) var\(--space-\d\)/)
+    expect(status).toMatch(/padding:\s*var\(--space-\d\)/)
+  })
+
+  it('leaves the head with one rule per boundary, not two competing ones', () => {
+    // The head closes off the tablist; the row closes off the badge. The badge's own section adds
+    // nothing — a third rule there would double the line under the brand.
+    expect(rule('.app-sidebar-status')).not.toMatch(/border/)
+  })
+
+  it('squares the chip on the rail rather than dropping or stretching it', () => {
+    const collapsed = rule('.app-collapsed .gateway-badge')
+    expect(collapsed, '.app-collapsed .gateway-badge must exist').toBeDefined()
+    expect(collapsed).not.toMatch(/display:\s*none/)
+    // One box, both axes from the same step — a chip that is 32px across and 30px tall is a
+    // rounded rectangle beside a 32px brand tile, which is what the story rules out.
+    const [width, height] = [/width:\s*var\((--space-\d)\)/, /height:\s*var\((--space-\d)\)/].map(
+      (pattern) => pattern.exec(collapsed ?? '')?.[1],
+    )
+    expect(width, 'the collapsed chip needs a width from the scale').toBeDefined()
+    expect(height).toBe(width)
+    expect(collapsed).toMatch(/margin-inline:\s*auto/)
+  })
+
+  it('keeps the collapsed wording clipped by the one rule, never removed', () => {
+    // The chip is the only thing in the rail whose text sits inside a box, so it is the one most
+    // easily "tidied" with a `display: none` — which would take the badge's accessible name with
+    // it. It stays in the shared clip list (DDR-0057).
+    const clipped = /\n([^{}]*\.app-collapsed \.gateway-badge-text[^{}]*)\{([^}]*)\}/.exec(CSS)
+    expect(clipped, 'the badge’s wording must stay in the shared clip rule').not.toBeNull()
+    // Shared, not its own: the same rule that clips the brand's name and the nav rows' labels.
+    expect(clipped?.[1]).toMatch(/\.app-brand-name/)
+    expect(clipped?.[2]).toMatch(/clip:\s*rect\(0, 0, 0, 0\)/)
+    expect(clipped?.[2]).not.toMatch(/display:\s*none/)
   })
 })
 

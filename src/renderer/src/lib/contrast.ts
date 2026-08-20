@@ -100,6 +100,29 @@ export const AA_LARGE = 3
  */
 export const NON_TEXT = 3
 
+/**
+ * The floor for a **surface boundary** — the rule or border that says where one surface ends and
+ * the next begins (Story #219, DDR-0069).
+ *
+ * Explicitly **not** a WCAG threshold, and named separately so nobody reads it as one. 1.4.11
+ * governs a control's boundary where the boundary is what identifies the control; the gateway
+ * chip is not interactive and its box carries no state — the wording inside it does. What the
+ * edge has to do is weaker than that and still real: mark a box on the rail rather than dissolve
+ * into it.
+ *
+ * The number is the app's own, not a round one picked for comfort. `--card` on `--bg` is 1.059 —
+ * two surfaces separated by fill alone, which is exactly the separation the app never relies on,
+ * because every card draws a border as well. `--border` on `--card` is 1.251 — the edge every
+ * card, every table rule and every input already ships. 1.2 sits between the two, so the guard
+ * fails the day `--border` is dimmed toward the surfaces it separates and passes for the edges
+ * the app draws today.
+ *
+ * A border's *inner* edge — the rule against the fill it encloses — is deliberately not measured
+ * against this or anything else. It is a boundary between a box and its own outline, which
+ * separates nothing a reader has to tell apart.
+ */
+export const SURFACE_EDGE = 1.2
+
 /** A colour used directly, or a token name resolved from `:root`. */
 /**
  * A colour named three ways: a `:root` token, a literal, or a token mixed into a surface.
@@ -320,36 +343,93 @@ export const PAIRINGS: readonly Pairing[] = [
    * They are the first entries in this list that are **not text**, which is why they carry
    * {@link NON_TEXT} rather than an AA threshold. The dot is the badge's colour channel and never
    * its only one — every outcome has its own wording — but a mark that cannot be seen against the
-   * sidebar is not a second channel at all, and 3:1 is the bar that says it can be.
+   * surface behind it is not a second channel at all, and 3:1 is the bar that says it can be.
    *
    * The warn tone is the half of the loss split this list has the least coverage of: `--neg` as a
    * *fill* appears here and in `.btn-danger:hover` and nowhere else, and unlike that one it is not
    * measured against a label sitting on it — it is measured against the surface it sits on.
+   *
+   * **Story #219 re-pointed all three from `--card` to `--surface-raised`** rather than adding
+   * three more beside them. The badge became a boxed chip with a fill of its own, so the dot no
+   * longer touches the sidebar's ground at all — and a pairing that has stopped occurring is a
+   * measurement of nothing, which is the failure mode this list's own header warns about from the
+   * other direction. Every tone loses a little headroom on the lighter fill (the warn mark goes
+   * 3.94:1 → 3.63:1, which is the tightest of the three), and that loss is the reason the entries
+   * had to move rather than a reason to leave them.
    */
   {
-    where: '.gateway-dot in .gateway-badge-live — the "answering" mark on the sidebar',
+    where: '.gateway-dot in .gateway-badge-live — the "answering" mark, on the chip’s own fill',
     foreground: { token: '--pos' },
-    background: { token: '--card' },
+    background: { token: '--surface-raised' },
     minimum: NON_TEXT,
     reason: 'A graphic that carries state has to be distinguishable from the surface behind it.',
   },
   {
     where: '.gateway-dot in .gateway-badge-warn — the stalled/unavailable mark',
     foreground: { token: '--neg' },
-    background: { token: '--card' },
+    background: { token: '--surface-raised' },
     minimum: NON_TEXT,
     reason:
       'The fill half of the loss split (DDR-0046), measured against its surface rather than ' +
-      'against a label on it: 3.94:1, which clears 1.4.11 and would not clear AA as text.',
+      'against a label on it: 3.63:1 on the chip, which clears 1.4.11 and would not clear AA as ' +
+      'text. The least headroom of anything in this list, and the first thing a lighter chip ' +
+      'fill would break.',
   },
   {
     where: '.gateway-dot in .gateway-badge-idle — not running, or a reading that has aged out',
     foreground: { token: '--muted' },
-    background: { token: '--card' },
+    background: { token: '--surface-raised' },
     minimum: NON_TEXT,
     reason:
       'The quietest of the three, and the one a future dimming of --muted would break first. ' +
       'It is also the resting state of a fresh launch, so it is the mark most often on screen.',
+  },
+  /**
+   * The four pairings Story #219 added: the gateway chip's own text, and its edge (DDR-0069).
+   *
+   * The badge's wording is the channel that carries the state (DDR-0056), so putting it on a new
+   * surface moves the *only* channel that matters — which is why the three inks are listed here
+   * even though two of them already appear on `--card` and on `--bg` above. `--surface-raised` is
+   * neither of those surfaces, and the chip is the one place in the app that renders on it.
+   *
+   * The idle tone's detail line is not listed separately: it is `--muted` on the chip, which is
+   * the label entry below, measured once.
+   */
+  {
+    where: '.gateway-badge-label — the chip’s micro-label, and its idle detail line',
+    foreground: { token: '--muted' },
+    background: { token: '--surface-raised' },
+    minimum: AA_NORMAL,
+    reason:
+      'The faintest ink the chip renders, at the smallest step the app has (--text-2xs). 5.35:1 ' +
+      'against 5.80:1 on --card, so the chip costs the label real headroom and still clears AA.',
+  },
+  {
+    where: '.gateway-badge-detail in .gateway-badge-live — "Live · 14:32" on the chip',
+    foreground: { token: '--pos' },
+    background: { token: '--surface-raised' },
+    minimum: AA_NORMAL,
+    reason: 'The gain tone as text, on the one surface in the app that is lighter than --card.',
+  },
+  {
+    where: '.gateway-badge-detail in .gateway-badge-warn — "Stalled" / "Unavailable" on the chip',
+    foreground: { token: '--neg-text' },
+    background: { token: '--surface-raised' },
+    minimum: AA_NORMAL,
+    reason:
+      'The text half of the loss split, which has to stay balanced against --pos on whatever ' +
+      'surface renders it (DDR-0046): 6.34:1 against 6.73:1, inside the 0.5 the guard enforces.',
+  },
+  {
+    where: '.gateway-badge’s border against the sidebar — and every card edge in the app',
+    foreground: { token: '--border' },
+    background: { token: '--card' },
+    minimum: SURFACE_EDGE,
+    reason:
+      'The chip is a box because its border says so; the 1.085:1 fill step only seconds that. ' +
+      'This pairing is not the chip’s alone — --border on --card is every card’s inner edge and ' +
+      'every table rule — so it is the widest-reaching entry in this list and was, until now, ' +
+      'unmeasured. See SURFACE_EDGE for why the threshold is not a WCAG one.',
   },
   /**
    * The three pairings Story #186 added: a table row's ink on the lift the row takes under the
