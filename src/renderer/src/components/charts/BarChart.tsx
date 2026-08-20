@@ -3,6 +3,7 @@ import type { ValuePoint } from '@shared/domain/performance'
 import { PERFORMANCE_PLOT } from '../../lib/chartGeometry'
 import { bandIndexAt, columnDomain } from '../../lib/column'
 import { StatePanel } from '../ui/StatePanel'
+import { signInk } from '../../lib/chartTooltip'
 import { ChartTooltip } from './ChartTooltip'
 
 /**
@@ -170,11 +171,18 @@ export function BarChart({
         </text>
       )}
 
+      {/* One row, and it stays one row (Story #220). The redesign splits a signed bar chart into a
+          "positive" and a "negative" series with a card entry each, which would say a day has two
+          readings when it has one; the direction is already in the figure's sign and in which side
+          of the zero line the bar is drawn on. `signInk` restates it in the tone the bar itself
+          carries, and says nothing at all on a flat day. */}
       {active && hover !== null && (
         <ChartTooltip
           anchorX={PAD.left + (hover + 0.5) * band}
           title={formatDate(active.date)}
-          rows={[{ label: seriesLabel, value: formatValue(active.value) }]}
+          rows={[
+            { label: seriesLabel, value: formatValue(active.value), ink: signInk(active.value) },
+          ]}
         />
       )}
     </svg>

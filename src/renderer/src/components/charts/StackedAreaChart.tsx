@@ -137,7 +137,7 @@ export function StackedAreaChart({
         <ChartTooltip
           anchorX={xs[activeIndex] ?? 0}
           title={formatDate(activePoint.date)}
-          rows={compositionRows(activePoint, bands, formatValue)}
+          rows={compositionRows(activePoint, bands, colors, formatValue)}
         />
       )}
     </svg>
@@ -186,10 +186,21 @@ export function CompositionLegend({ bands }: { bands: CompositionBand[] }): Reac
  * amount says what the band is worth, the share says whether it matters. The **Total** row is the
  * cumulative stack's, and on a day when a band is negative it is not the top edge of anything
  * drawn — which is why it is stated rather than left to be read off the chart.
+ *
+ * Each band's row is **inked with that band's own colour** (Story #220), and the class handed
+ * over is the one `compositionColors` already gave the ribbon and the legend swatch — so the row,
+ * the band and the key agree because they are literally the same string, not because three call
+ * sites were kept in step. The full-strength hue would fail AA as text on the card's fill, so
+ * `app.css` resolves it through the `--series-ink-*` ramp; DDR-0046's split, applied to the
+ * categorical palette.
+ *
+ * **The Total row stays untinted.** It is the stack, not a band, and the one hue that would be
+ * available for it is the neutral residual's, which already means "other".
  */
 function compositionRows(
   point: CompositionPoint,
   bands: CompositionBand[],
+  colors: string[],
   formatValue: (v: number) => string,
 ): TooltipRow[] {
   const pointShares = shares(point)
@@ -197,6 +208,7 @@ function compositionRows(
     ...bands.map((band, i) => ({
       label: band.label,
       value: `${formatValue(point.values[i] ?? 0)} (${formatPercent(pointShares[i] ?? 0)})`,
+      ink: colors[i],
     })),
     { label: 'Total', value: formatValue(point.total) },
   ]

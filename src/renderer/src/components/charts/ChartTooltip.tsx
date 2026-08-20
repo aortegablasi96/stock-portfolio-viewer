@@ -1,5 +1,5 @@
 import { PERFORMANCE_PLOT } from '../../lib/chartGeometry'
-import { tooltipLayout, type TooltipRow } from '../../lib/chartTooltip'
+import { RADIUS_UNITS, tooltipLayout, type TooltipRow } from '../../lib/chartTooltip'
 
 /**
  * The hover card the three time-series charts float over a scrubbed point (Story #188, DDR-0061).
@@ -16,6 +16,12 @@ import { tooltipLayout, type TooltipRow } from '../../lib/chartTooltip'
  *
  * The card is `pointerEvents="none"`, so it never interrupts the scrub it is reporting on — the
  * band beneath it stays hit-testable while the pointer crosses the card (DDR-0052).
+ *
+ * **Story #220 restyled it and moved nothing** (DDR-0070): it floats on `--surface-raised` now,
+ * with roomier padding, a named corner and a minimum width — all still in `lib/chartTooltip`,
+ * because they are geometry — and a row's figure can carry the colour of the mark it names. The
+ * placement above is unchanged, and deliberately so: the proposal's cursor-tracking box is a
+ * re-decision rather than a restyle.
  */
 export function ChartTooltip({
   anchorX,
@@ -41,7 +47,7 @@ export function ChartTooltip({
         y={box.y}
         width={box.width}
         height={box.height}
-        rx={8}
+        rx={RADIUS_UNITS}
       />
       <text className="chart-tooltip-date" x={box.textX} y={box.titleY}>
         {title}
@@ -55,9 +61,15 @@ export function ChartTooltip({
           )}
           {/* A labelled row is two columns, so its figure is right-aligned and the decimal points
               line up down the card. A bare figure has no second column to align against and stays
-              on the left margin, under the date. */}
+              on the left margin, under the date.
+
+              `ink` is the chart's own colour for this figure, and it is appended rather than
+              switched on: the composition rows hand over the band's `.pie-series-*` class
+              directly — the same string the band and the legend swatch carry, so the three cannot
+              drift apart — while the daily-return row hands over a sign tone. A row without one
+              renders in the card's default ink (Story #220, DDR-0030, DDR-0046). */}
           <text
-            className="chart-tooltip-value"
+            className={row.ink === undefined ? 'chart-tooltip-value' : `chart-tooltip-value ${row.ink}`}
             x={row.label === undefined ? box.textX : box.valueX}
             y={box.rowYs[i]}
             textAnchor={row.label === undefined ? 'start' : 'end'}

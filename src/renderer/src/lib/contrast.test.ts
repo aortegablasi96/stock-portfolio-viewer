@@ -4,6 +4,8 @@ import {
   AA_NORMAL,
   NON_TEXT,
   PAIRINGS,
+  SERIES_INK_PERCENT,
+  SERIES_INK_SLOTS,
   SURFACE_EDGE,
   brightness,
   contrastRatio,
@@ -12,6 +14,7 @@ import {
   readColorTokens,
   relativeLuminance,
 } from './contrast'
+import { stripComments } from './cssDeclarations'
 
 /**
  * The contrast guard (Story #163).
@@ -21,6 +24,18 @@ import {
  */
 
 const CSS = readFileSync(new URL('../app.css', import.meta.url), 'utf8')
+
+/**
+ * The same stylesheet with its commentary removed, for the assertions that scan for *rules*.
+ *
+ * `app.css` quotes its own values in prose — this file's own tokens are discussed at length in
+ * `:root` — so a scan over the raw text can pass, or fail, off a comment alone. That trap has now
+ * bitten four times (DDR-0042, DDR-0047, DDR-0048, DDR-0058), and Story #220 is where it reached
+ * this file: the note beside the hover card's loss ink names the two tokens the assertion below
+ * is looking for. `readColorTokens` and `findFailures` strip for themselves, so only the two
+ * text scans need this.
+ */
+const CLEAN = stripComments(CSS)
 
 describe('relative luminance', () => {
   it('anchors at the ends of the range', () => {
@@ -123,6 +138,46 @@ describe('the pairing list', () => {
     )
   })
 
+  /**
+   * The `--series-ink-*` ramp (Story #220, DDR-0070). Three assertions, and the first is the one
+   * that makes the other two mean anything: the ratio this module measures with has to be the
+   * ratio the stylesheet mixes with, or the nine pairings above are measuring a colour nothing
+   * renders.
+   */
+  describe('the series ink ramp', () => {
+    it('measures the ratio app.css actually mixes with', () => {
+      const declared = [
+        ...CLEAN.matchAll(
+          /--series-ink-[a-z0-9]+:\s*color-mix\(in srgb, var\(--series-[a-z0-9]+\) (\d+)%/g,
+        ),
+      ].map(([, percent]) => percent)
+      expect(declared).toHaveLength(SERIES_INK_SLOTS.length)
+      expect(new Set(declared)).toEqual(new Set([String(SERIES_INK_PERCENT)]))
+    })
+
+    it('declares one ink per slot, mixed from that slot and no other', () => {
+      // The failure this catches is a copy-paste: --series-ink-5 mixed from --series-4 renders a
+      // row in its neighbour's hue, which looks like a palette and is a lie about the band.
+      for (const slot of SERIES_INK_SLOTS) {
+        expect(CLEAN, `--series-ink-${slot}`).toMatch(
+          new RegExp(`--series-ink-${slot}:\\s*color-mix\\(in srgb, var\\(--series-${slot}\\) `),
+        )
+      }
+    })
+
+    it('lifts every slot clear of AA, which three of them are not at full strength', () => {
+      // The reason the ramp exists, asserted rather than described: --series-2, --series-5 and
+      // --series-6 fail as ink on the card's own fill, and --series-6 fails on --card too. If a
+      // later re-key made the slots text-safe, this fails and the ramp can be retired.
+      const tokens = readColorTokens(CSS)
+      const surface = tokens.get('--surface-raised')!
+      const raw = [1, 2, 3, 4, 5, 6, 7, 8].map((slot) =>
+        contrastRatio(tokens.get(`--series-${slot}`)!, surface),
+      )
+      expect(raw.filter((ratio) => ratio < AA_NORMAL)).toHaveLength(3)
+    })
+  })
+
   it('fails loudly if a pairing names a token that no longer exists', () => {
     const tokens = readColorTokens(CSS)
     expect(() =>
@@ -174,10 +229,20 @@ describe('app.css contrast', () => {
     // adopted --neg-text, or a text rule went back to --neg, the guard above would still pass
     // while the thing it protects had quietly moved.
     const textRules = /\.(btn-danger|stat-negative)\s*\{[^}]*\}/g
-    for (const [rule] of CSS.matchAll(textRules)) {
+    for (const [rule] of CLEAN.matchAll(textRules)) {
       if (rule.includes('color:')) expect(rule).toMatch(/color:\s*var\(--neg-text\)/)
     }
-    expect(CSS).toMatch(/\.chart-bar-loss\s*\{\s*fill:\s*var\(--neg\)/)
-    expect(CSS).not.toMatch(/fill:\s*var\(--neg-text\)/)
+    expect(CLEAN).toMatch(/\.chart-bar-loss\s*\{\s*fill:\s*var\(--neg\)/)
+
+    /* `fill` is the property this guard reads as "a fill", and in SVG that is only true of a
+       shape: an SVG `<text>` has no `color`, so its ink is a `fill` too, and the hover card's
+       figures are text (Story #220, DDR-0070). So the rule is not "--neg-text never appears in a
+       `fill`" but "it never fills a *shape*", and the exception is enumerated rather than
+       pattern-matched — `.chart-tooltip-value-neg` is the one selector where the property means
+       ink, and a second one has to come here and say so. */
+    const negFills = [...CLEAN.matchAll(/([^{}]+)\{[^}]*fill:\s*var\(--neg-text\)/g)].map(
+      ([, selector]) => selector!.trim(),
+    )
+    expect(negFills).toEqual(['.chart-tooltip-value-neg'])
   })
 })

@@ -145,10 +145,13 @@ describe('the status dot is a second channel, and a tokenised one', () => {
     // ground. `lib/contrast.ts`'s dot entries were re-pointed to match; this is the half of that
     // pairing the contrast guard cannot see, since it reads tokens and not which rule uses them.
     expect(rule('.gateway-badge')).toMatch(/background:\s*var\(--surface-raised\)/)
-    // And the chip is still the only thing standing on that surface. Not a style rule: every ink
-    // measured against `--surface-raised` is one the badge renders, so the second rule to adopt it
-    // brings inks nobody has measured there — and has to come here and say so.
-    expect(CSS.match(/var\(--surface-raised\)/g)).toHaveLength(1)
+    /* Two rules stand on that surface now, and the second one came here and said so, which is
+       what this count is for. Not a style rule: every ink measured against `--surface-raised` is
+       an ink one of these two renders, so a rule adopting it brings inks nobody has measured
+       there. Story #220 floated the chart hover card on it (DDR-0070) and added four pairings to
+       `lib/contrast.ts` plus nine for the series ink ramp — the card's own `--text` and `--muted`
+       had only ever been measured on `--card`. A third adopter owes the same. */
+    expect(CSS.match(/var\(--surface-raised\)/g)).toHaveLength(2)
   })
 
   it('is not announced as a live region', () => {
