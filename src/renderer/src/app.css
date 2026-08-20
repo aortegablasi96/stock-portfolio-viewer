@@ -2796,6 +2796,11 @@ html {
 /* A legend that sits in the card header instead of under the plot (DDR-0052), so the chart
    below it is a bare `<svg>` and every card in the Performance grid is the same height.
 
+   Since Story #221 it also carries the *other* kind of thing a plot cannot say for itself: the
+   return curve's baseline note, which is a swatchless one-liner but the same object here — same
+   slot, same weight, same constraint. It reuses this rule rather than getting one that would
+   differ only in its name.
+
    It must not be *taller* than the title it sits beside, or it would put that height back by
    another route: `--text-xs` under a `--text-sm` title clears that, `nowrap` keeps four bands on
    one line, and the margin the stacked legend carries is dropped because `.card-header` owns the

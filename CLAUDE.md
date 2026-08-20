@@ -269,7 +269,9 @@ below are the same move.
   (DDR-0051, DDR-0057). **A `viewBox` clips an overflowing label in silence**, so `pad.left` is
   *derived* from a measured glyph advance and a character budget (DDR-0051 §#190). A stacked
   chart's key lives in the **card header**, not a `<figcaption>` — `ColumnChart` and
-  `StackedAreaChart` both emit a bare `<svg>` (DDR-0052, DDR-0064).
+  `StackedAreaChart` both emit a bare `<svg>` (DDR-0052, DDR-0064). **A chart title never varies
+  with the range**; the return curve's rebasing is disclosed by a *fixed* header note beside the
+  key, since it opens at 0% in every range (DDR-0072).
 - **One chart tooltip, drawn inside the `viewBox`** (DDR-0061). `ChartTooltip` over `lib/chartTooltip`
   draws in the plot's own space — so it **cannot** cover the neighbouring chart — **pinned to the
   plot's top** in all three, never tracking the mark. A

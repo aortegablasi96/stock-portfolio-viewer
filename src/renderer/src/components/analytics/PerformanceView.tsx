@@ -36,6 +36,8 @@ import { useRangeSelection } from './useRangeSelection'
  * The return curve is *rebased* to the window rather than merely sliced (Story #169): it opens
  * at 0% and closes on the Time-weighted return tile, because a 1M heading over an
  * inception-to-date baseline left the reader doing the subtraction the tile had already done.
+ * That rebasing is disclosed by a fixed note in the card's header, never by the card's title
+ * (Story #221) — see `BaselineNote`.
  *
  * A third chart (Story #170) breaks that cumulative curve back into its individual days, because
  * neither line answers "what does a normal day look like?" — a curve that rises 40% over a year
@@ -87,13 +89,10 @@ export function PerformanceView(): React.JSX.Element {
           : { endValue: r.endingValue, changeAbs: 0, changePct: null, twr: r.cumulativeTwr }
 
         const periodLabel = range === 'all' ? 'Full history' : 'Selected period'
-        // Rebasing is invisible on an axis, so the title and the chart's accessible name both
-        // say which baseline the curve is drawn from. Full history is the identity case: it
-        // already opens at 0%, and its wording is unchanged.
-        const returnChartTitle =
-          range === 'all'
-            ? 'Performance change over time'
-            : 'Performance change over the selected period'
+        // Rebasing is invisible on an axis, so the curve still has to say which baseline it is
+        // drawn from — but *not* by renaming itself (Story #221). The visible disclosure is the
+        // fixed `BaselineNote` in the card header; this accessible name is the same fact stated at
+        // length, and it may name the window because a name is not a title.
         const returnChartLabel =
           range === 'all'
             ? 'Cumulative time-weighted return over time, from 0% at the start of the history'
@@ -176,7 +175,7 @@ export function PerformanceView(): React.JSX.Element {
                 />
               </ChartCard>
 
-              <ChartCard title={returnChartTitle}>
+              <ChartCard title="Performance change over time" aside={<BaselineNote />}>
                 <LineChart
                   points={returnSeries}
                   formatValue={formatSignedPercent}
@@ -256,7 +255,7 @@ function ChartCard({
   children,
 }: {
   title: string
-  /** Rendered at the header's right edge — the composition stack's legend, today. */
+  /** Rendered at the header's right edge — the composition stack's legend, or a `BaselineNote`. */
   aside?: ReactNode
   children: ReactNode
 }): React.JSX.Element {
@@ -269,6 +268,30 @@ function ChartCard({
       <CardContent>{children}</CardContent>
     </Card>
   )
+}
+
+/**
+ * What the return chart's title used to say, said once instead (Story #221).
+ *
+ * The title changed with the range because the curve is *rebased* to open at 0% over the selected
+ * window (Story #169) and an axis cannot show that. Naming the chart after its window was one way
+ * to disclose it and the wrong one: it made a chart look like a different chart every time the
+ * range moved, in a grid built to be read across its rows.
+ *
+ * The fix is that the disclosure was never conditional in the first place. **The curve opens at 0%
+ * in every range, full history included** — that is the identity case, not a second case — so this
+ * is one fixed string, and putting a branch back in here would be putting the defect back.
+ * "Period" is the word the KPI tiles beside it already use for the selected window ("At period
+ * end"), whatever that window happens to be.
+ *
+ * It wears the header key's classes rather than a rule of its own: this is the same object in the
+ * layout as `CompositionLegend` — one muted line at the header's right edge, `--text-xs` so it
+ * cannot out-height the title, `nowrap` so it cannot wrap the row and make one card in a row
+ * taller than the other (DDR-0052). A second rule differing from `.chart-legend-header` only in
+ * its name is the drift Epic #125 exists to remove.
+ */
+function BaselineNote(): React.JSX.Element {
+  return <p className="chart-legend chart-legend-header">0% at period start</p>
 }
 
 /**
