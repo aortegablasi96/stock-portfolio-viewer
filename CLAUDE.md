@@ -207,7 +207,7 @@ below are the same move.
   figure, asserted in `statTileVariants.test.ts`. Both ends bind (DDR-0060).
 - **Adoption is held by a ratchet; don't re-baseline it** (DDR-0042). `lib/tokenAdoption.ts` has
   `BASELINE` (may only shrink — **currently empty and must stay empty**) and `EXEMPTIONS`
-  (permanent, **eight**, each with a reason). The test fails three ways, including on a *dead*
+  (permanent, **nine**, each with a reason). The test fails three ways, including on a *dead*
   entry.
 - **A figure is a role, not a font** (DDR-0053). `--font-figure` + `--tracking-figure` +
   `font-variant-numeric: tabular-nums` are **one rule** listing its selectors — they only work as a
@@ -295,7 +295,11 @@ below are the same move.
   it; bars **thin rather than aggregate** (DDR-0049). Composition stacks **cumulatively in base
   currency** with the top edge as NAV: a negative band **hangs below the zero line** (never
   clamped or folded), and `other` is the **residual, surfaced and never redistributed** — drop a
-  category into it instead and nothing will look wrong (DDR-0052).
+  category into it instead and nothing will look wrong (DDR-0052). The report's `bands` order is
+  the **palette**, not the stack: `lib/composition`'s `stackOrder` draws bottom-up Accruals · Cash ·
+  `other` · Options · Stocks, so reordering `BAND_SPECS` repaints every band instead of moving one
+  (DDR-0073). Legend and hover rows read **top-down**. A slot publishes `--series-hue` for the
+  properties `fill` can't cover; a classed ribbon can't also be filled `url(#…)`, hence the `<g>`.
 - **The map popup's tint is banked into its edges, and the geometry is what lets it be loud**
   (DDR-0041): the gradient's inner stops sit at `--popup-pad-y`, an **absolute length, not a
   percentage** (a percentage band creeps under the text of taller popups), and

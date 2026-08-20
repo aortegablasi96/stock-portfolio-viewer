@@ -38,9 +38,14 @@ export type ValuePoint = z.infer<typeof valuePointSchema>
 
 /**
  * One band of the portfolio-composition chart — an asset class, or the residual buckets
- * below (Story #171, DDR-0050). Bands are emitted in **stacking order, bottom first**, and
- * only when they carry a non-zero value somewhere in the history: an account that has never
- * held options gets no options band rather than a flat zero one no legend entry can explain.
+ * below (Story #171, DDR-0050). Bands are emitted only when they carry a non-zero value somewhere
+ * in the history: an account that has never held options gets no options band rather than a flat
+ * zero one no legend entry can explain.
+ *
+ * The array's order is the **palette** order, and since Story #222 it is no longer the stacking
+ * order: the chart is drawn most-invested-first from the top, which is presentation and lives in
+ * `renderer/src/lib/composition.ts` with the rest of the chart's geometry (DDR-0073). Keeping the
+ * palette on this order is what let the picture be inverted without repainting a band.
  */
 export const compositionBandSchema = z.object({
   /** Stable identity — drives the palette slot, so a band keeps its hue as others appear. */

@@ -150,7 +150,14 @@ function latestPerDay(rows: DailyEquityRow[]): DailyEquityRow[] {
   return [...byDate.values()].sort((a, b) => a.reportDate - b.reportDate)
 }
 
-/** The bands, in stacking order (bottom first), and how to read each out of a daily row. */
+/**
+ * The bands, in palette order, and how to read each out of a daily row.
+ *
+ * This *was* the stacking order too, until Story #222 inverted the picture and left the palette
+ * where it was: the chart's own `lib/composition` decides which band is drawn on top, because
+ * that is presentation and this is a service (DDR-0073). Reordering here would have repainted
+ * every band, since a band's hue is its position in this array.
+ */
 const BAND_SPECS: Array<{ band: CompositionBand; valueOf: (r: DailyEquityRow) => number }> = [
   { band: { key: 'stock', label: 'Stocks' }, valueOf: (r) => r.stock },
   { band: { key: 'options', label: 'Options' }, valueOf: (r) => r.options },

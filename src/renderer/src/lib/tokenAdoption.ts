@@ -46,6 +46,12 @@
  * very declaration, now reads as the argument it always was: the only radius in this file that a
  * mechanical rule would have hidden turned out to be one the scale could express. **Eight.**
  *
+ * **Story #222 added the ninth**, and it is the first entry that could not be widened into an
+ * existing one: the composition key's swatch shrinks to the proposal's 8px square while the shared
+ * `.legend-swatch` keeps its 12px, and a corner drawn as a fixed *fraction* of the square is two
+ * values, not one rule with two members. Same family as the entry above it — chart geometry below
+ * `--radius-sm` — and it is listed separately because it is a second measurement.
+ *
  * **Story #188 widened one rather than adding a ninth.** The hover card grew a second muted SVG
  * label — a row's series name beside its figure — wanting exactly the size and tone the card's
  * date already had, so it joined that rule instead of copying it and the exemption's key moved
@@ -217,6 +223,12 @@ export const EXEMPTIONS: readonly ExemptEntry[] = [
     key: '.legend-swatch | border-radius',
     value: '3px',
     reason: 'Chart geometry: 3px is below --radius-sm (6px).',
+  },
+  {
+    key: '.composition-legend .legend-swatch | border-radius',
+    value: '2px',
+    reason:
+      'Chart geometry: the composition key’s 8px swatch keeps the 12px one’s 25% corner (Story #222).',
   },
   {
     key: '.map-popup-name | margin',
