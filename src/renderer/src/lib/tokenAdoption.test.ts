@@ -193,9 +193,11 @@ describe('app.css token adoption', () => {
     // 11 → 9 in #160, when the diverging legend's two end caps left with the gain/loss mode.
     // 9 → 8 in #182, when the active tab's marker rotated into the sidebar and its `1px` became
     // `--radius-pill` — an exemption the scale turned out to be able to express after all.
+    // 8 → 9 in #222: the composition key's swatch shrinks to 8px and keeps the 12px one's 25%
+    // corner, which is a second sub-6px measurement rather than a second member of the first.
     expect({ baseline: BASELINE.length, exemptions: EXEMPTIONS.length }).toEqual({
       baseline: 0,
-      exemptions: 8,
+      exemptions: 9,
     })
   })
 

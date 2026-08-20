@@ -1,8 +1,16 @@
-import { useRef, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import type { CompositionBand, CompositionPoint } from '@shared/domain/performance'
 import { PERFORMANCE_PLOT } from '../../lib/chartGeometry'
 import { formatPercent } from '../../lib/format'
-import { compositionColors, nearestIndex, shares, stackGeometry } from '../../lib/composition'
+import {
+  bandPaint,
+  nearestIndex,
+  orderComposition,
+  shares,
+  stackGeometry,
+  stackOrder,
+  type StackBand,
+} from '../../lib/composition'
 import type { TooltipRow } from '../../lib/chartTooltip'
 import { StatePanel } from '../ui/StatePanel'
 import { ChartTooltip } from './ChartTooltip'
@@ -18,12 +26,21 @@ import { ChartTooltip } from './ChartTooltip'
  * interesting cases (negative cash, a zero-NAV day, a band that appears partway through) are
  * actually tested. What is left here is the DOM: pointer tracking and the markup.
  *
- * Colour comes from `compositionColors` (`lib/composition`), which both this chart and its legend
- * call so the two cannot disagree. Those hues are then **softened, and only here**: `.stack-band`
- * carries a lowered fill opacity, so eight saturated slabs covering most of a card read as a
- * background the curves beside them can be understood against. The classes are unchanged, so one
- * asset class still means one hue everywhere — this is the same colour, quieter. The legend
- * swatches are softened by the same amount, or the key would no longer match the thing it keys.
+ * **Order and colour both come from `stackOrder` (`lib/composition`)**, which this chart, its
+ * legend and its hover card all call, so the three cannot disagree about either. Since Story #222
+ * the stack is drawn with the *most* invested band on top — Stocks under the value curve's own
+ * line, the hairline accrual band down on the baseline — which is no longer the order the report
+ * emits its bands in; that array orders the palette instead, so inverting the picture repainted
+ * nothing (DDR-0073).
+ *
+ * Those hues are **softened, and only here**: `.stack-band` carries a lowered fill opacity, so
+ * eight saturated slabs covering most of a card read as a background the curves beside them can be
+ * understood against. The classes are unchanged, so one asset class still means one hue everywhere
+ * — this is the same colour, quieter. What each band now also carries is a **hairline stroke of
+ * its own colour**, which is not the separating stroke DDR-0052 removed: that one was drawn in
+ * `--card` and painted straight over the slivers it was meant to delimit. The top band takes the
+ * proposal's vertical **gradient** instead of a flat fill, stops in `app.css` and the id from
+ * `useId()`, because two charts on this page mint gradients (DDR-0061).
  *
  * **The legend is not in here.** It is `CompositionLegend` below, rendered by the view into the
  * card's *header* — so this component emits a bare `<svg>`, exactly like `LineChart` and
@@ -55,9 +72,13 @@ export function StackedAreaChart({
   emptyMessage: string
 }): React.JSX.Element {
   const svgRef = useRef<SVGSVGElement>(null)
+  const gradientId = useId()
   const [hover, setHover] = useState<number | null>(null)
 
-  const { paths, domain, xs } = stackGeometry(points, bands.length, {
+  // Bottom-first, and the only place the drawing order is decided. `orderComposition` puts each
+  // point's values into that order so `stackGeometry` still takes one flat array per point.
+  const stack = stackOrder(bands)
+  const { paths, domain, xs } = stackGeometry(orderComposition(points, stack), stack.length, {
     width: W,
     height: H,
     pad: PAD,
@@ -67,7 +88,7 @@ export function StackedAreaChart({
     return <StatePanel surface="inline">{emptyMessage}</StatePanel>
   }
 
-  const colors = compositionColors(bands)
+  const paint = bandPaint(stack, gradientId)
 
   const spanV = domain.top - domain.bottom || 1
   const y = (v: number): number =>
@@ -99,6 +120,24 @@ export function StackedAreaChart({
       onMouseMove={onMove}
       onMouseLeave={() => setHover(null)}
     >
+      {/* The top band's gradient. Its stops read `--series-hue` off the class on the gradient
+          itself, so the ramp is the band's own token rather than a second copy of the palette —
+          and `objectBoundingBox` (the default) runs it down the *band*, top edge to bottom edge,
+          which is the surface the proposal ramps. */}
+      <defs>
+        <linearGradient
+          id={gradientId}
+          className={paint[paint.length - 1]?.hue}
+          x1="0"
+          y1="0"
+          x2="0"
+          y2="1"
+        >
+          <stop className="stack-top-from" offset="0%" />
+          <stop className="stack-top-to" offset="100%" />
+        </linearGradient>
+      </defs>
+
       {ticks.map((t) => (
         <g key={t}>
           {/* The zero line is the baseline a negative band hangs below, so it reads heavier
@@ -122,8 +161,13 @@ export function StackedAreaChart({
         </g>
       ))}
 
+      {/* One group per ribbon, carrying nothing but the band's palette class: the ribbon's stroke
+          (and the gradient's stops) read `--series-hue` from it, which is how the top band can be
+          filled by a `url(#…)` attribute — a class setting `fill` would out-rank it. */}
       {paths.map((path, i) => (
-        <path key={bands[i]?.key ?? i} className={`stack-band ${colors[i] ?? ''}`} d={path} />
+        <g key={stack[i]?.band.key ?? i} className={paint[i]?.hue}>
+          <path className={paint[i]?.className} d={path} fill={paint[i]?.fill} />
+        </g>
       ))}
 
       <text className="chart-axis-label" x={PAD.left} y={H - 8} textAnchor="start">
@@ -137,7 +181,7 @@ export function StackedAreaChart({
         <ChartTooltip
           anchorX={xs[activeIndex] ?? 0}
           title={formatDate(activePoint.date)}
-          rows={compositionRows(activePoint, bands, colors, formatValue)}
+          rows={compositionRows(activePoint, stack, formatValue)}
         />
       )}
     </svg>
@@ -153,24 +197,31 @@ export function StackedAreaChart({
  * below the plot made this one taller than its neighbours, which is precisely the misalignment
  * DDR-0051 built the grid to avoid.
  *
- * It draws its colours from `compositionColors`, the same call the chart makes, so the key cannot
- * drift from the bands it keys. Rendering nothing for an empty band list keeps the header a plain
- * title in the state where the chart is showing its empty message.
+ * It draws its order *and* its colours from `stackOrder`, the same call the chart makes, so the key
+ * cannot drift from the bands it keys. It reads **top-down** — the stack reversed — so a reader
+ * moving between the key and the picture finds them in the same sequence, which since Story #222
+ * means it opens on the band under the value curve's line rather than the sliver on the baseline.
+ * Rendering nothing for an empty band list keeps the header a plain title in the state where the
+ * chart is showing its empty message.
  */
 export function CompositionLegend({ bands }: { bands: CompositionBand[] }): React.JSX.Element | null {
   if (bands.length === 0) return null
-  const colors = compositionColors(bands)
 
   return (
     <p className="chart-legend chart-legend-header composition-legend">
-      {bands.map((band, i) => (
-        <span className="legend-item" key={band.key}>
-          <span className={`legend-swatch ${colors[i] ?? ''}`} aria-hidden="true" />
-          {band.label}
+      {topDown(stackOrder(bands)).map((s) => (
+        <span className="legend-item" key={s.band.key}>
+          <span className={`legend-swatch ${s.color}`} aria-hidden="true" />
+          {s.band.label}
         </span>
       ))}
     </p>
   )
+}
+
+/** The stack read the way it is looked at: from the band on top down to the one on the baseline. */
+function topDown(stack: readonly StackBand[]): StackBand[] {
+  return [...stack].reverse()
 }
 
 /**
@@ -188,27 +239,30 @@ export function CompositionLegend({ bands }: { bands: CompositionBand[] }): Reac
  * drawn — which is why it is stated rather than left to be read off the chart.
  *
  * Each band's row is **inked with that band's own colour** (Story #220), and the class handed
- * over is the one `compositionColors` already gave the ribbon and the legend swatch — so the row,
- * the band and the key agree because they are literally the same string, not because three call
- * sites were kept in step. The full-strength hue would fail AA as text on the card's fill, so
- * `app.css` resolves it through the `--series-ink-*` ramp; DDR-0046's split, applied to the
- * categorical palette.
+ * over is the one `stackOrder` already gave the ribbon and the legend swatch — so the row, the
+ * band and the key agree because they are literally the same string, not because three call sites
+ * were kept in step. The full-strength hue would fail AA as text on the card's fill, so `app.css`
+ * resolves it through the `--series-ink-*` ramp; DDR-0046's split, applied to the categorical
+ * palette.
+ *
+ * The rows read **top-down**, like the legend and for the same reason (Story #222): a reader
+ * scrubbing the stack matches rows to bands by their order, and a card that listed them upside
+ * down would be the one thing on the card that had to be read against the picture.
  *
  * **The Total row stays untinted.** It is the stack, not a band, and the one hue that would be
  * available for it is the neutral residual's, which already means "other".
  */
 function compositionRows(
   point: CompositionPoint,
-  bands: CompositionBand[],
-  colors: string[],
+  stack: readonly StackBand[],
   formatValue: (v: number) => string,
 ): TooltipRow[] {
   const pointShares = shares(point)
   return [
-    ...bands.map((band, i) => ({
-      label: band.label,
-      value: `${formatValue(point.values[i] ?? 0)} (${formatPercent(pointShares[i] ?? 0)})`,
-      ink: colors[i],
+    ...topDown(stack).map((s) => ({
+      label: s.band.label,
+      value: `${formatValue(point.values[s.index] ?? 0)} (${formatPercent(pointShares[s.index] ?? 0)})`,
+      ink: s.color,
     })),
     { label: 'Total', value: formatValue(point.total) },
   ]

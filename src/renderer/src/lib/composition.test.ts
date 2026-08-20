@@ -1,12 +1,16 @@
+import { readFileSync } from 'node:fs'
 import { describe, it, expect } from 'vitest'
 import type { CompositionPoint } from '@shared/domain/performance'
 import type { CompositionBand } from '@shared/domain/performance'
 import {
+  bandPaint,
   compositionColors,
   nearestIndex,
+  orderComposition,
   shares,
   sliceComposition,
   stackGeometry,
+  stackOrder,
   stackSpans,
   valueDomain,
 } from './composition'
@@ -302,6 +306,188 @@ describe('compositionColors', () => {
 
   it('has nothing to colour for an empty stack', () => {
     expect(compositionColors([])).toEqual([])
+  })
+})
+
+/**
+ * The stacking order, and the split between it and the palette (Story #222, DDR-0073).
+ *
+ * The order is asserted as the whole list rather than as "accruals is first", because the point of
+ * the story is that a later change to the band list cannot silently reshuffle the picture: a rule
+ * about one end would let the middle move. `STACK_SLOT` is a `Record` keyed by the domain union,
+ * so a *new* band key fails to type-check rather than failing here — this covers the other half,
+ * which is an existing key quietly moving.
+ */
+describe('stackOrder', () => {
+  const band = (key: CompositionBand['key'], label: string): CompositionBand => ({ key, label })
+
+  /** Every band the report can emit, in the palette order the service declares them in. */
+  const all: CompositionBand[] = [
+    band('stock', 'Stocks'),
+    band('options', 'Options'),
+    band('cash', 'Cash'),
+    band('accruals', 'Accruals'),
+    band('other', 'Other'),
+  ]
+
+  it('stacks least-invested first, so Stocks is drawn on top and Accruals on the baseline', () => {
+    expect(stackOrder(all).map((s) => s.band.key)).toEqual([
+      'accruals',
+      'cash',
+      'other',
+      'options',
+      'stock',
+    ])
+  })
+
+  it('places the two bands the request did not name deliberately, not by reversal', () => {
+    // A reversed report array would put the residual on the baseline, under Accruals. `other` is
+    // above the cash it is not and below the named invested bands it cannot be identified with.
+    const keys = stackOrder(all).map((s) => s.band.key)
+    expect(keys.indexOf('other')).toBeGreaterThan(keys.indexOf('cash'))
+    expect(keys.indexOf('other')).toBeLessThan(keys.indexOf('options'))
+    expect(keys.indexOf('options')).toBeLessThan(keys.indexOf('stock'))
+  })
+
+  it('holds the constraint the story states, whichever bands are actually drawn', () => {
+    // The owner's account: no options, and the components account for all of NAV.
+    const held = [band('stock', 'Stocks'), band('cash', 'Cash'), band('accruals', 'Accruals')]
+    expect(stackOrder(held).map((s) => s.band.key)).toEqual(['accruals', 'cash', 'stock'])
+  })
+
+  it('keeps each band’s hue on the report’s order, so inverting the stack repaints nothing', () => {
+    // Stocks had slot 1 when it was the base of the stack and keeps it at the top of it.
+    const byKey = new Map(stackOrder(all).map((s) => [s.band.key, s.color]))
+    expect(byKey.get('stock')).toBe('pie-series-1')
+    expect(byKey.get('options')).toBe('pie-series-2')
+    expect(byKey.get('cash')).toBe('pie-series-3')
+    expect(byKey.get('accruals')).toBe('pie-series-4')
+    expect(byKey.get('other')).toBe('pie-series-neutral')
+  })
+
+  it('carries each band’s index in the report, which the stack order no longer matches', () => {
+    expect(stackOrder(all).map((s) => s.index)).toEqual([3, 2, 4, 1, 0])
+  })
+
+  it('has nothing to stack for an empty band list', () => {
+    expect(stackOrder([])).toEqual([])
+  })
+})
+
+describe('orderComposition', () => {
+  const bands: CompositionBand[] = [
+    { key: 'stock', label: 'Stocks' },
+    { key: 'cash', label: 'Cash' },
+    { key: 'accruals', label: 'Accruals' },
+  ]
+
+  it('re-reads each point’s values in stacking order', () => {
+    const stack = stackOrder(bands)
+    const ordered = orderComposition([point(1005, [900, 100, 5])], stack)
+    expect(ordered[0]?.values).toEqual([5, 100, 900])
+  })
+
+  it('leaves the day’s NAV alone, so the stack still closes on `total`', () => {
+    const stack = stackOrder(bands)
+    const ordered = orderComposition([point(1005, [900, 100, 5], 42)], stack)
+    expect(ordered[0]?.total).toBe(1005)
+    expect(ordered[0]?.date).toBe(42)
+    expect(sum(ordered[0]!.values)).toBe(1005)
+    expect(stackSpans(ordered[0]!.values).at(-1)?.hi).toBe(1005)
+  })
+
+  it('keeps a negative band signed rather than losing it in the shuffle', () => {
+    const stack = stackOrder([bands[0]!, bands[1]!])
+    expect(orderComposition([point(40_000, [45_000, -5000])], stack)[0]?.values).toEqual([
+      -5000, 45_000,
+    ])
+  })
+})
+
+describe('bandPaint', () => {
+  const stack = stackOrder([
+    { key: 'stock', label: 'Stocks' },
+    { key: 'cash', label: 'Cash' },
+    { key: 'accruals', label: 'Accruals' },
+  ])
+
+  it('fills the top band from the gradient and every other from its own class', () => {
+    const paint = bandPaint(stack, 'grad')
+    expect(paint.map((p) => p.fill)).toEqual([undefined, undefined, 'url(#grad)'])
+    expect(paint[0]?.className).toBe('stack-band pie-series-3')
+    expect(paint.at(-1)?.className).toBe('stack-band stack-band-top')
+  })
+
+  it('publishes every band’s hue on its group, the top band’s included', () => {
+    // The top ribbon cannot carry the palette class — a CSS `fill` would out-rank the gradient
+    // reference — so its stroke and its gradient stops read the hue off the group instead.
+    expect(bandPaint(stack, 'grad').map((p) => p.hue)).toEqual([
+      'pie-series-3',
+      'pie-series-2',
+      'pie-series-1',
+    ])
+  })
+
+  it('treats whichever band reaches the top as the top, not `stock` by name', () => {
+    const noEquity = stackOrder([
+      { key: 'cash', label: 'Cash' },
+      { key: 'accruals', label: 'Accruals' },
+    ])
+    expect(bandPaint(noEquity, 'grad').at(-1)?.className).toContain('stack-band-top')
+  })
+
+  it('paints nothing for an empty stack', () => {
+    expect(bandPaint([], 'grad')).toEqual([])
+  })
+})
+
+/**
+ * The half of the treatment that lives in the stylesheet (Story #222, DDR-0073). Comments are
+ * stripped first: the rules quote their own values in prose, which is the trap DDR-0042 records
+ * and which has now bitten six times.
+ */
+describe('the stack’s fills, in app.css', () => {
+  const CSS = readFileSync(new URL('../app.css', import.meta.url), 'utf8').replace(
+    /\/\*[\s\S]*?\*\//g,
+    '',
+  )
+
+  /** One rule's body. Anchored to a line start, or `.pie-series-1` would find the hover card's
+      `.chart-tooltip-value.pie-series-1` first and measure the ink ramp instead. */
+  const rule = (selector: string): string =>
+    CSS.match(new RegExp(`^${selector.replace(/[.*]/g, '\\$&')}\\s*\\{([^}]*)\\}`, 'm'))?.[1] ?? ''
+
+  it('runs the top band’s ramp from 0.8 to the 0.5 every other band wears', () => {
+    expect(rule('.stack-top-from')).toContain('stop-opacity: 0.8')
+    expect(rule('.stack-top-to')).toContain('stop-opacity: 0.5')
+    expect(rule('.stack-band')).toContain('fill-opacity: 0.5')
+    // The ramp carries the alpha, so the flat softening is given back on the top band.
+    expect(rule('.stack-band-top')).toContain('fill-opacity: 1')
+  })
+
+  it('takes both the stops and the stroke from the band’s own hue, not a second palette', () => {
+    for (const selector of ['.stack-top-from', '.stack-top-to']) {
+      expect(rule(selector)).toContain('stop-color: var(--series-hue)')
+    }
+    expect(rule('.stack-band')).toContain('stroke: var(--series-hue)')
+    // …which every palette slot has to publish, or a band would stroke itself with nothing.
+    for (const slot of [1, 2, 3, 4, 5, 6, 7, 8]) {
+      expect(rule(`.pie-series-${slot}`)).toContain(`--series-hue: var(--series-${slot})`)
+    }
+    expect(rule('.pie-series-neutral')).toContain('--series-hue: var(--series-neutral)')
+  })
+
+  it('strokes the band rather than separating it, which is the stroke DDR-0052 removed', () => {
+    // `none` was the whole point of that rule; an own-colour hairline is the opposite decision.
+    expect(rule('.stack-band')).not.toContain('stroke: none')
+    expect(rule('.stack-band')).toContain('vector-effect: non-scaling-stroke')
+  })
+
+  it('shrinks the key’s swatch and stops softening it', () => {
+    const swatch = rule('.composition-legend .legend-swatch')
+    expect(swatch).toContain('width: 8px')
+    expect(swatch).toContain('border-radius: 2px')
+    expect(swatch).not.toContain('opacity')
   })
 })
 

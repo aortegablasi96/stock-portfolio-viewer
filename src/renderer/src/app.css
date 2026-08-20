@@ -2754,14 +2754,7 @@ html {
    band carries, exactly as a donut slice does — one asset class, one hue, shared with the
    legend swatch beside it.
 
-   Deliberately **no separating stroke**, unlike `.pie-slice`. A donut's slices meet at radial
-   edges and need delimiting; a stacked band is delimited by the colour change itself, and its
-   identity has three other channels — its position in the stack, its legend entry, and the
-   hover readout that names it and reads out its share. A stroke thick enough to see is also
-   thicker than a 0.1% band, so on this portfolio (~99.9% stocks) it painted the card colour
-   straight over the cash and accrual slivers it was meant to separate: the thin bands read as
-   dark specks rather than as their own hue. Verified on screen before it was removed. */
-/* The bands are softened, and *only* the bands (DDR-0052).
+   The bands are softened, and *only* the bands (DDR-0052).
 
    The `--series-*` palette is tuned for donut slices and map marks — small, isolated shapes that
    have to hold their identity against a dark card at a few dozen pixels across. A stacked area
@@ -2769,20 +2762,61 @@ html {
    that makes a 40px wedge legible makes the chart shout down the two curves it shares a grid with.
    Lowering the fill opacity blends each band toward `--card` — the same hue, further back — so
    the chart still reads as one asset class per colour while sitting behind rather than in front.
+   0.5 was picked on screen, and 0.62 was tried first; the proposal's 0.7 is declined for the same
+   measurement, since the two curves it would shout down are still beside it.
 
    Deliberately scoped rather than retuning the tokens: the palette is validated for CVD and
    contrast as a set (DDR-0030) and is worn by the allocation donuts, the map and every other
    legend, none of which have this problem. `fill-opacity` rather than `opacity` so the bands stay
    individually composited instead of being flattened into one group. `.stack-band` needs no
-   ancestor selector — it exists in this chart alone — but the legend swatch is the shared class,
-   so `.composition-legend` scopes the matching softening to this key and no other. */
+   ancestor selector — it exists in this chart alone.
+
+   The stroke is the redesign's (Story #222, DDR-0073), and it is **not** the separating stroke
+   DDR-0052 removed. That one was drawn in `--card` to delimit neighbours, and a stroke thick
+   enough to see is thicker than a 0.1% band, so on this portfolio (~99.9% stocks) it painted the
+   card colour straight over the cash and accrual slivers it was meant to separate. This one is the
+   band's **own** `--series-hue`, published by the palette class on the wrapping group, so the same
+   sliver is drawn *as its own colour* rather than obliterated — the failure mode is inverted.
+   `non-scaling-stroke` for `.chart-bar-active`'s reason: by a few hundred days a band is a
+   hairline, and a stroke in viewBox units would be wider than the ribbon it edges. */
 .stack-band {
-  stroke: none;
   fill-opacity: 0.5;
+  stroke: var(--series-hue);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
 }
 
+/* The top of the stack, whichever band reaches it (Story #222, DDR-0073). Its fill is the
+   gradient the component mints per instance, so the flat opacity is given back here — the ramp
+   carries the alpha now, 0.8 at the NAV edge down to the 0.5 every other band wears. The heavier
+   stroke is the proposal's, and the edge it draws is the reader's NAV. */
+.stack-band-top {
+  fill-opacity: 1;
+  stroke-width: 1.5;
+}
+
+/* The ramp's stops. `--series-hue` is inherited from the palette class on the `<linearGradient>`
+   itself, so the gradient is the band's own token rather than a second copy of the palette
+   (DDR-0061: stops live here, the `fill` is per element and its id comes from `useId()`). */
+.stack-top-from {
+  stop-color: var(--series-hue);
+  stop-opacity: 0.8;
+}
+
+.stack-top-to {
+  stop-color: var(--series-hue);
+  stop-opacity: 0.5;
+}
+
+/* The key's swatch is a miniature of the mark, so it takes the proposal's smaller square
+   (Story #222). It is no longer softened to match the slab: every band now carries its hue at
+   full strength on its own edge, and the swatch states that hue. The corner keeps the 25% of its
+   width that the 12px swatch had — 3px on 12 is 2px on 8 — rather than inheriting a corner drawn
+   for a bigger square. */
 .composition-legend .legend-swatch {
-  opacity: 0.5;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
 }
 
 .chart-legend {
@@ -2919,41 +2953,56 @@ html {
   white-space: nowrap;
 }
 
+/* A slot's three roles. `fill` paints an SVG mark and `background` an HTML swatch — the two
+   surfaces one palette class has always had to cover — while `--series-hue` re-publishes the same
+   token as an inheritable value, for the properties `fill` cannot stand in for. It is what lets a
+   composition band stroke itself in its own colour and its gradient's stops take that colour from
+   the class on the gradient element (Story #222), without a fourth copy of the palette or a
+   `.stack-*.pie-series-*` pair per slot. Declaring it costs nothing where nothing reads it. */
 .pie-series-1 {
   fill: var(--series-1);
   background: var(--series-1);
+  --series-hue: var(--series-1);
 }
 .pie-series-2 {
   fill: var(--series-2);
   background: var(--series-2);
+  --series-hue: var(--series-2);
 }
 .pie-series-3 {
   fill: var(--series-3);
   background: var(--series-3);
+  --series-hue: var(--series-3);
 }
 .pie-series-4 {
   fill: var(--series-4);
   background: var(--series-4);
+  --series-hue: var(--series-4);
 }
 .pie-series-5 {
   fill: var(--series-5);
   background: var(--series-5);
+  --series-hue: var(--series-5);
 }
 .pie-series-6 {
   fill: var(--series-6);
   background: var(--series-6);
+  --series-hue: var(--series-6);
 }
 .pie-series-7 {
   fill: var(--series-7);
   background: var(--series-7);
+  --series-hue: var(--series-7);
 }
 .pie-series-8 {
   fill: var(--series-8);
   background: var(--series-8);
+  --series-hue: var(--series-8);
 }
 .pie-series-neutral {
   fill: var(--series-neutral);
   background: var(--series-neutral);
+  --series-hue: var(--series-neutral);
 }
 
 /* ---- Country map (world geography, Story #46; #89/DDR-0019 basemap;

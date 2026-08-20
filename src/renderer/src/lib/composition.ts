@@ -33,6 +33,11 @@
  * future band were ever dropped rather than folded into `other`, the top edge would quietly stop
  * being NAV, and unlike the old chart nothing would look wrong.
  *
+ * **The stacking order is this module's, not the report's** (Story #222, DDR-0073). The report's
+ * `bands` array orders the *palette*; `stackOrder` orders the *picture*, bottom first, and every
+ * consumer — ribbons, legend, hover card — reads the stack through it. Splitting the two is what
+ * lets the stack be inverted without every band changing colour.
+ *
  * **A zero-NAV day is a genuine zero here, not a division by zero.** The stack simply pinches to
  * the baseline and reopens after it. This is not hypothetical: the owner's real 2025 export opens
  * on the day before the account was funded, with `total="0"`. `shares` still guards the division,
@@ -55,9 +60,105 @@ import { OTHER_KEY, sliceColorClasses } from './pie'
  * applies to *sectors* only (DDR-0030); an asset class is not a sector, so this chart keeps all
  * eight slots. The residual `other` band is mapped onto `OTHER_KEY` so it takes the neutral gray
  * rather than consuming a hue — it is not a category anyone named.
+ *
+ * **Taken from the report's own order, which is no longer the order the stack is drawn in**
+ * (Story #222, DDR-0073). The two were the same array until the stack was inverted; keeping the
+ * palette on the report's order is what stops a presentation change from repainting every band —
+ * Stocks keeps slot 1's blue at the top of the stack exactly as it had it at the bottom.
  */
 export function compositionColors(bands: readonly CompositionBand[]): string[] {
   return sliceColorClasses(bands.map((b) => ({ key: b.key === 'other' ? OTHER_KEY : b.key })))
+}
+
+/**
+ * Where each band sits in the stack, **bottom first** (Story #222, DDR-0073).
+ *
+ * A `Record` rather than a list, so the compiler is the guard the story asked for: add a key to
+ * `compositionBandSchema` and this object stops type-checking until someone decides where the new
+ * band goes. A list would have accepted the new key silently and dropped the band off the chart.
+ *
+ * The order runs from the least invested at the bottom to the most invested at the top, which is
+ * what puts Stocks under the value curve's own line and the hairline accrual band down on the
+ * baseline where it is legible. `other` is the unnamed residual: above the cash it is not, below
+ * the named invested bands it cannot be identified with.
+ */
+const STACK_SLOT: Record<CompositionBand['key'], number> = {
+  accruals: 0,
+  cash: 1,
+  other: 2,
+  options: 3,
+  stock: 4,
+}
+
+/** One band, resolved to where it is drawn, what it is drawn from, and what colour it wears. */
+export interface StackBand {
+  readonly band: CompositionBand
+  /** Its index in the report's `values` array, which the stack order no longer matches. */
+  readonly index: number
+  /** Its palette class, assigned from the report's order by {@link compositionColors}. */
+  readonly color: string
+}
+
+/**
+ * The report's bands in stacking order, bottom first.
+ *
+ * Every consumer of the stack goes through this — the ribbons, the legend and the hover card —
+ * so the three cannot disagree about either order or colour. The band's original index rides
+ * along because `point.values` is still index-aligned with the *report's* array.
+ */
+export function stackOrder(bands: readonly CompositionBand[]): StackBand[] {
+  const colors = compositionColors(bands)
+  return bands
+    .map((band, index) => ({ band, index, color: colors[index] ?? '' }))
+    .sort((a, b) => STACK_SLOT[a.band.key] - STACK_SLOT[b.band.key])
+}
+
+/**
+ * The series with each point's values put in stacking order, so `stackSpans` and `stackGeometry`
+ * keep taking one flat array and knowing nothing about which band is which.
+ */
+export function orderComposition(
+  points: readonly CompositionPoint[],
+  stack: readonly StackBand[],
+): CompositionPoint[] {
+  return points.map((point) => ({
+    ...point,
+    values: stack.map((s) => point.values[s.index] ?? 0),
+  }))
+}
+
+/** How one ribbon is painted (Story #222, DDR-0073). */
+export interface BandPaint {
+  /**
+   * The palette class carried by the ribbon's wrapping `<g>`, whose only job is to publish
+   * `--series-hue` — the band's own colour, which its stroke and (at the top) its gradient stops
+   * read back out. The group is uniform across bands so that rule has one shape.
+   */
+  readonly hue: string
+  /** The ribbon's own classes. */
+  readonly className: string
+  /** The `fill` attribute, present only where the class does not supply one. */
+  readonly fill?: string
+}
+
+/**
+ * The paint for each ribbon, bottom first — the top band on a gradient, the rest flat.
+ *
+ * The top band is whichever band is drawn top-most, not `stock` by name: an account holding no
+ * equities still gets its top edge treated as the NAV line it is.
+ *
+ * Why the top band's `fill` is an *attribute* while every other band's comes from its class: CSS
+ * beats a presentation attribute, so a ribbon carrying `.pie-series-N` cannot also be filled with
+ * a gradient reference. The hue therefore moves to the wrapping group, where it is inherited as a
+ * custom property and nothing competes with it (DDR-0061's `useId()` trap applies to the id).
+ */
+export function bandPaint(stack: readonly StackBand[], gradientId: string): BandPaint[] {
+  const top = stack.length - 1
+  return stack.map((s, i) =>
+    i === top
+      ? { hue: s.color, className: 'stack-band stack-band-top', fill: `url(#${gradientId})` }
+      : { hue: s.color, className: `stack-band ${s.color}` },
+  )
 }
 
 /**

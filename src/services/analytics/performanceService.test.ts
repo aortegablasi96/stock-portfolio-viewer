@@ -425,7 +425,8 @@ describe('performanceService.getPerformance', () => {
     if (result.status !== 'ok') throw new Error('expected ok')
     const { bands, points } = result.report.compositionSeries
     // No options band — the account has never held one, so a flat zero row is not offered.
-    // Stacking order is bottom-first, and stock is the base of the stack.
+    // This order is the *palette's*, not the stack's: the chart draws Stocks on top and Accruals
+    // on the baseline, and decides that for itself (Story #222, DDR-0073).
     expect(bands.map((b) => b.key)).toEqual(['stock', 'cash', 'accruals'])
     expect(points[0]?.values).toEqual([900, 100, 5])
     expect(points[0]?.total).toBe(1005)
