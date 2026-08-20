@@ -109,6 +109,34 @@
      reading as brown — which is the one thing the residual slot must not do. Same job,
      same lightness relationship, cool: 5.33:1 against the panel surface. */
   --series-neutral: #8189a3;
+  /* The same nine slots as **ink** (Story #220, DDR-0070).
+
+     The eight above are fill tokens and have only ever been fills — a donut wedge, a map mark, a
+     stacked band, a legend swatch. The hover card asks one of them to be *text*: a composition
+     row's figure is tinted with its own band's colour, so the row, the band and the key agree.
+     Measured on the card's own --surface-raised fill, three of the eight fail AA outright
+     (--series-2 4.39:1, --series-5 4.33:1, --series-6 3.45:1) and --series-6 fails on --card too,
+     at 3.74:1. Nothing noticed, because nothing had ever put them under a threshold.
+
+     So this is DDR-0046's move applied to a categorical set rather than to a polarity: a derived
+     text counterpart, not a re-cut palette. Lerping 25% toward --text lifts the floor to 4.87:1
+     (--series-6, still the tightest) and leaves every hue plainly itself — #008300 arrives at
+     #389c3c, which is green by any reading. The eight validated slots do not move, which is the
+     property DDR-0054 spent a story establishing, and the bands and swatches keep full strength:
+     only the ink is lifted.
+
+     The ratio is one number and it is deliberately not a token — a percentage inside color-mix()
+     is not on any scale DDR-0031 declares, and `lib/contrast.ts` measures the 75 directly, so a
+     nudge here fails there rather than dimming nine figures quietly. */
+  --series-ink-1: color-mix(in srgb, var(--series-1) 75%, var(--text));
+  --series-ink-2: color-mix(in srgb, var(--series-2) 75%, var(--text));
+  --series-ink-3: color-mix(in srgb, var(--series-3) 75%, var(--text));
+  --series-ink-4: color-mix(in srgb, var(--series-4) 75%, var(--text));
+  --series-ink-5: color-mix(in srgb, var(--series-5) 75%, var(--text));
+  --series-ink-6: color-mix(in srgb, var(--series-6) 75%, var(--text));
+  --series-ink-7: color-mix(in srgb, var(--series-7) 75%, var(--text));
+  --series-ink-8: color-mix(in srgb, var(--series-8) 75%, var(--text));
+  --series-ink-neutral: color-mix(in srgb, var(--series-neutral) 75%, var(--text));
   --pos: #10b981; /* good — realized/unrealized gain. 7.30:1 on --card, 7.73:1 on --bg */
   --neg: #e11d48; /* critical — realized/unrealized loss. FILLS ONLY: see --neg-text */
   /* The loss tone as *text* (Story #163), re-derived for the new palette (#181).
@@ -2434,14 +2462,21 @@ html {
   stroke-width: 2;
 }
 
-/* The hover card (Story #188, DDR-0061). It sits *on* the card it is drawn in, so `--card` on
-   `--card` gives it no ground of its own — the border and the shadow are the whole separation,
-   which is what "raised panel" means here. Both text tones are already-measured pairings against
-   `--card` (`--muted` 5.80:1, `--text` 15.02:1), so lifting the panel costs no contrast.
+/* The hover card (Story #188, DDR-0061; restyled #220, DDR-0070). It floats *on* the card it is
+   drawn in, and it now has ground of its own: `--surface-raised` is the app's one surface step
+   that goes up (DDR-0069), which is exactly what a panel lifting off a card wants and what the
+   redesign draws here. Until this story the fill was `--card` on `--card` and the border and the
+   shadow were the whole separation.
+
+   The step is faint by design — 1.085:1 off `--card` — so the border still draws the edge and the
+   fill only seconds it, the same relationship the gateway chip has. What the lift costs is
+   contrast on everything the card renders, which is why `lib/contrast.ts` measures all four inks
+   on this surface rather than on `--card`: `--muted` 5.35:1, `--text` 13.85:1, and the two sign
+   tones at 6.73:1 / 6.34:1.
 
    `drop-shadow()` rather than `box-shadow`: this is an SVG `<rect>`, which has no box. */
 .chart-tooltip-bg {
-  fill: var(--card);
+  fill: var(--surface-raised);
   stroke: var(--border);
   stroke-width: 1;
   filter: drop-shadow(0 2px 6px rgb(0 0 0 / 0.5));
@@ -2460,6 +2495,53 @@ html {
   fill: var(--text);
   font-size: 12px;
   font-weight: 600;
+}
+
+/* A figure tinted by the chart that drew it (Story #220, DDR-0070).
+
+   The daily-return row takes the tone of its own bar, and the split matters here as much as
+   anywhere: `--neg-text`, because this is text, while the bar beside it fills with `--neg`
+   (DDR-0046). A flat day matches neither rule and keeps the default ink above — untoned is a
+   state, not an oversight. */
+.chart-tooltip-value-pos {
+  fill: var(--pos);
+}
+
+.chart-tooltip-value-neg {
+  fill: var(--neg-text);
+}
+
+/* A composition row carries the band's own `.pie-series-*` class, so the row, the ribbon and the
+   legend swatch are keyed by one string and cannot drift (DDR-0030). What differs is the *role*:
+   a band is a fill and a row is ink, so the class is resolved through the `--series-ink-*` ramp
+   here — the reason the ramp exists is in `:root` beside it. Two classes rather than one, so
+   these win on specificity over `.pie-series-*`'s own `fill` without an `!important`. */
+.chart-tooltip-value.pie-series-1 {
+  fill: var(--series-ink-1);
+}
+.chart-tooltip-value.pie-series-2 {
+  fill: var(--series-ink-2);
+}
+.chart-tooltip-value.pie-series-3 {
+  fill: var(--series-ink-3);
+}
+.chart-tooltip-value.pie-series-4 {
+  fill: var(--series-ink-4);
+}
+.chart-tooltip-value.pie-series-5 {
+  fill: var(--series-ink-5);
+}
+.chart-tooltip-value.pie-series-6 {
+  fill: var(--series-ink-6);
+}
+.chart-tooltip-value.pie-series-7 {
+  fill: var(--series-ink-7);
+}
+.chart-tooltip-value.pie-series-8 {
+  fill: var(--series-ink-8);
+}
+.chart-tooltip-value.pie-series-neutral {
+  fill: var(--series-ink-neutral);
 }
 
 /* The card appears on `--duration-fast`, which is how it also *stops* appearing: the one

@@ -23,6 +23,34 @@ export interface TooltipRow {
   readonly label?: string
   /** The formatted figure. Right-aligned beside a label, left-aligned without one. */
   readonly value: string
+  /**
+   * A class inking the figure, where the chart has a colour for it (Story #220).
+   *
+   * Omitted is the card's default `--text`, and that is the common case: a figure is only tinted
+   * where the mark it names is already coloured, so the tint restates something the reader can
+   * see rather than introducing a channel of its own. Two charts qualify — the composition
+   * stack, whose rows take the band's own `.pie-series-*` class, and the daily-return bars, whose
+   * rows take {@link signInk}. The value stays on the row regardless, so nothing here is carried
+   * by colour alone (DDR-0021, DDR-0048).
+   */
+  readonly ink?: string
+}
+
+/** The gain ink, for a figure whose mark is drawn above the zero line. */
+export const INK_POSITIVE = 'chart-tooltip-value-pos'
+/** The loss ink. `--neg-text`, never `--neg` — this is text, and the split is silent (DDR-0046). */
+export const INK_NEGATIVE = 'chart-tooltip-value-neg'
+
+/**
+ * The ink a signed figure takes, or `undefined` where it takes none.
+ *
+ * **A zero day is untoned**, which is the case worth having a function for: neither tone is
+ * true of it, and folding it into either would paint a flat day as a direction it did not move.
+ */
+export function signInk(value: number): string | undefined {
+  if (value > 0) return INK_POSITIVE
+  if (value < 0) return INK_NEGATIVE
+  return undefined
 }
 
 /** The plot the card must stay inside — the shape `chartGeometry` exports. */
@@ -41,9 +69,38 @@ export interface TooltipPlot {
    `TITLE_H + rows × ROW_H + 2 × PAD_Y`, and a card whose padding disagrees with its row height
    puts its last line on its own border. */
 
-/** Inner padding, horizontal and vertical. */
-export const PAD_X = 10
-export const PAD_Y = 8
+/**
+ * Inner padding, horizontal and vertical — the redesign's `padding: 10px 14px` (Story #220).
+ *
+ * Read as **viewBox units**, not pasted as a page length, which is the whole of DDR-0018's rule
+ * applied to a padding rather than to a font size: the card scales with its plot, so a padding
+ * fixed in px would be a different card in the 2×2 grid than in the stacked column. The
+ * proposal's asymmetry is kept because it is right for the content — the two columns need
+ * separating from the edge more than the four lines need separating from the top.
+ */
+export const PAD_X = 14
+export const PAD_Y = 10
+/**
+ * The corner, in viewBox units — `--radius-md`'s step, which is what a card this size takes.
+ *
+ * A number rather than the token for the same reason {@link CHAR_W} is one: this is geometry
+ * inside a `viewBox`, and `var(--radius-md)` resolves against the page rather than against the
+ * plot, so the corner would grow when the chart shrank. It was an `rx={8}` literal in the
+ * component until this story; naming it here is what puts it beside the padding it has to agree
+ * with (DDR-0018, DDR-0031).
+ */
+export const RADIUS_UNITS = 8
+/**
+ * The narrowest the card gets, in viewBox units — the redesign's `min-width: 140` (Story #220).
+ *
+ * Without it the card is exactly as wide as its widest line, so scrubbing from Daily return
+ * (one row, `Return  −1.23%`) to Composition over time (four rows and a total) changes the size
+ * of the thing under the pointer as well as its contents, and the two read as different
+ * components rather than as one card saying different things. The floor is a floor only: a card
+ * with more to say still grows past it, which is what {@link tooltipLayout}'s width takes the
+ * maximum of.
+ */
+export const MIN_WIDTH = 140
 /** The title line's height — the date, one step smaller than a value row. */
 export const TITLE_H = 15
 /** A value row's height. */
@@ -108,7 +165,7 @@ export function tooltipLayout(
   rows: readonly TooltipRow[],
   plot: TooltipPlot,
 ): TooltipLayout {
-  const width = widestLine(title, rows) * CHAR_W + 2 * PAD_X
+  const width = Math.max(MIN_WIDTH, widestLine(title, rows) * CHAR_W + 2 * PAD_X)
   const height = TITLE_H + rows.length * ROW_H + 2 * PAD_Y
 
   const right = anchorX + ANCHOR_GAP

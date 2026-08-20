@@ -282,7 +282,11 @@ below are the same move.
   row's label is prose (sans), its date a figure; sharing one rule keeps `tokenAdoption` at
   **eight**. The area fill is a `<linearGradient>` with **stops in `app.css`, `fill` per element**
   (`useId()` — two curves, one page); `LineChart` draws a zero line only where the series *crosses*
-  zero. Bars, `.stack-band` and the donut's native tooltip are untouched.
+  zero. Bars, `.stack-band` and the donut's native tooltip are untouched. It floats on
+  `--surface-raised`; its padding, corner and `MIN_WIDTH` are **viewBox units**, not CSS lengths.
+- **A `--series-*` slot is a fill; as ink it is `--series-ink-*`** (DDR-0070) — three of the eight
+  fail AA as text. A composition row resolves the band's own `.pie-series-*` class through that
+  ramp; slots and bands are untouched. Daily return's row is toned by **sign**, a zero day not.
 - **Chart maths that has drawn a wrong picture before.** The performance curve is **cumulative
   TWR**, not a value curve, so deposits and withdrawals don't move it (DDR-0013). Daily returns are
   **chain-linked from that curve** (`lib/dailyReturns`), never differenced from `valueSeries`, and
@@ -302,8 +306,10 @@ below are the same move.
   `setTimeout` in `SidebarRail.tsx` is a **clock** arming the moment a live reading goes stale,
   not an interval. `displayCurrency` is the **app's** selection, so the control is never
   disabled. It is a **boxed chip** on `--surface-raised` — the app's one surface step that goes
-  *up*, and its only user — so every tone is measured **there**, not on `--card`; the warn dot's
-  3.63:1 is the tightest number in `contrast.ts`, and `SURFACE_EDGE` is not a WCAG bar (DDR-0069).
+  *up*, and one of **two** users (the hover card is the other) — so every tone is measured
+  **there**, not on `--card`; the warn dot's 3.63:1 is the tightest number in `contrast.ts`, and
+  `SURFACE_EDGE` is not a WCAG bar (DDR-0069). `sidebarRail.test.ts` **counts** its uses — a third
+  adopter must measure its own inks (DDR-0070).
 - **One sector, one hue, everywhere.** `pie-series-1` — the palette's only blue — is reserved for
   the map's country-weight donut, so the *sector* dimension starts at slot 2 (`SECTOR_SLOT_OFFSET`
   in `lib/pie`) wherever a sector appears. Only sectors pay it; asset class, currency and country

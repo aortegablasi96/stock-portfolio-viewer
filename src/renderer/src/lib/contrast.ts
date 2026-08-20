@@ -133,10 +133,12 @@ export const SURFACE_EDGE = 1.2
  * measured those mixes before, which is the same blind spot this module's own header describes:
  * a guard that lists only what has failed cannot see what has not failed *yet*.
  *
- * It models one form only, `color-mix(in srgb, X p%, transparent)` composited over an opaque
- * surface. That is a per-channel lerp in sRGB, which is what a browser does for it, and it is
- * the only form `app.css` uses. A mix in `oklab`, or over a translucent backdrop, would need
- * more than this and should get it when a rule needs one.
+ * It models one arithmetic, which `app.css` writes two ways. `color-mix(in srgb, X p%,
+ * transparent)` composited over an opaque surface is a per-channel lerp between X and that
+ * surface; `color-mix(in srgb, X p%, Y)` with both opaque is the same lerp with `Y` named
+ * outright, which is the form Story #220's `--series-ink-*` ramp takes (`over` is `--text`
+ * there, a colour rather than a ground). A mix in `oklab`, or over a translucent backdrop,
+ * would need more than this and should get it when a rule needs one.
  */
 type Colour =
   | { readonly token: string }
@@ -183,6 +185,23 @@ function resolve(colour: Colour, tokens: Map<string, string>): string {
   }
   return lookUp(colour.token, tokens)
 }
+
+/**
+ * The categorical slots that have an ink counterpart, in the order `app.css` declares them.
+ *
+ * `'neutral'` is the residual's, and it is in the list for the reason it is in the palette: an
+ * `other` band is a band, and its row is inked like any other (DDR-0030).
+ */
+export const SERIES_INK_SLOTS = [1, 2, 3, 4, 5, 6, 7, 8, 'neutral'] as const
+
+/**
+ * How much of the slot survives in its ink — the `75%` in `app.css`'s `color-mix()`.
+ *
+ * Mirrored here rather than parsed out of the stylesheet, and pinned back against it by
+ * `contrast.test.ts`: a number restated in two files is a number that will disagree, so the
+ * disagreement is what fails.
+ */
+export const SERIES_INK_PERCENT = 75
 
 /**
  * Every text-on-surface pairing the app actually renders.
@@ -507,6 +526,67 @@ export const PAIRINGS: readonly Pairing[] = [
       'An axis label is text, whatever it is drawn with, so it is held to AA like any other. ' +
       'Listed because --chart-axis is easy to read as chart furniture and dim on that basis.',
   },
+  /**
+   * The pairings Story #220 added: everything the hover card renders, on the card's new fill
+   * (DDR-0070).
+   *
+   * Two things happened at once and each on its own would have needed measuring. The card's
+   * ground moved from `--card` to `--surface-raised`, which re-points every ink it already
+   * carried — the same argument Story #219 made for the gateway chip, and the same conclusion:
+   * a pairing measured on a surface the thing no longer sits on measures nothing. And a row's
+   * figure started taking a *colour*, which is a role the `--series-*` slots have never had.
+   *
+   * The series family is the sharp one. Full strength, three of the eight fail AA here
+   * (4.39:1, 4.33:1, 3.45:1) and `--series-6` fails on `--card` too — so `app.css` derives the
+   * `--series-ink-*` ramp and these entries measure the ramp, not the slots. They are **mapped
+   * over a hand-written list of slots** rather than each spelled out, which is the one place in
+   * this file that happens: it is a single pairing shape across one palette, and nine
+   * near-identical objects would hide the only thing that varies. The list is still enumerated —
+   * a tenth slot does not appear here by itself, and the module header's rule holds.
+   */
+  {
+    where: '.chart-tooltip-value — a figure on the hover card’s raised fill',
+    foreground: { token: '--text' },
+    background: { token: '--surface-raised' },
+    minimum: AA_NORMAL,
+    reason: 'The card’s default ink, re-pointed from --card when the card gained its own ground.',
+  },
+  {
+    where: '.chart-tooltip-date, .chart-tooltip-label — the date and a row’s series name',
+    foreground: { token: '--muted' },
+    background: { token: '--surface-raised' },
+    minimum: AA_NORMAL,
+    reason:
+      'The faintest ink the card renders, at 10 viewBox units. 5.35:1 against 5.80:1 on --card, ' +
+      'so the lift costs it real headroom and it still clears AA.',
+  },
+  {
+    where: '.chart-tooltip-value-pos — an up day’s figure in the Daily return card',
+    foreground: { token: '--pos' },
+    background: { token: '--surface-raised' },
+    minimum: AA_NORMAL,
+    reason: 'The gain tone as text, restating a bar drawn above the zero line.',
+  },
+  {
+    where: '.chart-tooltip-value-neg — a down day’s figure in the Daily return card',
+    foreground: { token: '--neg-text' },
+    background: { token: '--surface-raised' },
+    minimum: AA_NORMAL,
+    reason:
+      'The text half of the loss split, which has to stay within 0.5 of --pos on whatever ' +
+      'surface renders it (DDR-0046): 6.34:1 against 6.73:1.',
+  },
+  ...SERIES_INK_SLOTS.map((slot) => ({
+    where: `.chart-tooltip-value.pie-series-${slot} — a composition row inked with its band’s hue`,
+    foreground: { mix: { token: `--series-${slot}`, percent: SERIES_INK_PERCENT, over: '--text' } },
+    background: { token: '--surface-raised' },
+    minimum: AA_NORMAL,
+    reason:
+      'A fill token used as ink. The slot itself is not measured here because the slot is not ' +
+      'what renders — --series-ink-' +
+      slot +
+      ' is, and the ramp exists precisely because three of these fail at full strength.',
+  })),
 ]
 
 /** One failing pairing, with the numbers, for the test’s failure message. */
