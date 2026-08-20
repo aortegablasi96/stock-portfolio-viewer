@@ -12,8 +12,14 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    // Main and preload run in Node (Electron main process).
-    files: ['src/main/**/*.{ts,tsx}', 'src/preload/**/*.{ts,tsx}', '*.{js,mjs,ts}'],
+    // Main and preload run in Node (Electron main process); so do the repo's own tooling
+    // scripts, including the screenshot driver the `run-app` skill invokes.
+    files: [
+      'src/main/**/*.{ts,tsx}',
+      'src/preload/**/*.{ts,tsx}',
+      '*.{js,mjs,ts}',
+      '.claude/skills/**/*.mjs',
+    ],
     languageOptions: {
       globals: { ...globals.node },
     },
