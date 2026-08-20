@@ -5,6 +5,7 @@ import { sectorPalette } from './sectorMap'
 import {
   countryDonuts,
   donutPath,
+  MAX_NAMED_HOLDINGS,
   normalizedShares,
   REST_KEY,
   WEIGHT_COLOR_CLASS,
@@ -357,5 +358,148 @@ describe('countryDonuts', () => {
       countries: [],
       unknown: { value: 0, percent: 0, count: 0 },
     })
+  })
+})
+
+/**
+ * The names a mark carries (Story #223, DDR-0074).
+ *
+ * Not the per-holding granularity DDR-0030 retired: no holding gains a mark, an arc, a colour or a
+ * figure. What each mark and each sector slice gains is a **bounded list of names**, so hovering a
+ * country answers "which of my companies is this?" without a trip to the Positions table.
+ */
+describe('the holdings a mark names', () => {
+  it('names a country’s instruments, largest market value first', () => {
+    const us = countryDonuts(
+      [
+        position({ symbol: 'IBKR', description: 'INTERACTIVE BROKERS GRO-CL A', marketValueBase: 40 }),
+        position({ symbol: 'SEZL', description: 'SEZZLE INC', marketValueBase: 900 }),
+        position({ symbol: 'SBI', description: 'SERABI GOLD PLC', marketValueBase: 300 }),
+      ],
+      techPalette(),
+    ).countries[0]!
+
+    expect(us.holdings.named).toEqual([
+      { symbol: 'SEZL', name: 'Sezzle' },
+      { symbol: 'SBI', name: 'Serabi Gold' },
+      { symbol: 'IBKR', name: 'Interactive Brokers' },
+    ])
+    expect(us.holdings.remainder).toBe(0)
+  })
+
+  /**
+   * The bound is the point of the field, not an incidental cap: the popup is hover-only and
+   * pointer-transparent, so a list that overflows is lost rather than deferred to a scroll.
+   */
+  it('names at most MAX_NAMED_HOLDINGS of them and states the rest as a count', () => {
+    const many = Array.from({ length: MAX_NAMED_HOLDINGS + 3 }, (_, i) =>
+      position({ conid: i, symbol: `S${i}`, description: `NAME ${i} INC`, marketValueBase: 100 - i }),
+    )
+    const us = countryDonuts(many, techPalette()).countries[0]!
+
+    expect(us.holdings.named).toHaveLength(MAX_NAMED_HOLDINGS)
+    expect(us.holdings.named.map((h) => h.symbol)).toEqual(
+      many.slice(0, MAX_NAMED_HOLDINGS).map((p) => p.symbol),
+    )
+    expect(us.holdings.remainder).toBe(3)
+  })
+
+  it('leaves the ordering to value, not to the order the report arrived in', () => {
+    const us = countryDonuts(
+      [
+        position({ symbol: 'SMALL', description: 'SMALL CO', marketValueBase: 1 }),
+        position({ symbol: 'BIG', description: 'BIG CO', marketValueBase: 1000 }),
+      ],
+      techPalette(),
+    ).countries[0]!
+    expect(us.holdings.named.map((h) => h.symbol)).toEqual(['BIG', 'SMALL'])
+  })
+
+  /**
+   * `instrumentName`, never `formatCompanyName` (DDR-0066, DDR-0067). IBKR writes the identifier
+   * again where an instrument has none, and title-casing that gives `Cad` — a chip reading
+   * `CAD Cad` is the same text twice, which read as a rendering fault on the trade history.
+   */
+  it('carries no name where the description merely repeats the symbol', () => {
+    const us = countryDonuts(
+      [
+        position({ symbol: 'CAD', description: 'CAD', marketValueBase: 200 }),
+        position({ symbol: 'EUR.CHF', description: 'EUR.CHF', marketValueBase: 100 }),
+      ],
+      techPalette(),
+    ).countries[0]!
+
+    expect(us.holdings.named).toEqual([
+      { symbol: 'CAD', name: null },
+      { symbol: 'EUR.CHF', name: null },
+    ])
+  })
+
+  /** A sector slice names its own instruments, not the country's. */
+  it('scopes a sector slice to the instruments in that sector', () => {
+    const us = countryDonuts(
+      [
+        position({ sector: 'Technology', symbol: 'SEZL', description: 'SEZZLE INC', marketValueBase: 500 }),
+        position({ sector: 'Energy', symbol: 'SBI', description: 'SERABI GOLD PLC', marketValueBase: 300 }),
+      ],
+      manySectorPalette(),
+    ).countries[0]!
+
+    const tech = us.sectors.find((s) => s.label === 'Technology')!
+    const energy = us.sectors.find((s) => s.label === 'Energy')!
+    expect(tech.holdings.named.map((h) => h.symbol)).toEqual(['SEZL'])
+    expect(energy.holdings.named.map((h) => h.symbol)).toEqual(['SBI'])
+    // The country still names both, so the two hover depths differ in scope and not in kind.
+    expect(us.holdings.named.map((h) => h.symbol)).toEqual(['SEZL', 'SBI'])
+  })
+
+  /**
+   * Sector is the one dimension Flex does not carry, so a country can legitimately hold nothing
+   * but unclassified positions until the owner runs the opt-in classification. That must not be
+   * the case where the names disappear — it is exactly where the reader has least to go on.
+   */
+  it('names the instruments of a country whose positions are unclassified', () => {
+    const palette = sectorPalette([sectorSlice('', 100)])
+    const us = countryDonuts(
+      [
+        position({ sector: '', symbol: 'NXT', description: 'NUEVA EXPRESION TEXTIL SA', marketValueBase: 300 }),
+        position({ sector: '', symbol: 'MMY', description: 'MONUMENT MINING LTD', marketValueBase: 100 }),
+      ],
+      palette,
+    ).countries[0]!
+
+    expect(us.holdings.named).toEqual([
+      { symbol: 'NXT', name: 'Nueva Expresion Textil' },
+      { symbol: 'MMY', name: 'Monument Mining' },
+    ])
+    expect(us.sectors).toHaveLength(1)
+    expect(us.sectors[0]!.holdings.named.map((h) => h.symbol)).toEqual(['NXT', 'MMY'])
+  })
+
+  /** Both weight slices open the country, so only the blue one has anything to name. */
+  it('names the country on the weight slice and nothing on the remainder', () => {
+    const us = countryDonuts(
+      [position({ symbol: 'SEZL', description: 'SEZZLE INC', marketValueBase: 100 })],
+      techPalette(),
+    ).countries[0]!
+
+    const weight = us.weight.find((s) => s.key === WEIGHT_KEY)!
+    const rest = us.weight.find((s) => s.key === REST_KEY)!
+    expect(weight.holdings).toEqual(us.holdings)
+    expect(rest.holdings).toEqual({ named: [], remainder: 0 })
+  })
+
+  /** A disc is still a mark, and the popup it opens is the same one. */
+  it('names them on a country too small to draw as a pair', () => {
+    const { countries } = countryDonuts(
+      [
+        position({ issuerCountry: 'US', marketValueBase: 10_000 }),
+        position({ issuerCountry: 'NL', symbol: 'ASML', description: 'ASML HOLDING NV', marketValueBase: 50 }),
+      ],
+      techPalette(),
+    )
+    const nl = countries.find((c) => c.code === 'NL')!
+    expect(nl.dot).toBe(true)
+    expect(nl.holdings.named).toEqual([{ symbol: 'ASML', name: 'Asml Holding' }])
   })
 })
