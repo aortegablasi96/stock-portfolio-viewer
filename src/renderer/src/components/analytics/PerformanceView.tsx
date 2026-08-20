@@ -183,6 +183,10 @@ export function PerformanceView(): React.JSX.Element {
                   formatDate={formatDate}
                   ariaLabel={returnChartLabel}
                   seriesLabel="Return"
+                  /* Split at break-even, in the daily-return bars' own tones (Story #229). The
+                     value curve beside it stays one indigo: a portfolio's value has no sign to
+                     report, only a size (DDR-0071). */
+                  tone="sign"
                 />
               </ChartCard>
 

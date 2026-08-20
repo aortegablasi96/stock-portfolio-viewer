@@ -15,11 +15,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current Repository State
 
-M0–M5 are delivered. The app boots, connects to the Interactive Brokers Client Portal Gateway,
-renders live holdings/balances/allocation in a display currency, captures immutable snapshots (on
-open + on demand), imports IBKR Flex Query statements, and renders four analytics views over that
-imported data. A vertical sidebar switches between the live Portfolio dashboard and the four
-analytics views.
+M0–M5 are delivered: live IBKR holdings/balances/allocation in a display currency, immutable
+snapshots, Flex statement import, and four analytics views over it — all
+behind a vertical sidebar.
 
 Not built: AI features, multi-broker support, benchmark comparison, tax reporting.
 
@@ -206,17 +204,15 @@ below are the same move.
   `--radius-*` in **px**, `--text-2xs..2xl`, `--leading-*`. Deliberately off-scale: chart/map SVG
   label sizes (DDR-0018) and sub-6px radii. One collision, re-decided: **`--text-xl` (26px) and
   `.stat-row`'s `minmax(14.5rem, 1fr)` are one number** — the column holds a twelve-character
-  figure, asserted in `statTileVariants.test.ts`. Both ends bind: narrower overruns the card,
-  wider drops Trades to two rows at 1280px (DDR-0060).
+  figure, asserted in `statTileVariants.test.ts`. Both ends bind (DDR-0060).
 - **Adoption is held by a ratchet; don't re-baseline it** (DDR-0042). `lib/tokenAdoption.ts` has
   `BASELINE` (may only shrink — **currently empty and must stay empty**) and `EXEMPTIONS`
   (permanent, **eight**, each with a reason). The test fails three ways, including on a *dead*
   entry.
 - **A figure is a role, not a font** (DDR-0053). `--font-figure` + `--tracking-figure` +
-  `font-variant-numeric: tabular-nums` are **one rule** listing its selectors, because the three
-  only work as a set. It declares no `font-size`, which is what keeps DDR-0018 intact where it
-  reaches SVG `<text>`. `lib/figureRole.ts` **throws rather than merging** if a second rule applies
-  the family. Mono is ~20% wider for digits — a story adding a column should re-measure.
+  `font-variant-numeric: tabular-nums` are **one rule** listing its selectors — they only work as a
+  set. It declares no `font-size`, which is what keeps DDR-0018 intact where it
+  reaches SVG `<text>`. `lib/figureRole.ts` **throws rather than merging** if a second rule applies it. Mono is ~20% wider for digits — a story adding a column should re-measure.
 - **Motion is two durations and two easings** (DDR-0044): `--duration-fast` (90ms) ·
   `--duration-base` (120ms) · `--ease-out` · `--ease-linear` (for a width *reporting a number*).
   One `prefers-reduced-motion` block **zeroes the tokens** rather than listing what moves, so later
@@ -226,24 +222,22 @@ below are the same move.
   is **fill only**, `--neg-text` **text only**; same shape for `--accent` (labels + ring) vs
   `--accent-strong` (the primary button's fill alone). The *shape* is durable — the split
   **inverted** in the #181 re-key. `--neg-text`'s constraint is **not** 4.5:1 but `--pos − 0.5`.
-  `contrast.ts` **enumerates pairings by hand**, lists *passing* ones too, and models
-  `.btn-primary:hover`'s `brightness(1.08)` — which *lowers* contrast where axe tests resting state
-  only. A tint mixed into a surface is a **measured** number, never eyeballed (the sidebar's active
-  row passes at 4.95:1; 22% fails), and a tone rendered on a **hovered row** is measured on the
+  `contrast.ts` **enumerates pairings by hand** and lists *passing* ones too; it models
+  `.btn-primary:hover`'s `brightness(1.08)`, which *lowers* contrast where axe tests rest only. A tint mixed into a surface is a **measured** number, never eyeballed (the sidebar's active row is
+  4.95:1 at 16%; 22% fails), and a tone rendered on a **hovered row** is measured on the
   lift, not on `--card` (DDR-0064).
-- **The palette is navy/indigo and was re-derived, not pasted** (DDR-0054) — the **eight
-  `--series-*` slots did not move**.
+- **The palette is navy/indigo; the eight `--series-*` slots did not move** (DDR-0054).
   `designTokens.test.ts` guards the stylesheet itself: it fails if `outline` gains a second value,
   a scale stops ascending, or a validated colour moves.
-- **A text-scanning guard must strip comments first.** This trap has now bitten four times
-  (DDR-0042, DDR-0047, DDR-0048, DDR-0058) — `app.css` and the components quote their own values in
+- **A text-scanning guard must strip comments first.** This trap has now bitten five times
+  (DDR-0042, DDR-0047, DDR-0048, DDR-0058, DDR-0070) — `app.css` and the components quote their own values in
   prose, so an assertion can pass off the commentary alone.
 
 ### Renderer: structure and behaviour
 
-- **shadcn/ui was deliberately declined** (ADR-0008, Epic #125). The CLI and MCP server are there
-  to *read* the component API, not to install: no `shadcn add`, no re-proposing the package. What
-  is adopted is the API *shape* — `variant`/`size`, `Card`/`CardHeader`/`CardContent`.
+- **shadcn/ui was declined** (ADR-0008, Epic #125). The CLI/MCP server are for *reading* the
+  component API: no `shadcn add`, no re-proposing it. Adopted is the *shape* — `variant`/`size`,
+  `Card`/`CardHeader`/`CardContent`.
 - **The view list is the full WAI-ARIA tabs pattern**, not styled buttons (DDR-0029), rotated into
   a **vertical sidebar** (DDR-0055) that **collapses to a 56px rail** (DDR-0057). Every view
   including Portfolio is wrapped in a `TabPanel`; `aria-controls` is set **only on the selected
@@ -276,17 +270,22 @@ below are the same move.
   *derived* from a measured glyph advance and a character budget (DDR-0051 §#190). A stacked
   chart's key lives in the **card header**, not a `<figcaption>` — `ColumnChart` and
   `StackedAreaChart` both emit a bare `<svg>` (DDR-0052, DDR-0064).
-- **One chart tooltip, drawn inside the `viewBox`** (DDR-0061). Three `HoverReadout`s became
-  `ChartTooltip` over `lib/chartTooltip`, in the plot's own space — so it **cannot** cover the
-  neighbouring chart — and **pinned to the plot's top** in all three, never tracking the mark. A
+- **One chart tooltip, drawn inside the `viewBox`** (DDR-0061). `ChartTooltip` over `lib/chartTooltip`
+  draws in the plot's own space — so it **cannot** cover the neighbouring chart — **pinned to the
+  plot's top** in all three, never tracking the mark. A
   row's label is prose (sans), its date a figure; sharing one rule keeps `tokenAdoption` at
-  **eight**. The area fill is a `<linearGradient>` with **stops in `app.css`, `fill` per element**
-  (`useId()` — two curves, one page); `LineChart` draws a zero line only where the series *crosses*
-  zero. Bars, `.stack-band` and the donut's native tooltip are untouched. It floats on
+  **eight**. Bars, `.stack-band` and the donut's native tooltip are untouched. It floats on
   `--surface-raised`; its padding, corner and `MIN_WIDTH` are **viewBox units**, not CSS lengths.
 - **A `--series-*` slot is a fill; as ink it is `--series-ink-*`** (DDR-0070) — three of the eight
   fail AA as text. A composition row resolves the band's own `.pie-series-*` class through that
   ramp; slots and bands are untouched. Daily return's row is toned by **sign**, a zero day not.
+- **A curve is `--accent`; a *signed* one splits at zero** in the bars' `--pos`/`--neg`, the
+  **mark** half — SVG writes both as `fill` (DDR-0071). Gradient stops stay in `app.css`, `fill`
+  per element (`useId()` — two curves, one page); the zero rule only where the series *crosses*
+  zero. The split is **clipped geometry, never two series**, and its wash anchors on
+  **zero**, not the domain floor. `lib/signedCurve` clamps the clip — a range never crossing zero
+  gives a **negative height**, and SVG then renders *nothing*. Dots need a **doubled** selector;
+  `.chart-dot` out-orders a bare one (DDR-0059; shipped once).
 - **Chart maths that has drawn a wrong picture before.** The performance curve is **cumulative
   TWR**, not a value curve, so deposits and withdrawals don't move it (DDR-0013). Daily returns are
   **chain-linked from that curve** (`lib/dailyReturns`), never differenced from `valueSeries`, and

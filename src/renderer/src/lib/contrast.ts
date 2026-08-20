@@ -517,6 +517,40 @@ export const PAIRINGS: readonly Pairing[] = [
       'The half of the split that has to stay balanced against --pos (DDR-0046), on the surface ' +
       'the Dividends transactions table renders it on hundreds of times.',
   },
+  /**
+   * The two pairings Story #229 added: the gain and loss tones as **marks** on a chart card
+   * (DDR-0071).
+   *
+   * Both tones appear in this list several times over already, and every one of those entries
+   * measures them as *text* on some surface. Neither has ever been measured as a graphic on
+   * `--card` — which means the daily-return bars, which have filled with `--neg` since Story
+   * #170, have gone unmeasured the whole time. The signed return curve adopts the same pair, so
+   * the gap is closed here rather than left for the chart that happens to trip over it.
+   *
+   * {@link NON_TEXT} and not AA, because these are the shapes themselves: a curve, a bar, a dot.
+   * The figures they describe are elsewhere in the card and in the hover row, held to AA there.
+   * `--neg` at 3.94:1 is the tighter of the two, and it is the fill half of the split by
+   * construction (DDR-0046) — the token that would *pass* AA here is `--neg-text`, and using it
+   * would be picking the wrong half for a mark.
+   */
+  {
+    where: '.chart-line-pos / .chart-bar-gain — the gain tone as a curve, bar or dot on a card',
+    foreground: { token: '--pos' },
+    background: { token: '--card' },
+    minimum: NON_TEXT,
+    reason:
+      'A mark that cannot be told from the surface behind it is not a channel at all. Listed ' +
+      'although it passes wide, so the pair cannot drift apart unnoticed on this surface either.',
+  },
+  {
+    where: '.chart-line-neg / .chart-bar-loss — the loss tone as a curve, bar or dot on a card',
+    foreground: { token: '--neg' },
+    background: { token: '--card' },
+    minimum: NON_TEXT,
+    reason:
+      'The fill half of the loss split as a graphic: 3.94:1, which clears 1.4.11 and would not ' +
+      'clear AA as text. Unmeasured since the daily-return bars shipped in Story #170.',
+  },
   {
     where: '.chart-axis-label — SVG <text> on a chart card',
     foreground: { token: '--chart-axis' },

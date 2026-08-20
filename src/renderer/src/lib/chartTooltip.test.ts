@@ -201,10 +201,13 @@ describe('the card app.css draws', () => {
     )
   })
 
-  it('fades the area to nothing at the baseline, in the series colour', () => {
+  it('fades the area to nothing at the baseline, from a token', () => {
     // The gradient's colour stays in the stylesheet; only the `<defs>` is in the component, because
-    // a gradient is referenced by id and two curves share a page (DDR-0061).
-    expect(CSS).toMatch(/\.chart-area-from\s*\{[^}]*stop-color:\s*var\(--series-1\)/)
+    // a gradient is referenced by id and two curves share a page (DDR-0061). Which token it is has
+    // moved once already (Story #229 took it to --accent), so what is pinned here is the shape of
+    // the rule — a token at the curve, nothing at the baseline. `signedCurve.test.ts` owns the
+    // colour, and is the one place that has to change when it moves again.
+    expect(CSS).toMatch(/\.chart-area-from\s*\{[^}]*stop-color:\s*var\(--[a-z0-9-]+\)/)
     expect(CSS).toMatch(/\.chart-area-to\s*\{[^}]*stop-opacity:\s*0;/)
     // The flat wash it replaced set `fill` and `opacity` on the polygon itself.
     expect(CSS).not.toMatch(/\.chart-area\s*\{/)
