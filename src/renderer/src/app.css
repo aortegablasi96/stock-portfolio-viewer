@@ -1742,15 +1742,18 @@ html {
   padding-inline: var(--space-3);
 }
 
-/* The head is a column, so centring its children is `align-items`; the badge and the toggle row
-   are rows, so it is `justify-content`. Getting that backwards centres nothing and stretches the
-   head instead. */
+/* The head is a column, so centring its children is `align-items`; the badge is a row, so it is
+   `justify-content`. Getting that backwards centres nothing and stretches the head instead. */
 .app-collapsed .app-sidebar-head {
   align-items: center;
 }
 
-.app-collapsed .app-sidebar-toggle-row {
-  justify-content: center;
+/* 40px of content in the rail holds the 32px tile *or* the 30px control, not both side by side —
+   so the head row turns the corner and stacks them (Story #218). Both are still visible and both
+   are still in the same order, which is what keeps the rail's one control findable; only the axis
+   changes. `align-items: center` above is already doing the centring on this axis. */
+.app-collapsed .app-sidebar-head-row {
+  flex-direction: column;
 }
 
 .app-collapsed .gateway-badge {
@@ -1813,6 +1816,27 @@ html {
   border-bottom: 1px solid var(--border);
 }
 
+/* The brand and the collapse toggle on one row (Story #218, DDR-0068), the control at the row's
+   trailing edge. It is a row of its own rather than a third child of the head, because the head is
+   a column and the badge below still needs its own line.
+
+   The row has no width to spare and does not ask for any: 220px less the head's `--space-4`
+   gutters is 196, the 32px tile and its gap take 40, and the 30px control and this gap take 38 —
+   which leaves the product's own name 118px where it wants 154. So the name wraps and the head
+   grows in height, which is the trade Story #184 measured and decided the other way. */
+.app-sidebar-head-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+/* The one control in this row, and the only thing in it that may not give: a shrunken icon button
+   is a smaller target, and the name beside it is what should reflow instead. */
+.app-sidebar-head-row .app-sidebar-toggle {
+  flex-shrink: 0;
+}
+
 .app-brand {
   display: flex;
   align-items: center;
@@ -1852,13 +1876,20 @@ html {
   height: 1em;
 }
 
+/* The name **wraps**; it is never ellipsised (Story #218). It used to be
+   `nowrap` + `text-overflow: ellipsis`, which fitted on one line only while nothing shared the
+   row — and the moment the toggle joined it, "Stock Portfolio Viewer" became "Stock Portfolio…".
+   An abbreviated product name is worse than a taller head row, so the clamp goes.
+
+   `--leading-tight` is what makes two lines read as one name rather than as two labels: at prose
+   leading the pair sits further apart than the 32px tile is tall. It is the same step the tile's
+   own type step comes from, so nothing here is hand-picked (DDR-0031). */
 .app-brand-name {
+  min-width: 0;
   font-size: var(--text-sm);
   font-weight: 600;
+  line-height: var(--leading-tight);
   color: var(--text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* The gateway badge. Its three tones are declared once, as two local custom properties, so the
@@ -2049,15 +2080,6 @@ html {
 
 .app-currency .control {
   width: 100%;
-}
-
-/* The collapse toggle, last in the column (Story #184). Trailing edge while there are labels to
-   align it against, centred once there are none — the rail is one column of glyphs and a control
-   hugging its right edge would be the only thing off-axis. */
-.app-sidebar-toggle-row {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: var(--space-4);
 }
 
 /* An analytics tab stays in the tree once opened and is hidden while another tab is active

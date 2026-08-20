@@ -80,6 +80,68 @@ test.describe('within one launch', () => {
     await expect.poll(() => sidebarWidth(page)).toBe(220)
   })
 
+  test('sits in the head row beside the brand, and the name wraps rather than truncating', async () => {
+    // Story #218. The measurement DDR-0057 made is answered here rather than ignored: with the
+    // control on the row there is no width for "Stock Portfolio Viewer" on one line, so it wraps
+    // and the head grows. `scrollWidth === clientWidth` is what an ellipsis would break, and the
+    // two client rects are the two lines.
+    const head = await page.evaluate(() => {
+      const row = document.querySelector('.app-sidebar-head-row')!
+      const name = document.querySelector('.app-brand-name')!
+      const toggle = document.querySelector('.app-sidebar-toggle')!
+      const tablist = document.querySelector('[role="tablist"]')!
+      return {
+        toggleInRow: row.contains(toggle),
+        // Above the list, which is what makes it the sidebar's first Tab stop.
+        toggleBeforeTablist:
+          toggle.compareDocumentPosition(tablist) === Node.DOCUMENT_POSITION_FOLLOWING,
+        toggleRight:
+          toggle.getBoundingClientRect().right > name.getBoundingClientRect().right,
+        truncated: name.scrollWidth > name.clientWidth,
+        // Over a `Range`, not the element: the name is a flex item and therefore blockified, so
+        // its own client rect is one box however many lines of text are inside it.
+        lines: (() => {
+          const range = document.createRange()
+          range.selectNodeContents(name)
+          return range.getClientRects().length
+        })(),
+        text: name.textContent,
+        sidebar: document.querySelector('.app-sidebar')!.getBoundingClientRect().width,
+      }
+    })
+    expect(head.toggleInRow).toBe(true)
+    expect(head.toggleBeforeTablist).toBe(true)
+    expect(head.toggleRight).toBe(true)
+    expect(head.truncated).toBe(false)
+    expect(head.lines).toBe(2)
+    expect(head.text).toBe('Stock Portfolio Viewer')
+    // And none of it was bought with width: the column is still 220px (DDR-0051, DDR-0057).
+    expect(head.sidebar).toBe(220)
+  })
+
+  test('the rail still shows the brand and one visible control, stacked', async () => {
+    await toggle(page, false).click()
+    await expect.poll(() => sidebarWidth(page)).toBe(56)
+
+    // 40px of content holds one of them across, so the row turns the corner. Both stay inside the
+    // rail — a control overflowing 56px is the failure this catches.
+    const rail = await page.evaluate(() => {
+      const bar = document.querySelector('.app-sidebar')!.getBoundingClientRect()
+      const mark = document.querySelector('.app-brand-mark')!.getBoundingClientRect()
+      const control = document.querySelector('.app-sidebar-toggle')!.getBoundingClientRect()
+      return {
+        stacked: control.top >= mark.bottom,
+        withinRail: mark.right <= bar.right && control.right <= bar.right,
+      }
+    })
+    expect(rail.stacked).toBe(true)
+    expect(rail.withinRail).toBe(true)
+    await expect(toggle(page, true)).toBeVisible()
+
+    await toggle(page, true).click()
+    await expect.poll(() => sidebarWidth(page)).toBe(220)
+  })
+
   test('every nav row keeps its accessible name on the rail', async () => {
     await toggle(page, false).click()
     await expect.poll(() => sidebarWidth(page)).toBe(56)

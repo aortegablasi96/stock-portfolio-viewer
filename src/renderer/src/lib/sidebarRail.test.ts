@@ -203,7 +203,13 @@ describe('what the rail must not have displaced', () => {
     // The ring comes from the zero-specificity `:where()` base rule; `designTokens.test.ts`
     // fails on a second `outline` value anywhere, and this pins the new selectors specifically.
     expect(RAIL).not.toMatch(/outline/)
-    for (const selector of ['.app-sidebar-head', '.app-sidebar-foot', '.gateway-badge', '.app-brand']) {
+    for (const selector of [
+      '.app-sidebar-head',
+      '.app-sidebar-head-row',
+      '.app-sidebar-foot',
+      '.gateway-badge',
+      '.app-brand',
+    ]) {
       expect(rule(selector) ?? '').not.toMatch(/outline/)
     }
   })

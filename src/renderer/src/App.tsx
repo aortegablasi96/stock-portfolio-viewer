@@ -232,7 +232,16 @@ export function App(): React.JSX.Element {
               of any one view — and the list is the part that gives if the column ever runs short,
               so nothing here can be pushed out of sight. */}
           <div className="app-sidebar-head">
-            <SidebarBrand />
+            {/* Brand and toggle on one row (Story #218). The control that changes the column's
+                width now sits with the thing it changes, and it is the first stop in the sidebar's
+                Tab order rather than the last — toggle → tabs → currency → panel (DDR-0068). */}
+            <div className="app-sidebar-head-row">
+              <SidebarBrand />
+              <SidebarToggle
+                collapsed={collapsed}
+                onToggle={() => setSidebarCollapsed(!collapsed)}
+              />
+            </div>
             <GatewayBadge reading={gateway} />
           </div>
 
@@ -293,16 +302,6 @@ export function App(): React.JSX.Element {
               options={currencyOptions}
               onChange={setDisplayCurrency}
             />
-            {/* Last in the column, which is where the prototype sketched an expand control and
-                where the collapsed rail's bottom-most glyph is easiest to find again. It is not
-                beside the brand for a plain reason: 220px minus the tile leaves the product's
-                own name barely fitting, and a control there ellipsizes it (Story #184). */}
-            <div className="app-sidebar-toggle-row">
-              <SidebarToggle
-                collapsed={collapsed}
-                onToggle={() => setSidebarCollapsed(!collapsed)}
-              />
-            </div>
           </div>
         </nav>
 

@@ -71,15 +71,52 @@ describe('the toggle', () => {
     expect(RAIL).toMatch(/title=\{label\}/)
   })
 
-  it('is last in the column, below the currency it shares a footer with', () => {
-    const currency = APP.indexOf('<CurrencySelector')
+  it('is in the head row beside the brand, above the tablist (Story #218)', () => {
+    const brand = APP.indexOf('<SidebarBrand')
     const toggle = APP.indexOf('<SidebarToggle')
+    const tablist = APP.indexOf('role="tablist"')
+    const currency = APP.indexOf('<CurrencySelector')
     expect(toggle).toBeGreaterThan(-1)
-    expect(toggle).toBeGreaterThan(currency)
-    // Not beside the brand, which is where it started: 220px minus the brand tile leaves the
-    // product's own name barely fitting, and a control there ellipsizes it. The cost is one more
-    // stop between the selected tab and its panel, which `e2e/tab-navigation.spec.ts` pins.
-    expect(APP).not.toMatch(/app-sidebar-top/)
+    expect(toggle).toBeGreaterThan(brand)
+    // DOM order is the Tab order, and this is the whole of it: toggle → tabs → currency → panel.
+    // `e2e/tab-navigation.spec.ts` walks it in a real browser.
+    expect(toggle).toBeLessThan(tablist)
+    expect(tablist).toBeLessThan(currency)
+    // And it is one row with the brand rather than a third child of the column head, because the
+    // badge below still needs a line of its own.
+    expect(APP).toMatch(/app-sidebar-head-row[\s\S]{0,200}<SidebarBrand[\s\S]{0,200}<SidebarToggle/)
+    // The footer it left is the currency alone; the wrapper it had there is gone from both files.
+    expect(APP).not.toMatch(/app-sidebar-toggle-row/)
+    expect(CSS).not.toMatch(/app-sidebar-toggle-row/)
+  })
+
+  it('is fitted by wrapping the product’s name, never by abbreviating it or widening the column', () => {
+    // Story #184 measured this and decided the other way: a control beside the brand ellipsised
+    // "Stock Portfolio Viewer" to "Stock Portfolio…". #218 answers the measurement instead of
+    // ignoring it — the name wraps to two lines and the head row grows in height.
+    const name = rule('.app-brand-name')
+    expect(name, '.app-brand-name must exist').toBeDefined()
+    expect(name).not.toMatch(/text-overflow/)
+    expect(name).not.toMatch(/white-space:\s*nowrap/)
+    expect(name).toMatch(/line-height:\s*var\(--leading-tight\)/)
+    // Neither width moved, so neither grid breakpoint derived from them can have (DDR-0051).
+    expect(CSS).toMatch(/--sidebar-width:\s*220px/)
+    expect(CSS).toMatch(/--sidebar-width-collapsed:\s*56px/)
+  })
+
+  it('keeps both the tile and the control visible on the rail, by stacking them', () => {
+    // 40px of content holds one of them across, so the row turns the corner rather than dropping
+    // either: the rail still shows the brand and exactly one visible control.
+    expect(rule('.app-collapsed .app-sidebar-head-row')).toMatch(/flex-direction:\s*column/)
+  })
+
+  it('introduces no raw length in the row that carries it', () => {
+    // The head row is the one new rule this story adds; `lib/tokenAdoption.ts` guards the
+    // stylesheet at large, and this pins the selector specifically.
+    const head = rule('.app-sidebar-head-row')
+    expect(head, '.app-sidebar-head-row must exist').toBeDefined()
+    expect(head).toMatch(/gap:\s*var\(--space-\d\)/)
+    expect(head).not.toMatch(/\d+(\.\d+)?(px|rem)/)
   })
 
   it('reaches no IPC of its own — the shell owns the state and the write', () => {
@@ -219,7 +256,7 @@ describe('what collapse must not have displaced', () => {
     // The ring comes from the zero-specificity `:where()` base rule.
     expect(RAIL).not.toMatch(/outline/)
     for (const selector of [
-      '.app-sidebar-top',
+      '.app-sidebar-head-row',
       '.app-sidebar-animated',
       '.app-collapsed .app-tab',
       '.app-collapsed .app-currency .control',

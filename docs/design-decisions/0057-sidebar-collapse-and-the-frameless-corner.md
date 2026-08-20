@@ -1,6 +1,7 @@
 # 0057. Sidebar collapse: one flag, a clipped label, and a title bar that keeps spanning the window
 
-- **Status:** Accepted
+- **Status:** Superseded by [[0068-sidebar-toggle-beside-the-app-name]] (the toggle's *placement*
+  only — everything else below still governs)
 - **Date:** 2026-08-18
 
 ## Context
@@ -65,6 +66,14 @@ the flag is the toggle's own callback. The prototype's re-expand-on-click is not
 was never expressible.
 
 ### One visible, labelled toggle, at the bottom of the column
+
+> **Superseded 2026-08-20 by [[0068-sidebar-toggle-beside-the-app-name]]** — the *placement* only.
+> The toggle moved into the sidebar's head row beside the brand, and the measurement below is what
+> it pays: the product's name now **wraps to two lines** rather than being ellipsised. Kept as
+> written because it is still the reason the name wraps, not a reason that turned out to be wrong.
+> The Tab order in the last paragraph is now toggle → tabs → currency → panel. Everything else in
+> this section — one visible control, `aria-expanded` for the state and a name for the action —
+> stands.
 
 Not the prototype's pair, one of which is invisible — that is how a reader collapses the sidebar by
 accident and cannot see what to click to undo it. One control, in the same place in both states,
@@ -159,7 +168,9 @@ preference.
   `.app-collapsed …`; a component never does.
 - The Tab order through the sidebar is now tab → currency → toggle → panel. That is the second time
   #183's placement test has moved, and the third control to land between a tab and its panel; a
-  fourth is the point to ask whether the footer wants a landmark of its own.
+  fourth is the point to ask whether the footer wants a landmark of its own. *(Superseded by
+  [[0068-sidebar-toggle-beside-the-app-name]]: the toggle moved above the tablist, so the order is
+  toggle → tabs → currency → panel and the count is back to one.)*
 - A collapsed rail is an **abbreviated** presentation, not a lossless one. The badge's wording, the
   currency's label and the app's name are all present to assistive technology and absent to the
   eye. The status dot is the only one of those that had to grow a replacement channel, because it

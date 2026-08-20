@@ -231,8 +231,8 @@ below are the same move.
   only. A tint mixed into a surface is a **measured** number, never eyeballed (the sidebar's active
   row passes at 4.95:1; 22% fails), and a tone rendered on a **hovered row** is measured on the
   lift, not on `--card` (DDR-0064).
-- **The palette is navy/indigo and was re-derived, not pasted** (DDR-0054) — four of the proposal's
-  eleven values failed a guard, and the **eight `--series-*` slots did not move**.
+- **The palette is navy/indigo and was re-derived, not pasted** (DDR-0054) — the **eight
+  `--series-*` slots did not move**.
   `designTokens.test.ts` guards the stylesheet itself: it fails if `outline` gains a second value,
   a scale stops ascending, or a validated colour moves.
 - **A text-scanning guard must strip comments first.** This trap has now bitten four times
@@ -249,11 +249,12 @@ below are the same move.
   including Portfolio is wrapped in a `TabPanel`; `aria-controls` is set **only on the selected
   tab** (an unvisited tab has no panel to name); a roving `tabindex` makes the tablist one Tab
   stop, so a keyboard move must `focus()` through the ref map; arrows use **automatic activation**,
-  which is why arrowing mounts a view. Index arithmetic is in `lib/tabKeyboard.ts` because nothing
-  inside a component is testable under Vitest. **Up/Down only** — Left/Right are deliberately
-  inert. Collapse is **one `app-collapsed` flag on the shell, never a `collapsed` prop**, which
-  makes "selecting a view must not reopen the column" unexpressible; a collapsed label is
-  **clipped, never removed**, so a row is still named by its own text.
+  which is why arrowing mounts a view. Index arithmetic is in `lib/tabKeyboard.ts`. **Up/Down
+  only** — Left/Right are deliberately inert. Collapse is **one `app-collapsed` flag on the shell,
+  never a `collapsed` prop**, which makes "selecting a view must not reopen the column"
+  unexpressible; a collapsed label is **clipped, never removed**, so a row is still named by its
+  own text. The toggle shares the head row with the app name, which **wraps** to fit it — never
+  re-ellipsise it, and never widen the column (DDR-0068).
 - **An analytics tab mounts on first visit and then stays mounted**, hidden rather than unmounted,
   so view-local state survives; unvisited tabs issue no IPC (DDR-0006, DDR-0027). The consequence:
   a mounted view can go stale, so both Flex write paths bump `lib/dataVersion` and every
@@ -412,9 +413,8 @@ follow that split when adding a component with real logic. Pure repository helpe
 touching no data source (`flexStatementParser`, `snapshotMapping`, `fifoSummary`) are tested alike.
 
 Several `lib/*.test.ts` files have **no module under test** — they guard `app.css`, the components,
-a view's own composition, or accessibility by scanning source text.
-**They must strip comments before matching.** What no Node test can see is pinned by Playwright:
-`e2e/page-header.spec.ts`, `e2e/tab-navigation.spec.ts`, `e2e/reduced-motion.spec.ts` (that the
+a view's own composition, or accessibility by scanning source text. What no Node test can see is
+pinned by Playwright: `e2e/page-header.spec.ts`, `e2e/tab-navigation.spec.ts`, `e2e/reduced-motion.spec.ts` (that the
 media query actually wins the cascade), `e2e/window-state.spec.ts`, `e2e/sidebar-collapse.spec.ts`.
 
 Every completed feature should include unit tests, regression review, edge-case validation, and a
