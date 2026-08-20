@@ -1,6 +1,7 @@
 import { useId, useRef, useState } from 'react'
 import type { ValuePoint } from '@shared/domain/performance'
 import { PERFORMANCE_PLOT } from '../../lib/chartGeometry'
+import { signInk } from '../../lib/chartTooltip'
 import { signedBands } from '../../lib/signedCurve'
 import { StatePanel } from '../ui/StatePanel'
 import { ChartTooltip } from './ChartTooltip'
@@ -254,10 +255,20 @@ export function LineChart({
             cy={y(active.value)}
             r={4.5}
           />
+          {/* The readout takes the curve's own tone, so the figure agrees with the stretch of line
+              it was scrubbed from and with the dot sitting on it. `signInk` is the daily chart's —
+              one function, so a curve and a bar reporting the same sign cannot end up two
+              different greens — and it returns nothing on a flat day (DDR-0070, DDR-0071). */}
           <ChartTooltip
             anchorX={x(active.date)}
             title={formatDate(active.date)}
-            rows={[{ label: seriesLabel, value: formatValue(active.value) }]}
+            rows={[
+              {
+                label: seriesLabel,
+                value: formatValue(active.value),
+                ink: tone === 'sign' ? signInk(active.value) : undefined,
+              },
+            ]}
           />
         </>
       )}

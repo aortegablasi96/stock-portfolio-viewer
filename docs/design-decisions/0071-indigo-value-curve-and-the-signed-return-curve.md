@@ -101,9 +101,12 @@ That happens in precisely the two ranges nobody scrubs to by hand.
   emphasised only where the series *crosses* zero — is now also the test for whether the split
   means anything.
 - [[0070-hover-card-restyle-and-the-series-ink-ramp]] — "The cumulative return curve is
-  deliberately *not* toned" is **superseded**. The rest of that record stands, including the
-  hover card's own tones, which now agree with the curve beneath them rather than contrasting
-  with it.
+  deliberately *not* toned" is **superseded**, and so is the consequence that followed from it:
+  this chart's hover row was the one signed figure in the grid that stayed `--text`, because a
+  card row was toned only where the *mark* it named was. Now that the mark is toned, the row is
+  too, through `signInk` — the daily chart's own function rather than a second copy, so a curve
+  and a bar reporting the same sign cannot end up two different greens. The rest of that record
+  stands unchanged, the ink ramp included.
 
 ## A bug this found, and the guard that came with it
 

@@ -68,6 +68,28 @@ describe('signedBands', () => {
   })
 })
 
+/**
+ * The chart's source, comments stripped — this file's own prose names `signInk` and both tones,
+ * so a raw scan would pass off the commentary after the call had gone (DDR-0042).
+ */
+const CHART = readFileSync(
+  new URL('../components/charts/LineChart.tsx', import.meta.url),
+  'utf8',
+).replace(/\/\*[\s\S]*?\*\//g, '')
+
+describe('a toned curve tones its own readout', () => {
+  it('inks the hover row from the same function the daily bars use', () => {
+    /* The gap the owner found: the curve went green and red while the figure it was scrubbed from
+       stayed white, so the card contradicted the line under it. `signInk` and not a local ternary
+       — a second copy is how a curve and a bar reporting the same sign end up two different
+       greens, which is the drift `lib/chartTooltip` was extracted to stop (DDR-0070). */
+    expect(CHART).toMatch(/import \{ signInk \} from '\.\.\/\.\.\/lib\/chartTooltip'/)
+    expect(CHART).toMatch(/ink:\s*tone === 'sign' \? signInk\(active\.value\) : undefined/)
+    // Toned only where the curve itself is: the value curve's readout has no sign to report.
+    expect(CHART).not.toMatch(/ink:\s*signInk\(active\.value\)\s*[,}]/)
+  })
+})
+
 describe('the tones app.css draws', () => {
   it('takes the value curve to the indigo, and off the categorical slot', () => {
     // The proposal's own hue for this curve, at the value DDR-0054 measured (#818cf8, 6.21:1)
