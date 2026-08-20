@@ -72,9 +72,12 @@ export function SidebarBrand(): React.JSX.Element {
  * same place in both states is what makes the affordance findable; two, one of which is invisible,
  * is how a reader collapses the sidebar by accident and cannot see what to click to undo it.
  *
- * It sits *first* in the sidebar, which is a keyboard decision as much as a visual one: the
- * tablist is a single Tab stop with a roving `tabindex` (DDR-0029), so anything placed after it
- * lands between the selected tab and its panel. First, the toggle costs that path nothing.
+ * It sits *last* in the column, below the currency selector, and that was measured rather than
+ * preferred: 220px minus the 32px brand tile leaves the product's own name barely fitting, and a
+ * control beside the brand ellipsised "Stock Portfolio Viewer" to "Stock Portfolio…". The cost is
+ * one more stop between the selected tab and its panel — the tablist is a single Tab stop with a
+ * roving `tabindex` (DDR-0029), so anything after it lands there — which makes the sidebar's Tab
+ * order tab → currency → toggle → panel, as `e2e/tab-navigation.spec.ts` describes.
  *
  * `aria-expanded` states what the button did to the region; the name states what it will do next.
  * The glyph is the same panel in both states with its chevron reversed — the thing being acted on
