@@ -102,6 +102,65 @@ describe('each series is windowed the way its own chart needs', () => {
   })
 })
 
+describe('a chart is named the same thing in every range (Story #221)', () => {
+  /**
+   * The four titles the redesign gives the grid, in the order the view renders them. Written out
+   * rather than counted: the point of the story is that these exact strings are what the reader
+   * sees whichever range is selected, so the assertion has to be the strings themselves.
+   */
+  const TITLES = [
+    'Portfolio value over time',
+    'Performance change over time',
+    'Daily return',
+    'Composition over time',
+  ]
+
+  /** Each `<ChartCard …>` opening tag's props — the definition below is `function ChartCard(`. */
+  const cardProps = [...VIEW.matchAll(/<ChartCard\b([\s\S]*?)>/g)].map((m) => m[1] ?? '')
+
+  it('gives every chart card a literal title, never an expression', () => {
+    expect(cardProps).toHaveLength(TITLES.length)
+    for (const props of cardProps) {
+      expect(props, 'a chart card title is computed rather than written').not.toMatch(/title=\{/)
+    }
+    expect(cardProps.map((p) => p.match(/title="([^"]+)"/)?.[1])).toEqual(TITLES)
+  })
+
+  /**
+   * The specific wording that used to appear under every range but `all`, and the binding that
+   * chose between the two. Both named, because a later story could reintroduce either half alone.
+   */
+  it('has no range-dependent wording left to fall back to', () => {
+    expect(VIEW).not.toContain('Performance change over the selected period')
+    expect(VIEW).not.toContain('returnChartTitle')
+  })
+
+  /**
+   * The half that would be quietly lost by deleting the conditional and stopping there. Rebasing
+   * is invisible on an axis (Story #169), so it is disclosed twice — once visibly in the card
+   * header for the sighted reader, once at length in the chart's accessible name — and neither is
+   * the card's title. `BaselineNote` takes no props, which is what makes it unconditional.
+   */
+  it('still states the baseline the removed wording carried', () => {
+    expect(VIEW).toContain('aside={<BaselineNote />}')
+    expect(VIEW).toMatch(/function BaselineNote\(\): React\.JSX\.Element \{/)
+    expect(VIEW).toContain('0% at period start')
+    expect(VIEW).toMatch(/returnChartLabel[\s\S]{0,240}from 0% at the start of the/)
+  })
+
+  /**
+   * DDR-0051's equality: four cards of one header plus one bare `<svg>`. The note lands in the
+   * header the legend already lives in, so nothing about the height changes — but it changes by
+   * *construction* only for as long as every card still goes through the one `CardHeader`.
+   */
+  it('keeps all four cards on the one header, aside or not', () => {
+    expect(VIEW.match(/<CardHeader\b/g)).toHaveLength(1)
+    expect(VIEW).toMatch(
+      /<CardHeader align="center" className="chart-card-header">\s*<CardTitle>\{title\}<\/CardTitle>\s*\{aside\}\s*<\/CardHeader>/,
+    )
+  })
+})
+
 describe('the Custom range is the RangeFilter’s own, not a fifth control', () => {
   /**
    * DDR-0017 and DDR-0035 settled this before the redesign proposed it: `Custom` is one of the
