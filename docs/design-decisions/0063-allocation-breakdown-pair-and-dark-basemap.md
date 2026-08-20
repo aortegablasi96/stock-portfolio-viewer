@@ -1,6 +1,6 @@
 # 0063. Allocation: the breakdown as a pair, and the basemap goes dark
 
-- **Status:** Accepted
+- **Status:** Accepted — *ordering superseded by [[0074-map-first-and-the-holdings-it-names]]*
 - **Date:** 2026-08-19
 
 ## Context
@@ -63,6 +63,11 @@ following an arc round does not change columns to find out what it came to. Valu
 table's column and in the slice's `<title>`, each of them once.
 
 ### The breakdown comes before the map
+
+> **Superseded by [[0074-map-first-and-the-holdings-it-names]] (Story #223).** The order reverses;
+> the *reason* below is answered rather than dropped — the map is flattened to 4:1 so the
+> breakdown's title stays on screen, and that budget is now asserted. Nothing else in this record
+> moves.
 
 The map is the tallest card on the page and the only approximate one — it is positioned by issuer
 country and says so in its own label. The breakdown is the exact answer to the question the view is

@@ -10,7 +10,9 @@ import {
   REST_KEY,
   type CountryDonuts,
   type DonutSlice,
+  type HeldInstruments,
 } from '../../lib/countryDonuts'
+import { badgeClassName } from '../../lib/badgeVariants'
 import { MAP_POPUP_TINTS, mapPopupTintClassName } from '../../lib/mapPopupTint'
 import { toneClassName, toneOf } from '../../lib/statTileVariants'
 import { Button } from '../ui/Button'
@@ -110,14 +112,69 @@ type Subject =
   | { kind: 'country'; country: CountryDonuts }
 
 /**
+ * The chip row that names what the hovered mark or slice covers (Story #223, DDR-0074).
+ *
+ * The one thing the map could not answer before this: a mark said *where* and *in what*, and the
+ * reader had to carry a country and a sector down to the Positions table to find out *which
+ * companies*. The list is the report's own `positions`, grouped where the mark was — no figure and
+ * no channel is added.
+ *
+ * **Bounded, not scrolled or clamped.** The popup is hover-only and `pointer-events: none`, so
+ * nothing inside it can be reached and anything that overflows is lost rather than deferred.
+ * `countryDonuts` names at most `MAX_NAMED_HOLDINGS` of them, largest first, and hands the rest over
+ * as a count — which the row prints as its last chip, so a mark never claims to name more than it
+ * does.
+ *
+ * A chip is the shared `Badge` (`neutral`, `sm`) through `badgeClassName`, which is a pure class
+ * composer and so works in imperative DOM exactly as it does in JSX (DDR-0037, ADR-0008). The
+ * primitive supplies the boundary and the muted ink; the symbol overrides the ink, and
+ * `.map-popup-holding` supplies placement only.
+ */
+function appendHoldings(root: HTMLDivElement, holdings: HeldInstruments): void {
+  if (holdings.named.length === 0) return
+
+  const list = document.createElement('ul')
+  list.className = 'map-popup-holdings'
+
+  for (const held of holdings.named) {
+    const chip = document.createElement('li')
+    chip.className = badgeClassName('neutral', 'sm', 'map-popup-holding')
+    const symbol = document.createElement('span')
+    symbol.className = 'map-popup-holding-symbol'
+    symbol.textContent = held.symbol
+    chip.appendChild(symbol)
+    // Absent rather than quieter where the import carries no name (DDR-0066): a chip reading
+    // `CAD CAD` is the same text twice, which is how it read on the trade history's FX rows.
+    if (held.name !== null) {
+      const name = document.createElement('span')
+      name.className = 'map-popup-holding-name'
+      name.textContent = held.name
+      chip.appendChild(name)
+    }
+    list.appendChild(chip)
+  }
+
+  if (holdings.remainder > 0) {
+    const more = document.createElement('li')
+    more.className = badgeClassName('plain', 'sm', 'map-popup-holding')
+    more.textContent = `+${holdings.remainder} more`
+    list.appendChild(more)
+  }
+
+  root.appendChild(list)
+}
+
+/**
  * Build the popup body for whichever bar — or country — is hovered.
  *
  * Imperative DOM rather than JSX because `mapboxgl.Popup` owns its content element. Every string is
- * set with `textContent`, never `innerHTML` — sector names and countries originate from broker data.
+ * set with `textContent`, never `innerHTML` — sector names, countries and instrument descriptions
+ * all originate from broker data.
  *
  * The layout keeps a Positions table row's fields, order and formatters, so the owner learns one
  * layout rather than two. A sector slice adds the two figures an aggregate has and a single position
- * does not: how many holdings it covers, and the share of the country its angle encodes.
+ * does not: how many holdings it covers, and the share of the country its angle encodes. Beneath the
+ * figures, both depths name the instruments they cover (Story #223).
  */
 function createPopupContent(
   subject: Subject,
@@ -183,6 +240,9 @@ function createPopupContent(
     source.returnPercent === null ? '' : tone,
   )
   root.appendChild(rows)
+
+  // Beneath the figures, per the proposal: the companies the mark stands for.
+  appendHoldings(root, source.holdings)
 
   return root
 }

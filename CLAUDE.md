@@ -326,7 +326,12 @@ below are the same move.
   constructed**, because Mapbox only assigns its own when the element lacks one. It is **one view,
   coloured by sector** — the gain/loss mode was withdrawn and `designTokens.test.ts` pins that
   *absence*, so don't paint wedges green and red (DDR-0045). Geometry and colour live in
-  `lib/countryDonuts`, which emits palette **classes** rather than values.
+  `lib/countryDonuts`, which emits palette **classes** rather than values. It sits **above** the
+  breakdown, and its ratio and floor are **one budget** derived from `WINDOW_DEFAULT_HEIGHT` — a
+  taller map puts the breakdown's title below the fold (DDR-0074, superseding DDR-0063's ordering).
+  Its popup is **not** clipped by the map: Mapbox flips one above or below a mark and nowhere else,
+  so the clip lives on `.mapboxgl-canvas-container` and the popup may overlap the card below. Marks
+  **name** their holdings — bounded, `instrumentName`, `Badge` via `badgeClassName`.
 - **The Allocation breakdown's table and donut link on the slice's `key`, never on position** — the
   table sorts by any column, so row order and arc order have no reason to agree. Emphasis **never
   touches `fill`**: the active wedge keeps its colour and the rest drop to 0.35 opacity (DDR-0040).

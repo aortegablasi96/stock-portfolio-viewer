@@ -21,6 +21,19 @@
  * the per-holding granularity DDR-0020 introduced. The map answers *where, and in what* — the
  * Positions table is where one company's figures are read.
  *
+ * **A mark still says which companies it covers** (Story #223, DDR-0074). That is not the granularity
+ * DDR-0030 retired: no holding gets a mark, an arc or a colour of its own, and no per-holding figure
+ * is added. What each mark and each sector slice carries is a **bounded list of names** — the
+ * `holdings` field below — which the popup prints as a row of chips so hovering answers "which of my
+ * companies is this?" without a trip to the table. Bounded because the popup may not grow taller than
+ * the map that carries it: {@link MAX_NAMED_HOLDINGS} are named, largest market value first, and
+ * whatever is left is stated as a count rather than dropped.
+ *
+ * The name comes from {@link instrumentName} and never from `formatCompanyName` (DDR-0066, DDR-0067):
+ * IBKR writes the identifier again where an instrument has none, and title-casing that produces
+ * `Cad`. A holding with no name of its own therefore carries `name: null`, and the chip is its
+ * symbol alone.
+ *
  * Output carries **colour classes, never colour values**, the seam every `lib/` chart helper keeps:
  * resolving `pie-series-3` needs `getComputedStyle`, which does not exist in Vitest's Node
  * environment. Nothing downstream has to resolve them — marks are SVG, so a class on a `<path>` *is*
@@ -29,6 +42,7 @@
 import type { AllocationPosition } from '@shared/domain/allocation'
 import type { SectorPalette } from './sectorMap'
 import { arcPath, fullRingPath } from './pie'
+import { instrumentName } from './format'
 import { returnPercent } from './gainLoss'
 import { centroidFor } from './worldGeo'
 
@@ -59,6 +73,36 @@ const MIN_SLICE_SHARE = 0.02
 
 const FULL_TURN = 2 * Math.PI
 
+/**
+ * How many instruments a mark or a sector slice names before the rest becomes a count
+ * (Story #223, DDR-0074).
+ *
+ * A bound rather than a scroll or a clamp, because the popup is hover-only and pointer-transparent:
+ * nothing in it can be reached, so anything that overflows is simply lost. Four is what keeps the
+ * tallest popup — a six-row sector card — inside the map frame it floats over, and it is stated
+ * here rather than in the stylesheet because the *arithmetic* is what bounds the height.
+ */
+export const MAX_NAMED_HOLDINGS = 4
+
+/** One instrument named on a mark. */
+export interface HeldInstrument {
+  symbol: string
+  /**
+   * The readable company name, or `null` where the import carries none — a currency pair or a bare
+   * code, where IBKR's description is the identifier again (DDR-0066). The chip is then the symbol
+   * alone rather than the same text twice.
+   */
+  name: string | null
+}
+
+/** The instruments a mark or a slice covers, bounded so a popup cannot outgrow the map. */
+export interface HeldInstruments {
+  /** Largest market value first, at most {@link MAX_NAMED_HOLDINGS} of them. */
+  named: HeldInstrument[]
+  /** How many holdings are covered but not named. `0` when every one of them is listed. */
+  remainder: number
+}
+
 /** Which donut of the pair a slice belongs to. */
 export type DonutSide = 'weight' | 'sectors'
 
@@ -85,6 +129,8 @@ export interface DonutSlice {
   percentOfCountry: number
   /** How many holdings the slice covers. */
   holdingCount: number
+  /** Which instruments those are, bounded and largest first (Story #223). */
+  holdings: HeldInstruments
   /** SVG path, in the pair's shared coordinate system (origin between the two donuts). */
   path: string
 }
@@ -115,6 +161,8 @@ export interface CountryDonuts {
   unrealizedPnlBase: number
   percentOfNav: number
   holdingCount: number
+  /** Which instruments the country holds, bounded and largest first (Story #223). */
+  holdings: HeldInstruments
   /** Left donut: the country's share of NAV in blue, then the rest of the portfolio. */
   weight: DonutSlice[]
   /** Right donut: one slice per sector, largest first. */
@@ -213,6 +261,29 @@ function sumTotals(positions: AllocationPosition[]): Totals {
   )
 }
 
+/**
+ * The instruments in a group, bounded and largest first (Story #223, DDR-0074).
+ *
+ * Ordered by market value rather than alphabetically, because the bound has to cut somewhere and
+ * the four it keeps should be the four that account for most of the arc. The remainder is a count,
+ * not a silent truncation: `+3 more` says the mark covers more than it names.
+ *
+ * The source list is copied before sorting — `positions` belongs to the report the view is still
+ * rendering from, and `Array.prototype.sort` is in place.
+ */
+function nameHoldings(positions: AllocationPosition[]): HeldInstruments {
+  const ordered = [...positions].sort((a, b) => b.marketValueBase - a.marketValueBase)
+  return {
+    named: ordered.slice(0, MAX_NAMED_HOLDINGS).map((p) => ({
+      symbol: p.symbol,
+      // Never `formatCompanyName`: it assumes its input is a company name, and a description that
+      // merely repeats the symbol title-cases into `Cad` (DDR-0066, DDR-0067).
+      name: instrumentName(p.symbol, p.description),
+    })),
+    remainder: Math.max(0, ordered.length - MAX_NAMED_HOLDINGS),
+  }
+}
+
 /** What a slice is built from, before it is given an angle and a path. */
 interface SliceSeed {
   key: string
@@ -220,6 +291,7 @@ interface SliceSeed {
   colorClass: string
   totals: Totals
   percentOfCountry: number
+  holdings: HeldInstruments
 }
 
 /** Lay seeds out as one donut's slices, in order, filling the full turn. */
@@ -247,6 +319,7 @@ function layOut(
       percentOfNav: seed.totals.percentOfNav,
       percentOfCountry: seed.percentOfCountry,
       holdingCount: seed.totals.holdingCount,
+      holdings: seed.holdings,
       path: dot ? '' : donutPath(cx, r, rHole, start, angle),
     }
   })
@@ -272,6 +345,7 @@ function sectorSeeds(
         colorClass: palette.colorClassOf(key),
         totals,
         percentOfCountry: countryValue > 0 ? (totals.marketValueBase / countryValue) * 100 : 0,
+        holdings: nameHoldings(group),
       }
     })
     .sort((a, b) => b.totals.marketValueBase - a.totals.marketValueBase)
@@ -317,6 +391,7 @@ export function countryDonuts(
     const rHole = r * HOLE_FRACTION
     const cx = r + (r * GAP_FRACTION) / 2
     const countryReturn = returnPercent(totals.costBasisBase, totals.unrealizedPnlBase)
+    const holdings = nameHoldings(group)
 
     // --- Left: the country's share of NAV, against the rest of the portfolio ------------
     // Clamped because `percentOfNav` is IBKR's own figure and a rounding artefact above 100 would
@@ -330,6 +405,7 @@ export function countryDonuts(
           colorClass: WEIGHT_COLOR_CLASS,
           totals,
           percentOfCountry: 100,
+          holdings,
         },
         {
           key: REST_KEY,
@@ -343,6 +419,9 @@ export function countryDonuts(
             holdingCount: 0,
           },
           percentOfCountry: 0,
+          // The remainder is the portfolio held *elsewhere*, and this map has no list of it: it is
+          // context for the blue arc, not a subject. Both weight slices open the country anyway.
+          holdings: { named: [], remainder: 0 },
         },
       ],
       // Not `normalizedShares`: this donut is an absolute 0–100% scale, so a country worth 3% of NAV
@@ -383,6 +462,7 @@ export function countryDonuts(
       unrealizedPnlBase: totals.unrealizedPnlBase,
       percentOfNav: totals.percentOfNav,
       holdingCount: group.length,
+      holdings,
       weight,
       sectors,
     }

@@ -191,6 +191,12 @@
      would only add empty air either side of it while taking width off the table,
      which is the half that has figures to line up. */
   --donut-column-width: 280px;
+  /* The Allocation map's floor (Story #223), the fourth of these and quoted by the same two
+     kinds of reader: the frame that draws it, and the test that checks the map card still
+     ends above the fold at the window the app opens at. It is a floor for a *narrow* window,
+     where `aspect-ratio: 4 / 1` alone would leave a strip too short to hold a 50px mark —
+     which is why it has to live on the same budget as the ratio rather than beside it. */
+  --country-map-min-height: 16rem;
 
   /* ---- Spacing scale (Story #126, DDR-0031) -------------------------------
      A 4px grid with one 6px half-step, derived from the values already in the
@@ -3025,12 +3031,24 @@ html {
 }
 
 /* The Mapbox canvas has no intrinsic size the way an SVG viewBox did, so the frame declares its
-   own proportion and the map fills it (Story #89). Without this the panel would collapse.
-   3:1 keeps a full-width map about as tall as the old 56rem one while spanning ~2x the width;
-   the camera fits the world to whatever shape it is given, so nothing is cropped. */
+   own proportion and the map fills it (Story #89). Without this the panel would collapse. The
+   camera fits the world to whatever shape it is given, so nothing is cropped by flattening it.
+
+   **4:1 is what pays for the map going first** (Story #223, DDR-0074). DDR-0063 put the breakdown
+   above the map because a 3:1 map pushed the breakdown's title below the fold at the window this
+   app opens at — 1280x800, where the content measure is 1107px. That reasoning is answered here
+   rather than reverted: at 3:1 the frame is 369px and the breakdown's title lands at ~834px, and
+   at 4:1 it is 277px and the title lands at ~783px. Height is the axis that gives, because capping
+   the map's *width* stays rejected (DDR-0051, DDR-0057) and because the marks scale with neither —
+   `R_MAX` is 25 CSS px whatever the frame is.
+
+   `--country-map-min-height` is the floor for a narrow window, where the ratio alone would leave a
+   strip too short to hold a 50px mark. It is on the *same* budget as the ratio, and
+   `allocationLayout.test.ts` checks both against it: a floor taller than the budget would set the
+   height by itself, and flattening the ratio would then change nothing. */
 .country-map-frame {
-  aspect-ratio: 3 / 1;
-  min-height: 20rem;
+  aspect-ratio: 4 / 1;
+  min-height: var(--country-map-min-height);
 }
 
 .country-map {
@@ -3038,8 +3056,32 @@ html {
   height: 100%;
   display: block;
   border-radius: var(--radius-sm);
-  overflow: hidden;
   touch-action: none; /* pointer-drag pans instead of scrolling the page */
+}
+
+/* The clip moves down one level, and that is what pays for the popup (Story #223, DDR-0074).
+   Mapbox mounts a popup as a direct child of the map container and clips it there — its own
+   `.mapboxgl-map { overflow: hidden }`, which this rule overrides at two classes deep so the
+   stylesheet order between `app.css` and `mapbox-gl.css` cannot decide it.
+
+   Without this, shortening the map to 4:1 truncates every popup: Mapbox flips a popup above or
+   below the mark only, and a 270px sector card has nowhere to go in a 277px frame. Measured in the
+   running app at 1280x800: every one of the map's seventeen hover targets lost between 69 and
+   149px of its card, taking the last figures and the whole holdings row with them. The clip was
+   never harmless — at 3:1 the same measurement showed up to 56px gone — but at 4:1 it eats the
+   thing this story adds.
+
+   The basemap, the marks and Mapbox's controls stay clipped, on the canvas container, which is
+   where the rounded corner is now cut: a marker that escaped the frame would be a mark placed
+   somewhere the map is not. Only the popup is let out, and it is `pointer-events: none`, so
+   nothing it covers becomes unreachable. */
+.country-map.mapboxgl-map {
+  overflow: visible;
+}
+
+.country-map .mapboxgl-canvas-container {
+  border-radius: var(--radius-sm);
+  overflow: hidden;
 }
 
 /* Degraded state: no token, or tiles unreachable. Sits where the basemap would be, carrying the
@@ -3208,6 +3250,10 @@ html {
 .map-popup-shell {
   pointer-events: none;
   animation: map-popup-in var(--duration-base) var(--ease-out);
+  /* The popup now hangs outside the map (see `.country-map.mapboxgl-map`), and the card below it
+     is a *later* sibling — without a stacking order of its own the next card's surface paints over
+     whatever escapes. Mapbox declares none on `.mapboxgl-popup`. */
+  z-index: 1;
   /* One number for the padding and for where the gradient has to have finished. Declared here so
      the two can't drift: if they did, the band would either stop short of the text or run under
      it, and only the second is visible — as unreadable labels.
@@ -3313,6 +3359,53 @@ html {
 .map-popup-row dd {
   margin: 0;
   font-weight: 600;
+}
+
+/* The companies the hovered mark stands for (Story #223, DDR-0074). A wrapping row of chips under
+   the figures, ruled off the same way the figures are ruled off the identity lines above them, so
+   the popup reads as three bands rather than one list.
+
+   Each chip is the shared `Badge` at `neutral`/`sm` — composed by `badgeClassName` in imperative
+   DOM, since `mapboxgl.Popup` owns this element and there is no JSX here. `sm` is the size with no
+   vertical padding, which is what keeps four chips plus an overflow count inside the map frame the
+   popup floats over; the row's own `gap` replaces the inline form's left margin. */
+.map-popup-holdings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  list-style: none;
+  margin: var(--space-3) 0 0;
+  padding: var(--space-3) 0 0;
+  border-top: 1px solid var(--border);
+}
+
+/* Placement only — the boundary, the ink and the type are the primitive's (ADR-0008). Two classes
+   deep for the same reason `.badge.badge-cell` is: it undoes a size's declaration, and at equal
+   specificity that would be left to source order. */
+.badge.map-popup-holding {
+  margin-left: 0;
+  /* The chip is a two-part label, so it lays its halves out rather than running them together. */
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  max-width: 100%;
+}
+
+/* The ticker is the identity, so it takes the full-strength ink out of the badge's muted default;
+   the name keeps that default and reads as the gloss on it. */
+.map-popup-holding-symbol {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* Broker descriptions are not length-bounded, and the popup is 15rem wide. A chip may take a row
+   to itself, but it may not push that row past the popup's edge — so the name is the half that
+   gives, and `min-width: 0` is what lets a flex item shrink below its own content at all. The
+   symbol never truncates: it is the identity the chip is for. */
+.map-popup-holding-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .country-map-legend {
