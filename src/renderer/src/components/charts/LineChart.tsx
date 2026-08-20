@@ -1,6 +1,7 @@
 import { useId, useRef, useState } from 'react'
 import type { ValuePoint } from '@shared/domain/performance'
 import { PERFORMANCE_PLOT } from '../../lib/chartGeometry'
+import { signedBands } from '../../lib/signedCurve'
 import { StatePanel } from '../ui/StatePanel'
 import { ChartTooltip } from './ChartTooltip'
 
@@ -37,6 +38,7 @@ export function LineChart({
   formatDate,
   ariaLabel,
   seriesLabel,
+  tone = 'series',
 }: {
   points: ValuePoint[]
   formatValue: (v: number) => string
@@ -44,6 +46,19 @@ export function LineChart({
   ariaLabel: string
   /** Names the series in the hover card. Omitted where the card's date is answer enough. */
   seriesLabel?: string
+  /**
+   * How the curve is coloured (Story #229, DDR-0071).
+   *
+   * `series` is one indigo end to end — right for a quantity, which has no sign to report: the
+   * portfolio's value is never "negative", it is only larger or smaller than it was.
+   *
+   * `sign` splits the curve at break-even and tones the halves with the daily-return bars' own
+   * pair. It is for a chart whose zero is a *level the series crosses* rather than the floor it
+   * sits on, which is the same test that decides whether the emphasised zero rule is drawn at
+   * all. Defaulted rather than required, so a new caller gets the plain curve unless it says
+   * otherwise.
+   */
+  tone?: 'series' | 'sign'
 }): React.JSX.Element {
   const svgRef = useRef<SVGSVGElement>(null)
   const gradientId = useId()
@@ -66,7 +81,13 @@ export function LineChart({
   const y = (v: number): number => H - PAD.bottom - ((v - minV) / spanV) * (H - PAD.top - PAD.bottom)
 
   const line = points.map((p) => `${x(p.date)},${y(p.value)}`).join(' ')
-  const area = `${PAD.left},${y(minV)} ${line} ${x(maxD)},${y(minV)}`
+  /* The wash is anchored at the level it is measuring *from*, and the two charts measure from
+     different places (Story #229). A value curve's baseline is the bottom of its domain — the
+     area says "this much portfolio". A signed curve's baseline is **zero**, because the area says
+     "this far from break-even"; anchored at `minV` instead, a stretch spent entirely under water
+     would fill downward from the curve and be drawn exactly the way a gain is. */
+  const areaBase = tone === 'sign' ? y(0) : y(minV)
+  const area = `${PAD.left},${areaBase} ${line} ${x(maxD)},${areaBase}`
   const ticks = [minV, minV + spanV / 2, maxV]
   // The return curve is a signed percentage and spends whole periods below zero; the value curve
   // never does, because `minV` floors at 0 and the baseline *is* the zero line. So the emphasised
@@ -94,6 +115,18 @@ export function LineChart({
 
   const active = hover !== null ? points[hover] : undefined
 
+  /* The two clipped halves and the ids that address them. `useId()` already mints one unique
+     string for this instance; deriving the rest from it keeps the two curves in the grid from
+     pointing at each other's clips, which is the same trap DDR-0061 recorded for the gradient. */
+  const bands = signedBands(y(0), PERFORMANCE_PLOT)
+  const aboveId = `${gradientId}-above`
+  const belowId = `${gradientId}-below`
+  const posGradientId = `${gradientId}-pos`
+  const negGradientId = `${gradientId}-neg`
+  /** A mark's tone on a signed curve; `undefined` leaves it the curve's own colour. */
+  const markTone = (value: number): string =>
+    tone !== 'sign' ? '' : value < 0 ? ' chart-mark-neg' : ' chart-mark-pos'
+
   return (
     <svg
       ref={svgRef}
@@ -106,10 +139,47 @@ export function LineChart({
       onMouseLeave={() => setHover(null)}
     >
       <defs>
-        <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-          <stop className="chart-area-from" offset="0%" />
-          <stop className="chart-area-to" offset="100%" />
-        </linearGradient>
+        {tone === 'series' ? (
+          <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+            <stop className="chart-area-from" offset="0%" />
+            <stop className="chart-area-to" offset="100%" />
+          </linearGradient>
+        ) : (
+          <>
+            {/* `userSpaceOnUse`, so each gradient spans its own band rather than the shape it
+                happens to be painting. An objectBoundingBox gradient would be measured against the
+                polygon — one shape covering both halves — and the two fades would meet somewhere
+                other than the zero line, which is the one place they have to meet. */}
+            <linearGradient
+              id={posGradientId}
+              gradientUnits="userSpaceOnUse"
+              x1={0}
+              y1={PAD.top}
+              x2={0}
+              y2={bands.zeroY}
+            >
+              <stop className="chart-area-pos-from" offset="0%" />
+              <stop className="chart-area-pos-to" offset="100%" />
+            </linearGradient>
+            <linearGradient
+              id={negGradientId}
+              gradientUnits="userSpaceOnUse"
+              x1={0}
+              y1={bands.zeroY}
+              x2={0}
+              y2={H - PAD.bottom}
+            >
+              <stop className="chart-area-neg-from" offset="0%" />
+              <stop className="chart-area-neg-to" offset="100%" />
+            </linearGradient>
+            <clipPath id={aboveId}>
+              <rect {...bands.above} />
+            </clipPath>
+            <clipPath id={belowId}>
+              <rect {...bands.below} />
+            </clipPath>
+          </>
+        )}
       </defs>
 
       {ticks.map((t) => (
@@ -125,12 +195,44 @@ export function LineChart({
         <line className="chart-zero" x1={PAD.left} x2={W - PAD.right} y1={y(0)} y2={y(0)} />
       )}
 
-      <polygon points={area} fill={`url(#${gradientId})`} />
-      <polyline className="chart-line" points={line} vectorEffect="non-scaling-stroke" />
+      {tone === 'series' ? (
+        <>
+          <polygon points={area} fill={`url(#${gradientId})`} />
+          <polyline className="chart-line" points={line} vectorEffect="non-scaling-stroke" />
+        </>
+      ) : (
+        /* One polygon and one polyline, each drawn twice under complementary clips. Not two
+           series: splitting the data at the crossing would mean inventing a point the report
+           never sampled, and the chart would stop plotting what it was handed (DDR-0071). */
+        <>
+          <g clipPath={`url(#${aboveId})`}>
+            <polygon points={area} fill={`url(#${posGradientId})`} />
+            <polyline
+              className="chart-line chart-line-pos"
+              points={line}
+              vectorEffect="non-scaling-stroke"
+            />
+          </g>
+          <g clipPath={`url(#${belowId})`}>
+            <polygon points={area} fill={`url(#${negGradientId})`} />
+            <polyline
+              className="chart-line chart-line-neg"
+              points={line}
+              vectorEffect="non-scaling-stroke"
+            />
+          </g>
+        </>
+      )}
 
       {points.length <= MAX_MARKERS &&
         points.map((p) => (
-          <circle key={`${p.date}-${p.value}`} className="chart-dot" cx={x(p.date)} cy={y(p.value)} r={4}>
+          <circle
+            key={`${p.date}-${p.value}`}
+            className={`chart-dot${markTone(p.value)}`}
+            cx={x(p.date)}
+            cy={y(p.value)}
+            r={4}
+          >
             <title>{`${formatDate(p.date)}: ${formatValue(p.value)}`}</title>
           </circle>
         ))}
@@ -146,7 +248,12 @@ export function LineChart({
         <>
           {/* The dot is drawn outside the card so it stays on the mark while the card is pinned to
               the top of the plot: the card says which day, the dot says where on the curve. */}
-          <circle className="chart-hover-dot" cx={x(active.date)} cy={y(active.value)} r={4.5} />
+          <circle
+            className={`chart-hover-dot${markTone(active.value)}`}
+            cx={x(active.date)}
+            cy={y(active.value)}
+            r={4.5}
+          />
           <ChartTooltip
             anchorX={x(active.date)}
             title={formatDate(active.date)}

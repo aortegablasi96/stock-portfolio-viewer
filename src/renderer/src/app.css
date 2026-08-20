@@ -2412,12 +2412,54 @@ html {
   font-size: 11px;
 }
 
+/* A single-series curve, in the app's indigo (Story #229, DDR-0071).
+
+   It was `--series-1` until this story, and moving it off the categorical set is the point rather
+   than a side effect: slot 1 is the *first of eight categories*, and a lone curve is not one of
+   eight of anything. It is the view's primary reading, which is what the accent means everywhere
+   else in the app. The proposal draws it in #6366f1; `--accent` is that identity hue at the value
+   DDR-0054 arrived at by measurement (6.21:1 on --card, against #6366f1's 4.14:1), and no new
+   token was needed to get there.
+
+   `--series-1` keeps every other job — the Stocks band, the weight donut, slot 1 (DDR-0030). */
 .chart-line {
   fill: none;
-  stroke: var(--series-1);
+  stroke: var(--accent);
   stroke-width: 2;
   stroke-linejoin: round;
   stroke-linecap: round;
+}
+
+/* The same curve, toned by sign where the chart is a signed one (Story #229, DDR-0071).
+
+   These are the daily-return bars' own tokens, which is the whole request: the two charts sit in
+   one grid and now make one statement about the same period. `--neg` and not `--neg-text` —
+   a curve is a mark. SVG writes both roles the same way, so the wrong half is silent (DDR-0046).
+
+   Applied to two clipped copies of one polyline, never to two series: splitting the data would
+   mean inventing a sample at the crossing that the report never took (`lib/signedCurve`). */
+.chart-line-pos {
+  stroke: var(--pos);
+}
+
+.chart-line-neg {
+  stroke: var(--neg);
+}
+
+/* A dot on a signed curve, toned like the stretch of line it sits on.
+   **Both selectors are doubled deliberately.** `.chart-dot` and `.chart-hover-dot` set their own
+   `fill` and are declared *below* this rule, so a bare `.chart-mark-pos` is the same specificity
+   and loses on source order — silently, leaving indigo dots on a green curve. It is the trap
+   DDR-0059 already recorded for the table's row lift, where an unscoped rule was out-specified by
+   `tr:hover > th`. Scoping wins it back without an `!important` and without moving the rule. */
+.chart-dot.chart-mark-pos,
+.chart-hover-dot.chart-mark-pos {
+  fill: var(--pos);
+}
+
+.chart-dot.chart-mark-neg,
+.chart-hover-dot.chart-mark-neg {
+  fill: var(--neg);
 }
 
 /* The area under a curve, as a vertical gradient rather than a flat wash (Story #188, DDR-0061).
@@ -2430,17 +2472,48 @@ html {
    chart's own series hue at the curve, fading to nothing at the baseline. `stop-opacity` rather
    than a `color-mix()` with the card, so the gridlines below stay visible through the fill. */
 .chart-area-from {
-  stop-color: var(--series-1);
+  stop-color: var(--accent);
   stop-opacity: 0.28;
 }
 
 .chart-area-to {
-  stop-color: var(--series-1);
+  stop-color: var(--accent);
   stop-opacity: 0;
 }
 
+/* The signed curve's two washes (Story #229, DDR-0071).
+
+   Both are anchored at the **zero line**, not at the domain floor, and both fade *toward* it: the
+   green is strongest at the peak and gone by break-even, the red strongest at the trough and gone
+   by break-even. So the wash reads as distance from zero, which is the only thing this chart is
+   about — anchored at the floor instead, a wholly-negative stretch would fill downward from the
+   curve and a loss would be drawn the way a gain is.
+
+   The order looks inverted and is not: a gradient runs top to bottom, so the *negative* band's
+   strong stop is its last one. Each gradient is given the exact `y` range of its own band in user
+   space by `LineChart`, which is what puts both fades on the same line. */
+.chart-area-pos-from {
+  stop-color: var(--pos);
+  stop-opacity: 0.28;
+}
+
+.chart-area-pos-to {
+  stop-color: var(--pos);
+  stop-opacity: 0;
+}
+
+.chart-area-neg-from {
+  stop-color: var(--neg);
+  stop-opacity: 0;
+}
+
+.chart-area-neg-to {
+  stop-color: var(--neg);
+  stop-opacity: 0.28;
+}
+
 .chart-dot {
-  fill: var(--series-1);
+  fill: var(--accent);
   stroke: var(--card);
   stroke-width: 2;
 }
@@ -2457,10 +2530,13 @@ html {
 }
 
 .chart-hover-dot {
-  fill: var(--series-1);
+  fill: var(--accent);
   stroke: var(--card);
   stroke-width: 2;
 }
+
+/* The scrubbed dot's two tones are declared with the vertex dot's, above — one rule for both, so
+   the scoping that rule needs cannot be given to one of them and forgotten on the other. */
 
 /* The hover card (Story #188, DDR-0061; restyled #220, DDR-0070). It floats *on* the card it is
    drawn in, and it now has ground of its own: `--surface-raised` is the app's one surface step
