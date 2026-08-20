@@ -86,13 +86,35 @@ test('the tablist is a single stop in the Tab order', async () => {
   ])
 })
 
-test('Tab from the selected tab leaves the tablist, and reaches the panel (Story #184)', async () => {
+test('the sidebar is three stops in DOM order: toggle, tablist, currency (Story #218)', async () => {
   // What this has always pinned is the roving tabindex: Tab out of the selected tab must not walk
   // the other four. It used to land directly on the panel, because the tablist was the last thing
-  // in the sidebar. Story #183 put the display-currency control below it, and Story #184 the
-  // collapse toggle below that — so the sidebar's footer is now two stops, in DOM order, which is
-  // also its visual order, and the panel is the one after.
-  await page.getByRole('tab', { name: 'Portfolio' }).focus()
+  // in the sidebar. Story #183 put the display-currency control below it and Story #184 the
+  // collapse toggle below that; Story #218 moved the toggle up beside the brand, so the order is
+  // now toggle → tabs → currency → panel — DOM order, and its visual order (DDR-0068).
+
+  // Ahead of the tablist, because the head row is above it. Focused directly rather than tabbed
+  // to: what is before the sidebar is the title bar's own controls, which this test is not about.
+  const collapse = page.getByRole('button', { name: 'Collapse sidebar' })
+  await collapse.focus()
+  const toggle = await page.evaluate(() => {
+    const focused = document.activeElement as HTMLElement | null
+    return {
+      inTheHeadRow: focused?.closest('.app-sidebar-head-row') !== null,
+      // The accessible name, which states the action rather than the state.
+      label: focused?.getAttribute('aria-label'),
+      expanded: focused?.getAttribute('aria-expanded'),
+      controls: focused?.getAttribute('aria-controls'),
+    }
+  })
+  expect(toggle.inTheHeadRow).toBe(true)
+  expect(toggle.label).toBe('Collapse sidebar')
+  expect(toggle.expanded).toBe('true')
+  expect(toggle.controls).toBe('app-sidebar')
+
+  // One stop from the toggle into the tablist, and it is the selected tab rather than the first.
+  await page.keyboard.press('Tab')
+  expect(await focusedId()).toBe('tab-portfolio')
 
   await page.keyboard.press('Tab')
   const afterTablist = await focusedId()
@@ -108,23 +130,6 @@ test('Tab from the selected tab leaves the tablist, and reaches the panel (Story
   expect(stops.isATab).toBe(false)
   expect(stops.inTheSidebar).toBe(true)
   expect(stops.label).toBe('Display currency')
-
-  // The collapse toggle (Story #184). It is last in the column rather than beside the brand,
-  // because a control there ellipsises the product's own name at 220px (DDR-0057) — and this is
-  // the cost of that: one more stop between the selected tab and its panel.
-  await page.keyboard.press('Tab')
-  const toggle = await page.evaluate(() => {
-    const focused = document.activeElement as HTMLElement | null
-    return {
-      inTheSidebar: focused?.closest('.app-sidebar') !== null,
-      // The accessible name, which states the action rather than the state.
-      label: focused?.getAttribute('aria-label'),
-      expanded: focused?.getAttribute('aria-expanded'),
-    }
-  })
-  expect(toggle.inTheSidebar).toBe(true)
-  expect(toggle.label).toBe('Collapse sidebar')
-  expect(toggle.expanded).toBe('true')
 
   await page.keyboard.press('Tab')
   expect(await focusedId()).toBe('panel-portfolio')
