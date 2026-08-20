@@ -119,6 +119,68 @@ test.describe('within one launch', () => {
     expect(head.sidebar).toBe(220)
   })
 
+  test('the gateway badge is a boxed chip, ruled off from the brand above it', async () => {
+    // Story #219, DDR-0069. Everything here needs a layout engine: a computed border, a rule's
+    // width against the column's, and the chip's box in each of the two states.
+    const expanded = await page.evaluate(() => {
+      const sidebar = document.querySelector('.app-sidebar')!.getBoundingClientRect()
+      const row = document.querySelector('.app-sidebar-head-row')!
+      const chip = document.querySelector('.gateway-badge')!
+      const style = getComputedStyle(chip)
+      const rowStyle = getComputedStyle(row)
+      return {
+        sidebarWidth: sidebar.width,
+        // The delimiter reaches both edges of the column — a rule inside the head's old padding
+        // would have stopped 12px short on each side.
+        ruleWidth: row.getBoundingClientRect().width,
+        ruleBottom: rowStyle.borderBottomWidth,
+        chipBackground: style.backgroundColor,
+        sidebarBackground: getComputedStyle(document.querySelector('.app-sidebar')!).backgroundColor,
+        chipBorder: style.borderTopWidth,
+        chipRadius: style.borderTopLeftRadius,
+        // Inset from the column's edges, which is what the wrapper section buys.
+        chipWidth: chip.getBoundingClientRect().width,
+      }
+    })
+    // Within the sidebar's own right edge — a hairline, which a scaled display reports as some
+    // fraction of a CSS pixel, so the comparison is "spans the column" rather than an equality.
+    expect(expanded.ruleWidth).toBeGreaterThan(expanded.sidebarWidth - 2)
+    expect(Number.parseFloat(expanded.ruleBottom)).toBeGreaterThan(0)
+    expect(Number.parseFloat(expanded.chipBorder)).toBeGreaterThan(0)
+    expect(expanded.chipRadius).toBe('8px')
+    // A box, not a bare row: its fill is a step off the ground it stands on.
+    expect(expanded.chipBackground).not.toBe(expanded.sidebarBackground)
+    // And inset from the column's edges by the section's own padding, which is what stops the
+    // chip and the rule above it from being the same width.
+    expect(expanded.chipWidth).toBeCloseTo(expanded.ruleWidth - 24, 0)
+
+    await toggle(page, false).click()
+    await expect.poll(() => sidebarWidth(page)).toBe(56)
+
+    const collapsed = await page.evaluate(() => {
+      const bar = document.querySelector('.app-sidebar')!.getBoundingClientRect()
+      const chip = document.querySelector('.gateway-badge')!.getBoundingClientRect()
+      const text = document.querySelector('.gateway-badge-text')!
+      return {
+        width: chip.width,
+        height: chip.height,
+        withinRail: chip.left >= bar.left && chip.right <= bar.right,
+        // Clipped, never removed: the wording is still in the accessibility tree.
+        display: getComputedStyle(text).display,
+        wording: text.textContent,
+      }
+    })
+    // Still a chip, and a square one — not a bar around a single dot, and not gone.
+    expect(collapsed.width).toBe(32)
+    expect(collapsed.height).toBe(32)
+    expect(collapsed.withinRail).toBe(true)
+    expect(collapsed.display).not.toBe('none')
+    expect(collapsed.wording).toContain('IBKR Gateway')
+
+    await toggle(page, true).click()
+    await expect.poll(() => sidebarWidth(page)).toBe(220)
+  })
+
   test('the rail still shows the brand and one visible control, stacked', async () => {
     await toggle(page, false).click()
     await expect.poll(() => sidebarWidth(page)).toBe(56)

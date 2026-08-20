@@ -2,7 +2,9 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
   AA_NORMAL,
+  NON_TEXT,
   PAIRINGS,
+  SURFACE_EDGE,
   brightness,
   contrastRatio,
   findFailures,
@@ -103,6 +105,24 @@ describe('the pairing list', () => {
     expect(PAIRINGS.some((p) => p.backgroundBrightness !== undefined)).toBe(true)
   })
 
+  /**
+   * The surface-edge floor (Story #219, DDR-0069). It is the one threshold in this module that no
+   * standard hands us, so what it means has to be pinned rather than remembered: it sits above the
+   * separation two surfaces manage by fill alone, and below every accessibility bar — a decorative
+   * boundary must not be confused for a control's.
+   */
+  it('holds the surface-edge floor between a fill-only step and the accessibility bars', () => {
+    const tokens = readColorTokens(CSS)
+    const fillOnly = contrastRatio(tokens.get('--card')!, tokens.get('--bg')!)
+    expect(SURFACE_EDGE).toBeGreaterThan(fillOnly)
+    expect(SURFACE_EDGE).toBeLessThan(NON_TEXT)
+    // And it is the app's own edge, not a number chosen to clear one chip: --border on --card is
+    // every card's inner edge and every table rule, and it is what this floor is calibrated to.
+    expect(contrastRatio(tokens.get('--border')!, tokens.get('--card')!)).toBeGreaterThanOrEqual(
+      SURFACE_EDGE,
+    )
+  })
+
   it('fails loudly if a pairing names a token that no longer exists', () => {
     const tokens = readColorTokens(CSS)
     expect(() =>
@@ -137,7 +157,9 @@ describe('app.css contrast', () => {
     // The finding behind this story was not that --neg was below a number; it was that losses
     // were harder to read than gains. That asymmetry is the thing worth pinning.
     const tokens = readColorTokens(CSS)
-    for (const surface of ['--card', '--bg'] as const) {
+    // `--surface-raised` joined the list in Story #219: the gateway chip renders both tones on it,
+    // so it is the third surface on which the asymmetry could reappear (DDR-0069).
+    for (const surface of ['--card', '--bg', '--surface-raised'] as const) {
       const background = tokens.get(surface)!
       const negative = contrastRatio(tokens.get('--neg-text')!, background)
       const positive = contrastRatio(tokens.get('--pos')!, background)

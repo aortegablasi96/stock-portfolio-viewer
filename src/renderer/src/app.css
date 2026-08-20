@@ -43,6 +43,21 @@
      proposal's intent; what it is not is illegible. */
   --bg: #080b18;
   --card: #0f1320;
+  /* The one step that goes *up* (Story #219, DDR-0069). Every other surface
+     relationship in the app recedes — `card-nested` drops to --bg so an inset
+     well reads as a hole (DDR-0033) — and the two lifts a row takes under the
+     pointer are a color-mix of --text, which is a transient state rather than a
+     surface. A boxed chip standing on the sidebar is neither, and it may not be
+     painted --bg: the content column beside the rail *is* --bg, so a recessed
+     chip would match the page next to it and read as a gap in the column rather
+     than as a box on it. This is the proposal's own --surface-2, and it is the
+     one value in the re-key taken at face value: it carries no text of its own
+     that --card does not already carry, so what had to be measured was what
+     lands on it. --muted 5.35:1, --pos 6.73:1, --neg-text 6.34:1 — and the two
+     tones stay inside DDR-0046's 0.5 balance (0.39 apart here, against 0.42 on
+     --card). Its own step off --card is 1.085:1, which is deliberately faint:
+     the border is what draws the chip's edge, and the fill only seconds it. */
+  --surface-raised: #161b2e;
   --border: #1f2644;
   --text: #e2e8f0; /* 15.02:1 on --card, 15.90:1 on --bg */
   --muted: #8690aa; /* 5.80:1 on --card, 6.14:1 on --bg */
@@ -1736,16 +1751,15 @@ html {
 }
 
 /* The head loses the room for a row, so the brand and the toggle stack. `--space-3` on each
-   side is the gutter that leaves the 32px brand tile centred in 56px. */
-.app-collapsed .app-sidebar-head,
+   side is the gutter that leaves the 32px brand tile centred in 56px.
+
+   Since Story #219 the head's own padding lives on its two children, so the gutter is applied to
+   them rather than to the head — the badge's section included, which is what keeps the chip 32px
+   wide in a 56px rail (DDR-0069). */
+.app-collapsed .app-sidebar-head-row,
+.app-collapsed .app-sidebar-status,
 .app-collapsed .app-sidebar-foot {
   padding-inline: var(--space-3);
-}
-
-/* The head is a column, so centring its children is `align-items`; the badge is a row, so it is
-   `justify-content`. Getting that backwards centres nothing and stretches the head instead. */
-.app-collapsed .app-sidebar-head {
-  align-items: center;
 }
 
 /* 40px of content in the rail holds the 32px tile *or* the 30px control, not both side by side —
@@ -1756,8 +1770,21 @@ html {
   flex-direction: column;
 }
 
+/* On the rail the chip stays a chip — it does not vanish, and it does not stretch into a bar
+   around a single dot (Story #219). It squares off instead, at `--space-8`: the same 32px box the
+   brand tile above it is, so the two things standing in the rail are one shape. 40px of content
+   less 32 leaves 4px either side, which `margin-inline: auto` centres.
+
+   The wording inside is **clipped, not removed** — the same one rule that clips the brand's name
+   and the nav rows' labels, so the badge is still named by its own text. That is why the padding
+   goes: a 1px×1px clipped `<span>` is still a flex item, and 8px of padding around it would push
+   the dot off centre. */
 .app-collapsed .gateway-badge {
   justify-content: center;
+  width: var(--space-8);
+  height: var(--space-8);
+  padding: 0;
+  margin-inline: auto;
 }
 
 /* The dot on the rail, where the words beside it are clipped — and therefore the one place in
@@ -1808,11 +1835,15 @@ html {
    Everything true of the *app* rather than of a view: what it is, whether the gateway behind it
    is answering, and the currency every figure is shown in. */
 
+/* Two blocks, two rules (Story #219, DDR-0069). The head used to be one padded column carrying
+   the brand row and the badge with a gap between them; the proposal draws them as separate
+   sections, each closed by a rule that spans the column. So the padding moved down onto the two
+   children — a rule inside a padded box stops short of the sidebar's edges, which is the one thing
+   a delimiter must not do — and the head itself keeps only the rule that has always closed it off
+   from the tablist. Two rules, in two places, neither competing with the other. */
 .app-sidebar-head {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
-  padding: var(--space-5) var(--space-4);
   border-bottom: 1px solid var(--border);
 }
 
@@ -1829,6 +1860,15 @@ html {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
+  padding: var(--space-5) var(--space-4);
+  border-bottom: 1px solid var(--border);
+}
+
+/* The badge's own block. It exists so the chip below can be inset from the column's edges while
+   the rule above it is not — the same reason the padding left the head. `--space-4` matches
+   `.app-sidebar-foot`, so the two things pinned to the ends of the column are inset alike. */
+.app-sidebar-status {
+  padding: var(--space-4);
 }
 
 /* The one control in this row, and the only thing in it that may not give: a shrunken icon button
@@ -1896,12 +1936,26 @@ html {
    fill half and the text half of the loss tone cannot be mixed up at the two call sites below:
    a dot is a filled shape and takes `--neg`, while the detail line is text and takes
    `--neg-text` (DDR-0046). The wording is the channel that carries the state; this is the
-   second one. */
+   second one.
+
+   Since Story #219 it is a **boxed chip** rather than a bare row: the app's identity and the
+   state of the source behind it are two things, and a box is what stops them reading as one
+   run-on block (DDR-0069). Deliberately not the `Badge` primitive — that one is never a
+   background and never a box (DDR-0037), and this is a rail element rather than a data chip.
+
+   Every tone now renders on `--surface-raised` instead of on the sidebar's own ground, which is
+   why `lib/contrast.ts`'s three dot entries were re-pointed rather than added to: a pairing that
+   no longer occurs is a measurement of nothing. `--radius-md` is the proposal's own 8px corner,
+   and `--space-3 --space-4` is its 8px/10px padding on the scale (DDR-0031). */
 .gateway-badge {
   display: flex;
   align-items: center;
   gap: var(--space-3);
   min-width: 0;
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
 }
 
 .gateway-badge-live {
