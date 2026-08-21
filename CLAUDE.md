@@ -278,10 +278,10 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
   `lib/chartTooltip` draws in the plot's own space — so it **cannot** cover the neighbouring chart
   — **pinned to the plot's top** in all four, never tracking the mark. It floats on
   `--surface-raised`; its padding, corner and `MIN_WIDTH` are **viewBox units**, not CSS lengths.
-  The income columns' plot **widens with its history**; the card deliberately does *not* scale
-  with it — both plots type in the same units, so correcting outgrows it. Its key names the
-  **column** (*Gross*), not the solid segment; a row with no figure is **absent, not zero**; only
-  the signed row is toned. No `<title>` is left (DDR-0077).
+  The income chart is **two bars a month on one baseline** (never a stack), sized in **pixels**
+  (`COLUMN_UNIT_PX` = 1, from the label floor) inside `.chart-scroll` — the app's one chart off
+  DDR-0018's aspect rule, nothing drawn below zero. A card row with no figure is **absent, not
+  zero**; only the undrawn net is toned. The value axis scrolls away with it (DDR-0077, DDR-0078).
 - **A `--series-*` slot is a fill; as ink it is `--series-ink-*`** (DDR-0070) — three of the eight
   fail AA as text. A composition row resolves its band's class through that ramp; the slots don't
   move. Daily return's row is toned by **sign**, a zero day not.
@@ -319,8 +319,8 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
   `border-color` and `padding-inline`, and **nothing else**, so the box is the one boundary
   (amends DDR-0035; DDR-0075). The badge is a **boxed chip** on `--surface-raised` — the app's one
   surface step that goes *up*, and one of **three** users (the hover card and that currency field
-  are the others) — so every tone is measured **there**, not on `--card`; the warn dot's 3.63:1 is
-  the tightest number in `contrast.ts`, and `SURFACE_EDGE` is not a WCAG bar (DDR-0069).
+  are the others) — so every tone is measured **there**, not on `--card`, and `SURFACE_EDGE` is not
+  a WCAG bar (DDR-0069).
   `sidebarRail.test.ts` **counts** its uses — a fourth adopter must measure its own inks
   (DDR-0070). The nav's **"Views" title is the tablist's `aria-labelledby`**, not a caption beside
   it (DDR-0075).

@@ -16,7 +16,7 @@ import {
 import { datedExtent, filterByRange, windowFor } from '../../lib/dateRange'
 import { distinctTypes, filterByTypes } from '../../lib/tableFilter'
 import { useTypeSelection } from './useTypeSelection'
-import { ColumnChart, IncomeLegend, type StackedColumn } from '../charts/ColumnChart'
+import { ColumnChart, IncomeLegend, type PairedColumn } from '../charts/ColumnChart'
 import { toneClassName, toneOf } from '../../lib/statTileVariants'
 import { BADGE_CELL_CLASS } from '../../lib/badgeVariants'
 import { Badge } from '../ui/Badge'
@@ -45,11 +45,12 @@ import { DataTable, type DataColumn } from '../ui/DataTable'
  * both take these, so the legend cannot come to say something the card does not (Story #192,
  * DDR-0064).
  *
- * **Story #236 renamed them for what the chart measures.** The key said `Net received` and
- * `Withholding tax`, which names the two *segments* and leaves the column's own height — the gross
- * — named nowhere the reader can see. So the key now names the column (`Gross`) and the part
- * stacked at its top (`Withholding tax`), and `Net` joins them as the third row of the hover card:
- * declared, taken, and what actually landed, in that order.
+ * **Story #236 renamed them for what the chart measures**, and **Story #241 made the chart draw
+ * them.** The key said `Net received` / `Withholding tax` — two *segments* of a stack, with the
+ * column's own height, the gross, named nowhere the reader could see. #236 named the column
+ * `Gross`; #241 stopped stacking, so `Gross` and `Withholding tax` are now two bars on one
+ * baseline and the key names one apiece. `Net` is the third row of the hover card and the one
+ * figure the chart no longer draws: declared, taken, and what actually landed.
  */
 const INCOME_GROSS_LABEL = 'Gross'
 const INCOME_TAX_LABEL = 'Withholding tax'
@@ -213,11 +214,14 @@ export function DividendsView(): React.JSX.Element {
           )
         }
 
-        const columns: StackedColumn[] = r.byMonth.map((m) => ({
+        // The report's own two figures, handed over as they are. Until Story #241 this mapped
+        // `lower: m.netBase` — the chart drew the net and *called* the column gross, which is the
+        // indirection the paired bars remove. Net is derived where it is displayed, in the card.
+        const columns: PairedColumn[] = r.byMonth.map((m) => ({
           key: m.key,
           label: formatMonth(m.key),
-          lower: m.netBase,
-          upper: m.withholdingBase,
+          primary: m.grossBase,
+          secondary: m.withholdingBase,
         }))
 
         return (
@@ -238,22 +242,25 @@ export function DividendsView(): React.JSX.Element {
             <Card>
               <CardHeader className="chart-card-header">
                 <CardTitle>Income over time</CardTitle>
-                <IncomeLegend columnLabel={INCOME_GROSS_LABEL} upperLabel={INCOME_TAX_LABEL} />
+                <IncomeLegend
+                  primaryLabel={INCOME_GROSS_LABEL}
+                  secondaryLabel={INCOME_TAX_LABEL}
+                />
               </CardHeader>
               <CardContent>
                 <p className="source-note">
-                  Each column’s height is the month’s gross income, with the withholding tax
-                  stacked at its top; what is left below it is the net that reached the account.
-                  Point at a month for all three. A month whose withholding outweighs its dividends
-                  dips below the zero line, and its withholding is reported rather than drawn.
+                  Each month is two columns on the same baseline: the gross income declared, and
+                  the withholding tax taken out of it. Point at a month for both, plus the net that
+                  reached the account. Scroll sideways for the older months — a column keeps its
+                  width however long the history gets.
                 </p>
                 <ColumnChart
                   columns={columns}
                   formatValue={c}
-                  lowerLabel={INCOME_NET_LABEL}
-                  upperLabel={INCOME_TAX_LABEL}
-                  totalLabel={INCOME_GROSS_LABEL}
-                  ariaLabel="Gross dividend income by month, with withholding tax stacked at the top of each column"
+                  primaryLabel={INCOME_GROSS_LABEL}
+                  secondaryLabel={INCOME_TAX_LABEL}
+                  differenceLabel={INCOME_NET_LABEL}
+                  ariaLabel="Gross dividend income and withholding tax by month, as paired columns"
                 />
               </CardContent>
             </Card>

@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
+import { stripComments } from './cssDeclarations'
 
 /**
  * The Dividends view's composition (Story #192, DDR-0064).
@@ -37,6 +38,8 @@ const VIEW = strip(
 const COLUMN_CHART = strip(
   readFileSync(new URL('../components/charts/ColumnChart.tsx', import.meta.url), 'utf8'),
 )
+/** Story #241's half of the decision that lives in the stylesheet. Comments stripped, as above. */
+const CSS = stripComments(readFileSync(new URL('../app.css', import.meta.url), 'utf8'))
 
 describe('the transaction type is a toned badge', () => {
   it('renders the type through Badge rather than as bare text', () => {
@@ -79,7 +82,7 @@ describe('the transaction type is a toned badge', () => {
   })
 })
 
-describe('the stack’s key sits in the card header', () => {
+describe('the pair’s key sits in the card header', () => {
   it('renders IncomeLegend inside the income card’s CardHeader', () => {
     expect(VIEW).toMatch(/<CardHeader className="chart-card-header">[\s\S]*?<IncomeLegend[\s\S]*?<\/CardHeader>/)
   })
@@ -99,55 +102,121 @@ describe('the stack’s key sits in the card header', () => {
    * The key and the hover card are handed the same constants, so a legend cannot come to name one
    * thing while the column under the pointer names another.
    *
-   * **Story #236 renamed all three and the assertions moved with them** (DDR-0077). The guard
-   * exists precisely so that cannot be done by halves: the key named the two *segments*, which
-   * left the column's own height — the gross, and the figure the card is about — named nowhere the
-   * reader could see. So the key names the column and the segment stacked at its top, and `Net`
-   * joins them as the card's third row. Renaming one of the three and not the others is the drift
-   * this catches; deleting the test is not a way to pass it.
+   * **#236 renamed all three and #241 made the chart draw them** (DDR-0077, DDR-0078). The guard
+   * exists precisely so that cannot be done by halves: the key first named the two *segments* of a
+   * stack, leaving the column's own height — the gross — named nowhere the reader could see, and
+   * then named the column while the chart still drew the net. Both bars are named now and both are
+   * drawn. Renaming one of the three and not the others is the drift this catches; deleting the
+   * test is not a way to pass it.
    */
   it('names the three parts once, for both the key and the hover card', () => {
     expect(VIEW).toContain("const INCOME_GROSS_LABEL = 'Gross'")
     expect(VIEW).toContain("const INCOME_TAX_LABEL = 'Withholding tax'")
     expect(VIEW).toContain("const INCOME_NET_LABEL = 'Net'")
-    // The key names the column, not the solid segment — `columnLabel`, never `lowerLabel`.
+    // Two swatches for two bars, and the same two labels reaching the chart.
     expect(VIEW).toMatch(
-      /<IncomeLegend columnLabel=\{INCOME_GROSS_LABEL\} upperLabel=\{INCOME_TAX_LABEL\} \/>/,
+      /<IncomeLegend\s*\n\s*primaryLabel=\{INCOME_GROSS_LABEL\}\s*\n\s*secondaryLabel=\{INCOME_TAX_LABEL\}\s*\n\s*\/>/,
     )
     expect(VIEW).toMatch(
-      /lowerLabel=\{INCOME_NET_LABEL\}\s*\n\s*upperLabel=\{INCOME_TAX_LABEL\}\s*\n\s*totalLabel=\{INCOME_GROSS_LABEL\}/,
+      /primaryLabel=\{INCOME_GROSS_LABEL\}\s*\n\s*secondaryLabel=\{INCOME_TAX_LABEL\}\s*\n\s*differenceLabel=\{INCOME_NET_LABEL\}/,
     )
     // A literal here is how the card and the key drifted apart in the first place.
-    expect(VIEW).not.toMatch(/totalLabel="/)
+    expect(VIEW).not.toMatch(/(primary|secondary|difference)Label="/)
+  })
+
+  /**
+   * The view hands over the report's **own** two figures. `lower: m.netBase` is the mapping #241
+   * removed — the chart drew the net and the key called the column gross, which is the whole of
+   * the ambiguity the pair resolves. Net is derived where it is displayed.
+   */
+  it('plots the report’s gross and withholding, not a net it has to re-derive', () => {
+    expect(VIEW).toMatch(/primary: m\.grossBase,\s*\n\s*secondary: m\.withholdingBase,/)
+    expect(VIEW).not.toContain('lower: m.netBase')
   })
 
   /** The chart still states its own full name, and it states the new one (DDR-0052's note). */
   it('updates the chart’s aria-label to the naming the key uses', () => {
-    expect(VIEW).toMatch(/ariaLabel="Gross dividend income by month[^"]*"/)
-    expect(VIEW).not.toContain('Net dividend income by month')
+    expect(VIEW).toMatch(/ariaLabel="Gross dividend income and withholding tax by month[^"]*"/)
+    expect(VIEW).not.toContain('stacked at the top of each column')
   })
 
   /**
    * The source note describes the chart the reader is looking at. It is prose, so nothing else in
-   * the suite would notice it still describing the old naming — and a note that says "the solid
-   * segment is what reached the account" beside a key that says `Gross` is worse than no note.
+   * the suite would notice it still describing a stack — and a note about a segment stacked at a
+   * column's top, beside two columns on one baseline, is worse than no note.
    */
-  it('re-words the note under the title for what the columns are now called', () => {
-    expect(VIEW).toContain('is the month’s gross income')
-    expect(VIEW).not.toContain('the solid segment is what reached')
+  it('re-words the note for two columns on one baseline, and for the scroll', () => {
+    expect(VIEW).toContain('two columns on the same baseline')
+    expect(VIEW).toContain('Scroll sideways')
+    expect(VIEW).not.toContain('stacked at its top')
   })
 
   /**
-   * `ColumnChart` stays its own component (DDR-0052). It stacks two series, legends them and
-   * labels every column; `BarChart` does none of the three, and folding them together would mean
-   * conditioning all of it on flags — the fork-wearing-a-shared-name that component's own header
-   * describes.
+   * `ColumnChart` stays its own component (DDR-0052). It plots two series a month, legends them
+   * and labels every month; `BarChart` does none of the three, and folding them together would
+   * mean conditioning all of it on flags — the fork-wearing-a-shared-name its header describes.
    */
-  it('keeps the stacked chart separate from the daily-return bars', () => {
+  it('keeps the paired chart separate from the daily-return bars', () => {
     expect(VIEW).toContain("from '../charts/ColumnChart'")
     expect(VIEW).not.toContain('BarChart')
-    expect(COLUMN_CHART).toContain('lower')
-    expect(COLUMN_CHART).toContain('upper')
+    expect(COLUMN_CHART).toContain('primary')
+    expect(COLUMN_CHART).toContain('secondary')
+  })
+})
+
+/**
+ * Two columns on one baseline, and the plot that scrolls (Story #241, DDR-0078).
+ *
+ * The stack is the thing that must not come back, and nothing else in the suite can see it: a
+ * `y` computed from `lower + upper` renders, type-checks, and draws a chart whose key describes
+ * something else. What is asserted here is the *shape* — two rects a month, both anchored on the
+ * zero line — plus the two halves of the width decision, which only work as a pair.
+ */
+describe('a month is two columns on one baseline', () => {
+  it('draws two bars a month, neither stacked on the other', () => {
+    expect(COLUMN_CHART).toContain('className="chart-bar-primary"')
+    expect(COLUMN_CHART).toContain('className="chart-bar-secondary"')
+    // Both heights are measured from the baseline. A `y(c.lower)`-relative height is the stack.
+    expect(COLUMN_CHART).toContain('height={zeroY - y(c.primary)}')
+    expect(COLUMN_CHART).toContain('height={zeroY - y(c.secondary)}')
+    expect(COLUMN_CHART).not.toMatch(/chart-bar-(lower|upper)/)
+  })
+
+  /**
+   * The domain floors at zero because both series are magnitudes, and it is `pairedDomain` that
+   * knows the top is a `max` of the two — a month whose only entry is withholding has the taller
+   * bar on the wrong side of that comparison.
+   */
+  it('takes its axis from the paired domain, not the stacked one', () => {
+    expect(COLUMN_CHART).toContain('pairedDomain(columns)')
+    expect(COLUMN_CHART).not.toContain('columnDomain(columns)')
+  })
+
+  /** Story #49's downward bar is gone with the stack, and so is the class that drew it here. */
+  it('no longer paints a month below the baseline', () => {
+    expect(COLUMN_CHART).not.toContain('chart-bar-loss')
+  })
+
+  /**
+   * The two halves of the width decision. A pixel width without `min-width` leaves a short history
+   * floating in the middle of its card (DDR-0018 rejected that on sight); `min-width` without the
+   * pixel width is the behaviour this story replaced. Neither is useful alone, so both are pinned.
+   */
+  it('sizes the plot in pixels and lets a short history still fill its card', () => {
+    expect(COLUMN_CHART).toContain('columnPlotWidthPx(plot)')
+    expect(CSS).toMatch(/\.chart-scroll \.chart\s*\{[^}]*min-width:\s*100%/)
+  })
+
+  /**
+   * A scroll region reachable only by mouse hides the older months from a keyboard reader
+   * (WCAG 2.1.1). It declares no focus rule of its own — the `:where(...)` base rule rings it.
+   */
+  it('scrolls sideways from a named, keyboard-reachable wrapper', () => {
+    expect(CSS).toMatch(/\.chart-scroll\s*\{[^}]*overflow-x:\s*auto/)
+    expect(COLUMN_CHART).toMatch(
+      /<div className="chart-scroll" tabIndex=\{0\} role="group" aria-label=\{ariaLabel\}>/,
+    )
+    expect(CSS).not.toMatch(/\.chart-scroll[^{]*\{[^}]*outline:/)
   })
 })
 
@@ -171,7 +240,7 @@ describe('the income columns are read by pointing at them', () => {
 
   /**
    * The card is laid out against **this** chart's plot. The three it was written for share one
-   * fixed `viewBox`; this one widens with its history, so a card defaulting to the Performance
+   * fixed `viewBox`; this one is as long as its history, so a card defaulting to the Performance
    * geometry would flip sides at the wrong x and clamp to an edge that is not there.
    */
   it('lays the card out in the plot the chart is actually drawn in', () => {
@@ -182,18 +251,22 @@ describe('the income columns are read by pointing at them', () => {
   })
 
   /**
-   * The band, not the bar. A month whose net is zero draws a zero-height rect, and a `<title>` on
-   * one is unhoverable — which is the bug the move fixes as much as the styling is.
+   * The band, not the bar — the pair's whole band, so the gap between the two bars of one month
+   * reads that month rather than nothing. It also survives the scroll: `getBoundingClientRect` is
+   * the rendered box, so it already carries the scroll offset and the arithmetic is unchanged.
    */
   it('hit-tests the month’s band, the way the daily-return bars do', () => {
     expect(COLUMN_CHART).toContain('bandIndexAt(vbX, PAD.left, plotW, columns.length)')
+    expect(COLUMN_CHART).toContain('svg.getBoundingClientRect()')
     expect(COLUMN_CHART).toMatch(/onMouseLeave=\{\(\) => setHover\(null\)\}/)
   })
 
   /** The absent row and the sign tone are one function, so no caller can implement half of them. */
   it('builds its rows through the shared helper rather than inline', () => {
-    expect(COLUMN_CHART).toContain('stackedTooltipRows(')
-    expect(COLUMN_CHART).toMatch(/\{ total: totalLabel, upper: upperLabel, lower: lowerLabel \}/)
+    expect(COLUMN_CHART).toContain('pairedTooltipRows(')
+    expect(COLUMN_CHART).toMatch(
+      /\{ primary: primaryLabel, secondary: secondaryLabel, difference: differenceLabel \}/,
+    )
   })
 
   /** Pointer-only, as the other three are — and the figures stay in the tables below regardless. */
