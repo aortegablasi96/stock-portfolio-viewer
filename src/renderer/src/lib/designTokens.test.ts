@@ -47,6 +47,53 @@ function expectAscending(names: string[]): void {
   expect(new Set(sizes).size, `${names.join(', ')} contains a duplicate value`).toBe(sizes.length)
 }
 
+/**
+ * The stylesheet parses at all (Story #234).
+ *
+ * This is the inverse of the trap the comment-stripping guards exist for. Those strip comments
+ * because prose quoting a value can satisfy an assertion the rules do not (DDR-0042, DDR-0047,
+ * DDR-0048, DDR-0058, DDR-0070). This one catches the same seam from the other side: a comment
+ * that never opens leaves its prose in the rule stream, and a browser discards **every
+ * declaration from there until it recovers** — silently, with no build error and no test failure,
+ * because every guard in this repo reads `app.css` as *text*.
+ *
+ * It shipped exactly once, in this story: a paragraph appended after a comment's `*∕` instead of
+ * inside it dropped `.app-tab`'s whole rule, and the five nav rows fell back to the UA's button
+ * styling — grey, centred, and outlined. Lint passed, typecheck passed, all 1178 unit tests
+ * passed, and 63 e2e specs passed. A screenshot is what found it, which is the argument for this
+ * assertion: the cheapest guard that could have.
+ */
+describe('the stylesheet is well formed', () => {
+  it('opens and closes every comment, so no prose lands in the rule stream', () => {
+    const problems: string[] = []
+    let depth = 0
+    let line = 1
+    for (let i = 0; i < CSS.length; ) {
+      if (CSS[i] === '\n') line += 1
+      if (CSS.startsWith('/*', i)) {
+        if (depth > 0) problems.push(`comment opened inside a comment at line ${line}`)
+        depth += 1
+        i += 2
+      } else if (CSS.startsWith('*/', i)) {
+        if (depth === 0) problems.push(`comment closed but never opened at line ${line}`)
+        depth -= 1
+        i += 2
+      } else {
+        i += 1
+      }
+    }
+    expect(problems).toEqual([])
+    expect(depth, 'a comment is left open at the end of app.css').toBe(0)
+  })
+
+  it('balances every brace, so no rule swallows the ones after it', () => {
+    const rules = stripComments(CSS)
+    const opens = (rules.match(/\{/g) ?? []).length
+    const closes = (rules.match(/\}/g) ?? []).length
+    expect(opens, 'unbalanced braces in app.css').toBe(closes)
+  })
+})
+
 describe('spacing scale', () => {
   it('declares eight ascending steps', () => {
     expectAscending([

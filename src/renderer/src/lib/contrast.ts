@@ -451,6 +451,40 @@ export const PAIRINGS: readonly Pairing[] = [
       'unmeasured. See SURFACE_EDGE for why the threshold is not a WCAG one.',
   },
   /**
+   * The two pairings Story #234 added: the display-currency field, boxed on the same raised
+   * surface as the chip above it (DDR-0069, DDR-0070).
+   *
+   * The field is the raised surface's **third** adopter, and the toll is the one
+   * `sidebarRail.test.ts` counts for: both of its inks had only ever been measured on `--card`,
+   * which is not the surface either renders on any more. Its edge is not listed — `--border` on
+   * `--card` is the entry above, and it is already the widest-reaching in this list.
+   *
+   * The control's hover ink is not listed either, for the reason the sidebar's hover entry
+   * explains from the other direction: `--accent` on `--surface-raised` is a *lighter* ground
+   * than the `--card` the accent is validated on, so the hover can only improve on a pairing
+   * that already passes.
+   */
+  {
+    where: '.app-currency .field-label — "Display currency" on the boxed field',
+    foreground: { token: '--muted' },
+    background: { token: '--surface-raised' },
+    minimum: AA_NORMAL,
+    reason:
+      'The same ink and the same move as the chip’s micro-label at the head of this column, ' +
+      'one step larger at --text-xs. Listed separately because it is a different rule: deleting ' +
+      'the chip must not take the currency’s measurement with it.',
+  },
+  {
+    where: '.app-currency .control — the selected code, on the field’s own fill',
+    foreground: { token: '--text' },
+    background: { token: '--surface-raised' },
+    minimum: AA_NORMAL,
+    reason:
+      'The control keeps DDR-0035’s ink and gives up only its resting border, so the value now ' +
+      'reads against the box rather than against the sidebar’s ground. Full ink on the app’s ' +
+      'one surface step that goes up — the most headroom any pairing here has.',
+  },
+  /**
    * The three pairings Story #186 added: a table row's ink on the lift the row takes under the
    * pointer, and on the stronger lift the linked row takes (DDR-0059).
    *

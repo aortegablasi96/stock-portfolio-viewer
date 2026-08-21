@@ -1,7 +1,22 @@
 # 0035. One labelled control: explicit `htmlFor`, an id the field owns, and no size axis
 
-- **Status:** Accepted
+- **Status:** Accepted — **amended 2026-08-21 by Story #234**
 - **Date:** 2026-08-01
+
+> **Amendment (Story #234, [[0075-sidebar-nav-rhythm-and-the-boxed-currency]]).** The
+> display-currency field in the sidebar's footer becomes a **boxed chip** on `--surface-raised`,
+> and the `<select>` inside it gives up **two** properties this record had reserved to `.control`:
+> its resting `border-color` (set to `transparent`, never `border: none`, so the metrics hold and
+> `.control:hover:not(:disabled)` still wins on specificity to bring the accent edge back) and its
+> `padding-inline` (zeroed, because the box already insets and a second inset misaligns the value
+> against its own label). A bordered control inside a bordered box is two nested rounded rectangles
+> in a 220px column.
+>
+> Everything else here stands, in that placement and every other: the generated id and the absent
+> `id` prop, the shared ink, the `:disabled` treatment, the single focus ring, and `kind` as the
+> only axis. The amendment is **one placement and two properties**, asserted in
+> `sidebarRail.test.ts` rather than left to the diff — including that `color`, `font-size` and
+> `background` are *not* re-declared there.
 
 ## Context
 

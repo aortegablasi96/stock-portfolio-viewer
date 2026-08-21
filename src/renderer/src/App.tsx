@@ -97,6 +97,14 @@ function sameCodes(a: readonly string[], b: readonly string[]): boolean {
 const tabDomId = (id: Tab): string => `tab-${id}`
 const panelDomId = (id: Tab): string => `panel-${id}`
 
+/**
+ * The id the visible "Views" label carries, so the tablist can be named by it (Story #234).
+ * A constant rather than `useId()` for the reason `tabDomId` is one: there is exactly one
+ * sidebar in the document, so there is nothing for a generated id to disambiguate — unlike
+ * `Field`, whose three `RangeFilter`s are all mounted at once (DDR-0035).
+ */
+const NAV_LABEL_ID = 'app-nav-label'
+
 export function App(): React.JSX.Element {
   const [tab, setTab] = useState<Tab>('portfolio')
   // Which analytics tabs have been opened at least once — the set of views that exist in the
@@ -252,10 +260,21 @@ export function App(): React.JSX.Element {
             </div>
           </div>
 
+          {/* The list's own title (Story #234). The tablist has carried the name "Views" since
+              Story #182 — as an `aria-label`, so only a screen reader ever had it. The proposal
+              draws it, so it stops being invisible and starts naming the region on screen as
+              well as in the accessibility tree, which is why `aria-label` gives way to
+              `aria-labelledby`: two names for one region is the redundancy this replaces, not a
+              second label. It sits outside the tablist because a non-tab child inside one is
+              invalid — every child of `role="tablist"` is a `role="tab"`. */}
+          <p className="app-nav-label" id={NAV_LABEL_ID}>
+            Views
+          </p>
+
           <div
             className="app-sidebar-tabs"
             role="tablist"
-            aria-label="Views"
+            aria-labelledby={NAV_LABEL_ID}
             // The list runs down the sidebar, so Up/Down are the keys that move along it and
             // assistive technology has to be told which axis it is on (DDR-0055).
             aria-orientation="vertical"

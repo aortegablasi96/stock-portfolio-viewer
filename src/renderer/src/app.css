@@ -171,8 +171,17 @@
      shell's own dimensions, and each is quoted in more than one rule. The title
      bar's 40px was written out three times the moment the sidebar had to stick
      below it and be as tall as the rest of the viewport; naming it is what keeps
-     those three from drifting. 220px is the redesign's own sidebar width, wide
-     enough for the longest label ("Performance") at --text-sm beside a 1em icon. */
+     those three from drifting. 220px is the redesign's own sidebar width.
+
+     Story #234 re-derived what it buys, because widening the icon gap spends part
+     of it and the old note ("wide enough for Performance at --text-sm beside a 1em
+     icon") read as though the label were the binding constraint. Measured in the
+     running app with the bundled Inter: 220 less the tablist's two --space-3
+     gutters and a row's two --space-4 gutters leaves 179.2, less a 14.4px 1em icon
+     and the --space-4 gap leaves **152.8px** for the label. The longest,
+     "Performance", advances **89.35px**. The label is therefore nowhere near the
+     binding constraint — 63px spare — and the real one is in the head row, where
+     the brand's name shares its line with the toggle (DDR-0068). */
   --titlebar-height: 40px;
   --sidebar-width: 220px;
   /* The collapsed rail (Story #184, DDR-0057). 56px is the redesign's own width, and it is
@@ -1775,6 +1784,7 @@ html {
 .app-collapsed .app-brand-name,
 .app-collapsed .gateway-badge-text,
 .app-collapsed .app-tab-label,
+.app-collapsed .app-nav-label,
 .app-collapsed .app-currency .field-label {
   position: absolute;
   width: 1px;
@@ -1862,6 +1872,14 @@ html {
   padding-inline: var(--space-1);
   text-align: center;
   appearance: none;
+}
+
+/* On the rail the chip stays a chip, exactly as the badge above it does (Story #234) — it keeps
+   its fill, its edge and its corner, and gives up only the inline inset it has no room for.
+   40px of content less the control's own `--space-1` either side leaves 32px, and "EUR" at
+   `--text-xs` advances ~24px. The block inset stays, so the box is still a box and not a rule. */
+.app-collapsed .app-currency {
+  padding-inline: 0;
 }
 
 /* ---- The sidebar's context rail (Story #183, DDR-0056) -------------------
@@ -2040,6 +2058,28 @@ html {
   text-overflow: ellipsis;
 }
 
+/* The list's title (Story #234), and the app's **one** micro-label rather than a third
+   treatment: the same four declarations `.stat-label` and `.data-table thead th` carry, held to
+   each other by one assertion in `statTileVariants.test.ts` (DDR-0059, DDR-0060). The proposal
+   sets it at `0.1em`; that tracking is deliberately not adopted, for the reason #187 already
+   declined it — 11px capitals need *a* tracking, and the app has one.
+
+   The two inset declarations are one alignment, and each is a scale step. `--space-4` is the
+   row's own inline padding, so "Views" starts at the same x as the icons below it; the
+   `--space-3` margin is the tablist's gutter, applied here as a margin because that gutter
+   exists to keep a *focused* row's ring off the scrolling edge and a static label has no ring
+   to protect. The bottom inset is zero on purpose — the tablist's own `--space-3` supplies the
+   8px the proposal draws under the label, and doubling it would put 16px there. */
+.app-nav-label {
+  margin: 0 var(--space-3);
+  padding: var(--space-4) var(--space-4) 0;
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
 /* The tablist itself. Its padding is not decoration: it is the gutter the focus ring lives in.
    The sidebar clips (it scrolls), and the ring is drawn 2px outside a 2px stroke — so a row
    flush against the sidebar's edge would lose the left half of its ring. `--space-3` is 8px,
@@ -2069,14 +2109,25 @@ html {
 
 /* One row of the list. Full width, icon then label, left-aligned — the class name is unchanged
    from the horizontal strip on purpose: it is the same tab, and DDR-0029's vocabulary (and the
-   guards that read it) still describe it. */
+   guards that read it) still describe it.
+
+   The gap and the vertical padding are the proposal's, taken to the nearest scale step
+   (Story #234): 11px → `--space-4` (12px), 9px → `--space-3` (8px). Its 2px row gap is not
+   adopted and does not need to be — the scale reproduces the *rhythm* exactly. Between two
+   labels the proposal puts 9 + 2 + 9 = 20px; `--space-3` + `--space-1` + `--space-3` is
+   8 + 4 + 8 = 20px, the same figure without a raw length the ratchet would fail (DDR-0042).
+
+   The label stays `--text-sm` rather than dropping to the proposal's 13px. `--text-xs` is the
+   nearest step at 12.8px, and it is the scale's step for "hints, dense controls" — these five
+   rows are the app's primary navigation, the icon is sized `1em` and would shrink with them,
+   and the 1.6px is bought with width the column measured above does not need. */
 .app-tab {
   position: relative;
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-4);
   width: 100%;
-  padding: var(--space-2) var(--space-4);
+  padding: var(--space-3) var(--space-4);
   font: inherit;
   font-size: var(--text-sm);
   font-weight: 500;
@@ -2158,16 +2209,42 @@ html {
 
 /* The field stacks here rather than sitting label-beside-control: 220px minus the column's own
    padding has no room for both, and the label is a micro-label above its value in the redesign's
-   vocabulary. Placement only — `Field` and `Select` are unchanged, and the control keeps its own
-   box, hover, disabled and focus treatment (DDR-0035). */
+   vocabulary.
+
+   Since Story #234 it is also a **boxed chip**, the same one the gateway badge became at the
+   other end of the column in #219: `--surface-raised` behind a `--border` hairline at the
+   proposal's own 8px corner, inset `--space-3 --space-4` (its 10px/12px on the scale). The two
+   things pinned to the ends of this column are now one shape, and the app's raised surface has
+   its **third** user — which is why `lib/contrast.ts` gained this field's inks measured there
+   rather than on `--card`, and why `sidebarRail.test.ts` counts three (DDR-0069, DDR-0070). */
 .app-currency {
   flex-direction: column;
   align-items: stretch;
   gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
 }
 
+/* The box **is** the field's boundary, so the control inside it does not draw a second one
+   (Story #234). This is the one place `.control`'s own border gives way, and the amendment is
+   recorded on DDR-0035 rather than taken quietly: a bordered control inside a bordered box is
+   two nested rounded rectangles in a 220px column, which is not what the proposal draws.
+
+   `transparent` rather than `none` is what makes it an amendment instead of a fork. The box
+   metrics are unchanged, so nothing reflows — and `.control:hover:not(:disabled)` is (0,3,0)
+   against this rule's (0,2,0), so the accent edge still arrives on hover and the control keeps
+   every other thing DDR-0035 gives it: the ink, the disabled treatment, and the one focus ring
+   the `:where()` base rule applies. Only the resting edge goes.
+
+   The inline padding goes with it. The box already insets by `--space-4`, and the control's own
+   `--control-pad-sm` would inset the value a second time — leaving it 24px in while the label
+   above it sits at 12px, which is the misalignment the proposal's drawing has neither of. */
 .app-currency .control {
   width: 100%;
+  padding-inline: 0;
+  border-color: transparent;
 }
 
 /* An analytics tab stays in the tree once opened and is hidden while another tab is active

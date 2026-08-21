@@ -2,16 +2,15 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> **Budget: keep this file under 35 KB.** It is loaded into every session, so its cost is paid
-> before any work starts. It grew 10 KB → 84 KB between 2026-06-25 and 2026-08-19, and a
-> compaction on 2026-08-11 was fully reversed within eight days.
+> **Budget: keep this file under 36 KB** (`wc -c CLAUDE.md` ≤ 36864). It is loaded into every
+> session, so its cost is paid before any work starts, and it has twice grown back after being
+> compacted.
 >
 > The failure mode is re-narrating a decision this repo already records: **every ADR and DDR is
 > 8–20 KB and carries its own reasoning**, and `docs/design-decisions/README.md` indexes all of
 > them in one line each. When a story lands, add *the trap* here in a sentence with its DDR number
-> — never the argument. 35 KB is what remains when every trap below is stated once and nothing is
-> justified twice; if it is exceeded, the fix is to find the paragraph that argues a case rather
-> than to drop a trap.
+> — never the argument. If the budget is exceeded, find the paragraph that argues a case rather
+> than drop a trap.
 
 ## Current Repository State
 
@@ -84,7 +83,8 @@ src/
   preload/       contextBridge → window.api (types + channel names only, no Zod)
   renderer/      React + Vite (src/renderer/src/*): App sidebar shell under a custom TitleBar,
                  components/{analytics,charts,ui}/, lib/ (pure, unit-tested), assets/fonts/
-  services/      pure business logic — primary unit-test target
+  services/      pure business logic — primary unit-test target; beyond the domains above,
+                 system/ (app:ping) and window/ (windowStateService, sidebarStateService)
   repositories/  the ONLY layer touching a data source (SQLite, the IBKR gateway, or both)
   db/            client.ts (better-sqlite3 + Drizzle singleton), migrate.ts, schema.ts
   shared/        ipc/contract.ts (Zod + inferred types), ipc/channels.ts, domain/, errors.ts
@@ -231,7 +231,10 @@ below are the same move.
   a scale stops ascending, or a validated colour moves.
 - **A text-scanning guard must strip comments first.** This trap has now bitten five times
   (DDR-0042, DDR-0047, DDR-0048, DDR-0058, DDR-0070) — `app.css` and the components quote their own values in
-  prose, so an assertion can pass off the commentary alone.
+  prose, so an assertion can pass off the commentary alone. **Its inverse is worse**: prose left
+  *outside* a comment becomes rules and the browser drops every declaration after it — every gate
+  passed with `.app-tab`'s rule dead, and only a screenshot saw it. `designTokens.test.ts` now
+  walks the delimiters (DDR-0075).
 
 ### Renderer: structure and behaviour
 
@@ -272,21 +275,18 @@ below are the same move.
   `StackedAreaChart` both emit a bare `<svg>` (DDR-0052, DDR-0064). **A chart title never varies
   with the range**; the return curve's rebasing is disclosed by a *fixed* header note beside the
   key, since it opens at 0% in every range (DDR-0072).
-- **One chart tooltip, drawn inside the `viewBox`** (DDR-0061). `ChartTooltip` over `lib/chartTooltip`
-  draws in the plot's own space — so it **cannot** cover the neighbouring chart — **pinned to the
-  plot's top** in all three, never tracking the mark. A
-  row's label is prose (sans), its date a figure; sharing one rule keeps `tokenAdoption` at
-  **eight**. Bars, `.stack-band` and the donut's native tooltip are untouched. It floats on
+- **One chart tooltip, drawn inside the `viewBox`** (DDR-0061). `ChartTooltip` over
+  `lib/chartTooltip` draws in the plot's own space — so it **cannot** cover the neighbouring chart
+  — **pinned to the plot's top** in all three, never tracking the mark. It floats on
   `--surface-raised`; its padding, corner and `MIN_WIDTH` are **viewBox units**, not CSS lengths.
 - **A `--series-*` slot is a fill; as ink it is `--series-ink-*`** (DDR-0070) — three of the eight
   fail AA as text. A composition row resolves the band's own `.pie-series-*` class through that
   ramp; slots and bands are untouched. Daily return's row is toned by **sign**, a zero day not.
-- **A curve is `--accent`; a *signed* one splits at zero** in the bars' `--pos`/`--neg`, the
-  **mark** half — SVG writes both as `fill` (DDR-0071). Gradient stops stay in `app.css`, `fill`
-  per element (`useId()` — two curves, one page); the zero rule only where the series *crosses*
-  zero. The split is **clipped geometry, never two series**, and its wash anchors on
-  **zero**, not the domain floor. `lib/signedCurve` clamps the clip — a range never crossing zero
-  gives a **negative height**, and SVG then renders *nothing*. Dots need a **doubled** selector;
+- **A curve is `--accent`; a *signed* one splits at zero** into the bars' `--pos`/`--neg` — SVG
+  writes both as `fill` (DDR-0071). The split is **clipped geometry, never two series**, and its
+  wash anchors on **zero**, not the domain floor. `lib/signedCurve` clamps the clip — a range never
+  crossing zero gives a **negative height**, and SVG then renders *nothing*. Gradient `fill`s are
+  per element (`useId()` — two curves share one page). Dots need a **doubled** selector;
   `.chart-dot` out-orders a bare one (DDR-0059; shipped once).
 - **Chart maths that has drawn a wrong picture before.** The performance curve is **cumulative
   TWR**, not a value curve, so deposits and withdrawals don't move it (DDR-0013). Daily returns are
@@ -298,8 +298,8 @@ below are the same move.
   category into it instead and nothing will look wrong (DDR-0052). The report's `bands` order is
   the **palette**, not the stack: `lib/composition`'s `stackOrder` draws bottom-up Accruals · Cash ·
   `other` · Options · Stocks, so reordering `BAND_SPECS` repaints every band instead of moving one
-  (DDR-0073). Legend and hover rows read **top-down**. A slot publishes `--series-hue` for the
-  properties `fill` can't cover; a classed ribbon can't also be filled `url(#…)`, hence the `<g>`.
+  (DDR-0073). A slot publishes `--series-hue` for what `fill` can't cover; a classed ribbon
+  **cannot also** be filled `url(#…)`, hence the `<g>`.
 - **The map popup's tint is banked into its edges, and the geometry is what lets it be loud**
   (DDR-0041): the gradient's inner stops sit at `--popup-pad-y`, an **absolute length, not a
   percentage** (a percentage band creeps under the text of taller popups), and
@@ -310,11 +310,15 @@ below are the same move.
   `portfolio:getOverview` result, which is why that tab is excluded from stay-mounted. The one
   `setTimeout` in `SidebarRail.tsx` is a **clock** arming the moment a live reading goes stale,
   not an interval. `displayCurrency` is the **app's** selection, so the control is never
-  disabled. It is a **boxed chip** on `--surface-raised` — the app's one surface step that goes
-  *up*, and one of **two** users (the hover card is the other) — so every tone is measured
-  **there**, not on `--card`; the warn dot's 3.63:1 is the tightest number in `contrast.ts`, and
-  `SURFACE_EDGE` is not a WCAG bar (DDR-0069). `sidebarRail.test.ts` **counts** its uses — a third
-  adopter must measure its own inks (DDR-0070).
+  disabled, and since #234 it is a boxed chip too — its `<select>` giving up its resting
+  `border-color` and `padding-inline`, and **nothing else**, so the box is the one boundary
+  (amends DDR-0035; DDR-0075). The badge is a **boxed chip** on `--surface-raised` — the app's one
+  surface step that goes *up*, and one of **three** users (the hover card and that currency field
+  are the others) — so every tone is measured **there**, not on `--card`; the warn dot's 3.63:1 is
+  the tightest number in `contrast.ts`, and `SURFACE_EDGE` is not a WCAG bar (DDR-0069).
+  `sidebarRail.test.ts` **counts** its uses — a fourth adopter must measure its own inks
+  (DDR-0070). The nav's **"Views" title is the tablist's `aria-labelledby`**, not a caption beside
+  it (DDR-0075).
 - **One sector, one hue, everywhere.** `pie-series-1` — the palette's only blue — is reserved for
   the map's country-weight donut, so the *sector* dimension starts at slot 2 (`SECTOR_SLOT_OFFSET`
   in `lib/pie`) wherever a sector appears. Only sectors pay it; asset class, currency and country
@@ -358,27 +362,6 @@ alternatives this table can only name.
 | `Badge` (DDR-0037, DDR-0064, DDR-0065) | `variant` × `size` | **Never a pill** (that corner means multi-select) and **never a background** — the toned pair keeps both: `--pos` / `--neg-text` ink, the *borders* take the fill tokens. `BADGE_VARIANTS` ⊇ `STAT_TONES`, so `toneOf()` names a variant. `sm` carries no vertical padding — with it, every holdings row grows ~7px; alone in a cell it also needs `BADGE_CELL_CLASS`, because CSS cannot see that an inline chip follows a *text node*. Trades' side badge is **untoned on purpose** (DDR-0065): a buy is not a gain, and no substitute hue is free either. |
 | `StatePanel` (DDR-0038) | `variant` (the state) × `surface` | Only `error` paints; the axis exists because the copy and the *announcement* differ. `role` is derived. No heading → the panel **is** a `<p>`. |
 | `DataTable` (DDR-0039, DDR-0059, DDR-0065) | the *container's* `surface` × `height` | Sorting is **opt-in per column**; a **missing value sorts last in both directions**. `.data-table-dim` is the absent-value cell — a *neutral* tone is the **absence** of a class, so an untoned cell keeps `--text`. The 11px column head and its `0.06em` tracking are a **pair**. The linked row's lift is scoped to match the hover's specificity and win on source order — unscoped, `tr:hover > th` silently out-specifies it. |
-
-## Architecture
-
-Dependencies point downward only, and the boundary is **ESLint-enforced**.
-
-```text
-src/renderer      React UI. No business logic, no data source.
-        ↓ IPC     (window.api only)
-src/main          thin handlers: validate with Zod, delegate to a service
-        ↓
-src/services      business logic, calculations, orchestration
-        ↓
-src/repositories  the only layer that touches a data source
-        ↓
-SQLite / Interactive Brokers Gateway
-```
-
-Repositories expose **domain-oriented** methods, so a service never knows where data originates.
-Keep `src/repositories/README.md` in step when adding one. The database holds local history, app
-metadata and cached derived data — don't duplicate live brokerage data there unless analytics needs
-it. Longer treatments (*Layer Responsibilities*, *Repository Pattern*) are in `docs/architecture.md`.
 
 ## Stack
 
@@ -443,8 +426,11 @@ Testing Report.
 Four tiers. Each stage produces an artifact that is the next stage's input; execution skills
 consume only *approved* artifacts and must not redefine requirements, design, or architecture.
 
-They are **plain `SKILL.md` files, not `Skill`-tool skills** — read
-`.claude/skills/<tier>/<name>/SKILL.md` directly; invoking one by name resolves nothing.
+The four tiers are **plain `SKILL.md` files, not `Skill`-tool skills** — nested one level deeper
+than the loader looks, so read `.claude/skills/<tier>/<name>/SKILL.md` directly; invoking one by
+name resolves nothing. **`run-app` is the exception**: it sits at the top level and *is* invocable
+(`/run-app`). It either launches the app for the owner to click through **or** captures view
+screenshots — never both at once. Reach for it whenever a change needs seeing rather than testing.
 
 - **workflow-skills** (planning) — `product-manager` → `ui-designer` / `architect` →
   `database-designer` → `implementation-engineer` → `testing`.
@@ -467,7 +453,8 @@ and return to the owning workflow skill rather than being made inline.**
 `docs/` holds `architecture.md`, `database.md`, `product.md`, `mcp.md`, `github-issues.md`, plus
 `decisions/` (ADRs) and `design-decisions/` (DDRs), each with a README indexing every record in one
 line. Two directories are **gitignored and local-only**, so a fresh clone has neither:
-`flex-queries/` and `figma_design/`.
+`flex-queries/` and `figma_design/`. Adding a repository means keeping
+`src/repositories/README.md` in step; the layering itself is `docs/architecture.md`.
 
 Project history is **not** kept in local files — milestones and work items live in GitHub Issues;
 the record of completed work is the git history and closed issues.
