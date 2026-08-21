@@ -1,12 +1,13 @@
-import { columnDomain } from '../../lib/column'
+import { useRef, useState } from 'react'
+import { bandIndexAt, columnDomain, columnPlot, stackedTooltipRows } from '../../lib/column'
 import { StatePanel } from '../ui/StatePanel'
+import { ChartTooltip } from './ChartTooltip'
 
 /**
  * A stacked column chart over a time axis (Milestone M3, Story #23). Each column stacks a
  * `lower` segment and a non-negative `upper` segment (e.g. net income + withholding tax =
  * gross), so the full column height reads as the gross total. Two series, so a legend is
- * always present; each segment carries a native `<title>` tooltip reporting the whole
- * breakdown, including the stacked total when `totalLabel` is given (Story #31).
+ * always present.
  *
  * The `lower` value may be negative: when a month's withholding exceeds the dividends
  * received, its net bar extends below a labelled zero baseline instead of clamping at zero,
@@ -18,7 +19,26 @@ import { StatePanel } from '../ui/StatePanel'
  * made for the composition stack and for the same two reasons: a key is read *before* the plot
  * rather than after it, and a `<figcaption>` under the plot is height the card's neighbours do
  * not have. `IncomeLegend` below is what the view renders there, so this component emits a bare
- * `<svg>` — the labels it still takes are the tooltip's, which repeats the whole column.
+ * `<svg>`.
+ *
+ * **Story #236 took the native `<title>` off both segments and gave the chart the app's hover
+ * card**, the last of the four to get it (#188, #220). Three things came with the move and each
+ * of them is why it was worth making rather than restyling a `<title>`:
+ *
+ * - the hit target is the **band**, as it is in `BarChart` — so a month with nothing to draw is
+ *   still hoverable, which a `<title>` on a zero-height rect never was;
+ * - the card is **drawn in this plot's own `viewBox`**, which is why `columnPlot` exists: the
+ *   three Performance charts share a fixed geometry and this one widens with its history, so the
+ *   card has to be laid out against the plot it is actually in (DDR-0061);
+ * - the card reports the whole column — total, upper, lower — where the `<title>` did, but
+ *   **omits a row it has no figure for** and tones the signed one. `stackedTooltipRows` owns
+ *   both rules, because neither can be seen from a test that cannot render (DDR-0029).
+ *
+ * The card renders smaller on screen at a long history, and that is the chart rather than the
+ * card: the `viewBox` widens by 56 units a column while the card stays the size it is, so it
+ * keeps exactly the relationship to the axis labels beside it that it has at twelve months. A
+ * card fixed in page pixels is the version that misbehaves — it would grow against the plot as
+ * the history lengthened until it covered the columns it was reporting on (DDR-0018).
  */
 export interface StackedColumn {
   key: string
@@ -28,9 +48,6 @@ export interface StackedColumn {
   /** Non-negative upper segment (withholding), stacked above a positive lower. */
   upper: number
 }
-
-const H = 240
-const PAD = { top: 16, right: 16, bottom: 30, left: 64 }
 
 export function ColumnChart({
   columns,
@@ -42,19 +59,23 @@ export function ColumnChart({
 }: {
   columns: StackedColumn[]
   formatValue: (v: number) => string
+  /** Names the lower segment in the hover card — the signed one, and the only toned row. */
   lowerLabel: string
+  /** Names the segment stacked at the column's top, in the card and in the key beside it. */
   upperLabel: string
-  /** When set, each segment's tooltip also reports the full column height under this name. */
+  /** When set, the hover card also reports the full column height under this name. */
   totalLabel?: string
   ariaLabel: string
 }): React.JSX.Element {
+  const svgRef = useRef<SVGSVGElement>(null)
+  const [hover, setHover] = useState<number | null>(null)
+
   if (columns.length === 0) {
     return <StatePanel surface="inline">No income to plot over time yet.</StatePanel>
   }
 
-  // Widen the viewBox with the column count so bars stay legible for long histories. The 1080
-  // floor matches the line chart's 4.5:1 plot, so a full-width chart doesn't tower (Story #76).
-  const W = Math.max(1080, PAD.left + PAD.right + columns.length * 56)
+  const plot = columnPlot(columns.length)
+  const { width: W, height: H, pad: PAD } = plot
   const plotH = H - PAD.top - PAD.bottom
   const plotW = W - PAD.left - PAD.right
   const { top, bottom, ticks } = columnDomain(columns)
@@ -65,13 +86,27 @@ export function ColumnChart({
   const y = (v: number): number => PAD.top + plotH - ((v - bottom) / span) * plotH
   const zeroY = y(0)
 
+  /** Map a pointer event to the month whose band it falls in (see `bandIndexAt`). */
+  function onMove(e: React.MouseEvent<SVGSVGElement>): void {
+    const svg = svgRef.current
+    if (!svg) return
+    const rect = svg.getBoundingClientRect()
+    const vbX = ((e.clientX - rect.left) / rect.width) * W
+    setHover(bandIndexAt(vbX, PAD.left, plotW, columns.length))
+  }
+
+  const active = hover !== null ? columns[hover] : undefined
+
   return (
     <svg
+      ref={svgRef}
       className="chart"
       viewBox={`0 0 ${W} ${H}`}
       role="img"
       aria-label={ariaLabel}
       preserveAspectRatio="xMidYMid meet"
+      onMouseMove={onMove}
+      onMouseLeave={() => setHover(null)}
     >
       {ticks.map((t, i) => {
         const yy = y(t)
@@ -105,24 +140,15 @@ export function ColumnChart({
         // through the tooltip alone rather than a second rect.
         const stackUpper = c.lower >= 0 && c.upper > 0
         const upperH = stackUpper ? y(c.lower) - y(gross) : 0
-        // Each tooltip repeats the whole column so reading one segment never loses the rest.
-        const tip = (): string =>
-          [
-            c.label,
-            `${lowerLabel}: ${formatValue(c.lower)}`,
-            `${upperLabel}: ${formatValue(c.upper)}`,
-            totalLabel ? `${totalLabel}: ${formatValue(gross)}` : null,
-          ]
-            .filter((line) => line !== null)
-            .join('\n')
         // A below-zero net (withholding outweighed the dividends) is a loss, so its bar
         // switches from the positive "received" blue to the loss red (Story #49 refinement).
         const lowerClass = c.lower < 0 ? 'chart-bar-lower chart-bar-loss' : 'chart-bar-lower'
         return (
           <g key={c.key}>
-            <rect className={lowerClass} x={cx} y={lowerTop} width={barW} height={lowerH} rx={2}>
-              <title>{tip()}</title>
-            </rect>
+            {/* No per-segment `<title>`: the hover card below replaces it, and leaving both would
+                float a slow native tooltip over the one that already answered the question — the
+                same note `BarChart` carries, arriving here two stories later (Story #236). */}
+            <rect className={lowerClass} x={cx} y={lowerTop} width={barW} height={lowerH} rx={2} />
             {stackUpper && (
               <rect
                 className="chart-bar-upper"
@@ -131,9 +157,7 @@ export function ColumnChart({
                 width={barW}
                 height={upperH}
                 rx={2}
-              >
-                <title>{tip()}</title>
-              </rect>
+              />
             )}
             <text className="chart-axis-label" x={cx + barW / 2} y={H - 10} textAnchor="middle">
               {c.label}
@@ -141,6 +165,23 @@ export function ColumnChart({
           </g>
         )
       })}
+
+      {/* The card is what carries a negative month's explanation now. Where withholding outweighs
+          the dividends, the upper segment is not drawn at all — it cannot stack across zero
+          without overlapping the downward bar — so the withholding is a figure the chart states
+          and does not draw, which is exactly the job the `<title>` used to have (Story #49). */}
+      {active && hover !== null && (
+        <ChartTooltip
+          plot={plot}
+          anchorX={PAD.left + (hover + 0.5) * band}
+          title={active.label}
+          rows={stackedTooltipRows(
+            active,
+            { total: totalLabel, upper: upperLabel, lower: lowerLabel },
+            formatValue,
+          )}
+        />
+      )}
     </svg>
   )
 }
@@ -149,21 +190,30 @@ export function ColumnChart({
  * The stack's key, rendered into the income card's **header** rather than under the plot
  * (Story #192, DDR-0064) — the placement DDR-0052 settled for the composition stack.
  *
- * It takes the same two labels the chart's tooltips use, so the key cannot name one thing while
- * the tooltip names another. The swatches are `aria-hidden`: the label beside each is the text,
- * and a screen reader reading "square, Net received" gains nothing.
+ * It takes the same labels the hover card uses, so the key cannot name one thing while the column
+ * under the pointer names another. The swatches are `aria-hidden`: the label beside each is the
+ * text, and a screen reader reading "square, Withholding tax" gains nothing.
+ *
+ * **The key names the column, not the segment** (Story #236). It read `Net received` /
+ * `Withholding tax` — two segment names for a chart whose *height* is the figure the view is
+ * about, so the one number the reader came for was named nowhere on the card and only inside a
+ * native tooltip. `columnLabel` names the whole column and `upperLabel` the part stacked at its
+ * top; what is left below is the net, which the hover card gives with the other two rather than
+ * taking a third swatch here for a segment the reader can already see.
  */
 export function IncomeLegend({
-  lowerLabel,
+  columnLabel,
   upperLabel,
 }: {
-  lowerLabel: string
+  /** Names the column's full height — the chart's headline figure. */
+  columnLabel: string
+  /** Names the segment stacked at the top of it. */
   upperLabel: string
 }): React.JSX.Element {
   return (
     <p className="chart-legend chart-legend-header">
       <span className="legend-item">
-        <span className="legend-swatch legend-swatch-lower" aria-hidden="true" /> {lowerLabel}
+        <span className="legend-swatch legend-swatch-lower" aria-hidden="true" /> {columnLabel}
       </span>
       <span className="legend-item">
         <span className="legend-swatch legend-swatch-upper" aria-hidden="true" /> {upperLabel}

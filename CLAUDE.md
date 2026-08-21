@@ -115,8 +115,7 @@ docs/figma_design/  Epic #179's Figma Make export — gitignored
 This repo's habit is to make invariants *unexpressible* rather than documented — reach for the same
 instinct. **ESLint layer boundaries** (`eslint.config.mjs`, ADR-0002/0003): the renderer may not
 import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not import `@db` or
-`electron`. The CSP's omitted telemetry origin, the `:where()` focus ring and the token ratchet
-below are the same move.
+`electron`.
 
 ### Build, runtime, environment
 
@@ -277,8 +276,12 @@ below are the same move.
   key (DDR-0072).
 - **One chart tooltip, drawn inside the `viewBox`** (DDR-0061). `ChartTooltip` over
   `lib/chartTooltip` draws in the plot's own space — so it **cannot** cover the neighbouring chart
-  — **pinned to the plot's top** in all three, never tracking the mark. It floats on
+  — **pinned to the plot's top** in all four, never tracking the mark. It floats on
   `--surface-raised`; its padding, corner and `MIN_WIDTH` are **viewBox units**, not CSS lengths.
+  The income columns' plot **widens with its history**; the card deliberately does *not* scale
+  with it — both plots type in the same units, so correcting outgrows it. Its key names the
+  **column** (*Gross*), not the solid segment; a row with no figure is **absent, not zero**; only
+  the signed row is toned. No `<title>` is left (DDR-0077).
 - **A `--series-*` slot is a fill; as ink it is `--series-ink-*`** (DDR-0070) — three of the eight
   fail AA as text. A composition row resolves its band's class through that ramp; the slots don't
   move. Daily return's row is toned by **sign**, a zero day not.
@@ -432,7 +435,7 @@ The four tiers are **plain `SKILL.md` files, not `Skill`-tool skills** — neste
 than the loader looks, so read `.claude/skills/<tier>/<name>/SKILL.md` directly; invoking one by
 name resolves nothing. **`run-app` is the exception**: it sits at the top level and *is* invocable
 (`/run-app`). It either launches the app for the owner to click through **or** captures view
-screenshots — never both at once. Reach for it whenever a change needs seeing rather than testing.
+screenshots — never both at once.
 
 - **workflow-skills** (planning) — `product-manager` → `ui-designer` / `architect` →
   `database-designer` → `implementation-engineer` → `testing`.
@@ -457,9 +460,6 @@ and return to the owning workflow skill rather than being made inline.**
 line. Two directories are **gitignored and local-only**, so a fresh clone has neither:
 `flex-queries/` and `figma_design/`. Adding a repository means keeping
 `src/repositories/README.md` in step; the layering itself is `docs/architecture.md`.
-
-Project history is **not** kept in local files — milestones and work items live in GitHub Issues;
-the record of completed work is the git history and closed issues.
 
 Consult documentation in this order: **`docs/decisions/` → `docs/design-decisions/` →
 `docs/product.md` → GitHub Issues → `docs/architecture.md` → `docs/database.md`.** On a conflict:
