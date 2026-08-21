@@ -145,13 +145,15 @@ describe('the status dot is a second channel, and a tokenised one', () => {
     // ground. `lib/contrast.ts`'s dot entries were re-pointed to match; this is the half of that
     // pairing the contrast guard cannot see, since it reads tokens and not which rule uses them.
     expect(rule('.gateway-badge')).toMatch(/background:\s*var\(--surface-raised\)/)
-    /* Two rules stand on that surface now, and the second one came here and said so, which is
-       what this count is for. Not a style rule: every ink measured against `--surface-raised` is
-       an ink one of these two renders, so a rule adopting it brings inks nobody has measured
+    /* Three rules stand on that surface now, and each one came here and said so, which is what
+       this count is for. Not a style rule: every ink measured against `--surface-raised` is an
+       ink one of these three renders, so a rule adopting it brings inks nobody has measured
        there. Story #220 floated the chart hover card on it (DDR-0070) and added four pairings to
        `lib/contrast.ts` plus nine for the series ink ramp — the card's own `--text` and `--muted`
-       had only ever been measured on `--card`. A third adopter owes the same. */
-    expect(CSS.match(/var\(--surface-raised\)/g)).toHaveLength(2)
+       had only ever been measured on `--card`. Story #234 boxed the display currency at the far
+       end of this column and paid the same toll: two pairings, the field's label and its value,
+       both re-pointed off `--card`. A fourth adopter owes it too. */
+    expect(CSS.match(/var\(--surface-raised\)/g)).toHaveLength(3)
   })
 
   it('is not announced as a live region', () => {
@@ -258,8 +260,39 @@ describe('the display-currency control after the move', () => {
     const currency = rule('.app-currency')
     expect(currency, '.app-currency must exist').toBeDefined()
     expect(currency).toMatch(/flex-direction:\s*column/)
-    // Placement only: it must not re-declare what the shared `.control` rules own (DDR-0035).
-    expect(currency).not.toMatch(/padding|border-radius|outline|color:/)
+    // Still not a variant: the two properties that would make it one are the ones `Field` and
+    // `Select` own, and neither is here. `color` in particular — the field's ink is the shared
+    // rules' in both states, which is what keeps the `:disabled` and hover treatments honest.
+    expect(currency).not.toMatch(/outline|color:/)
+  })
+
+  /**
+   * The box the field became (Story #234, amending DDR-0035).
+   *
+   * DDR-0035's rule was that `.app-currency` is placement and nothing else, and this guard used
+   * to assert exactly that by forbidding `padding` and `border-radius` here. The amendment is
+   * narrow and is asserted rather than removed: the *box* moves out to the field, and the
+   * control gives up its resting border so the app does not draw two nested rounded rectangles
+   * in a 220px column. Everything else the shared rules own stays theirs.
+   */
+  it('is the boxed chip, and takes the control’s resting border with it (DDR-0035, DDR-0069)', () => {
+    const currency = rule('.app-currency')
+    expect(currency).toMatch(/background:\s*var\(--surface-raised\)/)
+    expect(currency).toMatch(/border:\s*1px solid var\(--border\)/)
+    // The proposal's own 8px corner, from the scale rather than as a length (DDR-0031).
+    expect(currency).toMatch(/border-radius:\s*var\(--radius-md\)/)
+
+    const control = rule('.app-currency .control')
+    expect(control, '.app-currency .control must exist').toBeDefined()
+    // `transparent`, never `none`: the box metrics stay put, so `.control:hover:not(:disabled)`
+    // — which is (0,3,0) against this rule's (0,2,0) — still brings the accent edge back.
+    expect(control).toMatch(/border-color:\s*transparent/)
+    expect(control).not.toMatch(/border:\s*none/)
+    // The one inset that would double up, and nothing else about the control is re-declared.
+    // The lookbehind is load-bearing: `border-color` above ends in `color:`, and a bare
+    // /color:/ here would assert the opposite of what this line means.
+    expect(control).toMatch(/padding-inline:\s*0/)
+    expect(control).not.toMatch(/(?<!-)color:|font-size|background:/)
   })
 })
 

@@ -165,9 +165,13 @@ describe('the stylesheet backs every declared part and tone', () => {
    * are what fails to read, and dropping the weight with the size makes them faint as well as
    * small. The tile's label and the table's head are asserted to be the *same* treatment — the
    * app has one micro-label, not one per surface.
+   *
+   * Story #234 added the third: the sidebar's "Views" title. It is listed here rather than left
+   * to agree by inspection — the proposal draws that label at `0.1em`, and this is the assertion
+   * that fails if the second tracking #187 already declined is ever pasted back in.
    */
   it('sets the label as the app-wide micro-label, and the table head to match', () => {
-    for (const selector of ['.stat-label', '.data-table thead th']) {
+    for (const selector of ['.stat-label', '.data-table thead th', '.app-nav-label']) {
       const body = ruleBody(selector)
       expect(body, selector).toContain('font-size: var(--text-2xs)')
       expect(body, selector).toContain('letter-spacing: 0.06em')

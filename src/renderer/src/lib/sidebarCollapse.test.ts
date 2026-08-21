@@ -143,11 +143,16 @@ describe('selecting a view while collapsed does not reopen the column', () => {
 })
 
 describe('a collapsed row keeps its name', () => {
-  it('clips the four labels in one rule, rather than removing them', () => {
+  it('clips the five labels in one rule, rather than removing them', () => {
     // `display: none` would take the text out of the accessibility tree and leave `title` as the
     // mechanism, which is the thing the story rules out.
+    //
+    // The fifth is the tablist's own "Views" title (Story #234). It joins the rule rather than
+    // being dropped at 56px for a reason the other four share and it sharpens: it is the
+    // tablist's accessible name via `aria-labelledby`, so removing it would leave the region
+    // unnamed on the rail — the same failure as a nav row losing its label, one level up.
     const hidden = CSS.match(
-      /\n\.app-collapsed \.app-brand-name,\n\.app-collapsed \.gateway-badge-text,\n\.app-collapsed \.app-tab-label,\n\.app-collapsed \.app-currency \.field-label \{([^}]*)\}/,
+      /\n\.app-collapsed \.app-brand-name,\n\.app-collapsed \.gateway-badge-text,\n\.app-collapsed \.app-tab-label,\n\.app-collapsed \.app-nav-label,\n\.app-collapsed \.app-currency \.field-label \{([^}]*)\}/,
     )?.[1]
     expect(hidden, 'the one hidden-label rule must exist').toBeDefined()
     expect(hidden).toMatch(/clip:\s*rect\(0, 0, 0, 0\)/)
