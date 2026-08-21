@@ -2470,6 +2470,32 @@ html {
   height: auto;
 }
 
+/* The income chart's scroll window (Story #241, DDR-0078).
+
+   Overflow and nothing else — whether anything is *drawn* stays the card's job, which is the split
+   `.data-table-scroll` already makes and the reason there is no `-inline` variant of either.
+
+   It exists because that plot is the one chart in the app sized in **pixels** rather than by its
+   aspect: a month is worth `COLUMN_MONTH_PX`, so the plot gets longer as the history grows instead
+   of denser, and something has to hold the overrun. `min-width: 100%` on the `<svg>` is the other
+   half — the pixel width is a *floor*, so a short history still fills its card rather than floating
+   in the middle of a panel (DDR-0018).
+
+   `overscroll-behavior-x: contain` keeps a trackpad swipe that reaches the end of the plot from
+   continuing into the window's own back-navigation gesture. */
+.chart-scroll {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+
+/* The floor half. The width itself is an inline attribute because it is a function of the data,
+   not a design value — it is computed in `lib/column.ts` beside the geometry it derives from, the
+   way `chartGeometry`'s numbers are, and an inline style is what wins over `.chart`'s `width: 100%`
+   above without a second rule chasing it. */
+.chart-scroll .chart {
+  min-width: 100%;
+}
+
 /* An empty chart is `<StatePanel surface="inline">` (Story #133): the rule that
    used to live here was byte-identical to `.snapshot-empty`, which is the drift
    Epic #125 exists to remove. A chart's empty state stays inline rather than
@@ -2800,7 +2826,10 @@ html {
   flex-wrap: wrap;
 }
 
-.chart-bar-lower {
+/* The taller bar of a month's pair — the income itself (Story #241). It was `.chart-bar-lower`,
+   the solid *net* segment of a stack, and the rename is the point rather than tidying: a class
+   named for its position in a stack that no longer exists describes nothing. */
+.chart-bar-primary {
   fill: var(--series-1);
 }
 
@@ -2818,7 +2847,11 @@ html {
   fill: var(--neg);
 }
 
-.chart-bar-upper {
+/* The bar beside it — what was taken out of the income. The fill token and not `--neg-text`:
+   this is an area, not a glyph (DDR-0046). Colour is the second channel here, never the only one —
+   the key names it, the hover card names it, and it stands on the same baseline as the bar it is
+   read against (DDR-0021). */
+.chart-bar-secondary {
   fill: var(--neg);
 }
 
@@ -2989,11 +3022,13 @@ html {
   border-radius: 3px;
 }
 
-.legend-swatch-lower {
+/* The income pair's two swatches, named for the bars they stand for rather than for the halves
+   of the stack they used to be (Story #241). */
+.legend-swatch-primary {
   background: var(--series-1);
 }
 
-.legend-swatch-upper {
+.legend-swatch-secondary {
   background: var(--neg);
 }
 

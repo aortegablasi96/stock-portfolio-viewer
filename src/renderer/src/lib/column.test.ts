@@ -1,14 +1,25 @@
 import { describe, it, expect } from 'vitest'
 import {
   COLUMN_BAND_UNITS,
-  COLUMN_PLOT_FLOOR,
+  COLUMN_MONTH_PX,
+  COLUMN_PLOT_MIN_ASPECT,
+  COLUMN_UNIT_PX,
   bandIndexAt,
+  columnAxisLabelPx,
   columnDomain,
   columnPlot,
-  stackedTooltipRows,
+  columnPlotWidthPx,
+  pairedDomain,
+  pairedTooltipRows,
   type ColumnDatum,
+  type PairedDatum,
 } from './column'
-import { INK_NEGATIVE, INK_POSITIVE, tooltipLayout } from './chartTooltip'
+import {
+  AXIS_LABEL_ADVANCE_UNITS,
+  AXIS_LABEL_UNITS,
+  MIN_AXIS_LABEL_PX,
+} from './chartGeometry'
+import { INK_NEGATIVE, INK_POSITIVE, tooltipLayout, type TooltipRow } from './chartTooltip'
 
 function col(lower: number, upper: number): ColumnDatum {
   return { lower, upper }
@@ -134,72 +145,128 @@ describe('bandIndexAt', () => {
 })
 
 /**
- * The stacked chart's own plot, and the hover card drawn inside it (Story #236, DDR-0077).
+ * The paired chart's plot, its pixel width, and the hover card drawn inside it
+ * (Stories #236, #241; DDR-0077, DDR-0078).
  *
- * The card was the last native `<title>` in the app. What no test can see about the move is where
- * the card lands, because Vitest has no jsdom and nothing here renders the `<g>` (DDR-0029) — so
- * what is checked is the arithmetic, at **both ends of the history**: a few months, where the plot
- * sits on its floor, and several years, where it is three times as wide.
+ * Nothing here can be observed — Vitest runs in Node with no jsdom, so nothing renders the `<svg>`
+ * and measures it (DDR-0029). What can be checked is the arithmetic, and after #241 the arithmetic
+ * is the whole decision: a month is worth a fixed number of pixels, so what has to hold is that
+ * **a mark renders the same size at any history length**, checked at both ends.
  */
 describe('columnPlot', () => {
-  it('sits on its floor until the columns need more room than the floor holds', () => {
-    // Twelve months is 672 units of bands inside an 80-unit text allowance — well under 1080.
-    expect(columnPlot(12).width).toBe(COLUMN_PLOT_FLOOR)
-    expect(columnPlot(1).width).toBe(COLUMN_PLOT_FLOOR)
+  /**
+   * The floor is an **aspect**, not a column count, and the reason is the card's *height*: the
+   * `<svg>` keeps its ratio when it stretches to fill a wider card, so a short history in a narrow
+   * plot is a tall card. A twelve-month floor was tried and rendered the same thirteen bars at
+   * 376px instead of 282px.
+   */
+  it('floors on its aspect, so a short history is not a tall card or a row of slabs', () => {
+    const floor = columnPlot(1)
+    expect(floor.width / floor.height).toBe(COLUMN_PLOT_MIN_ASPECT)
+    expect(columnPlot(13).width).toBe(floor.width)
+    // Under the floor the bands widen instead: three pairs spread across the axis, not three slabs.
+    const { width, pad } = columnPlot(3)
+    expect((width - pad.left - pad.right) / 3).toBeGreaterThan(COLUMN_BAND_UNITS)
   })
 
-  it('widens by one band per column once past it, and never shortens', () => {
-    const years = columnPlot(60)
-    expect(years.width).toBe(80 + 60 * COLUMN_BAND_UNITS)
-    expect(years.width).toBeGreaterThan(COLUMN_PLOT_FLOOR)
-    // The height is fixed, which is the whole of the widening trap: a unit buys less of the screen
-    // at a long history, and every mark in the plot pays that equally (DDR-0018).
-    expect(years.height).toBe(columnPlot(12).height)
+  /** The floor fits the card of a default window, so today's import renders as it always did. */
+  it('keeps the floor inside a default window, so the scroll starts where shrinking would have', () => {
+    expect(columnPlotWidthPx(columnPlot(1))).toBeLessThan(1107)
   })
 
-  it('keeps a band exactly one column wide at any length', () => {
-    for (const count of [1, 12, 24, 60, 240]) {
-      const { width, pad } = columnPlot(count)
-      const band = (width - pad.left - pad.right) / count
-      expect(band).toBeGreaterThanOrEqual(count > 17 ? COLUMN_BAND_UNITS : 0)
-    }
+  it('grows by one band a month past the floor, and never changes height', () => {
+    expect(columnPlot(60).width).toBe(80 + 60 * COLUMN_BAND_UNITS)
     expect((columnPlot(60).width - 80) / 60).toBe(COLUMN_BAND_UNITS)
+    expect(columnPlot(60).height).toBe(columnPlot(13).height)
+  })
+
+  /**
+   * The band is the *month label's* number, not the bars'. `Jul 2026` is eight glyphs at the
+   * measured advance, and a band narrower than that collides two labels — which is why this chart
+   * lengthens where `BarChart` thins (DDR-0049).
+   */
+  it('keeps a band wide enough for the month label that names it', () => {
+    expect(COLUMN_BAND_UNITS).toBeGreaterThan('Jul 2026'.length * AXIS_LABEL_ADVANCE_UNITS)
   })
 })
 
-describe('the hover card inside a widening plot', () => {
-  const ROWS = [
+describe('the plot’s width in pixels', () => {
+  /**
+   * The story's whole point, and the property that was missing before it. A unit was worth
+   * whatever the card's width divided by the history made it, so an 11-unit axis label rendered
+   * 11.3px at thirteen months and 3.5px at five years — the chart being the only one in the app
+   * not held to `MIN_AXIS_LABEL_PX`. Now the size is a constant and the plot gets longer instead.
+   */
+  it('renders a mark at the same size at one year and at five', () => {
+    for (const count of [1, 12, 13, 24, 60, 240]) {
+      const plot = columnPlot(count)
+      expect(columnPlotWidthPx(plot) / plot.width, `${count} months`).toBeCloseTo(COLUMN_UNIT_PX, 9)
+    }
+  })
+
+  /**
+   * Derived from the two constants that already state the constraint, not picked. An axis label is
+   * `AXIS_LABEL_UNITS` units and may not render below `MIN_AXIS_LABEL_PX`; both are 11, so a unit
+   * is a pixel. It is the *smallest* value that clears the floor, which is the half that matters:
+   * every pixel above it is plot the reader has to scroll.
+   */
+  it('takes its pixels a unit from the legibility floor rather than from taste', () => {
+    expect(COLUMN_UNIT_PX).toBe(MIN_AXIS_LABEL_PX / AXIS_LABEL_UNITS)
+    expect(columnAxisLabelPx()).toBe(MIN_AXIS_LABEL_PX)
+    expect(COLUMN_MONTH_PX).toBe(COLUMN_BAND_UNITS * COLUMN_UNIT_PX)
+  })
+
+  /** A year of history is a plot a normal window can hold; the scroll is for what comes after. */
+  it('fits a year inside a default window, and lengthens past it', () => {
+    const year = columnPlotWidthPx(columnPlot(12))
+    expect(year).toBeLessThan(1107)
+    expect(columnPlotWidthPx(columnPlot(60))).toBeGreaterThan(year)
+    // Strictly monotonic past the floor: one more month is one more band, never a rescale.
+    const step = columnPlotWidthPx(columnPlot(25)) - columnPlotWidthPx(columnPlot(24))
+    expect(step).toBeCloseTo(COLUMN_MONTH_PX, 9)
+  })
+})
+
+describe('pairedDomain', () => {
+  const pair = (primary: number, secondary: number): PairedDatum => ({ primary, secondary })
+
+  /** Both series are magnitudes, so zero is the floor rather than a level the data crosses. */
+  it('floors at zero and never goes below it', () => {
+    const domain = pairedDomain([pair(80, 20), pair(40, 5)])
+    expect(domain.bottom).toBe(0)
+    expect(domain.ticks[0]).toBe(0)
+    expect(domain.top).toBeGreaterThanOrEqual(80)
+  })
+
+  /**
+   * The case a `primary`-only top would get wrong: a month whose only entry is withholding has a
+   * gross of zero, so the taller bar of that pair is the *secondary*. Taking the top from the
+   * primary alone would draw it off the plot.
+   */
+  it('takes its top from the taller bar, whichever of the two that is', () => {
+    const domain = pairedDomain([pair(0, 6.02), pair(1, 0)])
+    expect(domain.top).toBeGreaterThanOrEqual(6.02)
+  })
+
+  it('collapses to a single 0 tick for an empty history', () => {
+    expect(pairedDomain([])).toEqual({ top: 0, bottom: 0, ticks: [0] })
+  })
+})
+
+describe('the hover card inside the plot', () => {
+  const ROWS: TooltipRow[] = [
     { label: 'Gross', value: '€1,234.56' },
     { label: 'Withholding tax', value: '€123.45' },
     { label: 'Net', value: '€1,111.11' },
   ]
 
-  /**
-   * The card is the same size in `viewBox` units at both ends, and that is the answer to the trap
-   * rather than an omission: it therefore holds the same relationship to the 11-unit axis labels
-   * beside it whatever the history's length, and shrinks on screen only because the whole chart
-   * does. A card sized in page pixels would do the opposite — grow against the plot until it
-   * covered the columns it was reporting on.
-   */
-  it('is drawn at one size in the chart’s own units, at a few months and at several years', () => {
-    const months = columnPlot(12)
-    const years = columnPlot(60)
-    const near = tooltipLayout(months.pad.left + 40, 'Jul 2026', ROWS, months)
-    const far = tooltipLayout(years.pad.left + 40, 'Jul 2026', ROWS, years)
-
-    expect(far.width).toBe(near.width)
-    expect(far.height).toBe(near.height)
-    // Which means it is a *smaller share* of the plot at the long end, never a larger one.
-    expect(far.width / years.width).toBeLessThan(near.width / months.width)
-  })
-
-  it('never leaves the plot, at any anchor and at either end', () => {
+  it('never leaves the plot, at any anchor and at any history length', () => {
     for (const count of [4, 12, 24, 60, 240]) {
       const plot = columnPlot(count)
       const right = plot.width - plot.pad.right
       for (let anchorX = plot.pad.left; anchorX <= right; anchorX += Math.max(7, count)) {
         const box = tooltipLayout(anchorX, 'December 2026', ROWS, plot)
-        expect(box.x, `${count} columns at ${anchorX}`).toBeGreaterThanOrEqual(plot.pad.left)
+        expect(box.x, `${count} months at ${anchorX}`).toBeGreaterThanOrEqual(plot.pad.left)
         expect(box.x + box.width).toBeLessThanOrEqual(right)
         expect(box.y).toBe(plot.pad.top)
         expect(box.y + box.height).toBeLessThan(plot.height - plot.pad.bottom)
@@ -208,10 +275,17 @@ describe('the hover card inside a widening plot', () => {
   })
 
   /**
-   * The floor is a floor on the *card*, not on the plot, so a four-month history — the narrowest
-   * plot there is — still has room for it several times over. The failure this catches is a card
-   * that fits the twelve-month chart the story was reviewed against and clips on a new import.
+   * The card is one size in units and now also one size on screen, because a unit is. Before #241
+   * it held its relation to the axis labels beside it and shrank with them; now neither shrinks.
    */
+  it('is the same card on screen at a year and at five', () => {
+    const near = tooltipLayout(120, 'Jul 2026', ROWS, columnPlot(12))
+    const far = tooltipLayout(120, 'Jul 2026', ROWS, columnPlot(60))
+    expect(far.width).toBe(near.width)
+    expect(far.height).toBe(near.height)
+    expect(far.width * COLUMN_UNIT_PX).toBe(near.width * COLUMN_UNIT_PX)
+  })
+
   it('fits inside the narrowest plot the chart draws', () => {
     const plot = columnPlot(1)
     const box = tooltipLayout(plot.pad.left, 'December 2026', ROWS, plot)
@@ -219,55 +293,56 @@ describe('the hover card inside a widening plot', () => {
   })
 })
 
-describe('stackedTooltipRows', () => {
-  const c = (v: number): string => `€${v.toFixed(2)}`
-  const LABELS = { total: 'Gross', upper: 'Withholding tax', lower: 'Net' }
+describe('pairedTooltipRows', () => {
+  const c = (v: number): string => `EUR ${v.toFixed(2)}`
+  const LABELS = { primary: 'Gross', secondary: 'Withholding tax', difference: 'Net' }
+  const pair = (primary: number, secondary: number): PairedDatum => ({ primary, secondary })
 
-  it('reports the column top-down: what was declared, what was taken, what landed', () => {
-    const rows = stackedTooltipRows(col(80, 20), LABELS, c)
+  it('reports the month in the order it happened: declared, taken, landed', () => {
+    const rows = pairedTooltipRows(pair(100, 20), LABELS, c)
     expect(rows.map((r) => r.label)).toEqual(['Gross', 'Withholding tax', 'Net'])
-    // Gross is the column's height — the sum, never a fourth figure carried alongside it.
-    expect(rows.map((r) => r.value)).toEqual(['€100.00', '€20.00', '€80.00'])
+    // The difference is derived here, not carried as a fourth figure that could disagree.
+    expect(rows.map((r) => r.value)).toEqual(['EUR 100.00', 'EUR 20.00', 'EUR 80.00'])
   })
 
   /** A row that does not exist is absent, not zero — and the card shrinks to fit. */
   it('drops the withholding row for a month with nothing withheld', () => {
-    const rows = stackedTooltipRows(col(80, 0), LABELS, c)
+    const rows = pairedTooltipRows(pair(80, 0), LABELS, c)
     expect(rows.map((r) => r.label)).toEqual(['Gross', 'Net'])
-    expect(rows.some((r) => r.value === '€0.00')).toBe(false)
+    expect(rows.some((r) => r.value === 'EUR 0.00')).toBe(false)
   })
 
   /**
-   * The month the chart cannot draw. Where withholding outweighs the dividends the upper segment
-   * is not stacked at all, so the card is the only place that figure appears — dropping it with
-   * the segment is the regression this asserts against.
+   * The month the chart no longer draws a signed mark for. Since #241 nothing hangs below the
+   * baseline, so the card is the only place the negative net appears — dropping it with the
+   * downward bar is the regression this asserts against.
    */
-  it('still reports the withholding of a negative month, and a gross of exactly zero', () => {
-    const rows = stackedTooltipRows(col(-6.02, 6.02), LABELS, c)
+  it('keeps a negative net, beside a gross of exactly zero', () => {
+    const rows = pairedTooltipRows(pair(0, 6.02), LABELS, c)
     expect(rows.map((r) => r.label)).toEqual(['Gross', 'Withholding tax', 'Net'])
-    expect(rows[0]!.value).toBe('€0.00')
-    expect(rows[1]!.value).toBe('€6.02')
+    expect(rows[0]!.value).toBe('EUR 0.00')
+    expect(rows[2]!.value).toBe('EUR -6.02')
   })
 
   it('tones the net by its sign, and a flat month not at all', () => {
-    expect(stackedTooltipRows(col(80, 20), LABELS, c).at(-1)!.ink).toBe(INK_POSITIVE)
-    expect(stackedTooltipRows(col(-6, 6), LABELS, c).at(-1)!.ink).toBe(INK_NEGATIVE)
-    expect(stackedTooltipRows(col(0, 0), LABELS, c).at(-1)!.ink).toBeUndefined()
+    expect(pairedTooltipRows(pair(100, 20), LABELS, c).at(-1)!.ink).toBe(INK_POSITIVE)
+    expect(pairedTooltipRows(pair(0, 6), LABELS, c).at(-1)!.ink).toBe(INK_NEGATIVE)
+    expect(pairedTooltipRows(pair(0, 0), LABELS, c).at(-1)!.ink).toBeUndefined()
   })
 
   /**
-   * Only the signed row is toned. Withholding is a deduction by construction, so a loss tone there
-   * restates the label rather than adding a channel — DDR-0065's reasoning for the untoned trade
-   * side, arriving at the same answer from the other direction.
+   * Only the difference is toned, and after #241 that is also the only row the chart does not
+   * draw. The two bars are their own channel; a loss tone on a deduction restates its label —
+   * DDR-0065's reasoning for the untoned trade side, from the other direction.
    */
-  it('leaves gross and withholding untoned', () => {
-    const rows = stackedTooltipRows(col(-6, 6), LABELS, c)
+  it('leaves both drawn bars untoned', () => {
+    const rows = pairedTooltipRows(pair(0, 6), LABELS, c)
     expect(rows[0]!.ink).toBeUndefined()
     expect(rows[1]!.ink).toBeUndefined()
   })
 
-  it('omits the total row for a chart with no total worth naming', () => {
-    const rows = stackedTooltipRows(col(80, 20), { upper: 'Tax', lower: 'Net' }, c)
-    expect(rows.map((r) => r.label)).toEqual(['Tax', 'Net'])
+  it('omits the difference row where the chart has no third figure to name', () => {
+    const rows = pairedTooltipRows(pair(100, 20), { primary: 'In', secondary: 'Out' }, c)
+    expect(rows.map((r) => r.label)).toEqual(['In', 'Out'])
   })
 })
