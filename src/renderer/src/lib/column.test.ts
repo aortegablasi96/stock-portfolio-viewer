@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import {
   COLUMN_BAND_UNITS,
+  axisTicks,
   COLUMN_MONTH_PX,
   COLUMN_PLOT_MIN_ASPECT,
+  COLUMN_PLOT_PAD,
   COLUMN_UNIT_PX,
   bandIndexAt,
   columnAxisLabelPx,
@@ -175,9 +177,20 @@ describe('columnPlot', () => {
   })
 
   it('grows by one band a month past the floor, and never changes height', () => {
-    expect(columnPlot(60).width).toBe(80 + 60 * COLUMN_BAND_UNITS)
-    expect((columnPlot(60).width - 80) / 60).toBe(COLUMN_BAND_UNITS)
+    // Derived from the pad rather than restated: Story #243 took the left allowance to zero when
+    // the value axis left the `viewBox`, and a hard-coded sum here would have to be found by hand.
+    const text = COLUMN_PLOT_PAD.left + COLUMN_PLOT_PAD.right
+    expect(columnPlot(60).width).toBe(text + 60 * COLUMN_BAND_UNITS)
+    expect((columnPlot(60).width - text) / 60).toBe(COLUMN_BAND_UNITS)
     expect(columnPlot(60).height).toBe(columnPlot(13).height)
+  })
+
+  /**
+   * The gutter is HTML beside the plot since Story #243, so the `viewBox` reserves nothing for it.
+   * A left pad growing back would indent every bar behind a column that is no longer there.
+   */
+  it('reserves no room for a value axis it no longer draws', () => {
+    expect(COLUMN_PLOT_PAD.left).toBe(0)
   })
 
   /**
@@ -344,5 +357,59 @@ describe('pairedTooltipRows', () => {
   it('omits the difference row where the chart has no third figure to name', () => {
     const rows = pairedTooltipRows(pair(100, 20), { primary: 'In', secondary: 'Out' }, c)
     expect(rows.map((r) => r.label)).toEqual(['In', 'Out'])
+  })
+})
+
+/**
+ * The value axis, now that it is HTML beside the plot rather than `<text>` inside it
+ * (Story #243, DDR-0079).
+ *
+ * The one thing that can go wrong and would not look wrong is a label drifting off its gridline,
+ * and it cannot be observed here — Vitest has no jsdom, so nothing lays the grid out (DDR-0029).
+ * What is checkable is that the offsets come from the *same* mapping the gridlines are drawn with,
+ * and that they are expressed as a proportion, which is the only form that survives a plot whose
+ * rendered height is decided by the card it lands in.
+ */
+describe('axisTicks', () => {
+  const PLOT = columnPlot(13)
+  // The chart's own mapping, copied from the component: value → unit, over the padded plot area.
+  const plotH = PLOT.height - PLOT.pad.top - PLOT.pad.bottom
+  const y = (v: number): number => PLOT.pad.top + plotH - (v / 200) * plotH
+
+  it('places a tick where the gridline it names is drawn', () => {
+    for (const tick of axisTicks([0, 50, 100, 150, 200], PLOT, y)) {
+      expect(tick.topPercent).toBeCloseTo((y(tick.value) / PLOT.height) * 100, 9)
+    }
+  })
+
+  /**
+   * A proportion, never a length. The plot stretches to fill a card wider than its natural width,
+   * so its rendered height is not a number this module knows — and the gutter is only as tall as
+   * the plot because they share a grid row. A percentage is what is true at both ends of that.
+   */
+  it('expresses every offset as a share of the plot’s own height', () => {
+    for (const tick of axisTicks([0, 100, 200], PLOT, y)) {
+      expect(tick.topPercent).toBeGreaterThanOrEqual(0)
+      expect(tick.topPercent).toBeLessThanOrEqual(100)
+    }
+    // The extremes land inside the padded plot area, not on the `viewBox`'s own edges: the top
+    // tick sits at `pad.top` and the zero line at `pad.bottom` off the floor.
+    const [zero, , top] = axisTicks([0, 100, 200], PLOT, y)
+    expect(top!.topPercent).toBeCloseTo((PLOT.pad.top / PLOT.height) * 100, 9)
+    expect(zero!.topPercent).toBeCloseTo(
+      ((PLOT.height - PLOT.pad.bottom) / PLOT.height) * 100,
+      9,
+    )
+  })
+
+  /** Evenly-stepped ticks stay evenly stepped in the gutter — the mapping is linear either side. */
+  it('keeps an even domain evenly spaced down the column', () => {
+    const offsets = axisTicks([0, 50, 100, 150, 200], PLOT, y).map((t) => t.topPercent)
+    const steps = offsets.slice(1).map((o, i) => o - offsets[i]!)
+    for (const step of steps) expect(step).toBeCloseTo(steps[0]!, 9)
+  })
+
+  it('has nothing to place for an empty axis', () => {
+    expect(axisTicks([], PLOT, y)).toEqual([])
   })
 })

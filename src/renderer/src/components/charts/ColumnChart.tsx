@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import {
+  axisTicks,
   bandIndexAt,
   columnPlot,
   columnPlotWidthPx,
@@ -120,12 +121,46 @@ export function ColumnChart({
 
   const active = hover !== null ? columns[hover] : undefined
 
+  const gutter = axisTicks(ticks, plot, y)
+  // Sizes the gutter to its own content, so the column is exactly as wide as the widest figure it
+  // holds. A hand-set width is the failure DDR-0051 §#190 recorded — a gutter cut for eight
+  // characters against labels that render ten, clipping the currency symbol in silence — and this
+  // element makes that unexpressible rather than documented: the browser measures the real string
+  // in the real face, and a portfolio crossing a decimal place widens the column by itself.
+  const widest = gutter.reduce(
+    (longest, tick) => {
+      const text = formatValue(tick.value)
+      return text.length > longest.length ? text : longest
+    },
+    '',
+  )
+
   return (
     // A tab stop and a name, because this is the only copy of the older months and a scroll region
     // a mouse alone can reach hides them from a keyboard reader (WCAG 2.1.1). `role="group"` for
     // the reason DDR-0047 gave the map one: it is a graphic with something inside it. It declares
     // no focus rule — the `:where(...)` base rule rings it.
     <div className="chart-scroll" tabIndex={0} role="group" aria-label={ariaLabel}>
+      {/* The gutter is **inside** the scroll container and sticks to its left edge, which is what
+          makes its height the plot's rather than the plot's plus a scrollbar — a percentage
+          resolves against the scroller's *content* box, and a horizontal scrollbar is not in it.
+          Placed outside instead, every label sat ~15px low the moment the plot got long enough to
+          scroll: exact at rest, and wrong precisely when the axis has a job to do (Story #243).
+
+          `aria-hidden`: the chart is a `role="img"` with a name of its own and its figures are in
+          the tables below, so five bare numbers read out before it would be noise. */}
+      <div className="chart-axis" aria-hidden="true">
+        <span className="chart-axis-sizer">{widest}</span>
+        {gutter.map((tick) => (
+          <span
+            className="chart-axis-tick"
+            key={tick.value}
+            style={{ top: `${tick.topPercent}%` }}
+          >
+            {formatValue(tick.value)}
+          </span>
+        ))}
+      </div>
       <svg
         ref={svgRef}
         className="chart"
@@ -140,32 +175,20 @@ export function ColumnChart({
         onMouseMove={onMove}
         onMouseLeave={() => setHover(null)}
       >
-        {ticks.map((t, i) => {
-          const yy = y(t)
-          // Both series are magnitudes, so zero is the floor rather than a level the data crosses.
-          // It stays emphasised: it is the baseline both bars of a pair are measured from.
-          const isZero = t === 0
-          return (
-            <g key={`${t}-${i}`}>
-              <line
-                className={isZero ? 'chart-zero' : 'chart-grid'}
-                x1={PAD.left}
-                x2={W - PAD.right}
-                y1={yy}
-                y2={yy}
-              />
-              <text
-                className="chart-axis-label"
-                x={PAD.left - 8}
-                y={yy}
-                dy="0.32em"
-                textAnchor="end"
-              >
-                {formatValue(t)}
-              </text>
-            </g>
-          )
-        })}
+        {/* Gridlines only. The figures that named them are the HTML gutter above, so that scrolling
+            the plot cannot carry the value axis off the screen (Story #243). */}
+        {ticks.map((t, i) => (
+          <line
+            // Both series are magnitudes, so zero is the floor rather than a level the data
+            // crosses. It stays emphasised: it is the baseline both bars of a pair sit on.
+            className={t === 0 ? 'chart-zero' : 'chart-grid'}
+            key={`${t}-${i}`}
+            x1={PAD.left}
+            x2={W - PAD.right}
+            y1={y(t)}
+            y2={y(t)}
+          />
+        ))}
 
         {columns.map((c, i) => {
           // The pair is centred in its band, so the month label below it names both bars.

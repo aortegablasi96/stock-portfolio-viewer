@@ -146,8 +146,15 @@ export function bandIndexAt(x: number, left: number, plotWidth: number, count: n
 
 /** The plot's fixed height. Only the width moves; a month is a month however many there are. */
 export const COLUMN_PLOT_HEIGHT = 240
-/** Text allowance around the plot, as the chart draws it: value labels left, month labels below. */
-export const COLUMN_PLOT_PAD = { top: 16, right: 16, bottom: 30, left: 64 } as const
+/**
+ * Text allowance around the plot: month labels below, and **nothing on the left** since Story #243.
+ *
+ * The 64 units that used to sit there were the value axis's, and the value axis is no longer drawn
+ * in the `viewBox` — it is HTML beside the scroll container, so that scrolling the plot cannot
+ * carry it off the screen. Everything that measured from `pad.left` moves with it in one step: the
+ * gridlines' start, `bandIndexAt`'s origin, and the hover card's clamp.
+ */
+export const COLUMN_PLOT_PAD = { top: 16, right: 16, bottom: 30, left: 0 } as const
 /**
  * One month's share of the axis, in `viewBox` units.
  *
@@ -187,18 +194,19 @@ export const COLUMN_MONTH_PX = COLUMN_BAND_UNITS * COLUMN_UNIT_PX
 /**
  * The widest the plot may get relative to its height, which is what floors a short history.
  *
- * `4.5:1` is the ratio DDR-0018 gave this chart and the 1080-unit floor Story #76 wrote down; what
- * it lacked was a reason, having been chosen to match a line chart that DDR-0051 has since taken
- * to 500×180 (DDR-0077 recorded the drift). The reason is the **card's height**: the `<svg>` keeps
- * its aspect when it stretches to fill a card wider than its natural width, so a short history in
- * a narrow plot is a *tall* card — at a twelve-month floor the same import rendered 376px instead
- * of 282px, half again as much of the view for the same thirteen bars.
+ * The reason is the **card's height**: the `<svg>` keeps its aspect when it stretches to fill a
+ * card wider than its natural width, so a short history in a narrow plot is a *tall* card — at a
+ * twelve-month floor the same import rendered 376px instead of 282px, half again as much of the
+ * view for the same thirteen bars (Story #241).
  *
- * Floors the width at 1080 units, which is 1080px and fits inside the card of a default window
- * (measured at 1107px). So today's import renders exactly as it rendered before this story, and
- * the scroll begins at the point the chart would otherwise have started shrinking.
+ * **Re-derived rather than re-tuned by Story #243**, which is the distinction worth keeping: the
+ * number describes the *plot*, and the plot lost its 64-unit gutter to the HTML axis beside it. So
+ * `4.5` — a plot that contained its own gutter — becomes `4.2`, which is the same total chart at
+ * its floor: 1008 units of plot plus a gutter of about 56px is the 1080px it has always been, and
+ * that still fits inside the card of a default window (measured at 1107px). Today's import
+ * therefore still does not scroll, and the plot's height does not jump.
  */
-export const COLUMN_PLOT_MIN_ASPECT = 4.5
+export const COLUMN_PLOT_MIN_ASPECT = 4.2
 
 /**
  * The plot `count` months are drawn in.
@@ -228,9 +236,43 @@ export function columnPlotWidthPx(plot: PlotGeometry): number {
   return plot.width * COLUMN_UNIT_PX
 }
 
-/** What an 11-unit axis label renders at, at the plot's natural width. Derived, never restated. */
+/**
+ * What an 11-unit **month** label renders at, at the plot's natural width. Derived, never restated.
+ *
+ * The month labels are the only `.chart-axis-label` this chart still draws: they name the columns
+ * they sit under and scroll with them, which is what keeps them in the `viewBox` where the value
+ * axis no longer is (Story #243).
+ */
 export function columnAxisLabelPx(): number {
   return AXIS_LABEL_UNITS * COLUMN_UNIT_PX
+}
+
+/** One value-axis tick: its figure, and where the gutter puts it. */
+export interface AxisTick {
+  readonly value: number
+  /** Distance from the plot's top edge, as a percentage of the plot's **rendered** height. */
+  readonly topPercent: number
+}
+
+/**
+ * The value axis, as offsets a stylesheet can use (Story #243).
+ *
+ * The gutter is HTML beside the scrolling plot, so it cannot share the plot's coordinate space and
+ * must not try to: the plot stretches to fill a card wider than its natural width, so its rendered
+ * height is not a number this module knows. A **percentage of the plot's own height** is the one
+ * expression that is true at every size — the two sit in one grid row, so the gutter is exactly as
+ * tall as the plot, and `topPercent` lands each label on its gridline without either measuring the
+ * other.
+ *
+ * `y` is the chart's own value-to-unit mapping, passed in rather than recomputed, so a tick label
+ * and the gridline it names cannot come from two different domains.
+ */
+export function axisTicks(
+  ticks: readonly number[],
+  plot: PlotGeometry,
+  y: (value: number) => number,
+): AxisTick[] {
+  return ticks.map((value) => ({ value, topPercent: (y(value) / plot.height) * 100 }))
 }
 
 /** What the hover card calls each of a month's three figures. The chart supplies them. */
