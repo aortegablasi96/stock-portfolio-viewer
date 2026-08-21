@@ -2,6 +2,8 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
   AA_NORMAL,
+  BAND_TINT_ALPHAS,
+  BAND_TINT_PERCENT,
   NON_TEXT,
   PAIRINGS,
   SERIES_INK_PERCENT,
@@ -9,10 +11,13 @@ import {
   SURFACE_EDGE,
   brightness,
   contrastRatio,
+  describeRange,
   findFailures,
   measure,
+  mixOver,
   readColorTokens,
   relativeLuminance,
+  withinRange,
 } from './contrast'
 import { stripComments } from './cssDeclarations'
 
@@ -178,6 +183,82 @@ describe('the pairing list', () => {
     })
   })
 
+  /**
+   * The composition stack's tint (Story #235, DDR-0076). Four assertions, and the first is the one
+   * that makes the rest mean anything — as with the ink ramp above, a composite measured from a
+   * percentage the stylesheet does not use is a measurement of nothing. Here it takes *two*
+   * numbers, because the tint renders at an alpha: the mix and the alpha are both restated in
+   * this module, so both are pinned back.
+   */
+  describe('the band tint', () => {
+    it('measures the mix app.css actually tints with', () => {
+      const declared = [
+        ...CLEAN.matchAll(/--band-tint:\s*color-mix\(in srgb, var\(--series-hue\) ([\d.]+)%/g),
+      ].map(([, percent]) => percent)
+      expect(declared).toEqual([String(BAND_TINT_PERCENT)])
+    })
+
+    it('measures the alphas app.css actually lays it down at', () => {
+      // The composite is the mix times the alpha, so an alpha nudged in the stylesheet moves every
+      // pairing above without any of them noticing. Each is read from the rule that renders it.
+      const rule = (selector: string): string =>
+        CLEAN.match(new RegExp(`^\\${selector}\\s*\\{([^}]*)\\}`, 'm'))?.[1] ?? ''
+      const declared = new Map([
+        ['.stack-top-from', rule('.stack-top-from').match(/stop-opacity:\s*([\d.]+)/)?.[1]],
+        ['.stack-band', rule('.stack-band').match(/fill-opacity:\s*([\d.]+)/)?.[1]],
+        ['.stack-top-to', rule('.stack-top-to').match(/stop-opacity:\s*([\d.]+)/)?.[1]],
+      ])
+      for (const { where, alpha } of BAND_TINT_ALPHAS) {
+        const selector = where.split(' ')[0]!
+        expect(declared.get(selector), selector).toBe(String(alpha))
+      }
+    })
+
+    it('derives the mix from the alpha the ramp opens at, not from a value picked on screen', () => {
+      // 0.8 × 62.5% = 50%: the loudest tint the chart renders is the flat opacity every band wore
+      // before Story #235. If either end moved without the other, the derivation is gone.
+      const loudest = BAND_TINT_ALPHAS[0]!
+      expect(loudest.alpha * BAND_TINT_PERCENT).toBeCloseTo(50, 10)
+    })
+
+    it('keeps every fill below every edge, so the edge is always the sharper channel', () => {
+      // The two families are stated separately in PAIRINGS as a ceiling and a floor. What they are
+      // *for* is the gap between them, and only this assertion can see it.
+      const tokens = readColorTokens(CSS)
+      const card = tokens.get('--card')!
+      const ratios = (percent: number): number[] =>
+        SERIES_INK_SLOTS.map((slot) =>
+          contrastRatio(mixOver(tokens.get(`--series-${slot}`)!, percent, card), card),
+        )
+      const fills = BAND_TINT_ALPHAS.flatMap(({ alpha }) => ratios(alpha * BAND_TINT_PERCENT))
+      const edges = ratios(100)
+      expect(Math.max(...fills)).toBeLessThan(Math.min(...edges))
+    })
+  })
+
+  /**
+   * The ceiling itself (Story #235, DDR-0076). Every other entry in this list fails by being too
+   * faint, so a guard that silently ignored `maximum` would leave the bands exactly as unmeasured
+   * as they were — which is the failure this whole family exists to prevent.
+   */
+  it('fails a pairing that is too loud, not only one that is too faint', () => {
+    const tokens = readColorTokens(CSS)
+    const tooLoud = measure(
+      {
+        where: 'a band painted at full strength',
+        foreground: { token: '--series-4' },
+        background: { token: '--card' },
+        minimum: SURFACE_EDGE,
+        maximum: NON_TEXT,
+        reason: 'A slab, which is precisely the reading Story #235 was opened to remove.',
+      },
+      tokens,
+    )
+    expect(tooLoud.ratio).toBeGreaterThan(NON_TEXT)
+    expect(withinRange(tooLoud)).toBe(false)
+    expect(describeRange(tooLoud)).toBe(`${SURFACE_EDGE}–${NON_TEXT}:1`)
+  })
+
   it('fails loudly if a pairing names a token that no longer exists', () => {
     const tokens = readColorTokens(CSS)
     expect(() =>
@@ -199,11 +280,11 @@ describe('the pairing list', () => {
  * The contract. This is the assertion that would have caught the audit's findings.
  */
 describe('app.css contrast', () => {
-  it('meets AA on every enumerated pairing', () => {
+  it('stays inside the range every enumerated pairing allows', () => {
     const failures = findFailures(CSS).map(
       (f) =>
         `${f.where}\n    ${f.foreground} on ${f.background} = ${f.ratio.toFixed(2)}:1` +
-        `, needs ${f.minimum}:1`,
+        `, needs ${describeRange(f)}`,
     )
     expect(failures, `\n${failures.join('\n')}\n`).toEqual([])
   })

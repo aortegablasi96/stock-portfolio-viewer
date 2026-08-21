@@ -33,14 +33,17 @@ import { ChartTooltip } from './ChartTooltip'
  * emits its bands in; that array orders the palette instead, so inverting the picture repainted
  * nothing (DDR-0073).
  *
- * Those hues are **softened, and only here**: `.stack-band` carries a lowered fill opacity, so
- * eight saturated slabs covering most of a card read as a background the curves beside them can be
- * understood against. The classes are unchanged, so one asset class still means one hue everywhere
- * — this is the same colour, quieter. What each band now also carries is a **hairline stroke of
- * its own colour**, which is not the separating stroke DDR-0052 removed: that one was drawn in
- * `--card` and painted straight over the slivers it was meant to delimit. The top band takes the
- * proposal's vertical **gradient** instead of a flat fill, stops in `app.css` and the id from
- * `useId()`, because two charts on this page mint gradients (DDR-0061).
+ * Those hues are **softened, and only here** — the palette itself does not move, so one asset
+ * class still means one hue everywhere; this is the same colour, quieter. Since Story #235 the
+ * softening is in the *hue* rather than in the alpha: a band's fill is its slot mixed toward
+ * `--card` (`--band-tint`), and the alphas are the proposal's own 0.7 / 0.8→0.5. The point of the
+ * split is that a mix is a value `lib/contrast.ts` can measure, and the measurement is what the
+ * treatment rests on: **the edge carries the band and the fill only decorates it**, so the
+ * hairline stroke stays at full strength and clears 3:1 on every slot while the fill is held
+ * below it (DDR-0076). That stroke is not the separating stroke DDR-0052 removed — that one was
+ * drawn in `--card` and painted straight over the slivers it was meant to delimit. The top band
+ * takes the proposal's vertical **gradient** instead of a flat fill, stops in `app.css` and the id
+ * from `useId()`, because two charts on this page mint gradients (DDR-0061).
  *
  * **The legend is not in here.** It is `CompositionLegend` below, rendered by the view into the
  * card's *header* — so this component emits a bare `<svg>`, exactly like `LineChart` and
@@ -161,9 +164,10 @@ export function StackedAreaChart({
         </g>
       ))}
 
-      {/* One group per ribbon, carrying nothing but the band's palette class: the ribbon's stroke
-          (and the gradient's stops) read `--series-hue` from it, which is how the top band can be
-          filled by a `url(#…)` attribute — a class setting `fill` would out-rank it. */}
+      {/* One group per ribbon, carrying nothing but the band's palette class. Everything the band
+          is painted with reads `--series-hue` off it — the stroke, the flat tint, the gradient's
+          stops — which is what leaves the top band's `fill` free to be a `url(#…)` attribute; a
+          class setting `fill` on the path itself would out-rank it. */}
       {paths.map((path, i) => (
         <g key={stack[i]?.band.key ?? i} className={paint[i]?.hue}>
           <path className={paint[i]?.className} d={path} fill={paint[i]?.fill} />

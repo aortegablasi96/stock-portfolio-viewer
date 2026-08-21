@@ -130,12 +130,14 @@ export function orderComposition(
 /** How one ribbon is painted (Story #222, DDR-0073). */
 export interface BandPaint {
   /**
-   * The palette class carried by the ribbon's wrapping `<g>`, whose only job is to publish
-   * `--series-hue` — the band's own colour, which its stroke and (at the top) its gradient stops
-   * read back out. The group is uniform across bands so that rule has one shape.
+   * The classes carried by the ribbon's wrapping `<g>`, whose only job is to publish the band's
+   * colour: its palette slot, which declares `--series-hue`, and `.stack-hue`, which derives
+   * `--band-tint` from it once for everything underneath — the stroke, the flat fill and, at the
+   * top of the stack, the gradient's stops (Story #235, DDR-0076). The group is uniform across
+   * bands so those rules have one shape.
    */
   readonly hue: string
-  /** The ribbon's own classes. */
+  /** The ribbon's own classes — the shared one plus which end of the stack it is. */
   readonly className: string
   /** The `fill` attribute, present only where the class does not supply one. */
   readonly fill?: string
@@ -147,18 +149,26 @@ export interface BandPaint {
  * The top band is whichever band is drawn top-most, not `stock` by name: an account holding no
  * equities still gets its top edge treated as the NAV line it is.
  *
- * Why the top band's `fill` is an *attribute* while every other band's comes from its class: CSS
- * beats a presentation attribute, so a ribbon carrying `.pie-series-N` cannot also be filled with
- * a gradient reference. The hue therefore moves to the wrapping group, where it is inherited as a
- * custom property and nothing competes with it (DDR-0061's `useId()` trap applies to the id).
+ * Why the top band's `fill` is an *attribute* while every other band's comes from a class: CSS
+ * beats a presentation attribute, so a rule filling every `.stack-band` would erase the gradient
+ * reference. The flat fill therefore lives on `.stack-band-flat` alone, and the hue lives on the
+ * wrapping group, where it is inherited as a custom property and nothing competes with it
+ * (DDR-0061's `useId()` trap applies to the id).
+ *
+ * **The ribbon no longer carries its palette class** (Story #235, DDR-0076). It did while the
+ * flat bands were filled straight from `.pie-series-*`; now they are filled from `--band-tint`,
+ * derived from the `--series-hue` the group already publishes, and a second copy on the path
+ * would only race that class's own `fill` on source order. So every ribbon carries the same two
+ * classes and `hue` is the one place the slot is named.
  */
 export function bandPaint(stack: readonly StackBand[], gradientId: string): BandPaint[] {
   const top = stack.length - 1
-  return stack.map((s, i) =>
-    i === top
-      ? { hue: s.color, className: 'stack-band stack-band-top', fill: `url(#${gradientId})` }
-      : { hue: s.color, className: `stack-band ${s.color}` },
-  )
+  return stack.map((s, i) => ({
+    hue: `stack-hue ${s.color}`,
+    ...(i === top
+      ? { className: 'stack-band stack-band-top', fill: `url(#${gradientId})` }
+      : { className: 'stack-band stack-band-flat' }),
+  }))
 }
 
 /**
