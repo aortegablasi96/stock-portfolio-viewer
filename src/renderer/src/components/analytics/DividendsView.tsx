@@ -41,12 +41,19 @@ import { DataTable, type DataColumn } from '../ui/DataTable'
  */
 
 /**
- * The two series in the income stack, named once. The chart's tooltips and the key in the card
- * header both take these, so the legend cannot come to say something the tooltip does not
- * (Story #192, DDR-0064).
+ * The three parts of the income stack, named once. The hover card and the key in the card header
+ * both take these, so the legend cannot come to say something the card does not (Story #192,
+ * DDR-0064).
+ *
+ * **Story #236 renamed them for what the chart measures.** The key said `Net received` and
+ * `Withholding tax`, which names the two *segments* and leaves the column's own height — the gross
+ * — named nowhere the reader can see. So the key now names the column (`Gross`) and the part
+ * stacked at its top (`Withholding tax`), and `Net` joins them as the third row of the hover card:
+ * declared, taken, and what actually landed, in that order.
  */
-const INCOME_NET_LABEL = 'Net received'
+const INCOME_GROSS_LABEL = 'Gross'
 const INCOME_TAX_LABEL = 'Withholding tax'
+const INCOME_NET_LABEL = 'Net'
 
 /**
  * Declared-but-unpaid dividends. Three distinct empty states matter here: no accruals
@@ -231,21 +238,22 @@ export function DividendsView(): React.JSX.Element {
             <Card>
               <CardHeader className="chart-card-header">
                 <CardTitle>Income over time</CardTitle>
-                <IncomeLegend lowerLabel={INCOME_NET_LABEL} upperLabel={INCOME_TAX_LABEL} />
+                <IncomeLegend columnLabel={INCOME_GROSS_LABEL} upperLabel={INCOME_TAX_LABEL} />
               </CardHeader>
               <CardContent>
                 <p className="source-note">
-                  Column height is the month’s gross income and the solid segment is what reached
-                  the account; a month whose withholding outweighs its dividends dips below the
-                  zero line.
+                  Each column’s height is the month’s gross income, with the withholding tax
+                  stacked at its top; what is left below it is the net that reached the account.
+                  Point at a month for all three. A month whose withholding outweighs its dividends
+                  dips below the zero line, and its withholding is reported rather than drawn.
                 </p>
                 <ColumnChart
                   columns={columns}
                   formatValue={c}
                   lowerLabel={INCOME_NET_LABEL}
                   upperLabel={INCOME_TAX_LABEL}
-                  totalLabel="Gross"
-                  ariaLabel="Net dividend income by month, with withholding tax stacked to gross"
+                  totalLabel={INCOME_GROSS_LABEL}
+                  ariaLabel="Gross dividend income by month, with withholding tax stacked at the top of each column"
                 />
               </CardContent>
             </Card>

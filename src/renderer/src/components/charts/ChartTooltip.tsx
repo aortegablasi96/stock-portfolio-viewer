@@ -1,5 +1,10 @@
 import { PERFORMANCE_PLOT } from '../../lib/chartGeometry'
-import { RADIUS_UNITS, tooltipLayout, type TooltipRow } from '../../lib/chartTooltip'
+import {
+  RADIUS_UNITS,
+  tooltipLayout,
+  type TooltipPlot,
+  type TooltipRow,
+} from '../../lib/chartTooltip'
 
 /**
  * The hover card the three time-series charts float over a scrubbed point (Story #188, DDR-0061).
@@ -22,11 +27,19 @@ import { RADIUS_UNITS, tooltipLayout, type TooltipRow } from '../../lib/chartToo
  * because they are geometry — and a row's figure can carry the colour of the mark it names. The
  * placement above is unchanged, and deliberately so: the proposal's cursor-tracking box is a
  * re-decision rather than a restyle.
+ *
+ * **Story #236 gave it a fourth chart and a `plot` to be drawn in.** The three it was written for
+ * share one `viewBox`, so the geometry could be a module constant; `ColumnChart`'s widens with the
+ * history it plots, and a card laid out against a 500-unit plot inside a 3440-unit one would flip
+ * sides at the wrong x and clamp to an edge that is not there. Nothing else about the card moves:
+ * it is still in the plot's own units and still pinned to the plot's top, and the default keeps
+ * the three original callers passing exactly what they passed before.
  */
 export function ChartTooltip({
   anchorX,
   title,
   rows,
+  plot = PERFORMANCE_PLOT,
 }: {
   /** The scrubbed point's x, in viewBox units. The crosshair is drawn here. */
   anchorX: number
@@ -34,9 +47,11 @@ export function ChartTooltip({
   title: string
   /** One line per series. A row without a label is a single-series chart's bare figure. */
   rows: readonly TooltipRow[]
+  /** The plot to stay inside. Defaults to the Performance grid's shared geometry. */
+  plot?: TooltipPlot
 }): React.JSX.Element {
-  const { pad: PAD, height: H } = PERFORMANCE_PLOT
-  const box = tooltipLayout(anchorX, title, rows, PERFORMANCE_PLOT)
+  const { pad: PAD, height: H } = plot
+  const box = tooltipLayout(anchorX, title, rows, plot)
 
   return (
     <g className="chart-tooltip" pointerEvents="none">

@@ -96,14 +96,45 @@ describe('the stack’s key sits in the card header', () => {
   })
 
   /**
-   * The key and the tooltips are handed the same two constants, so a legend cannot come to name
-   * one thing while the segment under the pointer names another.
+   * The key and the hover card are handed the same constants, so a legend cannot come to name one
+   * thing while the column under the pointer names another.
+   *
+   * **Story #236 renamed all three and the assertions moved with them** (DDR-0077). The guard
+   * exists precisely so that cannot be done by halves: the key named the two *segments*, which
+   * left the column's own height — the gross, and the figure the card is about — named nowhere the
+   * reader could see. So the key names the column and the segment stacked at its top, and `Net`
+   * joins them as the card's third row. Renaming one of the three and not the others is the drift
+   * this catches; deleting the test is not a way to pass it.
    */
-  it('names the two series once, for both the key and the tooltip', () => {
-    expect(VIEW).toContain("const INCOME_NET_LABEL = 'Net received'")
+  it('names the three parts once, for both the key and the hover card', () => {
+    expect(VIEW).toContain("const INCOME_GROSS_LABEL = 'Gross'")
     expect(VIEW).toContain("const INCOME_TAX_LABEL = 'Withholding tax'")
-    expect(VIEW).toMatch(/<IncomeLegend lowerLabel=\{INCOME_NET_LABEL\} upperLabel=\{INCOME_TAX_LABEL\} \/>/)
-    expect(VIEW).toMatch(/lowerLabel=\{INCOME_NET_LABEL\}\s*\n\s*upperLabel=\{INCOME_TAX_LABEL\}/)
+    expect(VIEW).toContain("const INCOME_NET_LABEL = 'Net'")
+    // The key names the column, not the solid segment — `columnLabel`, never `lowerLabel`.
+    expect(VIEW).toMatch(
+      /<IncomeLegend columnLabel=\{INCOME_GROSS_LABEL\} upperLabel=\{INCOME_TAX_LABEL\} \/>/,
+    )
+    expect(VIEW).toMatch(
+      /lowerLabel=\{INCOME_NET_LABEL\}\s*\n\s*upperLabel=\{INCOME_TAX_LABEL\}\s*\n\s*totalLabel=\{INCOME_GROSS_LABEL\}/,
+    )
+    // A literal here is how the card and the key drifted apart in the first place.
+    expect(VIEW).not.toMatch(/totalLabel="/)
+  })
+
+  /** The chart still states its own full name, and it states the new one (DDR-0052's note). */
+  it('updates the chart’s aria-label to the naming the key uses', () => {
+    expect(VIEW).toMatch(/ariaLabel="Gross dividend income by month[^"]*"/)
+    expect(VIEW).not.toContain('Net dividend income by month')
+  })
+
+  /**
+   * The source note describes the chart the reader is looking at. It is prose, so nothing else in
+   * the suite would notice it still describing the old naming — and a note that says "the solid
+   * segment is what reached the account" beside a key that says `Gross` is worse than no note.
+   */
+  it('re-words the note under the title for what the columns are now called', () => {
+    expect(VIEW).toContain('is the month’s gross income')
+    expect(VIEW).not.toContain('the solid segment is what reached')
   })
 
   /**
@@ -117,6 +148,58 @@ describe('the stack’s key sits in the card header', () => {
     expect(VIEW).not.toContain('BarChart')
     expect(COLUMN_CHART).toContain('lower')
     expect(COLUMN_CHART).toContain('upper')
+  })
+})
+
+/**
+ * The hover card, and the native `<title>` it replaced (Story #236, DDR-0077).
+ *
+ * `ColumnChart` was the last chart in the app on a `<title>`; the three in the Performance grid
+ * moved to the shared card in #188 and #220. None of what follows can be observed under Node — the
+ * card is a `<g>` nothing here renders (DDR-0029) — so the arithmetic is checked in
+ * `column.test.ts` and what is checked here is that the component actually reaches for it.
+ */
+describe('the income columns are read by pointing at them', () => {
+  /**
+   * Both halves matter. A `<title>` left behind floats a slow native tooltip *over* the card that
+   * already answered the question — the note `BarChart` has carried since #170, arriving here.
+   */
+  it('raises the shared card and leaves no native tooltip behind', () => {
+    expect(COLUMN_CHART).toContain('<ChartTooltip')
+    expect(COLUMN_CHART).not.toMatch(/<title>/)
+  })
+
+  /**
+   * The card is laid out against **this** chart's plot. The three it was written for share one
+   * fixed `viewBox`; this one widens with its history, so a card defaulting to the Performance
+   * geometry would flip sides at the wrong x and clamp to an edge that is not there.
+   */
+  it('lays the card out in the plot the chart is actually drawn in', () => {
+    expect(COLUMN_CHART).toContain('columnPlot(columns.length)')
+    expect(COLUMN_CHART).toMatch(/<ChartTooltip[\s\S]*?plot=\{plot\}/)
+    // Not the grid's geometry: ColumnChart is not in that grid (DDR-0018, chartGeometry.test.ts).
+    expect(COLUMN_CHART).not.toContain('PERFORMANCE_PLOT')
+  })
+
+  /**
+   * The band, not the bar. A month whose net is zero draws a zero-height rect, and a `<title>` on
+   * one is unhoverable — which is the bug the move fixes as much as the styling is.
+   */
+  it('hit-tests the month’s band, the way the daily-return bars do', () => {
+    expect(COLUMN_CHART).toContain('bandIndexAt(vbX, PAD.left, plotW, columns.length)')
+    expect(COLUMN_CHART).toMatch(/onMouseLeave=\{\(\) => setHover\(null\)\}/)
+  })
+
+  /** The absent row and the sign tone are one function, so no caller can implement half of them. */
+  it('builds its rows through the shared helper rather than inline', () => {
+    expect(COLUMN_CHART).toContain('stackedTooltipRows(')
+    expect(COLUMN_CHART).toMatch(/\{ total: totalLabel, upper: upperLabel, lower: lowerLabel \}/)
+  })
+
+  /** Pointer-only, as the other three are — and the figures stay in the tables below regardless. */
+  it('keeps the chart an img with a name of its own', () => {
+    expect(COLUMN_CHART).toContain('role="img"')
+    expect(COLUMN_CHART).toContain('aria-label={ariaLabel}')
   })
 })
 
