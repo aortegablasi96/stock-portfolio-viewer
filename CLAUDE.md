@@ -274,20 +274,20 @@ below are the same move.
   chart's key lives in the **card header**, not a `<figcaption>` — `ColumnChart` and
   `StackedAreaChart` both emit a bare `<svg>` (DDR-0052, DDR-0064). **A chart title never varies
   with the range**; the return curve's rebasing is disclosed by a *fixed* header note beside the
-  key, since it opens at 0% in every range (DDR-0072).
+  key (DDR-0072).
 - **One chart tooltip, drawn inside the `viewBox`** (DDR-0061). `ChartTooltip` over
   `lib/chartTooltip` draws in the plot's own space — so it **cannot** cover the neighbouring chart
   — **pinned to the plot's top** in all three, never tracking the mark. It floats on
   `--surface-raised`; its padding, corner and `MIN_WIDTH` are **viewBox units**, not CSS lengths.
 - **A `--series-*` slot is a fill; as ink it is `--series-ink-*`** (DDR-0070) — three of the eight
-  fail AA as text. A composition row resolves the band's own `.pie-series-*` class through that
-  ramp; slots and bands are untouched. Daily return's row is toned by **sign**, a zero day not.
+  fail AA as text. A composition row resolves its band's class through that ramp; the slots don't
+  move. Daily return's row is toned by **sign**, a zero day not.
 - **A curve is `--accent`; a *signed* one splits at zero** into the bars' `--pos`/`--neg` — SVG
   writes both as `fill` (DDR-0071). The split is **clipped geometry, never two series**, and its
   wash anchors on **zero**, not the domain floor. `lib/signedCurve` clamps the clip — a range never
   crossing zero gives a **negative height**, and SVG then renders *nothing*. Gradient `fill`s are
-  per element (`useId()` — two curves share one page). Dots need a **doubled** selector;
-  `.chart-dot` out-orders a bare one (DDR-0059; shipped once).
+  per element (`useId()`). Dots need a **doubled** selector; `.chart-dot` out-orders a bare one
+  (DDR-0059; shipped once).
 - **Chart maths that has drawn a wrong picture before.** The performance curve is **cumulative
   TWR**, not a value curve, so deposits and withdrawals don't move it (DDR-0013). Daily returns are
   **chain-linked from that curve** (`lib/dailyReturns`), never differenced from `valueSeries`, and
@@ -298,8 +298,10 @@ below are the same move.
   category into it instead and nothing will look wrong (DDR-0052). The report's `bands` order is
   the **palette**, not the stack: `lib/composition`'s `stackOrder` draws bottom-up Accruals · Cash ·
   `other` · Options · Stocks, so reordering `BAND_SPECS` repaints every band instead of moving one
-  (DDR-0073). A slot publishes `--series-hue` for what `fill` can't cover; a classed ribbon
-  **cannot also** be filled `url(#…)`, hence the `<g>`.
+  (DDR-0073). A slot publishes `--series-hue`; `.stack-hue` mixes it to `--band-tint` — bands
+  soften by **mix, not opacity** (only a value is measurable) and stay *under* their full-strength
+  edge (DDR-0076). A ribbon carries **no** palette class: a CSS `fill` beats `url(#…)` and the
+  tint, hence the `<g>`.
 - **The map popup's tint is banked into its edges, and the geometry is what lets it be loud**
   (DDR-0041): the gradient's inner stops sit at `--popup-pad-y`, an **absolute length, not a
   percentage** (a percentage band creeps under the text of taller popups), and

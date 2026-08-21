@@ -411,20 +411,30 @@ describe('bandPaint', () => {
     { key: 'accruals', label: 'Accruals' },
   ])
 
-  it('fills the top band from the gradient and every other from its own class', () => {
+  it('fills the top band from the gradient and every other from the flat tint', () => {
     const paint = bandPaint(stack, 'grad')
     expect(paint.map((p) => p.fill)).toEqual([undefined, undefined, 'url(#grad)'])
-    expect(paint[0]?.className).toBe('stack-band pie-series-3')
+    expect(paint[0]?.className).toBe('stack-band stack-band-flat')
     expect(paint.at(-1)?.className).toBe('stack-band stack-band-top')
   })
 
+  it('keeps the palette class off the ribbon, where it would race the tint’s own fill', () => {
+    // Story #235: the flat fill is `--band-tint`, derived from the hue the *group* publishes. A
+    // `.pie-series-*` on the path as well declares a second `fill` at equal specificity, and which
+    // one wins is then a question about source order — the failure DDR-0059 records.
+    for (const { className } of bandPaint(stack, 'grad')) {
+      expect(className).not.toMatch(/pie-series/)
+    }
+  })
+
   it('publishes every band’s hue on its group, the top band’s included', () => {
-    // The top ribbon cannot carry the palette class — a CSS `fill` would out-rank the gradient
-    // reference — so its stroke and its gradient stops read the hue off the group instead.
+    // No ribbon carries the palette class itself — a CSS `fill` would out-rank the top band's
+    // gradient reference, and race the flat tint on the others — so the stroke, the fill and the
+    // stops all read the hue off the group, where `.stack-hue` also derives `--band-tint` from it.
     expect(bandPaint(stack, 'grad').map((p) => p.hue)).toEqual([
-      'pie-series-3',
-      'pie-series-2',
-      'pie-series-1',
+      'stack-hue pie-series-3',
+      'stack-hue pie-series-2',
+      'stack-hue pie-series-1',
     ])
   })
 
@@ -457,19 +467,31 @@ describe('the stack’s fills, in app.css', () => {
   const rule = (selector: string): string =>
     CSS.match(new RegExp(`^${selector.replace(/[.*]/g, '\\$&')}\\s*\\{([^}]*)\\}`, 'm'))?.[1] ?? ''
 
-  it('runs the top band’s ramp from 0.8 to the 0.5 every other band wears', () => {
+  it('wears the proposal’s alphas — 0.7 flat, 0.8 down to 0.5 on the top band', () => {
+    // Story #235 adopted these literally, which is only safe because the softening left the alpha
+    // channel: the hue is mixed toward --card first, and `lib/contrast.ts` measures the composite.
     expect(rule('.stack-top-from')).toContain('stop-opacity: 0.8')
     expect(rule('.stack-top-to')).toContain('stop-opacity: 0.5')
-    expect(rule('.stack-band')).toContain('fill-opacity: 0.5')
-    // The ramp carries the alpha, so the flat softening is given back on the top band.
+    expect(rule('.stack-band')).toContain('fill-opacity: 0.7')
+    // The ramp carries the alpha, so the flat one is given back on the top band.
     expect(rule('.stack-band-top')).toContain('fill-opacity: 1')
   })
 
-  it('takes both the stops and the stroke from the band’s own hue, not a second palette', () => {
+  it('softens the fills through the hue, and leaves the edge at full strength', () => {
+    // The whole treatment in three lines: one tint, mixed once, worn by the flat fill and by both
+    // stops — and a stroke that does not read it, because the edge is what identifies the band.
+    expect(rule('.stack-band-flat')).toContain('fill: var(--band-tint)')
     for (const selector of ['.stack-top-from', '.stack-top-to']) {
-      expect(rule(selector)).toContain('stop-color: var(--series-hue)')
+      expect(rule(selector)).toContain('stop-color: var(--band-tint)')
     }
     expect(rule('.stack-band')).toContain('stroke: var(--series-hue)')
+    expect(rule('.stack-band')).not.toContain('--band-tint')
+  })
+
+  it('mixes that tint from the band’s own hue, not from a second palette', () => {
+    expect(rule('.stack-hue')).toMatch(
+      /--band-tint:\s*color-mix\(in srgb, var\(--series-hue\) [\d.]+%, var\(--card\)\)/,
+    )
     // …which every palette slot has to publish, or a band would stroke itself with nothing.
     for (const slot of [1, 2, 3, 4, 5, 6, 7, 8]) {
       expect(rule(`.pie-series-${slot}`)).toContain(`--series-hue: var(--series-${slot})`)
@@ -483,11 +505,15 @@ describe('the stack’s fills, in app.css', () => {
     expect(rule('.stack-band')).toContain('vector-effect: non-scaling-stroke')
   })
 
-  it('shrinks the key’s swatch and stops softening it', () => {
+  it('shrinks the key’s swatch and leaves it at full strength', () => {
+    // Story #222 stopped softening it; Story #235 softened the fills and deliberately did *not*
+    // take the swatch with them. Both decisions say the same thing — the swatch states the hue a
+    // band carries on its own edge, and that edge is still full strength (DDR-0076).
     const swatch = rule('.composition-legend .legend-swatch')
     expect(swatch).toContain('width: 8px')
     expect(swatch).toContain('border-radius: 2px')
     expect(swatch).not.toContain('opacity')
+    expect(swatch).not.toContain('--band-tint')
   })
 })
 

@@ -154,6 +154,19 @@ export interface Pairing {
   /** Applied to the background, for hover states that filter their own fill. */
   readonly backgroundBrightness?: number
   readonly minimum: number
+  /**
+   * A ceiling, for the pairings that fail by being too **loud** (Story #235, DDR-0076).
+   *
+   * Every entry above this one is a floor, because every failure this module was built for was a
+   * thing too faint to read. The composition stack's failure is the other one: eight saturated
+   * slabs covering most of a card, shouting down the three charts beside it. A guard that only
+   * knows floors cannot see that, and the softening it needed would otherwise be a number picked
+   * on screen — which is what DDR-0052 did, and what left it unmeasured for two stories.
+   *
+   * A ceiling is only meaningful where something *else* carries the meaning: a band's fill may sit
+   * under 1.4.11's bar because the band's own stroke is held above it, five rules below.
+   */
+  readonly maximum?: number
   readonly reason: string
 }
 
@@ -202,6 +215,36 @@ export const SERIES_INK_SLOTS = [1, 2, 3, 4, 5, 6, 7, 8, 'neutral'] as const
  * disagreement is what fails.
  */
 export const SERIES_INK_PERCENT = 75
+
+/**
+ * How much of a band's own hue survives in the composition stack's tint — the `62.5%` in
+ * `app.css`'s `--band-tint` (Story #235, DDR-0076).
+ *
+ * Mirrored here for {@link SERIES_INK_PERCENT}'s reason, and pinned back against the stylesheet by
+ * `contrast.test.ts`: a number restated in two files is a number that will disagree, so the
+ * disagreement is what fails.
+ *
+ * It is derived rather than chosen. The proposal's numbers are alpha — 0.7 for a flat band, 0.8
+ * down to 0.5 for the ramp on the band at the stack's edge — and adopting them literally makes
+ * these bands *louder* than the 0.5 DDR-0052 measured. So the alpha stays the proposal's and the
+ * softening moves into the hue, at the one mix that puts the loudest tint the chart renders where
+ * its quietest band already was: `0.8 × 62.5% = 50%`, the flat opacity every band wore before.
+ */
+export const BAND_TINT_PERCENT = 62.5
+
+/**
+ * Every alpha the stack lays that tint down at, and what renders each.
+ *
+ * All three are listed rather than just the extremes. The ratios are monotone in the composite, so
+ * bounding the loudest and the quietest would bound the middle by arithmetic — but the middle is
+ * the alpha most of the bands actually wear, and "bounded by construction" is how a value stops
+ * being looked at.
+ */
+export const BAND_TINT_ALPHAS: readonly { readonly where: string; readonly alpha: number }[] = [
+  { where: '.stack-top-from — the ramp’s NAV edge, the loudest tint the chart renders', alpha: 0.8 },
+  { where: '.stack-band — the flat bands, every one below the top', alpha: 0.7 },
+  { where: '.stack-top-to — the ramp’s foot, the quietest tint the chart renders', alpha: 0.5 },
+]
 
 /**
  * Every text-on-surface pairing the app actually renders.
@@ -655,15 +698,65 @@ export const PAIRINGS: readonly Pairing[] = [
       slot +
       ' is, and the ramp exists precisely because three of these fail at full strength.',
   })),
+  /**
+   * The composition stack's two channels (Story #235, DDR-0076), and the first entries in this
+   * list with a {@link Pairing.maximum}.
+   *
+   * The stack has worn the `--series-*` slots as area since Story #171 and as a hairline stroke
+   * since Story #222, and neither has ever been measured — a `fill-opacity` resolves to no value
+   * a Node test can read, so the softening DDR-0052 picked on screen stayed a number nobody could
+   * check. Making it a `color-mix()` is what puts it in reach of this module, and that is most of
+   * why the mix exists.
+   *
+   * The two families say one thing between them: **the edge carries the band and the fill only
+   * decorates it.** The stroke is the hue at full strength and is held to {@link NON_TEXT},
+   * because on this portfolio a 0.1% cash band is sub-pixel and the hairline is the entire mark.
+   * The fill is held *under* that same bar — a ceiling, not a floor — so a band's identifying
+   * channel is always the sharper of its two. The ranges do not even meet: the loudest tint is
+   * 2.39:1 (`--series-7` at the ramp's edge) and the faintest edge is 3.74:1 (`--series-6`),
+   * which `contrast.test.ts` asserts as a gap rather than as two separate bounds.
+   *
+   * The fills also carry a floor, and {@link SURFACE_EDGE} is the right one rather than a
+   * borrowed name: a band's tint against the card is exactly what that threshold was cut for — a
+   * fill that has to mark a shape rather than dissolve into the surface behind it, with no claim
+   * on an accessibility bar. The quietest is 1.37:1 (`--series-6` at the ramp's foot), so both
+   * ends bind and neither is far away.
+   */
+  ...BAND_TINT_ALPHAS.flatMap(({ where, alpha }) =>
+    SERIES_INK_SLOTS.map((slot) => ({
+      where: `${where} — a band tinted from --series-${slot}`,
+      foreground: {
+        mix: { token: `--series-${slot}`, percent: BAND_TINT_PERCENT * alpha, over: '--card' },
+      },
+      background: { token: '--card' },
+      minimum: SURFACE_EDGE,
+      maximum: NON_TEXT,
+      reason:
+        'A composition band is a tint of the card, not a slab on it: loud enough to mark the ' +
+        'ribbon, quiet enough that the band’s own edge stays the channel that identifies it.',
+    })),
+  ),
+  ...SERIES_INK_SLOTS.map((slot) => ({
+    where: `.stack-band’s stroke — the hairline edge of a band drawn from --series-${slot}`,
+    foreground: { token: `--series-${slot}` },
+    background: { token: '--card' },
+    minimum: NON_TEXT,
+    reason:
+      'The edge is the whole mark where a band is sub-pixel, so it is a graphic carrying ' +
+      'meaning. It is also why the stroke is not diluted with the fills: --series-6 is 3.74:1 ' +
+      'here, 85% of it measures 3.01:1 and 84% fails, so there is nothing to spend.',
+  })),
 ]
 
-/** One failing pairing, with the numbers, for the test’s failure message. */
+/** One measured pairing, with the numbers, for the test’s failure message. */
 export interface ContrastFailure {
   readonly where: string
   readonly foreground: string
   readonly background: string
   readonly ratio: number
   readonly minimum: number
+  /** Present only where the pairing can also fail by being too loud (DDR-0076). */
+  readonly maximum?: number
 }
 
 export function measure(pairing: Pairing, tokens: Map<string, string>): ContrastFailure {
@@ -679,13 +772,27 @@ export function measure(pairing: Pairing, tokens: Map<string, string>): Contrast
     background,
     ratio: contrastRatio(foreground, background),
     minimum: pairing.minimum,
+    ...(pairing.maximum === undefined ? {} : { maximum: pairing.maximum }),
   }
 }
 
-/** Every enumerated pairing that falls below its threshold. */
+/** Whether one measurement sits inside the range its pairing allows. */
+export function withinRange(result: ContrastFailure): boolean {
+  if (result.ratio < result.minimum) return false
+  return result.maximum === undefined || result.ratio <= result.maximum
+}
+
+/** The range a pairing allows, for a failure message: `≥ 4.5:1`, or `1.2–3:1`. */
+export function describeRange(result: ContrastFailure): string {
+  return result.maximum === undefined
+    ? `≥ ${result.minimum}:1`
+    : `${result.minimum}–${result.maximum}:1`
+}
+
+/** Every enumerated pairing that falls outside its threshold — too faint, or too loud. */
 export function findFailures(css: string): ContrastFailure[] {
   const tokens = readColorTokens(css)
   return PAIRINGS.map((pairing) => measure(pairing, tokens)).filter(
-    (result) => result.ratio < result.minimum,
+    (result) => !withinRange(result),
   )
 }

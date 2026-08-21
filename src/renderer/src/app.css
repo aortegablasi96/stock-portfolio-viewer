@@ -2833,69 +2833,115 @@ html {
   vector-effect: non-scaling-stroke;
 }
 
-/* A composition band (Story #171, DDR-0050). The fill comes from the `.pie-series-*` class the
-   band carries, exactly as a donut slice does — one asset class, one hue, shared with the
-   legend swatch beside it.
+/* A composition band (Story #171, DDR-0050). Its colour is the band's own palette slot, published
+   as `--series-hue` by the class on the wrapping `<g>` (Story #222, DDR-0073), and this chart
+   spends that one hue in two channels which are deliberately not the same strength.
 
-   The bands are softened, and *only* the bands (DDR-0052).
+   **The edge carries the band; the fill only decorates it** (Story #235, DDR-0076).
 
-   The `--series-*` palette is tuned for donut slices and map marks — small, isolated shapes that
-   have to hold their identity against a dark card at a few dozen pixels across. A stacked area
-   uses the same eight hues as slabs covering most of the card, and at that size the saturation
-   that makes a 40px wedge legible makes the chart shout down the two curves it shares a grid with.
-   Lowering the fill opacity blends each band toward `--card` — the same hue, further back — so
-   the chart still reads as one asset class per colour while sitting behind rather than in front.
-   0.5 was picked on screen, and 0.62 was tried first; the proposal's 0.7 is declined for the same
-   measurement, since the two curves it would shout down are still beside it.
+   The stroke is the hue at full strength. On this portfolio a cash band is ~0.1% of NAV and
+   sub-pixel, so the hairline *is* the mark, and `lib/contrast.ts` now holds every slot to
+   1.4.11's 3:1 against `--card` there — `--series-6` is the tightest at 3.74:1, so diluting the
+   stroke has almost nothing to spend: 85% of the hue measures 3.01:1 and 84% fails. The fill is
+   required to stay *under* that same 3:1, so the sharper of a band's two channels is always the
+   one that identifies it.
 
-   Deliberately scoped rather than retuning the tokens: the palette is validated for CVD and
+   That split is what the tint below is for. The `--series-*` palette is tuned for donut slices and
+   map marks — small, isolated shapes holding their identity at a few dozen pixels — and a stacked
+   area wears the same hues as slabs covering most of a card, where the saturation that makes a
+   40px wedge legible makes this chart shout down the three it shares a grid with.
+
+   The proposal's fill numbers are **alpha**: 0.7 flat, and 0.8 down to 0.5 on the band at the
+   stack's edge. Taken literally they make these bands *louder* than the 0.5 DDR-0052 measured,
+   which is the opposite of what Story #235 is for. So the alpha is the proposal's and the
+   softening moves to the hue — each band mixed toward `--card` before its alpha is applied. The
+   mix is derived rather than picked: **the loudest tint the chart may render is the one its
+   quietest band already wore.** The ramp opens at 0.8, so 0.8 × 62.5% is the 50% of full hue every
+   flat band carried before; the flat bands land at 0.7 × 62.5% = 43.75% and the ramp's foot at
+   31.25%. The whole card now sits at or below the value its softest band used to, and the band
+   that made it a slab — whichever reaches the top, Stocks on this account — loses its NAV edge
+   from 3.70:1 to 2.17:1 against the card.
+
+   A `color-mix()` and not simply a lower `fill-opacity`, although over an opaque card the two
+   composite to the same colour: a mix resolves to a *value*, and a value is something
+   `lib/contrast.ts` can measure. An opacity cannot be measured without knowing what lies beneath
+   it, which is exactly why these bands went unmeasured from DDR-0052 until now.
+
+   Where the two do differ is the gridlines under a band, and the direction is the opposite of what
+   the alpha suggests: less of the line survives (30% at 0.7 against 50% at 0.5), but it survives
+   against a far darker tint, so on screen the €20k–€60k rules now read *through* the stack where
+   before they were buried in it. `.chart-area-from` makes the trade the other way for a curve's
+   wash, and keeps its `stop-opacity` for exactly that reason (DDR-0061).
+
+   Still scoped to this chart rather than retuning the tokens: the palette is validated for CVD and
    contrast as a set (DDR-0030) and is worn by the allocation donuts, the map and every other
    legend, none of which have this problem. `fill-opacity` rather than `opacity` so the bands stay
    individually composited instead of being flattened into one group. `.stack-band` needs no
    ancestor selector — it exists in this chart alone.
 
-   The stroke is the redesign's (Story #222, DDR-0073), and it is **not** the separating stroke
-   DDR-0052 removed. That one was drawn in `--card` to delimit neighbours, and a stroke thick
-   enough to see is thicker than a 0.1% band, so on this portfolio (~99.9% stocks) it painted the
-   card colour straight over the cash and accrual slivers it was meant to separate. This one is the
-   band's **own** `--series-hue`, published by the palette class on the wrapping group, so the same
-   sliver is drawn *as its own colour* rather than obliterated — the failure mode is inverted.
-   `non-scaling-stroke` for `.chart-bar-active`'s reason: by a few hundred days a band is a
-   hairline, and a stroke in viewBox units would be wider than the ribbon it edges. */
+   The stroke is **not** the separating stroke DDR-0052 removed. That one was drawn in `--card` to
+   delimit neighbours, and a stroke thick enough to see is thicker than a 0.1% band, so on this
+   portfolio (~99.9% stocks) it painted the card colour straight over the cash and accrual slivers
+   it was meant to separate. This one is the band's own hue, so the same sliver is drawn *as
+   itself* rather than obliterated — the failure mode is inverted. `non-scaling-stroke` for
+   `.chart-bar-active`'s reason: by a few hundred days a band is a hairline, and a stroke in
+   viewBox units would be wider than the ribbon it edges. */
+/* The tint, derived once per band on the same element that publishes the hue — the wrapping `<g>`,
+   and the `<linearGradient>` for the top band's ramp. Everything below it reads the result: the
+   flat fill and both stops. Declared here rather than in each of those rules so the mix is one
+   number in one place, and here rather than on `.pie-series-*` because a tint of `--card` is this
+   chart's business and no donut's (DDR-0073 kept the palette publishing the hue alone). */
+.stack-hue {
+  --band-tint: color-mix(in srgb, var(--series-hue) 62.5%, var(--card));
+}
+
 .stack-band {
-  fill-opacity: 0.5;
+  fill-opacity: 0.7;
   stroke: var(--series-hue);
   stroke-width: 1;
   vector-effect: non-scaling-stroke;
 }
 
+/* The flat bands' fill — a class of its own rather than a `fill` on `.stack-band`, for two
+   reasons that both come out of DDR-0073. The top band takes its fill from a `url(#…)`
+   *attribute*, and CSS beats a presentation attribute, so a `fill` on the shared class would
+   erase the ramp. And the tint is derived from `--series-hue`, which the wrapping group already
+   publishes, so the ribbon no longer needs to carry `.pie-series-*` itself — which is just as
+   well, since that class also declares a `fill` and the two would have raced on source order.
+   Every ribbon now carries the same two classes. */
+.stack-band-flat {
+  fill: var(--band-tint);
+}
+
 /* The top of the stack, whichever band reaches it (Story #222, DDR-0073). Its fill is the
-   gradient the component mints per instance, so the flat opacity is given back here — the ramp
-   carries the alpha now, 0.8 at the NAV edge down to the 0.5 every other band wears. The heavier
-   stroke is the proposal's, and the edge it draws is the reader's NAV. */
+   gradient the component mints per instance, so the flat alpha is given back here — the ramp
+   carries it now, 0.8 at the NAV edge down to 0.5 at the band's foot. The heavier stroke is the
+   proposal's, and the edge it draws is the reader's NAV. */
 .stack-band-top {
   fill-opacity: 1;
   stroke-width: 1.5;
 }
 
-/* The ramp's stops. `--series-hue` is inherited from the palette class on the `<linearGradient>`
-   itself, so the gradient is the band's own token rather than a second copy of the palette
-   (DDR-0061: stops live here, the `fill` is per element and its id comes from `useId()`). */
+/* The ramp's stops. They take `--band-tint`, which resolves from the `--series-hue` inherited from
+   the palette class on the `<linearGradient>` itself — so the gradient is still the band's own
+   token rather than a second copy of the palette, softened by the same one number as the flat
+   bands (DDR-0061: stops live here, the `fill` is per element and its id comes from `useId()`). */
 .stack-top-from {
-  stop-color: var(--series-hue);
+  stop-color: var(--band-tint);
   stop-opacity: 0.8;
 }
 
 .stack-top-to {
-  stop-color: var(--series-hue);
+  stop-color: var(--band-tint);
   stop-opacity: 0.5;
 }
 
 /* The key's swatch is a miniature of the mark, so it takes the proposal's smaller square
-   (Story #222). It is no longer softened to match the slab: every band now carries its hue at
-   full strength on its own edge, and the swatch states that hue. The corner keeps the 25% of its
-   width that the 12px swatch had — 3px on 12 is 2px on 8 — rather than inheriting a corner drawn
-   for a bigger square. */
+   (Story #222). It is **not** softened with the bands, and that is the same decision restated
+   rather than a new one: the swatch states the hue a band carries on its own edge, and Story #235
+   softened the fills precisely so the edge could stay at full strength (DDR-0076). The corner
+   keeps the 25% of its width that the 12px swatch had — 3px on 12 is 2px on 8 — rather than
+   inheriting a corner drawn for a bigger square. */
 .composition-legend .legend-swatch {
   width: 8px;
   height: 8px;

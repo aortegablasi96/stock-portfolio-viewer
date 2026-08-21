@@ -95,6 +95,15 @@ happened to read top-down, because the report's order was the stack's; now it is
   real import, having tried 0.62 and found it still the loudest thing in the grid, and the two
   curves it would shout down are still beside it. What the proposal was buying with the extra 0.2
   — definition on a small band — the stroke buys instead, and buys better.
+
+  > **Superseded by [[0076-the-band-tint-is-measured-and-the-edge-carries-the-band]]** (Story
+  > #235). The proposal's 0.7 is adopted after all, and so is the 0.8→0.5 ramp beside it, because
+  > the softening moved out of the alpha channel entirely: a band's fill is now its hue mixed
+  > 62.5% into `--card` first. The decision this bullet was making — *is 0.5 or 0.7 the right
+  > number* — turned out to be unanswerable as posed, since neither is a value any test could
+  > measure. Everything else in this section stands: the ramp, the stroke and the hue are
+  > unchanged, and the stroke stays at **full strength** precisely so the softened fills can sit
+  > under it.
 - **The stroke is 1px of the band's own `--series-hue`**, `non-scaling-stroke` for
   `.chart-bar-active`'s reason: by a few hundred trading days a band is a hairline, and a stroke in
   viewBox units would be wider than the ribbon it edges. The top band's is 1.5px, the proposal's,
@@ -129,7 +138,10 @@ CSS competing. The group is uniform across bands so the rule has one shape.
 8×8 with a 2px corner — the proposal's square, and a corner that keeps the 25% of its width the
 12px swatch had, rather than inheriting one drawn for a bigger square. It is **no longer softened
 to 0.5**: that matched the slab, and every band now carries its hue at full strength on its own
-edge, which is what the key states. The shared `.legend-swatch` is untouched, so the donut legends
+edge, which is what the key states. (Story #235 softened the fills further still and deliberately
+left the swatch where it is, on this sentence:
+[[0076-the-band-tint-is-measured-and-the-edge-carries-the-band]] keeps the edge at full strength,
+so the key keeps stating it.) The shared `.legend-swatch` is untouched, so the donut legends
 keep their 12px.
 
 The 2px corner is the token ratchet's **ninth** exemption
@@ -199,6 +211,10 @@ a presentation decision.
 Declined. [[0052-composition-cumulative-and-chart-readability]] measured 0.5 on screen against this
 import with these neighbours, and nothing about the neighbours changed. The stroke gives the small
 bands the definition the extra opacity was there for.
+
+**Reversed by [[0076-the-band-tint-is-measured-and-the-edge-carries-the-band]]**, which found the
+question ill-posed: "measured on screen" is not measured, and neither 0.5 nor 0.7 is a number any
+guard in this repo could reach. Adopting 0.7 is safe once the hue is mixed toward `--card` first.
 
 ### Paint the top band `#6366f1`, as the proposal does
 

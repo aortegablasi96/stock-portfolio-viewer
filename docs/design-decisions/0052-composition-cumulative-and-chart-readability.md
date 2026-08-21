@@ -77,6 +77,14 @@ tried first and still read as the loudest thing in the grid.
 `.stack-band` needs no ancestor selector, since it exists in this chart alone; the legend swatch is
 the shared `.legend-swatch` class, so that half is scoped.
 
+> **Superseded twice, and the second time on the mechanism** (Story #222, Story #235). The swatch
+> stopped being softened at all when it became a miniature of the band's own edge
+> ([[0073-the-composition-stack-inverts-and-the-palette-stays]]). The band's own softening is no
+> longer an opacity: [[0076-the-band-tint-is-measured-and-the-edge-carries-the-band]] mixes the
+> hue 62.5% into `--card` and adopts the proposal's alphas on top of it, which is a *value*
+> `lib/contrast.ts` can measure — and the "picked on screen rather than derived" above is exactly
+> why it had to. The intent this section states is unchanged and is what the later work is for.
+
 ### The legend moves into the card header, and all four cards become the same height
 
 `CompositionLegend` renders at the right of the composition card's `CardHeader`, beside the title.
@@ -159,6 +167,11 @@ Tradeoffs:
   *opacity*, not hue, and only inside one figure — but it is a precedent, and a second such
   exception would be the moment to ask whether the palette needs a second, quieter scale rather
   than a per-chart override.
+  ([[0076-the-band-tint-is-measured-and-the-edge-carries-the-band]] moved the deviation into
+  **hue** and kept it inside the same one figure. The question this bullet holds open — a quieter
+  scale in `:root` versus a per-chart override — was asked there and answered the same way: the
+  eight slots are validated as a set and are worn by four other surfaces, so `--band-tint` is
+  derived from a slot rather than joining them.)
 - `stackSpans` is now unit-agnostic in practice as well as in principle. Its tests moved from
   shares to currency, which is a weaker guard against someone passing the wrong one in.
 
