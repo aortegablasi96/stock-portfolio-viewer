@@ -396,6 +396,8 @@ body {
 .bar-list-value,
 .map-popup-row dd,
 .chart-axis-label,
+.chart-axis-sizer,
+.chart-axis-tick,
 .chart-tooltip-date,
 .chart-tooltip-value {
   font-family: var(--font-figure);
@@ -2470,6 +2472,54 @@ html {
   height: auto;
 }
 
+/* The income chart's value axis, which does not scroll with its plot (Story #243, DDR-0079).
+
+   It is a **sticky flex item inside the scroll container**, and both halves of that are load-
+   bearing. Sticky is what keeps it on screen while the plot slides past. *Inside* is what makes a
+   percentage mean the right thing: the ticks are placed on a share of this element's height, and
+   stretched to a flex line inside the scroller it is exactly as tall as the `<svg>` — because a
+   horizontal scrollbar sits outside the content box a percentage resolves against. Placed beside
+   the scroller instead, the same labels were exact at rest and ~15px low the moment the plot grew
+   long enough to scroll, which is precisely when the axis has a job to do.
+
+   The background is what the plot slides *under*. It is `--card` because that is the surface this
+   chart is drawn on, and it is the one thing here that would have to move if it were ever drawn on
+   another. */
+.chart-axis {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  flex: none;
+  background: var(--card);
+  padding-right: var(--space-3);
+}
+
+/* One tick, centred on its gridline. `top` is set per element because it is data, not a design
+   value — `lib/column.ts`'s `axisTicks` derives it from the same `y` the gridlines are drawn with,
+   so a label and the line it names cannot come from two different domains. */
+.chart-axis-tick {
+  position: absolute;
+  right: var(--space-3);
+  transform: translateY(-50%);
+  white-space: nowrap;
+}
+
+/* What makes the column as wide as its widest figure — the browser measures the real string in the
+   real face, so a portfolio that crosses a decimal place widens the gutter by itself. DDR-0051
+   §#190 is the failure this replaces: a hand-set allowance held eight characters, the charts
+   rendered ten, and the `viewBox` clipped the currency symbol off every tick in silence. It is
+   `visibility: hidden` rather than absent because only an element in flow can size a column. */
+.chart-axis-sizer {
+  visibility: hidden;
+}
+
+.chart-axis-sizer,
+.chart-axis-tick {
+  color: var(--chart-axis);
+  font-size: var(--text-2xs);
+  line-height: 1;
+}
+
 /* The income chart's scroll window (Story #241, DDR-0078).
 
    Overflow and nothing else — whether anything is *drawn* stays the card's job, which is the split
@@ -2484,6 +2534,7 @@ html {
    `overscroll-behavior-x: contain` keeps a trackpad swipe that reaches the end of the plot from
    continuing into the window's own back-navigation gesture. */
 .chart-scroll {
+  display: flex;
   overflow-x: auto;
   overscroll-behavior-x: contain;
 }
@@ -2491,9 +2542,15 @@ html {
 /* The floor half. The width itself is an inline attribute because it is a function of the data,
    not a design value — it is computed in `lib/column.ts` beside the geometry it derives from, the
    way `chartGeometry`'s numbers are, and an inline style is what wins over `.chart`'s `width: 100%`
-   above without a second rule chasing it. */
+   above without a second rule chasing it.
+
+   `flex-grow` rather than `min-width: 100%` since Story #243: the gutter is a flex item beside it
+   now, so "fill the card" means "fill what the gutter leaves", which is what growing does and what
+   a percentage of the container does not. `flex-shrink: 0` is the half that keeps it scrolling —
+   a flex item shrinks to its line by default, and a plot that shrank would be back to spending
+   legibility on its history. */
 .chart-scroll .chart {
-  min-width: 100%;
+  flex: 1 0 auto;
 }
 
 /* An empty chart is `<StatePanel surface="inline">` (Story #133): the rule that

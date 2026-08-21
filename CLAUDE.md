@@ -91,7 +91,6 @@ src/
 drizzle/         generated SQL migrations + meta journal
 e2e/             Playwright specs launching the built app
 docs/flex-queries/  real Flex exports (parser ground truth) — gitignored
-docs/figma_design/  Epic #179's Figma Make export — gitignored
 ```
 
 ### Reference slices to copy
@@ -281,7 +280,9 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
   The income chart is **two bars a month on one baseline** (never a stack), sized in **pixels**
   (`COLUMN_UNIT_PX` = 1, from the label floor) inside `.chart-scroll` — the app's one chart off
   DDR-0018's aspect rule, nothing drawn below zero. A card row with no figure is **absent, not
-  zero**; only the undrawn net is toned. The value axis scrolls away with it (DDR-0077, DDR-0078).
+  zero**; only the undrawn net is toned. Its **value axis is HTML**, sticky **inside** the scroller
+  — outside it a scrollbar puts every tick 15px low once the plot scrolls; the month labels stay in
+  the `viewBox` (DDR-0077–0079).
 - **A `--series-*` slot is a fill; as ink it is `--series-ink-*`** (DDR-0070) — three of the eight
   fail AA as text. A composition row resolves its band's class through that ramp; the slots don't
   move. Daily return's row is toned by **sign**, a zero day not.
@@ -457,8 +458,7 @@ and return to the owning workflow skill rather than being made inline.**
 
 `docs/` holds `architecture.md`, `database.md`, `product.md`, `mcp.md`, `github-issues.md`, plus
 `decisions/` (ADRs) and `design-decisions/` (DDRs), each with a README indexing every record in one
-line. Two directories are **gitignored and local-only**, so a fresh clone has neither:
-`flex-queries/` and `figma_design/`. Adding a repository means keeping
+line. `flex-queries/` is **gitignored** (see above). Adding a repository means keeping
 `src/repositories/README.md` in step; the layering itself is `docs/architecture.md`.
 
 Consult documentation in this order: **`docs/decisions/` → `docs/design-decisions/` →

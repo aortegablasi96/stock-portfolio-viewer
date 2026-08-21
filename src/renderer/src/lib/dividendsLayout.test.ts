@@ -198,13 +198,14 @@ describe('a month is two columns on one baseline', () => {
   })
 
   /**
-   * The two halves of the width decision. A pixel width without `min-width` leaves a short history
-   * floating in the middle of its card (DDR-0018 rejected that on sight); `min-width` without the
-   * pixel width is the behaviour this story replaced. Neither is useful alone, so both are pinned.
+   * The two halves of the width decision. A pixel width with nothing to fill against leaves a short
+   * history floating in the middle of its card (DDR-0018 rejected that on sight); the fill without
+   * the pixel width is the behaviour this story replaced. Neither is useful alone, so both are
+   * pinned — the fill was `min-width: 100%` until Story #243 gave the plot a flex sibling.
    */
   it('sizes the plot in pixels and lets a short history still fill its card', () => {
     expect(COLUMN_CHART).toContain('columnPlotWidthPx(plot)')
-    expect(CSS).toMatch(/\.chart-scroll \.chart\s*\{[^}]*min-width:\s*100%/)
+    expect(CSS).toMatch(/\.chart-scroll \.chart\s*\{\s*flex:\s*1 0 auto/)
   })
 
   /**
@@ -217,6 +218,91 @@ describe('a month is two columns on one baseline', () => {
       /<div className="chart-scroll" tabIndex=\{0\} role="group" aria-label=\{ariaLabel\}>/,
     )
     expect(CSS).not.toMatch(/\.chart-scroll[^{]*\{[^}]*outline:/)
+  })
+})
+
+/**
+ * The value axis stays on screen while the plot scrolls (Story #243, DDR-0079).
+ *
+ * The failure this guards is silent in a way the last two were not: the labels are HTML and the
+ * gridlines are SVG, so the two can drift apart and both still render. Three things hold them
+ * together and none is visible from a test that cannot lay out a page (DDR-0029) — so what is
+ * asserted is that each is present, and the arithmetic is checked in `column.test.ts`.
+ */
+describe('the value axis does not scroll with the plot', () => {
+  /** Out of the `<svg>` entirely: `<text>` inside it moves when the plot moves. */
+  it('renders the ticks as HTML, and leaves only the month labels in the plot', () => {
+    expect(COLUMN_CHART).toContain('className="chart-axis"')
+    // The figures that used to be drawn at `PAD.left - 8` are gone from the plot; the month
+    // labels are the only `.chart-axis-label` left, and they scroll with the months they name.
+    expect(COLUMN_CHART).not.toContain('x={PAD.left - 8}')
+    expect(COLUMN_CHART.match(/className="chart-axis-label"/g)).toHaveLength(1)
+  })
+
+  /**
+   * **Sticky, and inside the scroller.** Both halves are load-bearing and the second is the one
+   * that is easy to get wrong: a tick is placed on a share of the gutter's height, and stretched
+   * to a flex line *inside* the scroller the gutter is exactly as tall as the `<svg>` — a
+   * horizontal scrollbar sits outside the content box a percentage resolves against. Beside the
+   * scroller instead, the labels measured exact at rest and ~15px low the moment the plot was long
+   * enough to scroll, which is the only time the axis has a job to do.
+   */
+  it('sticks to the scroller’s left edge from inside it, so the plot slides under it', () => {
+    expect(CSS).toMatch(/\.chart-scroll\s*\{[^}]*display:\s*flex/)
+    expect(CSS).toMatch(/\.chart-axis\s*\{[^}]*position:\s*sticky[^}]*left:\s*0/)
+    // Inside: the scroll container opens first, and the gutter is its first child.
+    expect(COLUMN_CHART).toMatch(
+      /<div className="chart-scroll"[^>]*>[\s\S]*?<div className="chart-axis"/,
+    )
+    // The plot slides *under* it, so it needs ground of its own — the surface it is drawn on.
+    expect(CSS).toMatch(/\.chart-axis\s*\{[^}]*background:\s*var\(--card\)/)
+  })
+
+  /**
+   * `flex-grow` fills what the gutter leaves, which a percentage of the container cannot; and
+   * `flex-shrink: 0` is what keeps the plot scrolling rather than being squeezed back to the card,
+   * which would put it straight back to spending legibility on its history.
+   */
+  it('lets the plot fill what the gutter leaves, and never shrink to fit', () => {
+    expect(CSS).toMatch(/\.chart-scroll \.chart\s*\{\s*flex:\s*1 0 auto/)
+    expect(CSS).not.toMatch(/\.chart-scroll \.chart\s*\{[^}]*min-width:/)
+  })
+
+  /** The offset is data, derived from the same `y` the gridlines use, and never a length. */
+  it('places each tick on a percentage of the plot’s height, from the chart’s own mapping', () => {
+    expect(COLUMN_CHART).toContain('axisTicks(ticks, plot, y)')
+    expect(COLUMN_CHART).toContain('top: `${tick.topPercent}%`')
+    expect(CSS).toMatch(/\.chart-axis-tick\s*\{[^}]*position:\s*absolute/)
+  })
+
+  /**
+   * The column is as wide as its widest figure because an element in flow measures it. A hand-set
+   * width is DDR-0051 §#190's failure — an allowance cut for eight characters against labels that
+   * render ten — and this makes it unexpressible rather than documented.
+   */
+  it('sizes its column from the widest label the browser measures, not from a constant', () => {
+    expect(COLUMN_CHART).toContain('className="chart-axis-sizer"')
+    expect(CSS).toMatch(/\.chart-axis-sizer\s*\{\s*visibility:\s*hidden/)
+    expect(CSS).not.toMatch(/\.chart-axis\s*\{[^}]*width:/)
+  })
+
+  /**
+   * Now that it is page type rather than a `viewBox` unit it takes a scale step, and it joins the
+   * figure role's **existing** selector list — `lib/figureRole.ts` throws if a second rule applies
+   * it (DDR-0053).
+   */
+  it('takes the type scale and the figure role, in one rule', () => {
+    expect(CSS).toMatch(
+      /\.chart-axis-sizer,\s*\n\.chart-axis-tick\s*\{[^}]*font-size:\s*var\(--text-2xs\)/,
+    )
+    expect(CSS).toMatch(
+      /\.chart-axis-sizer,\s*\n\.chart-axis-tick,[\s\S]{0,80}\{\s*font-family:\s*var\(--font-figure\)/,
+    )
+  })
+
+  /** The chart is a named `role="img"` and its figures are in the tables below. */
+  it('hides the gutter from the accessibility tree', () => {
+    expect(COLUMN_CHART).toMatch(/<div className="chart-axis" aria-hidden="true">/)
   })
 })
 
