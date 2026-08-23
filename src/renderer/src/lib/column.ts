@@ -63,15 +63,66 @@ export interface PairedDatum {
  * top taken from the taller *of the pair* would scale the plot to a bar hanging off the opposite
  * end of it.
  *
- * Expressed through `columnDomain` rather than beside it: `lower` is what reaches below zero and
- * `lower + upper` what reaches above, so `{ lower: -secondary, upper: primary + secondary }` says
- * exactly that. The rounding, the even step and the guaranteed `0` tick are then the ones every
- * other chart in the app already uses.
+ * **The step comes from the dominant side, and the small side is not rounded to it** (Story #248).
+ * Story #246 expressed this through `columnDomain`, which rounds *both* extremes outward to one
+ * shared nice step. That is right when the two sides are comparable and wrong when one is an order
+ * of magnitude smaller than the other, which is the normal shape of this data: measured on a real
+ * import, a largest withholding of €14.25 against a largest gross of €184.21 floored the axis at
+ * −€100 and spent about a quarter of the plot on empty space below the line. Tax is a fraction of
+ * income in every ordinary month, so the failing case is the common one.
+ *
+ * So the step is taken from whichever side has the range to divide, and then:
+ *
+ * - **the tax side needs a whole step or more** — it is rounded outward to that step like the
+ *   income side, and every gridline is evenly spaced, exactly as before;
+ * - **it needs less than one step** — it rounds outward to a nice number of *its own* magnitude
+ *   instead, contributing a single labelled tick at the bottom.
+ *
+ * The second branch is the only place in the app where gridline spacing is not uniform, and it is
+ * uneven **across zero and nowhere else**. That is the deliberate trade: the alternative is a step
+ * fine enough to divide the tax side, which puts eleven gridlines behind a chart that wants four.
+ * What keeps it honest is that the bottom tick is *labelled* — the reader takes the number from the
+ * axis, not from counting spaces — and that zero is still a tick, so the one line both series are
+ * read against is never the interpolated one.
+ *
+ * `columnDomain` is deliberately left alone. It is the daily-return chart's domain too, and that
+ * chart's two sides are genuinely comparable — a shared step is right there, and this reasoning
+ * does not reach it.
  */
 export function pairedDomain(columns: PairedDatum[]): ColumnDomain {
-  return columnDomain(
-    columns.map((c) => ({ lower: -c.secondary, upper: c.primary + c.secondary })),
-  )
+  const rawTop = Math.max(0, ...columns.map((c) => c.primary))
+  const rawBottom = -Math.max(0, ...columns.map((c) => c.secondary))
+
+  if (rawTop === 0 && rawBottom === 0) {
+    return { top: 0, bottom: 0, ticks: [0] }
+  }
+
+  // Whichever side has more to divide sets the step, so a history that is all withholding and no
+  // income still gets a sensible one rather than the `niceStep(0)` fallback.
+  const step = niceStep(Math.max(rawTop, -rawBottom) / TARGET_INTERVALS)
+  const top = clean(Math.ceil(rawTop / step) * step)
+
+  // A history with nothing withheld anywhere has no negative side at all, and must not be given
+  // one: `niceStep(0)` falls back to 1, which would hang a −1 tick under a chart that never goes
+  // below zero. The zero line is then the floor again, exactly as Story #241 drew it.
+  //
+  // Otherwise `niceStep` is reused as a nice-*ceiling* — 14.25 rounds to 20, 6 to 10 — because
+  // "round outward to 1, 2 or 5 times a power of ten" is the same rule at both scales.
+  const bottom =
+    rawBottom === 0
+      ? 0
+      : -rawBottom >= step
+        ? clean(Math.floor(rawBottom / step) * step)
+        : -niceStep(-rawBottom)
+
+  const ticks: number[] = [0]
+  for (let v = step; v <= top + step / 2; v += step) ticks.push(clean(v))
+  // Downward from zero by the same step while whole ones fit; the remainder is the bottom edge,
+  // which is a tick in its own right precisely so the negative side is never left unlabelled.
+  for (let v = -step; v >= bottom + step / 2; v -= step) ticks.unshift(clean(v))
+  if (bottom < 0 && ticks[0] !== bottom) ticks.unshift(bottom)
+
+  return { top, bottom, ticks }
 }
 
 export interface ColumnDomain {
