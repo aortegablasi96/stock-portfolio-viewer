@@ -234,13 +234,15 @@ test.describe('within one launch', () => {
 
     // The prototype re-expands on every nav click, which defeats the point of collapsing.
     await page.getByRole('tab', { name: 'Allocation' }).click()
-    await expect(page.getByRole('tab', { selected: true })).toHaveText('Allocation')
+    // The accessible name, not the row's text: each row also draws the accelerator's digit since
+    // Story #254, `aria-hidden` and therefore deliberately outside the name (DDR-0083).
+    await expect(page.getByRole('tab', { selected: true })).toHaveAccessibleName('Allocation')
     expect(await sidebarWidth(page)).toBe(56)
 
     // Nor does the keyboard path, which selects as it moves (automatic activation, DDR-0029).
     await page.getByRole('tab', { name: 'Allocation' }).focus()
     await page.keyboard.press('ArrowDown')
-    await expect(page.getByRole('tab', { selected: true })).toHaveText('Dividends')
+    await expect(page.getByRole('tab', { selected: true })).toHaveAccessibleName('Dividends')
     expect(await sidebarWidth(page)).toBe(56)
 
     await page.getByRole('tab', { name: 'Portfolio' }).click()

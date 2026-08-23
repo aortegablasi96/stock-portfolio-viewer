@@ -15,6 +15,7 @@ import {
   TradesIcon,
 } from './components/TabIcons'
 import { nextTabIndex } from './lib/tabKeyboard'
+import { isTextEntry, viewShortcutHint, viewShortcutIndex, viewShortcutKeys } from './lib/viewShortcut'
 import { collapsedTitle, shellClassName, sidebarClassName } from './lib/sidebarCollapse'
 import type { GatewayReading } from './lib/gatewayStatus'
 
@@ -74,6 +75,14 @@ import type { GatewayReading } from './lib/gatewayStatus'
  * live here rather than in the sidebar. The state arrives asynchronously, so the width is applied
  * without animating until a frame has passed; and the flag is set once, on the root element, so
  * nothing in the rail takes a `collapsed` prop and no view below knows the sidebar moved.
+ *
+ * **Story #254 adds a second way into that list** (DDR-0083): `Ctrl`/`Cmd` and the digit drawn
+ * beside a view's name select it from anywhere, without first walking focus back to the rail.
+ * It is an addition to the tabs pattern, not a change to it — the tablist's own keys, its roving
+ * `tabindex` and its automatic activation are untouched, and `nextTabIndex` still declines every
+ * key it does not own. Two consequences live here: the listener is on `window` rather than on the
+ * tablist (the whole point is that focus is elsewhere), and it moves focus onto the destination
+ * tab, because the panel focus was standing in is about to be `hidden`.
  */
 type Tab = 'portfolio' | 'performance' | 'allocation' | 'dividends' | 'trades'
 
@@ -179,6 +188,53 @@ export function App(): React.JSX.Element {
   )
 
   /**
+   * Select a view *and put focus on its row* — the landing spot both keyboard paths share.
+   *
+   * A roving `tabindex` means the tab being left is about to stop being focusable, so focus has to
+   * be moved deliberately rather than left to the browser. The accelerator needs it for a second,
+   * stronger reason: focus may be standing inside the panel that is about to become `hidden`, and
+   * a `hidden` ancestor blurs its contents to `<body>` — so without this a jump would silently
+   * cost the reader their place in the Tab order (DDR-0083).
+   */
+  const selectAndFocus = useCallback(
+    (id: Tab): void => {
+      select(id)
+      tabRefs.current.get(id)?.focus()
+    },
+    [select],
+  )
+
+  /**
+   * The accelerator: `Ctrl`/`Cmd` and a view's own digit, from anywhere in the app (Story #254).
+   *
+   * On `window` rather than on the tablist, because reaching the tablist is the whole problem —
+   * `onTabKeyDown` below only ever fires once focus is already in it. The two do not overlap: a
+   * digit's `event.key` is `'1'`, which `nextTabIndex` declines like every other key it does not
+   * own, so the pattern's keys and this one pass each other untouched.
+   *
+   * It selects exactly its destination. Unlike arrowing, the views it passes over are neither
+   * selected nor mounted (DDR-0027), which is what makes a jump to Trades cost one view rather
+   * than four.
+   */
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent): void => {
+      // The control's key before the app's: with focus in a Field, Select or DateInput, or in
+      // anything editable, this keystroke is not ours to take (DDR-0035).
+      if (isTextEntry(event.target as HTMLElement | null)) return
+
+      const target = viewShortcutIndex(event, TABS.length)
+      if (target === null) return
+
+      // Only now: an unhandled combination has to stay the browser's.
+      event.preventDefault()
+      selectAndFocus(TABS[target]!.id)
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [selectAndFocus])
+
+  /**
    * Arrow / Home / End movement along the tablist.
    *
    * Tabs activate as focus reaches them ("automatic activation"), which is the pattern's
@@ -199,11 +255,9 @@ export function App(): React.JSX.Element {
 
       // Only now: an unhandled key (Tab above all) has to stay the browser's.
       event.preventDefault()
-      const id = TABS[target]!.id
-      select(id)
-      tabRefs.current.get(id)?.focus()
+      selectAndFocus(TABS[target]!.id)
     },
-    [tab, select],
+    [tab, selectAndFocus],
   )
 
   /**
@@ -280,7 +334,7 @@ export function App(): React.JSX.Element {
             aria-orientation="vertical"
             onKeyDown={onTabKeyDown}
           >
-            {TABS.map((t) => {
+            {TABS.map((t, index) => {
               const isActive = tab === t.id
               const Icon = t.icon
               return (
@@ -298,6 +352,10 @@ export function App(): React.JSX.Element {
                   // exactly the broken promise this story is about.
                   aria-controls={isActive ? panelDomId(t.id) : undefined}
                   aria-selected={isActive}
+                  // The binding, in the attribute the platform has for it (Story #254). The hint
+                  // below is drawn for a sighted reader; this is the same fact for a reader who is
+                  // listening, and it is why the accelerator does not need a legend somewhere else.
+                  aria-keyshortcuts={viewShortcutKeys(index)}
                   // Roving tabindex: the tablist is one stop in the Tab order, and Tab from the
                   // selected tab moves on into its panel rather than along the other four.
                   tabIndex={isActive ? 0 : -1}
@@ -312,6 +370,14 @@ export function App(): React.JSX.Element {
                       tab's `textContent` is still exactly its name. */}
                   <Icon />
                   <span className="app-tab-label">{t.label}</span>
+                  {/* The digit that reaches this row, drawn where it is read: beside the name it
+                      belongs to, so nothing has to be inferred from the row's position. It is
+                      `aria-hidden` for the reason the icon is — the row's accessible name is still
+                      the label alone, and `aria-keyshortcuts` above is how a reader who is
+                      listening is told the same thing (DDR-0083). */}
+                  <span className="app-tab-key" aria-hidden="true">
+                    {viewShortcutHint(index)}
+                  </span>
                 </button>
               )
             })}

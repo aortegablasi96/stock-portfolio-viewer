@@ -1864,6 +1864,17 @@ html {
   padding-inline: var(--space-1);
 }
 
+/* The accelerator's hint is the one thing on the rail that is *removed* rather than clipped, and
+   the distinction is the whole rule above it (Story #254). The clip exists so a collapsed row
+   keeps its accessible **name** — take the label out of the tree and `title` becomes the
+   mechanism, which DDR-0057 rules out. The hint has no name to keep: it is `aria-hidden` already,
+   and `aria-keyshortcuts` on the row carries the same fact to a reader who is listening whatever
+   width the column is. So `display: none` costs nothing here and leaves the icon centred, which a
+   clipped-but-in-flow element would not. */
+.app-collapsed .app-tab-key {
+  display: none;
+}
+
 /* The currency keeps its `<select>`, at the only size that fits.
 
    40px of content, so the native dropdown arrow goes and the three-letter code is the whole
@@ -2154,6 +2165,28 @@ html {
 .app-tab-icon {
   width: 1em;
   height: 1em;
+  flex-shrink: 0;
+}
+
+/* The accelerator's digit (Story #254, DDR-0083). A third thing in the row, and the only one that
+   is neither the view's name nor a picture of it — so it is subordinated by *size* rather than by
+   tone: `--text-2xs` is the scale's smallest step, and the ink is left alone.
+
+   Left alone is the load-bearing part. Like `.app-tab-icon` above, the hint carries no `color` of
+   its own and inherits `currentColor`, so it follows the row through muted → text → accent and is
+   rendered in exactly the ink the label beside it is already wearing on exactly the same ground.
+   That is what keeps it out of `lib/contrast.ts` entirely: a tone picked here would need measuring
+   three times over — at rest on `--card`, on the hover's `--text` lift, and on the active row's
+   `--accent` wash (DDR-0064) — and every one of those pairings is already the label's.
+
+   `margin-left: auto` rather than a spacer: the label has no rule of its own and takes its natural
+   width, so the auto margin is what puts the digit on the trailing edge. `flex-shrink: 0` for the
+   reason the icon has it — a squashed digit reads as a different character, not a smaller one.
+   No `--font-figure`: this is the name of a key, not a quantity, and the figure role is one rule
+   that `lib/figureRole.ts` throws rather than merge into (DDR-0053). */
+.app-tab-key {
+  margin-left: auto;
+  font-size: var(--text-2xs);
   flex-shrink: 0;
 }
 

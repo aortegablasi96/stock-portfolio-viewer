@@ -94,7 +94,9 @@ test('every view is still reachable and still renders with reduced motion', asyn
 
   for (const label of TABS) {
     await page.getByRole('tab', { name: label }).click()
-    await expect(page.getByRole('tab', { selected: true })).toHaveText(label)
+    // The accessible name, not the row's text: each row also draws the accelerator's digit
+    // since Story #254, `aria-hidden` and therefore deliberately outside the name (DDR-0083).
+    await expect(page.getByRole('tab', { selected: true })).toHaveAccessibleName(label)
 
     // The panel exists, is the selected tab's, and has something in it. No state is stranded
     // behind a transition that no longer runs.
