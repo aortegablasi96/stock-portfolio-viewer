@@ -102,13 +102,14 @@ Tradeoffs:
 
 Risks:
 
-* **The negative region is over-allocated when withholding is a small fraction of gross.** Both
+* ~~**The negative region is over-allocated when withholding is a small fraction of gross.** Both
   extremes round outward to one shared nice step, so a €14.25 largest withholding against a €184
   largest gross floors the axis at −€100 and spends roughly a quarter of the plot on empty space
-  below the line. The chart is correct and the bars are drawn where they belong; the proportion is
-  not yet earning its height. Measured in the running app on the owner's own import, and left as a
-  finding rather than fixed here — tightening it means either a non-uniform tick step or a domain
-  edge that is not a tick, and both are decisions this record's story did not scope.
+  below the line.~~ **Closed by [[0081-the-tax-side-keeps-its-own-scale]]** (Story #248): the step
+  is now taken from the dominant side and the tax side is not rounded to it, which brings the
+  negative region from 33% of the domain to 9% on the same import. The price paid for it is an axis
+  that is uneven across zero — and, as that record notes, the finding was measured rather than
+  predicted, which is why it was worth landing the geometry first and judging its proportions after.
 * A later story that reintroduces a net mark would put the signed-series problem straight back.
   The net stays a toned figure in the hover card, which is where DDR-0077 put it.
 

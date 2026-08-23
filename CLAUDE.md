@@ -14,16 +14,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current Repository State
 
-M0–M5 are delivered: live IBKR holdings/balances/allocation in a display currency, immutable
-snapshots, Flex statement import, and four analytics views over it — all
-behind a vertical sidebar.
+M0–M7 are delivered: live IBKR holdings/balances/allocation in a display currency, immutable
+snapshots, Flex statement import, and four analytics views over it — all behind a vertical sidebar.
 
 Not built: AI features, multi-broker support, benchmark comparison, tax reporting.
 
-**Which Epics are open is deliberately not recorded here** — the backlog is the source of
-milestones (see *Current Priority*). The stable rule is the **lifecycle**: an Epic closes when its
-stories close, and new refinement opens a *new* area-scoped Epic rather than reopening a delivered
-one. The one narrow exception is in `docs/github-issues.md`; Epic #125 is the precedent.
+**Which Epics are open is deliberately not recorded here** — read the backlog (*Current Priority*).
+The **lifecycle** is the stable rule: an Epic closes with its stories, and refinement opens a *new*
+area-scoped Epic rather than reopening a delivered one (#240 → #245). `docs/github-issues.md` has
+the one narrow exception; Epic #125 is the precedent.
 
 **Views are reworked often — read the backlog before assuming one is final.**
 
@@ -277,12 +276,15 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
   `lib/chartTooltip` draws in the plot's own space — so it **cannot** cover the neighbouring chart
   — **pinned to the plot's top** in all four, never tracking the mark. It floats on
   `--surface-raised`; its padding, corner and `MIN_WIDTH` are **viewBox units**, not CSS lengths.
-  The income chart is **two bars a month on one baseline** (never a stack), sized in **pixels**
+  The income chart is **two bars a month across one baseline** (never a stack), sized in **pixels**
   (`COLUMN_UNIT_PX` = 1, from the label floor) inside `.chart-scroll` — the app's one chart off
-  DDR-0018's aspect rule, nothing drawn below zero. A card row with no figure is **absent, not
-  zero**; only the undrawn net is toned. Its **value axis is HTML**, sticky **inside** the scroller
-  — outside it a scrollbar puts every tick 15px low once the plot scrolls; the month labels stay in
-  the `viewBox` (DDR-0077–0079).
+  DDR-0018's aspect rule. Gross rises, **withholding hangs below zero** — legal only because
+  direction is the **series'**, never the value; a *net* bar is the signed series DDR-0078 refused
+  (DDR-0080). A bar or row with no figure is **absent, not zero**; only the undrawn net is toned.
+  `pairedDomain` is **not** `columnDomain` — the step is the dominant side's and the tax side keeps
+  its own scale, so the axis is **uneven across zero on purpose** (DDR-0081). Its **value axis is
+  HTML**, sticky **inside** the scroller — outside it a scrollbar puts every tick 15px low once the
+  plot scrolls; the month labels stay in the `viewBox` (DDR-0077–0081).
 - **A `--series-*` slot is a fill; as ink it is `--series-ink-*`** (DDR-0070) — three of the eight
   fail AA as text. A composition row resolves its band's class through that ramp; the slots don't
   move. Daily return's row is toned by **sign**, a zero day not.

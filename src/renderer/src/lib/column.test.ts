@@ -290,6 +290,80 @@ describe('pairedDomain', () => {
   it('collapses to a single 0 tick for an all-zero history', () => {
     expect(pairedDomain([pair(0, 0), pair(0, 0)])).toEqual({ top: 0, bottom: 0, ticks: [0] })
   })
+
+  /* ---- The tax side is not rounded to the income side's step (Story #248) ---- */
+
+  /**
+   * The measured case, from the owner's own import: €184.21 largest gross against €14.25 largest
+   * withholding. Rounding the bottom outward to the shared 50 step floored the axis at −100 and
+   * spent a quarter of the plot on nothing. It now rounds to a nice number of its own magnitude.
+   */
+  it('does not floor the tax side to a whole income-side step', () => {
+    const domain = pairedDomain([pair(184.21, 14.25)])
+    expect(domain.top).toBe(200)
+    expect(domain.bottom).toBe(-20)
+    // The share of the plot below the line is close to the share the data needs, not 4x it.
+    const negativeShare = -domain.bottom / (domain.top - domain.bottom)
+    expect(negativeShare).toBeLessThan(0.15)
+  })
+
+  /** …and the negative side is still *labelled*: the bottom edge is a tick in its own right. */
+  it('labels the tax side even when it is under one step', () => {
+    const { ticks, bottom } = pairedDomain([pair(184.21, 14.25)])
+    expect(ticks[0]).toBe(bottom)
+    expect(ticks).toContain(0)
+    expect(ticks.filter((t) => t < 0)).toHaveLength(1)
+  })
+
+  /** Above zero the spacing is untouched — the unevenness is across zero and nowhere else. */
+  it('keeps the income side evenly spaced', () => {
+    const positive = pairedDomain([pair(184.21, 14.25)]).ticks.filter((t) => t >= 0)
+    const gaps = positive.slice(1).map((t, i) => t - positive[i]!)
+    expect(new Set(gaps).size).toBe(1)
+  })
+
+  /** Two comparable sides keep one shared step and stay uniform throughout, as before. */
+  it('stays uniform when both sides are comparable', () => {
+    const { ticks } = pairedDomain([pair(10, 40)])
+    const gaps = ticks.slice(1).map((t, i) => t - ticks[i]!)
+    expect(new Set(gaps).size).toBe(1)
+    expect(ticks).toContain(0)
+  })
+
+  /** A history with nothing withheld gets no negative side, not a −1 tick from `niceStep(0)`. */
+  it('gives a history with no withholding no negative side at all', () => {
+    const { bottom, ticks } = pairedDomain([pair(100, 0), pair(60, 0)])
+    expect(bottom).toBe(0)
+    expect(ticks.every((t) => t >= 0)).toBe(true)
+  })
+
+  /** The step comes from whichever side has the range, so an income-free history still divides. */
+  it('takes its step from the tax side when there is no income', () => {
+    const { top, bottom, ticks } = pairedDomain([pair(0, 12)])
+    expect(top).toBe(0)
+    expect(bottom).toBeLessThanOrEqual(-12)
+    expect(ticks.length).toBeGreaterThan(1)
+    expect(ticks.length).toBeLessThan(8)
+    expect(ticks).toContain(0)
+  })
+
+  /** Ascending, unique, and zero always present — what `axisTicks` and the gridlines assume. */
+  it('returns ascending, unique ticks spanning the domain', () => {
+    for (const cols of [
+      [pair(184.21, 14.25)],
+      [pair(10, 40)],
+      [pair(0, 12)],
+      [pair(100, 0)],
+      [pair(458.95, 36.91), pair(12, 3)],
+    ]) {
+      const { top, bottom, ticks } = pairedDomain(cols)
+      expect(ticks).toEqual([...ticks].sort((a, b) => a - b))
+      expect(new Set(ticks).size).toBe(ticks.length)
+      expect(ticks).toContain(0)
+      expect(ticks[0]).toBeGreaterThanOrEqual(bottom)
+      expect(ticks[ticks.length - 1]!).toBeLessThanOrEqual(top)
+    }
+  })
 })
 
 describe('the hover card inside the plot', () => {
