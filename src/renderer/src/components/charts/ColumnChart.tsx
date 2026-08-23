@@ -13,20 +13,26 @@ import { ChartTooltip } from './ChartTooltip'
 /**
  * Two columns a month over a time axis (Milestone M3, Story #23; re-shaped by Story #241).
  *
- * Each month draws a **pair of bars on one baseline**: a `primary` — the month's whole income —
- * and a `secondary` beside it, which is what was taken out of the primary. Both are magnitudes,
- * so the axis floors at zero and nothing is drawn below the baseline. Inline SVG, no charting
- * dependency.
+ * Each month draws a **pair of bars across one baseline**: a `primary` rising from zero — the
+ * month's whole income — and a `secondary` hanging below it, which is what was taken out of the
+ * primary. Inline SVG, no charting dependency.
  *
  * **It was a stack until Story #241**, `lower` (the net) with `upper` (the withholding) on top of
  * it, so the column's height read as the gross. Two names in the key and one column drawing one of
  * them *as part of* the other is the problem that ended it: the withholding segment's size could
  * only be read against a baseline that was not there, which asked the reader to do the arithmetic
- * the chart existed to do for them. It also cost a real mark — Story #49's negative-net month,
- * whose bar hung below the zero line — and that is the one thing the pair does not carry. A month
- * whose withholding outweighs its dividends now reads as a withholding bar beside **no** income
- * bar, which states the same fact without a second baseline, and the net stays in the hover card
- * toned by sign.
+ * the chart existed to do for them.
+ *
+ * **Story #246 turned the secondary downward.** #241's pair fixed the arithmetic but left both
+ * bars pointing the same way, so the picture said *compare these two* where the relationship is a
+ * deduction — one figure taken out of the other. Drawing it below the line makes the deduction the
+ * subject and gives Story #49's month its mark back: a month whose withholding outweighed its
+ * income is a short bar up and a longer one down rather than a lone bar beside a gap.
+ *
+ * The thing that makes this legal, and that DDR-0078 was right to guard: **a bar's direction is a
+ * property of its series, never of its value.** Both figures stay non-negative and the plot keeps
+ * exactly one baseline. A third *net* bar — the alternative DDR-0078 was actually refusing — would
+ * not, because its sign moves with the data; the net stays a toned figure in the hover card.
  *
  * **The legend moved into the card header** in Story #192 (DDR-0064), the same move DDR-0052 made
  * for the composition stack and for the same two reasons: a key is read *before* the plot rather
@@ -179,8 +185,9 @@ export function ColumnChart({
             the plot cannot carry the value axis off the screen (Story #243). */}
         {ticks.map((t, i) => (
           <line
-            // Both series are magnitudes, so zero is the floor rather than a level the data
-            // crosses. It stays emphasised: it is the baseline both bars of a pair sit on.
+            // Zero is a level the plot straddles again (Story #246): income above it, tax below.
+            // Emphasised for the reason it always was — it is the one line both bars of a pair are
+            // read against — but it is now a baseline *between* them rather than under them.
             className={t === 0 ? 'chart-zero' : 'chart-grid'}
             key={`${t}-${i}`}
             x1={PAD.left}
@@ -199,22 +206,34 @@ export function ColumnChart({
               {/* No per-bar `<title>`: the hover card below replaces it, and leaving both would
                   float a slow native tooltip over the one that already answered the question — the
                   note `BarChart` has carried since Story #170. */}
-              <rect
-                className="chart-bar-primary"
-                x={left}
-                y={y(c.primary)}
-                width={barW}
-                height={zeroY - y(c.primary)}
-                rx={2}
-              />
-              <rect
-                className="chart-bar-secondary"
-                x={left + barW + PAIR_GAP}
-                y={y(c.secondary)}
-                width={barW}
-                height={zeroY - y(c.secondary)}
-                rx={2}
-              />
+              {/* Absent, not a zero-height mark on the line — the rule `pairedTooltipRows` applies
+                  to the card's rows, applied to the plot. A `rect` of height 0 draws nothing
+                  anyway; saying so here is what keeps it from being restored as a rounded sliver
+                  the next time `rx` is touched. */}
+              {c.primary > 0 && (
+                <rect
+                  className="chart-bar-primary"
+                  x={left}
+                  y={y(c.primary)}
+                  width={barW}
+                  height={zeroY - y(c.primary)}
+                  rx={2}
+                />
+              )}
+              {/* Downward from the baseline (Story #246). The height is measured from `zeroY` to
+                  `y(-secondary)` rather than the other way about, so the bar is anchored on zero at
+                  its *top* — the reader compares both series against the same line, and a month
+                  with more tax than income simply reaches further down. */}
+              {c.secondary > 0 && (
+                <rect
+                  className="chart-bar-secondary"
+                  x={left + barW + PAIR_GAP}
+                  y={zeroY}
+                  width={barW}
+                  height={y(-c.secondary) - zeroY}
+                  rx={2}
+                />
+              )}
               <text
                 className="chart-axis-label"
                 x={left + groupW / 2}
@@ -227,9 +246,10 @@ export function ColumnChart({
           )
         })}
 
-        {/* The card carries the figure the chart stopped drawing. A month whose secondary outweighs
-            its primary has a negative difference, and the pair states that by which bar is taller
-            rather than by a bar below the baseline — so the signed figure itself lives here. */}
+        {/* The card carries the figure the chart does not draw: the net. The plot shows what came
+            in and what was taken, one either side of the line, and leaves their difference as the
+            thing the reader can see but not measure — so the signed figure itself lives here,
+            toned, and is still the only row of the three the chart has no mark for. */}
         {active && hover !== null && (
           <ChartTooltip
             plot={plot}

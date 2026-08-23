@@ -247,20 +247,23 @@ export function DividendsView(): React.JSX.Element {
                   secondaryLabel={INCOME_TAX_LABEL}
                 />
               </CardHeader>
+              {/* No `source-note` (Story #247). It described the geometry, the hover card and the
+                  scroll in four lines of prose, and it was the last chart note in the app — the
+                  Performance grid dropped both of its own for the reason `ChartCard` records
+                  there: prose competing with the plot it annotates, on a card where the note is a
+                  real share of the height. Story #246 is what made it safe to go rather than
+                  merely desirable: a deduction drawn below the line no longer needs a sentence
+                  saying it is one. The method is in `lib/column` and in DDR-0005 / DDR-0078; what
+                  the reader of the *view* needs is on the chart — the axis, the key and the hover
+                  card — and the scroll is disclosed by the region's own name below. */}
               <CardContent>
-                <p className="source-note">
-                  Each month is two columns on the same baseline: the gross income declared, and
-                  the withholding tax taken out of it. Point at a month for both, plus the net that
-                  reached the account. Scroll sideways for the older months — a column keeps its
-                  width however long the history gets.
-                </p>
                 <ColumnChart
                   columns={columns}
                   formatValue={c}
                   primaryLabel={INCOME_GROSS_LABEL}
                   secondaryLabel={INCOME_TAX_LABEL}
                   differenceLabel={INCOME_NET_LABEL}
-                  ariaLabel="Gross dividend income and withholding tax by month, as paired columns"
+                  ariaLabel="Gross dividend income and withholding tax by month, as paired columns above and below a zero baseline. Scroll sideways for older months."
                 />
               </CardContent>
             </Card>

@@ -46,17 +46,32 @@ export interface PairedDatum {
 }
 
 /**
- * The value domain a pair of non-negative series needs: zero to the taller of the two.
+ * The value domain a deducted pair needs: the largest `primary` above zero, the largest
+ * `secondary` below it (Story #246).
  *
- * `columnDomain` in its degenerate single-series form, which is exactly what `BarChart` does with
- * it from the other direction. **The domain no longer spans zero downward**, and that follows from
- * the data rather than from a choice: both bars are magnitudes, so nothing can be drawn below the
- * baseline and the zero line becomes the floor. `secondary` can still be the larger of the two — a
- * month whose only entry is withholding has a gross of zero — so the top is a `max`, not the
- * primary.
+ * **The domain spans zero again**, and the zero line is the level both series are read against
+ * rather than the floor one of them sits on. Story #241 floored it here, because both bars rose
+ * from the baseline and neither could reach below it; drawing the `secondary` *downward* puts the
+ * axis back across zero. Note what did **not** come back with it: no figure changes sign. Both
+ * inputs stay magnitudes and each is negated by its **series**, never by its value, which is the
+ * distinction [[0078-two-columns-a-month-and-a-plot-sized-in-pixels]] was really drawing when it
+ * refused a signed series — that argument was answering a third *net* bar, whose sign moves with
+ * the data and which genuinely would need a second baseline.
+ *
+ * The extremes are independent `max`es rather than a comparison of the two. A month whose only
+ * entry is withholding has a gross of zero, so neither side can be derived from the other, and a
+ * top taken from the taller *of the pair* would scale the plot to a bar hanging off the opposite
+ * end of it.
+ *
+ * Expressed through `columnDomain` rather than beside it: `lower` is what reaches below zero and
+ * `lower + upper` what reaches above, so `{ lower: -secondary, upper: primary + secondary }` says
+ * exactly that. The rounding, the even step and the guaranteed `0` tick are then the ones every
+ * other chart in the app already uses.
  */
 export function pairedDomain(columns: PairedDatum[]): ColumnDomain {
-  return columnDomain(columns.map((c) => ({ lower: Math.max(c.primary, c.secondary), upper: 0 })))
+  return columnDomain(
+    columns.map((c) => ({ lower: -c.secondary, upper: c.primary + c.secondary })),
+  )
 }
 
 export interface ColumnDomain {

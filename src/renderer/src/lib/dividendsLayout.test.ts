@@ -141,14 +141,32 @@ describe('the pair’s key sits in the card header', () => {
   })
 
   /**
-   * The source note describes the chart the reader is looking at. It is prose, so nothing else in
-   * the suite would notice it still describing a stack — and a note about a segment stacked at a
-   * column's top, beside two columns on one baseline, is worse than no note.
+   * The income card carries **no** chart source note (Story #247), and this is the assertion that
+   * used to pin its wording. It is replaced rather than deleted, because what it was really
+   * guarding is that the horizontal scroll is *disclosed* — the plot holds the only copy of the
+   * older months, and before #247 the paragraph was where a reader was told so.
+   *
+   * The disclosure moved into the scroll region's own accessible name, which is the better home
+   * for it: a `role="group"` with `tabIndex={0}` announces its label at the moment a keyboard
+   * reader arrives at the region, where the paragraph announced it to whoever happened to read
+   * the card top to bottom. Losing both at once is the failure this test now catches.
    */
-  it('re-words the note for two columns on one baseline, and for the scroll', () => {
-    expect(VIEW).toContain('two columns on the same baseline')
-    expect(VIEW).toContain('Scroll sideways')
-    expect(VIEW).not.toContain('stacked at its top')
+  it('drops the chart’s prose note but keeps the scroll disclosed', () => {
+    // The paragraph and every sentence of it are gone.
+    expect(VIEW).not.toContain('two columns on the same baseline')
+    expect(VIEW).not.toContain('a column keeps its')
+    expect(VIEW).not.toMatch(/<p className="source-note">\s*\n\s*Each month/)
+    // …and the scroll is still named, in the region's own label.
+    expect(VIEW).toMatch(/ariaLabel="[^"]*Scroll sideways[^"]*"/)
+  })
+
+  /**
+   * The other two notes annotate a panel and a table, not a plot. The Performance precedent this
+   * story follows is about charts competing with their own prose, so it reaches neither of them —
+   * and a later sweep that took all three would be going further than #247 decided.
+   */
+  it('leaves the upcoming and transactions notes alone', () => {
+    expect(VIEW.match(/className="source-note"/g)).toHaveLength(2)
   })
 
   /**
@@ -178,22 +196,46 @@ describe('a month is two columns on one baseline', () => {
     expect(COLUMN_CHART).toContain('className="chart-bar-secondary"')
     // Both heights are measured from the baseline. A `y(c.lower)`-relative height is the stack.
     expect(COLUMN_CHART).toContain('height={zeroY - y(c.primary)}')
-    expect(COLUMN_CHART).toContain('height={zeroY - y(c.secondary)}')
     expect(COLUMN_CHART).not.toMatch(/chart-bar-(lower|upper)/)
   })
 
   /**
-   * The domain floors at zero because both series are magnitudes, and it is `pairedDomain` that
-   * knows the top is a `max` of the two — a month whose only entry is withholding has the taller
-   * bar on the wrong side of that comparison.
+   * The secondary hangs **below** the line (Story #246). Anchored at `zeroY` with its height
+   * running down to `y(-c.secondary)` — the negation is on the *series*, applied here at the one
+   * place it is drawn, and never on the figure, which stays a magnitude all the way from the
+   * report. A `y(c.secondary)`-anchored rect is #241's upward bar and the thing that must not
+   * come back.
+   */
+  it('hangs the secondary below the baseline, negated by series and not by value', () => {
+    expect(COLUMN_CHART).toMatch(/y=\{zeroY\}[\s\S]*?height=\{y\(-c\.secondary\) - zeroY\}/)
+    expect(COLUMN_CHART).not.toContain('height={zeroY - y(c.secondary)}')
+  })
+
+  /**
+   * A month with nothing on one side draws nothing there — absent, not a zero-height mark sitting
+   * on the line, which is `pairedTooltipRows`' rule for the card's rows applied to the plot.
+   */
+  it('omits a bar it has no figure for, rather than drawing it flat', () => {
+    expect(COLUMN_CHART).toContain('{c.primary > 0 && (')
+    expect(COLUMN_CHART).toContain('{c.secondary > 0 && (')
+  })
+
+  /**
+   * `pairedDomain` owns the span, and the two extremes come from different series — so a month
+   * whose only entry is withholding still scales the plot correctly at both ends.
    */
   it('takes its axis from the paired domain, not the stacked one', () => {
     expect(COLUMN_CHART).toContain('pairedDomain(columns)')
     expect(COLUMN_CHART).not.toContain('columnDomain(columns)')
   })
 
-  /** Story #49's downward bar is gone with the stack, and so is the class that drew it here. */
-  it('no longer paints a month below the baseline', () => {
+  /**
+   * Story #49's month is drawn again, but not by Story #49's mechanism: the withholding series is
+   * what reaches below the line, so there is no separate loss-toned *net* bar and no class for one.
+   * `.chart-bar-secondary` is already `--neg`, and a second downward mark would be the third bar
+   * DDR-0078 refused.
+   */
+  it('paints below the baseline without reviving the loss bar', () => {
     expect(COLUMN_CHART).not.toContain('chart-bar-loss')
   })
 
