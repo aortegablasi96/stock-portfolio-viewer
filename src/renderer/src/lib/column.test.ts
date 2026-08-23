@@ -243,26 +243,52 @@ describe('the plot’s width in pixels', () => {
 describe('pairedDomain', () => {
   const pair = (primary: number, secondary: number): PairedDatum => ({ primary, secondary })
 
-  /** Both series are magnitudes, so zero is the floor rather than a level the data crosses. */
-  it('floors at zero and never goes below it', () => {
+  /**
+   * The axis spans zero again (Story #246): income above the line, tax below it. The `secondary`
+   * is what reaches downward, so the bottom is its largest value negated — not the smallest net,
+   * which is the stacked domain's rule and would scale the plot to a figure nothing draws.
+   */
+  it('spans zero, with the primary above it and the secondary below', () => {
     const domain = pairedDomain([pair(80, 20), pair(40, 5)])
-    expect(domain.bottom).toBe(0)
-    expect(domain.ticks[0]).toBe(0)
     expect(domain.top).toBeGreaterThanOrEqual(80)
+    expect(domain.bottom).toBeLessThanOrEqual(-20)
+    expect(domain.ticks).toContain(0)
   })
 
   /**
-   * The case a `primary`-only top would get wrong: a month whose only entry is withholding has a
-   * gross of zero, so the taller bar of that pair is the *secondary*. Taking the top from the
-   * primary alone would draw it off the plot.
+   * The two extremes are independent. A month whose only entry is withholding has a gross of zero,
+   * so neither side can be derived from the other: the top must still clear the largest *primary*
+   * and the bottom the largest *secondary*, even when they fall in different months.
    */
-  it('takes its top from the taller bar, whichever of the two that is', () => {
+  it('takes each extreme from its own series, across different months', () => {
     const domain = pairedDomain([pair(0, 6.02), pair(1, 0)])
-    expect(domain.top).toBeGreaterThanOrEqual(6.02)
+    expect(domain.top).toBeGreaterThanOrEqual(1)
+    expect(domain.bottom).toBeLessThanOrEqual(-6.02)
+  })
+
+  /**
+   * The month DDR-0078 gave up and this story restores: withholding outweighing gross. It must
+   * reach further below the line than the income reaches above it, which is the whole picture.
+   */
+  it('lets a month’s withholding outreach its gross, below the line', () => {
+    const domain = pairedDomain([pair(10, 40)])
+    expect(domain.bottom).toBeLessThanOrEqual(-40)
+    expect(Math.abs(domain.bottom)).toBeGreaterThan(domain.top)
+  })
+
+  /** No input changes sign: a bar is negated by its series, never by its value. */
+  it('never sends a primary below the line, however small', () => {
+    const domain = pairedDomain([pair(0, 0), pair(0, 12)])
+    expect(domain.top).toBeGreaterThanOrEqual(0)
+    expect(domain.bottom).toBeLessThanOrEqual(-12)
   })
 
   it('collapses to a single 0 tick for an empty history', () => {
     expect(pairedDomain([])).toEqual({ top: 0, bottom: 0, ticks: [0] })
+  })
+
+  it('collapses to a single 0 tick for an all-zero history', () => {
+    expect(pairedDomain([pair(0, 0), pair(0, 0)])).toEqual({ top: 0, bottom: 0, ticks: [0] })
   })
 })
 

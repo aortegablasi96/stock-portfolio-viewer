@@ -1,6 +1,7 @@
 # 0078. Two columns a month, and a plot sized in pixels that scrolls
 
-- **Status:** Accepted
+- **Status:** Accepted — *the below-zero decision superseded by
+  [[0080-withholding-hangs-below-the-line]]; the width and scroll decisions still govern*
 
 - **Date:** 2026-08-21
 
