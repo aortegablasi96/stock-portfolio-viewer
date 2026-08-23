@@ -119,6 +119,42 @@ export const CHAR_W = 7
 /** Gap between the crosshair and the card's near edge. */
 export const ANCHOR_GAP = 12
 
+/**
+ * How many value rows a card can hold inside `plot`, derived rather than chosen (Story #228).
+ *
+ * The card's height is `TITLE_H + rows × ROW_H + 2 × PAD_Y` and its top is `plot.pad.top`, so what
+ * it can hold follows from those four numbers and the plot's inner height — nothing here is a
+ * budget someone picked. Change `ROW_H`, the padding or the plot, and the bound moves with them.
+ *
+ * This is DDR-0051 §#190's treatment applied to the other axis. That story found `pad.left`
+ * described by a rule the number never implemented, with the `€` clipped off every tick for
+ * months, and replaced the number with a derivation. The card's height had the same defect and had
+ * never been looked at: `tooltipLayout` bounded the card across the plot and never down it.
+ *
+ * On `PERFORMANCE_PLOT` this is **7**. The composition card — the tallest caller, at every
+ * `CompositionBand` key plus a `Total` — reaches 6, so the margin is one row.
+ *
+ * Floored at 1: a plot too short for even one row still gets a card rather than a negative count,
+ * and the overflow row below is what tells the reader the rest is missing.
+ */
+export function maxRowsFor(plot: TooltipPlot): number {
+  const inner = plot.height - plot.pad.top - plot.pad.bottom
+  return Math.max(1, Math.floor((inner - TITLE_H - 2 * PAD_Y) / ROW_H))
+}
+
+/**
+ * The row standing in for the ones that did not fit.
+ *
+ * **A truncation is information.** Dropping rows off the bottom of a card silently is the failure
+ * this story exists to prevent, and it is the same principle DDR-0021 and DDR-0048 settled for
+ * colour: a reader must not lose a figure without being able to tell that a figure is missing.
+ * It carries no `label`, so it sets left-aligned under the date like any bare figure and does not
+ * read as a series with a value.
+ */
+export function overflowRow(hidden: number): TooltipRow {
+  return { value: `+${hidden} more` }
+}
+
 /** Where the card goes and how big it is. All coordinates are the plot's own. */
 export interface TooltipLayout {
   readonly x: number
@@ -131,8 +167,18 @@ export interface TooltipLayout {
   readonly valueX: number
   /** The title's baseline. */
   readonly titleY: number
-  /** Baselines for each row, in the order given. */
+  /** Baselines for each drawn row, index-aligned with {@link TooltipLayout.rows}. */
   readonly rowYs: readonly number[]
+  /**
+   * The rows actually drawn — the caller's, or as many as fit followed by {@link overflowRow}.
+   *
+   * The component renders **this**, not the array it passed in, which is what makes the bound
+   * impossible to bypass: a chart cannot draw a row the layout decided there was no room for
+   * (DDR-0061 — geometry here, markup there).
+   */
+  readonly rows: readonly TooltipRow[]
+  /** How many rows the card could not hold. `0` whenever everything fitted. */
+  readonly hiddenRows: number
   /** Whether the card sits left of the anchor, because the right side had no room. */
   readonly flipped: boolean
 }
@@ -158,6 +204,12 @@ function widestLine(title: string, rows: readonly TooltipRow[]): number {
  * **Right of the crosshair by default, flipped left when it would overrun**, and clamped to the
  * plot's left edge in the degenerate case where it fits on neither side — a clipped card is worse
  * than one overlapping its own crosshair.
+ *
+ * **Bounded down the plot as well as across it** (Story #228). The card was previously free to
+ * grow past the axis labels and then past the `viewBox`, which clips it without a sound — the
+ * failure class DDR-0051 §#190 recorded in the other axis. Past {@link maxRowsFor} the card keeps
+ * as many rows as fit and spends the last one saying how many it dropped, so the box it returns is
+ * inside the plot at every row count and the reader is told when there is more.
  */
 export function tooltipLayout(
   anchorX: number,
@@ -165,8 +217,19 @@ export function tooltipLayout(
   rows: readonly TooltipRow[],
   plot: TooltipPlot,
 ): TooltipLayout {
-  const width = Math.max(MIN_WIDTH, widestLine(title, rows) * CHAR_W + 2 * PAD_X)
-  const height = TITLE_H + rows.length * ROW_H + 2 * PAD_Y
+  const maxRows = maxRowsFor(plot)
+  // The overflow row costs a slot of its own, so the last row kept is `maxRows - 1` and the count
+  // it reports includes the row it displaced. Treating that slot as free would put the card one
+  // row past the bound it exists to respect, and under-report by one on the way.
+  const overflows = rows.length > maxRows
+  const kept = overflows ? maxRows - 1 : rows.length
+  const hiddenRows = rows.length - kept
+  const drawn = overflows ? [...rows.slice(0, kept), overflowRow(hiddenRows)] : rows
+
+  // Measured on the rows actually drawn: the overflow row is short, so a card sized to a hidden
+  // row would be wider than anything in it.
+  const width = Math.max(MIN_WIDTH, widestLine(title, drawn) * CHAR_W + 2 * PAD_X)
+  const height = TITLE_H + drawn.length * ROW_H + 2 * PAD_Y
 
   const right = anchorX + ANCHOR_GAP
   const flipped = right + width > plot.width - plot.pad.right
@@ -183,7 +246,9 @@ export function tooltipLayout(
     textX: x + PAD_X,
     valueX: x + width - PAD_X,
     titleY,
-    rowYs: rows.map((_, i) => titleY + (i + 1) * ROW_H),
+    rowYs: drawn.map((_, i) => titleY + (i + 1) * ROW_H),
+    rows: drawn,
+    hiddenRows,
     flipped,
   }
 }

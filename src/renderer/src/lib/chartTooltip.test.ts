@@ -13,11 +13,14 @@ import {
   RADIUS_UNITS,
   ROW_H,
   TITLE_H,
+  maxRowsFor,
+  overflowRow,
   signInk,
   tooltipLayout,
   type TooltipLayout,
   type TooltipRow,
 } from './chartTooltip'
+import { compositionBandSchema } from '@shared/domain/performance'
 
 /**
  * The hover card's layout (Story #188, DDR-0061).
@@ -39,6 +42,11 @@ const RIGHT_EDGE = PLOT.width - PLOT.pad.right
 
 function layout(anchorX: number, title: string, rows: TooltipRow[]): TooltipLayout {
   return tooltipLayout(anchorX, title, rows, PLOT)
+}
+
+/** `n` labelled rows, for walking the row count the way the anchor tests walk the anchor. */
+function rowsOf(n: number): TooltipRow[] {
+  return Array.from({ length: n }, (_, i) => ({ label: `Band ${i}`, value: '€1' }))
 }
 
 describe('tooltipLayout', () => {
@@ -87,18 +95,20 @@ describe('tooltipLayout', () => {
     expect(labelled.width).toBeGreaterThan(bare.width + 'Technology'.length * CHAR_W)
   })
 
-  it('grows in height with the row count, so eight bands and a total still fit', () => {
+  /**
+   * **This test used to claim more than it checked** (Story #228). It was named for nine rows
+   * fitting, and nine rows do not fit — `PERFORMANCE_PLOT` holds seven. What it actually asserted
+   * was that each baseline falls inside *the box*, which stays true however far past the plot the
+   * box has grown, so it passed on a card hanging over the axis labels.
+   */
+  it('grows in height with the row count, up to what the plot holds', () => {
     const one = layout(100, '1 Jan', [{ value: 'x' }])
-    const nine = layout(
-      100,
-      '1 Jan',
-      Array.from({ length: 9 }, (_, i) => ({ label: `Band ${i}`, value: '€1' })),
-    )
+    const full = layout(100, '1 Jan', rowsOf(maxRowsFor(PLOT)))
     expect(one.height).toBe(TITLE_H + ROW_H + 2 * PAD_Y)
-    expect(nine.height).toBe(one.height + 8 * ROW_H)
+    expect(full.height).toBe(one.height + (maxRowsFor(PLOT) - 1) * ROW_H)
     // Every baseline is inside the box it is drawn in. Three components computing their own
     // height and their own row step is how the composition card's rows and its box disagreed.
-    for (const y of nine.rowYs) expect(y).toBeLessThan(nine.y + nine.height)
+    for (const y of full.rowYs) expect(y).toBeLessThan(full.y + full.height)
   })
 
   it('sits right of the anchor with room, and flips left without it', () => {
@@ -121,6 +131,79 @@ describe('tooltipLayout', () => {
       expect(box.y).toBeGreaterThanOrEqual(PLOT.pad.top)
       expect(box.y + box.height).toBeLessThan(PLOT.height - PLOT.pad.bottom)
     }
+  })
+
+  /**
+   * The containment assertion above walks the **anchor** and holds the row count at one, which is
+   * how a card that grew past the plot went unnoticed: the axis it could overflow was the axis
+   * nothing varied. This walks the row count the same way (Story #228).
+   */
+  it('never leaves the plot, at any row count', () => {
+    const bottom = PLOT.height - PLOT.pad.bottom
+    for (let count = 1; count <= 20; count++) {
+      const box = layout(200, '31 December 2026', rowsOf(count))
+      expect(box.y + box.height, `${count} rows`).toBeLessThanOrEqual(bottom)
+      // …and inside the `viewBox` too, which is the second, quieter failure: past the plot the
+      // card sits over the date labels; past the root `<svg>` it is simply clipped away.
+      expect(box.y + box.height, `${count} rows`).toBeLessThanOrEqual(PLOT.height)
+      for (const y of box.rowYs) expect(y).toBeLessThan(box.y + box.height)
+    }
+  })
+
+  /**
+   * Eight rows is the count that used to sit over the date labels; ten is the count the `viewBox`
+   * clipped outright. Both now truncate, and **say so** — a figure the reader cannot see must not
+   * disappear without a trace (DDR-0021, DDR-0048 in spirit).
+   */
+  it('truncates past the bound and reports how many it dropped', () => {
+    const max = maxRowsFor(PLOT)
+    for (const count of [max + 1, max + 3, 20]) {
+      const box = layout(200, '1 Jan', rowsOf(count))
+      expect(box.rows, `${count} rows`).toHaveLength(max)
+      expect(box.hiddenRows).toBe(count - (max - 1))
+      // The last row is the marker, and it names the true number of rows the reader cannot see —
+      // including the one the marker itself displaced.
+      expect(box.rows[box.rows.length - 1]).toEqual(overflowRow(box.hiddenRows))
+      expect(box.rows[max - 1]?.value).toBe(`+${count - max + 1} more`)
+    }
+  })
+
+  it('draws every row and reports none hidden while they fit', () => {
+    for (let count = 1; count <= maxRowsFor(PLOT); count++) {
+      const box = layout(200, '1 Jan', rowsOf(count))
+      expect(box.rows, `${count} rows`).toHaveLength(count)
+      expect(box.hiddenRows).toBe(0)
+      expect(box.rows.some((r) => r.value.endsWith('more'))).toBe(false)
+    }
+  })
+
+  /**
+   * The bound is **derived**, not a number someone chose — the treatment DDR-0051 §#190 gave
+   * `pad.left` after the `€` had been clipped off every tick for months. Moving any constant the
+   * card is built from moves it, and this is the assertion that fails if the derivation is ever
+   * replaced by a literal.
+   */
+  it('derives what it can hold from the card metrics and the plot', () => {
+    const inner = PLOT.height - PLOT.pad.top - PLOT.pad.bottom
+    expect(maxRowsFor(PLOT)).toBe(Math.floor((inner - TITLE_H - 2 * PAD_Y) / ROW_H))
+    // A taller plot holds strictly more; a shorter one strictly fewer.
+    const taller = { ...PLOT, height: PLOT.height + 4 * ROW_H }
+    expect(maxRowsFor(taller)).toBe(maxRowsFor(PLOT) + 4)
+    // Never zero or negative, however cramped — a card with one row beats a card with none.
+    expect(maxRowsFor({ ...PLOT, height: PLOT.pad.top + PLOT.pad.bottom })).toBe(1)
+  })
+
+  /**
+   * **The guard that makes the band list and the card visible to each other** (Story #228).
+   *
+   * The composition card is the tallest caller: one row per `CompositionBand` key plus a `Total`.
+   * The keys are a Zod enum in `shared/domain/performance.ts`, which is the side a change would
+   * come from — so adding one there fails *here* rather than being found on screen. Today it is
+   * 5 + 1 = 6 against a bound of 7, and that one-row margin is the finding this story was filed on.
+   */
+  it('holds every composition band the domain can emit, plus a total', () => {
+    const bandKeys = compositionBandSchema.shape.key.options
+    expect(bandKeys.length + 1).toBeLessThanOrEqual(maxRowsFor(PLOT))
   })
 
   it('pins to the top of the plot, whatever the anchor', () => {

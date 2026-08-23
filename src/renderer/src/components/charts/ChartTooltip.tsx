@@ -67,7 +67,11 @@ export function ChartTooltip({
       <text className="chart-tooltip-date" x={box.textX} y={box.titleY}>
         {title}
       </text>
-      {rows.map((row, i) => (
+      {/* `box.rows`, never the `rows` prop (Story #228). The layout is what decides how many rows
+          fit in the plot and appends the `+N more` standing in for the rest, so rendering the prop
+          would draw past a bound the module had already computed — and the card would be clipped
+          by the `viewBox` in silence, which is the whole of what this story fixed. */}
+      {box.rows.map((row, i) => (
         <g key={row.label ?? `row-${i}`}>
           {row.label !== undefined && (
             <text className="chart-tooltip-label" x={box.textX} y={box.rowYs[i]}>
