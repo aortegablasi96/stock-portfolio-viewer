@@ -41,26 +41,29 @@ test.afterAll(async () => {
 /** The id of the element currently holding focus — the only way to assert a roving tabindex. */
 const focusedId = (): Promise<string | undefined> => page.evaluate(() => document.activeElement?.id)
 
+/** The five views, in order, by the name a reader hears. */
+const TAB_NAMES = ['Portfolio', 'Performance', 'Allocation', 'Dividends', 'Trades'] as const
+
 test('the tablist is named, vertical, and every tab is a tab', async () => {
   const tablist = page.getByRole('tablist', { name: 'Views' })
   await expect(tablist).toBeVisible()
   // The axis is part of the promise: a reader who is told "vertical" reaches for Up/Down, and
   // the test below is what makes sure those are the keys that answer.
   await expect(tablist).toHaveAttribute('aria-orientation', 'vertical')
-  await expect(tablist.getByRole('tab')).toHaveText([
-    'Portfolio',
-    'Performance',
-    'Allocation',
-    'Dividends',
-    'Trades',
-  ])
+  // The **accessible name**, not the row's text. Since Story #254 each row also draws the digit
+  // that reaches it, `aria-hidden` so it stays out of the name — so `toHaveText` would now read
+  // "Portfolio1". The name is what a reader hears, and it is the property this ever meant to pin
+  // (DDR-0083).
+  for (const [index, label] of TAB_NAMES.entries()) {
+    await expect(tablist.getByRole('tab').nth(index)).toHaveAccessibleName(label)
+  }
 })
 
 test('the selected tab points at a panel that exists, and the panel points back', async () => {
   // The half-implemented version of this pattern announced a tablist and controlled nothing:
   // no tabpanel existed, so `aria-controls` had nothing to name.
   const selected = page.getByRole('tab', { selected: true })
-  await expect(selected).toHaveText('Portfolio')
+  await expect(selected).toHaveAccessibleName('Portfolio')
   await expect(selected).toHaveAttribute('aria-controls', 'panel-portfolio')
 
   const panel = page.getByRole('tabpanel')
@@ -73,7 +76,9 @@ test('the tablist is a single stop in the Tab order', async () => {
   // Roving tabindex: exactly one tab is reachable with Tab, and it is the selected one.
   const reachable = await page.evaluate(() =>
     [...document.querySelectorAll('[role="tab"]')].map((tab) => ({
-      label: tab.textContent,
+      // The label element rather than the row's text: the row also carries the accelerator's
+      // digit since Story #254, and the label is the half this test names its rows by.
+      label: tab.querySelector('.app-tab-label')?.textContent,
       tabIndex: (tab as HTMLElement).tabIndex,
     })),
   )
@@ -140,13 +145,13 @@ test('arrow keys move between tabs and select as they go', async () => {
 
   await page.keyboard.press('ArrowDown')
   expect(await focusedId()).toBe('tab-performance')
-  await expect(page.getByRole('tab', { selected: true })).toHaveText('Performance')
+  await expect(page.getByRole('tab', { selected: true })).toHaveAccessibleName('Performance')
   // Selection and the visible panel never disagree — that is what automatic activation buys.
   await expect(page.getByRole('tabpanel')).toHaveAttribute('id', 'panel-performance')
 
   await page.keyboard.press('ArrowUp')
   expect(await focusedId()).toBe('tab-portfolio')
-  await expect(page.getByRole('tab', { selected: true })).toHaveText('Portfolio')
+  await expect(page.getByRole('tab', { selected: true })).toHaveAccessibleName('Portfolio')
 })
 
 test('arrow keys wrap at both ends of the tablist', async () => {
@@ -170,7 +175,7 @@ test('the cross-axis arrows are left to the panel', async () => {
   expect(await focusedId()).toBe('tab-portfolio')
   await page.keyboard.press('ArrowLeft')
   expect(await focusedId()).toBe('tab-portfolio')
-  await expect(page.getByRole('tab', { selected: true })).toHaveText('Portfolio')
+  await expect(page.getByRole('tab', { selected: true })).toHaveAccessibleName('Portfolio')
 })
 
 test('Home and End jump to the first and last tabs', async () => {
@@ -178,11 +183,11 @@ test('Home and End jump to the first and last tabs', async () => {
 
   await page.keyboard.press('End')
   expect(await focusedId()).toBe('tab-trades')
-  await expect(page.getByRole('tab', { selected: true })).toHaveText('Trades')
+  await expect(page.getByRole('tab', { selected: true })).toHaveAccessibleName('Trades')
 
   await page.keyboard.press('Home')
   expect(await focusedId()).toBe('tab-portfolio')
-  await expect(page.getByRole('tab', { selected: true })).toHaveText('Portfolio')
+  await expect(page.getByRole('tab', { selected: true })).toHaveAccessibleName('Portfolio')
 })
 
 test('only the selected panel is exposed, however many are mounted', async () => {

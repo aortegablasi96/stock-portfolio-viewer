@@ -3,8 +3,7 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 > **Budget: keep this file under 36 KB** (`wc -c CLAUDE.md` ≤ 36864). It is loaded into every
-> session, so its cost is paid before any work starts, and it has twice grown back after being
-> compacted.
+> session, so its cost is paid before any work starts.
 >
 > The failure mode is re-narrating a decision this repo already records: **every ADR and DDR is
 > 8–20 KB and carries its own reasoning**, and `docs/design-decisions/README.md` indexes all of
@@ -17,14 +16,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 M0–M7 are delivered: live IBKR holdings/balances/allocation in a display currency, immutable
 snapshots, Flex statement import, and four analytics views over it — all behind a vertical sidebar.
 
-Not built: AI features, multi-broker support, benchmark comparison, tax reporting.
+Not built: AI, multi-broker, benchmarks, tax reporting.
 
 **Which Epics are open is deliberately not recorded here** — read the backlog (*Current Priority*).
 The **lifecycle** is the stable rule: an Epic closes with its stories, and refinement opens a *new*
 area-scoped Epic rather than reopening a delivered one (#240 → #245). `docs/github-issues.md` has
 the one narrow exception; Epic #125 is the precedent.
-
-**Views are reworked often — read the backlog before assuming one is final.**
 
 ### Domains
 
@@ -110,8 +107,7 @@ docs/flex-queries/  real Flex exports (parser ground truth) — gitignored
 
 ### Enforced by the platform, not by convention
 
-This repo's habit is to make invariants *unexpressible* rather than documented — reach for the same
-instinct. **ESLint layer boundaries** (`eslint.config.mjs`, ADR-0002/0003): the renderer may not
+**ESLint layer boundaries** (`eslint.config.mjs`, ADR-0002/0003): the renderer may not
 import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not import `@db` or
 `electron`.
 
@@ -217,9 +213,8 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
   and `designTokens.test.ts` fails if it moves. A raw duration is the only way out.
 - **The loss tone is two tokens and picking the wrong one is silent** (DDR-0046, DDR-0054): `--neg`
   is **fill only**, `--neg-text` **text only**; same shape for `--accent` (labels + ring) vs
-  `--accent-strong` (the primary button's fill alone). The *shape* is durable — the split
-  **inverted** in the #181 re-key. `--neg-text`'s constraint is **not** 4.5:1 but `--pos − 0.5`.
-  `contrast.ts` **enumerates pairings by hand** and lists *passing* ones too; it models
+  `--accent-strong` (the primary button's fill alone). `--neg-text`'s constraint is **not** 4.5:1
+  but `--pos − 0.5`. `contrast.ts` **enumerates pairings by hand**; it models
   `.btn-primary:hover`'s `brightness(1.08)`, which *lowers* contrast where axe tests rest only. A tint mixed into a surface is a **measured** number, never eyeballed (the sidebar's active row is
   4.95:1 at 16%; 22% fails), and a tone rendered on a **hovered row** is measured on the
   lift, not on `--card` (DDR-0064).
@@ -248,7 +243,11 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
   never a `collapsed` prop**, which makes "selecting a view must not reopen the column"
   unexpressible; a collapsed label is **clipped, never removed**, so a row is still named by its
   own text. The toggle shares the head row with the app name, which **wraps** to fit it — never
-  re-ellipsise it, and never widen the column (DDR-0068).
+  re-ellipsise it, and never widen the column (DDR-0068). An accelerator sits **beside** the
+  pattern, never in it (DDR-0083): `Ctrl`/`Cmd`+`1`–`5` on a `window` listener in `App.tsx`.
+  Neither handler checks for the other: they read different properties, `key` vs `code`. It **declines while text is being entered**, and it is disclosed by an
+  *attribute*: each row's `title` (amending DDR-0057) plus `aria-keyshortcuts`. A drawn digit per
+  row was built and **withdrawn** — don't re-propose it.
 - **An analytics tab mounts on first visit and then stays mounted**, hidden rather than unmounted,
   so view-local state survives; unvisited tabs issue no IPC (DDR-0006, DDR-0027). The consequence:
   a mounted view can go stale, so both Flex write paths bump `lib/dataVersion` and every
@@ -261,7 +260,7 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
   row is **absent, not empty**, where there is nothing to refresh. `lib/analyticsShell.ts` holds
   the branch mapping; its test fails if a view re-declares the guard, wrapper, or header.
 - **Charts are dependency-free inline SVG** sized by **aspect ratio, never a pixel width**
-  (DDR-0018), because an axis label is 11 *viewBox units* — halving the column halves the label.
+  (DDR-0018): an axis label is 11 *viewBox units*, so halving the column halves the label.
   Performance's four charts share one geometry (`lib/chartGeometry`), and both grid breakpoints
   derive from **one** number (`GRID_CONTENT_BREAKPOINT_PX`, 1200) with the sidebar width as a
   defaulted parameter, so neither can be tuned alone. Don't "restore" the old breakpoint by
@@ -376,9 +375,8 @@ alternatives this table can only name.
 Node ≥22.12 (CI runs 24) · npm · Electron · React + Vite · TypeScript (renderer **and** main) ·
 SQLite via Drizzle · Zod · IBKR Client Portal Gateway · Vitest · Playwright.
 
-Runtime dependencies are deliberately few — `better-sqlite3`, `drizzle-orm`, `fast-xml-parser`,
-`mapbox-gl` (the Allocation basemap only), `react`, `react-dom`, `zod`.
-**Avoid adding dependencies without clear long-term value.**
+Runtime dependencies are deliberately few (see `package.json`; `mapbox-gl` is the Allocation
+basemap and nothing else). **Avoid adding dependencies without clear long-term value.**
 
 ## Commands
 
@@ -405,50 +403,47 @@ npm run db:migrate     # apply to ./local.dev.db (dev tooling only; override wit
 npm run db:studio
 ```
 
-Migrations apply automatically on launch; `db:migrate` is for the standalone dev DB. There is no
-lint-fix or aggregate `check` script. **CI** runs exactly `lint`, `typecheck`, `test` and `build`
+There is no lint-fix or aggregate `check` script. **CI** runs exactly `lint`, `typecheck`, `test` and `build`
 on every push to `main` and every PR (Node 24, Ubuntu). The Playwright suite is **intentionally
 excluded from CI** (needs a display server) — run `npm run test:e2e` locally. Run all four before
 opening a PR.
 
 ## Testing
 
-Services are the primary unit-test target; mock repositories and external providers.
+Mock repositories and external providers; services are the primary target.
 
 **Vitest runs every test under `src/` in a Node environment with no jsdom, so no test may render a
 React component.** This shapes the renderer: chart maths, filtering, sorting, formatting and state
 are **extracted into pure modules under `renderer/src/lib/`** precisely so they can be tested —
-follow that split when adding a component with real logic. Pure repository helpers
-touching no data source (`flexStatementParser`, `snapshotMapping`, `fifoSummary`) are tested alike.
+follow that split when adding a component with real logic. Pure repository helpers touching no
+data source are tested alike.
 
 Several `lib/*.test.ts` files have **no module under test** — they guard `app.css`, the components,
 a view's own composition, or accessibility by scanning source text. What no Node test can see is
-pinned by Playwright: `e2e/page-header.spec.ts`, `e2e/tab-navigation.spec.ts`, `e2e/reduced-motion.spec.ts` (that the
-media query actually wins the cascade), `e2e/window-state.spec.ts`, `e2e/sidebar-collapse.spec.ts`.
+pinned by Playwright: `e2e/page-header.spec.ts`, `e2e/tab-navigation.spec.ts`,
+`e2e/view-shortcuts.spec.ts`, `e2e/reduced-motion.spec.ts` (that the media query actually wins the
+cascade), `e2e/window-state.spec.ts`, `e2e/sidebar-collapse.spec.ts`.
 
 Every completed feature should include unit tests, regression review, edge-case validation, and a
 Testing Report.
 
 ## Skills System (`.claude/skills/`)
 
-Four tiers. Each stage produces an artifact that is the next stage's input; execution skills
-consume only *approved* artifacts and must not redefine requirements, design, or architecture.
-
-The four tiers are **plain `SKILL.md` files, not `Skill`-tool skills** — nested one level deeper
+Four tiers, each stage's artifact the next stage's input; execution skills consume only *approved*
+artifacts and must not redefine requirements, design, or architecture. They are
+**plain `SKILL.md` files, not `Skill`-tool skills** — nested one level deeper
 than the loader looks, so read `.claude/skills/<tier>/<name>/SKILL.md` directly; invoking one by
 name resolves nothing. **`run-app` is the exception**: it sits at the top level and *is* invocable
-(`/run-app`). It either launches the app for the owner to click through **or** captures view
-screenshots — never both at once.
+(`/run-app`). It either launches the app for the owner **or** captures view screenshots, never
+both at once.
 
 - **workflow-skills** (planning) — `product-manager` → `ui-designer` / `architect` →
   `database-designer` → `implementation-engineer` → `testing`.
-- **execution-skills** — `feature-implementer`, `repository-builder`, `service-builder`,
-  `api-builder`, `ui-builder`, `storage-builder`, `assistant-builder`. The Implementation Engineer
-  selects the minimum set.
+- **execution-skills** — seven builders; the Implementation Engineer selects the minimum set.
 - **governance-skills** — `adr-writer` (→ `docs/decisions/`), `design-recorder`
   (→ `docs/design-decisions/`), `refactoring-reviewer` (required before significant restructuring).
-- **project-management** — `issue-writer` helps the owner *draft* backlog issues;
-  `project-historian` backfills historical ones. These track work; they never design it.
+- **project-management** — `issue-writer` drafts backlog issues, `project-historian` backfills
+  historical ones. These track work; they never design it.
 
 Work **originates in GitHub Issues** — the owner authors Epics and Stories, and the Product Manager
 **reads them before planning**. Issues are never created after implementation to record work done.
@@ -484,9 +479,9 @@ order-placing tools**.
 Stock Portfolio Viewer is a **standalone, single-user, local-first desktop application** for
 personal portfolio analytics, **analytics-first, not advice-first**.
 
-AI features (a later milestone) may explain changes, summarize performance, compare periods and
-answer questions. AI must **never** recommend investments, suggest trades, decide allocations, or
-execute transactions. Robo-advisor functionality is out of scope; the owner decides.
+AI features (a later milestone) may explain, summarize, compare periods and answer questions. AI
+must **never** recommend investments, suggest trades, decide allocations, or execute transactions.
+Robo-advisor functionality is out of scope; the owner decides.
 
 ## Current Priority
 
