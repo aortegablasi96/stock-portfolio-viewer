@@ -3,7 +3,6 @@ import type { Holding, PortfolioOverview } from '@shared/domain/portfolio'
 import type { SnapshotSummary } from '@shared/domain/snapshot'
 import { HoldingsTable } from './HoldingsTable'
 import { BalancesSummary } from './BalancesSummary'
-import { AllocationPanel } from './AllocationPanel'
 import { SnapshotHistory } from './SnapshotHistory'
 import {
   DataSourcesCard,
@@ -43,26 +42,27 @@ function heldCurrencies(holdings: readonly Holding[]): string[] {
  * policy live in the services (see the M2 Architecture Review / DDR-0003).
  *
  * **Story #189 gives the view the redesign's shape**, and with it the Flex import controls, which
- * used to sit in a second `.dashboard` block beside this one in `App.tsx`. The page is now a
- * header, a KPI row, a `1fr / 260px` pair — the holdings table beside a rail carrying allocation
- * weights and a data-sources card — and then the full-width stored-statement and snapshot tables.
+ * used to sit in a second `.dashboard` block beside this one in `App.tsx`. **Story #266 retires
+ * the rail that shape put them in.** The page is now a header, a KPI row, the holdings table at
+ * the page's full width, then one row pairing Stored statements with Data sources, then the
+ * snapshot history.
  *
- * Three placement decisions are worth stating, because each answers a question the prototype left
- * open:
+ * Three placement decisions are worth stating, because each answers a question a reader of the
+ * previous arrangement would ask:
  *
- *   - **The rail renders in every live state, not only `ok`.** The prototype draws it beside a
- *     populated table and says nothing about a disconnected gateway. Imported Flex history is
- *     local and has never needed the gateway, so a `not_connected` dashboard that also hid the
- *     import button would strand the owner exactly when importing is the useful thing to do. The
- *     live state renders in the main column; the rail's data-sources card is beside it either way.
- *   - **The allocation list is the part that comes and goes**, because it is a reading of the same
- *     positions the main column is showing — with nothing to weigh, there is no list.
- *   - **`SnapshotHistory` stays, last on the page**, directly under Stored statements. The
- *     prototype has no snapshot section at all; that is an omission in a sketch, not a decision to
- *     delete a feature. Below the statements is where it belongs: the two are the app's two local
- *     stores, each with its own `ConfirmAction` reset, and pairing them puts "what history do I
- *     hold?" in one band. The rail was the alternative and is too narrow — a snapshot row is a
- *     time, a converted total and a holdings count on one line.
+ *   - **The imported store still renders outside every gateway branch**, which was the rail's
+ *     load-bearing property (DDR-0062) and is now free: the row is a sibling of the live-state
+ *     block rather than a column beside it, so no branch can contain it. Imported Flex history is
+ *     local and has never needed the gateway, and a `not_connected` dashboard that also hid the
+ *     import button would strand the owner exactly when importing is the useful thing to do.
+ *   - **The allocation list is gone, not moved.** It listed each position's weight as a labelled
+ *     bar — the Weight column of the table beside it, drawn a second time on the same
+ *     `lib/weightBars` scale. The table keeps the figure, the micro-bar and the scale; what the
+ *     page loses is the second drawing and the 260px it cost the table.
+ *   - **`SnapshotHistory` stays, last on the page**, below the row. The prototype has no snapshot
+ *     section at all; that is an omission in a sketch, not a decision to delete a feature. The
+ *     foot of the page is where it belongs: it and Stored statements are the app's two local
+ *     stores, each with its own `ConfirmAction` reset.
  *
  * Story #183 moved the display-currency control out of this header and into the sidebar, which
  * makes this view a **reporter as well as a reader** (DDR-0056). It receives the currency to
@@ -307,92 +307,87 @@ export function PortfolioDashboard({
 
       {state.phase === 'ok' && <BalancesSummary balances={state.overview.balances} />}
 
-      {/* The redesign's pair (Story #189). The grid itself is unconditional: the main column
-          carries whatever the live read produced — a table, an empty account, or one of the three
-          gateway states — while the rail carries the local store, which none of those states can
-          affect. */}
-      <div className="dashboard-columns">
-        <div className="col-main">
-          {state.phase === 'loading' && (
-            <StatePanel variant="loading">Loading your portfolio…</StatePanel>
-          )}
+      {/* Whatever the live read produced, at the page's full width (Story #266): a table, an
+          empty account, or one of the four gateway states. No wrapper — `.dashboard` is a
+          column, and a column of one is the width of the page. */}
+      {state.phase === 'loading' && (
+        <StatePanel variant="loading">Loading your portfolio…</StatePanel>
+      )}
 
-          {state.phase === 'not_connected' && (
-            <StatePanel
-              variant="notice"
-              heading="Not connected to Interactive Brokers"
-              action={
-                <Button variant="primary" onClick={() => void load(displayCurrency)}>
-                  Retry
-                </Button>
-              }
-            >
-              {state.message}
-            </StatePanel>
-          )}
+      {state.phase === 'not_connected' && (
+        <StatePanel
+          variant="notice"
+          heading="Not connected to Interactive Brokers"
+          action={
+            <Button variant="primary" onClick={() => void load(displayCurrency)}>
+              Retry
+            </Button>
+          }
+        >
+          {state.message}
+        </StatePanel>
+      )}
 
-          {/* Distinct from not_connected by its heading and by the fix it names: this gateway is
-              running, so a restart is the wrong advice (DDR-0022). */}
-          {state.phase === 'not_responding' && (
-            <StatePanel
-              variant="notice"
-              heading="Interactive Brokers isn’t responding"
-              hint={
-                <>
-                  The gateway is running but didn’t answer. Its session usually needs
-                  re-authenticating at <code>https://localhost:5000</code>.
-                </>
-              }
-              action={
-                <Button variant="primary" onClick={() => void load(displayCurrency)}>
-                  Retry
-                </Button>
-              }
-            >
-              {state.message}
-            </StatePanel>
-          )}
+      {/* Distinct from not_connected by its heading and by the fix it names: this gateway is
+          running, so a restart is the wrong advice (DDR-0022). */}
+      {state.phase === 'not_responding' && (
+        <StatePanel
+          variant="notice"
+          heading="Interactive Brokers isn’t responding"
+          hint={
+            <>
+              The gateway is running but didn’t answer. Its session usually needs
+              re-authenticating at <code>https://localhost:5000</code>.
+            </>
+          }
+          action={
+            <Button variant="primary" onClick={() => void load(displayCurrency)}>
+              Retry
+            </Button>
+          }
+        >
+          {state.message}
+        </StatePanel>
+      )}
 
-          {state.phase === 'error' && (
-            <StatePanel
-              variant="error"
-              heading="Couldn’t load your portfolio"
-              action={
-                <Button variant="primary" onClick={() => void load(displayCurrency)}>
-                  Retry
-                </Button>
-              }
-            >
-              {state.message}
-            </StatePanel>
-          )}
+      {state.phase === 'error' && (
+        <StatePanel
+          variant="error"
+          heading="Couldn’t load your portfolio"
+          action={
+            <Button variant="primary" onClick={() => void load(displayCurrency)}>
+              Retry
+            </Button>
+          }
+        >
+          {state.message}
+        </StatePanel>
+      )}
 
-          {state.phase === 'ok' &&
-            (state.overview.holdings.length === 0 ? (
-              <StatePanel variant="empty">No open positions in this account.</StatePanel>
-            ) : (
-              <HoldingsTable
-                holdings={state.overview.holdings}
-                allocation={state.overview.allocation}
-                displayCurrency={state.overview.displayCurrency}
-              />
-            ))}
-        </div>
+      {state.phase === 'ok' &&
+        (state.overview.holdings.length === 0 ? (
+          <StatePanel variant="empty">No open positions in this account.</StatePanel>
+        ) : (
+          <HoldingsTable
+            holdings={state.overview.holdings}
+            allocation={state.overview.allocation}
+            displayCurrency={state.overview.displayCurrency}
+          />
+        ))}
 
-        <aside className="col-side">
-          {/* A reading of the positions in the main column, so it is present exactly when they
-              are. Unconvertible rows are already out of `allocation` upstream (DDR-0007). */}
-          {state.phase === 'ok' && state.overview.holdings.length > 0 && (
-            <AllocationPanel allocation={state.overview.allocation} />
-          )}
-          <DataSourcesCard sources={sources} />
-        </aside>
+      {/* The imported store, in one row (Story #266): what it holds, and the two controls that
+          change it. Outside every `state.phase` branch by construction now — it is a sibling of
+          the block above rather than a column beside it — so a disconnected dashboard still
+          offers the import (DDR-0062's reason, kept). The list takes the flexible column: it is
+          the half with figures to line up, and the card stops needing width. */}
+      <div className="dashboard-sources">
+        <StoredStatementsCard sources={sources} />
+        <DataSourcesCard sources={sources} />
       </div>
 
-      {/* Both full width, and both below the pair: a receipt for the import that just ran, and
-          the standing list of what the store holds. */}
+      {/* Full width, and directly under the button that produced it: the per-file receipt for
+          the import that just ran. Absent until one lands. */}
       <ImportReceipt sources={sources} />
-      <StoredStatementsCard sources={sources} />
 
       {historyStatus && (
         <p className="capture-status" role="status">

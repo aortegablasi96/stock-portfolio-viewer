@@ -147,7 +147,6 @@ describe('the figure role', () => {
       '.data-table .data-table-num',
       '.highlight-value',
       '.snapshot-value',
-      '.allocation-weight',
       '.bar-list-value',
       '.chart-axis-label',
       '.chart-tooltip-value',

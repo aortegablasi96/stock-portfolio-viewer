@@ -189,10 +189,23 @@
      column's --space-3 gutter on each side is exactly 48px of content in a 56px rail with
      8px to spare for the focus ring. Narrower clips the tile; wider stops reading as a rail. */
   --sidebar-width-collapsed: 56px;
-  /* The Portfolio view's right rail (Story #189), a structural measure for the same reason
-     the two above are: it is the redesign's own 260px, and it is quoted by the grid that
-     places it and by the media query that decides when it stops fitting. */
-  --rail-width: 260px;
+  /* The Portfolio view's data-sources card (Story #266), the third of these and the successor
+     to Story #189's `--rail-width: 260px`. The rail is gone — the holdings table takes the
+     page — and the card it carried now sits beside Stored statements, so the measure is no
+     longer the redesign's number but the card's **own content**: its two controls stand side
+     by side rather than stacked, and this is the width that fits them.
+
+     Measured on screen rather than reasoned about, because a glyph advance is not something a
+     comment can promise: "Import statements…" renders 190.4px and "Clear statements" 165.4px at
+     `--control-pad-md`, plus the --space-3 between them — 364px of content, inside
+     `--surface-pad-md` either side and the card's own hairline border, is 406px. 400px was
+     tried first and wrapped, which `e2e/portfolio-layout.spec.ts` measures rather than trusts.
+
+     416px is the number, and it is 26rem — the cap `.confirm-action` has always carried. That
+     is a coincidence rather than a derivation (the buttons bind, not the cap), but it is the
+     useful one: this is the first place that control has fitted without a `max-width` override
+     fighting it. Quoted by the grid that places it and by the media query that drops it. */
+  --sources-width: 416px;
   /* The Allocation breakdown's donut column (Story #191), the third of these and the same
      kind of measure: the redesign's own 280px, quoted by the grid that places it and by the
      media query that decides when it stops fitting. It is a *fixed* track on purpose — the
@@ -388,7 +401,6 @@ body {
    `viewBox` unit is still a `viewBox` unit — so DDR-0018 is intact: no chart label acquires a page
    type step, and `lib/figureRole.test.ts` fails if one does. */
 .stat-value,
-.allocation-weight,
 .data-table .data-table-num,
 .snapshot-value,
 .highlight-value,
@@ -1207,77 +1219,50 @@ html {
   margin-top: var(--space-5);
 }
 
-/* ---- The holdings table and its rail (Story #189) -------------------------
-   The redesign's pair: the table takes the space, the rail is a fixed 260px carrying the
-   allocation weights and the data-sources card. Fixed rather than fractional because both
-   cards in it are read at a glance rather than scanned — a coverage sentence and a column
-   of tickers — and a fraction would widen them on a large monitor to no purpose while
-   squeezing the six-column table on a small one. */
+/* ---- The imported store's row (Story #266) --------------------------------
+   Story #189's `1fr / 260px` pair is gone: the holdings table has the page, and the rail's
+   two cards were each answered by it. The allocation list was the table's own Weight column
+   drawn a second time, and the data-sources card was in the rail only because the rail
+   existed — its subject is the store Stored statements lists, so the two are one row.
 
-.dashboard-columns {
+   The idiom is the app's third instance of it (`.dashboard-columns` had it, `.breakdown-split`
+   still does): a flexible content column and a **fixed** track beside it, `align-items: start`
+   so both halves begin at the row's top edge. Fixed for the reason DDR-0062 gave for the rail
+   and #191 for the donut — the card is read at a glance and stops needing width, so every
+   pixel the window gains goes to the half with figures to line up. */
+
+.dashboard-sources {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) var(--rail-width);
+  grid-template-columns: minmax(0, 1fr) var(--sources-width);
   gap: var(--space-7);
   align-items: start;
 }
 
-.col-main {
+/* Both halves are grid children that must be allowed to shrink, the same rule
+   `.breakdown-split > *` states for the same reason: a table's `min-content` is wide. */
+.dashboard-sources > * {
   min-width: 0;
 }
 
-/* The rail's cards stack; the gap is the dashboard's own, so the rail's second card lines
-   up with nothing in particular and simply follows its first. */
-.col-side {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-7);
-}
-
-/* Below this the rail goes under the table rather than beside it. The number is derived
-   rather than chosen, and `portfolioLayout.test.ts` does the arithmetic rather than trusting
-   this comment: the sidebar at its expanded 220px + 2rem of content padding each side + the
-   260px rail + the --space-7 gap + 560px left for the holdings table, which is what its six
-   columns need before the table starts scrolling inside itself. 220 + 64 + 260 + 24 + 560.
-   Collapsing the sidebar buys 164px of it back, so the rail returns before the window grows. */
-@media (max-width: 1128px) {
-  .dashboard-columns {
+/* Below this the cards stack, statements first. Derived rather than chosen, and
+   `portfolioLayout.test.ts` does the arithmetic rather than trusting this comment: the sidebar
+   at its expanded 220px + 2rem of content padding each side + the 416px card + the --space-7
+   gap + 480px left for the stored-statements table, which is what its four columns need before
+   it starts scrolling inside its own card. 220 + 64 + 416 + 24 + 480. Collapsing the sidebar
+   buys 164px of it back, so the row returns before the window has to grow. */
+@media (max-width: 1204px) {
+  .dashboard-sources {
     grid-template-columns: minmax(0, 1fr);
   }
 }
 
-/* ---- Allocation panel (Story #16) ---------------------------------------- */
-
-.allocation-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-}
-
-.allocation-head {
-  display: flex;
-  justify-content: space-between;
-  font-size: var(--text-xs);
-  margin-bottom: var(--space-2);
-}
-
-.allocation-symbol {
-  font-weight: 600;
-}
-
-.allocation-weight {
-  color: var(--muted);
-}
-
-/* ---- Weight bars (Story #189) --------------------------------------------
-   One track and one fill, drawn twice on the Portfolio view: down the rail's allocation
-   list, and under each Weight figure in the holdings table. They were `.allocation-track`
-   / `.allocation-bar` when only the rail drew them; the names lost the panel because the
-   table draws the same fact on the same scale (`lib/weightBars`), and two class families
-   for one measure is how the app ended up with the families Epic #125 spent nine stories
-   consolidating.
+/* ---- Weight bars (Story #189, narrowed by Story #266) ---------------------
+   One track and one fill, drawn **once**: under each Weight figure in the holdings table.
+   They were `.allocation-track` / `.allocation-bar` when the rail's allocation list drew
+   them, and `.weight-*` once the table drew the same fact on the same scale; the list is
+   gone with the rail and the names stay, because they name the measure rather than either
+   drawing of it. `lib/weightBars` stays too — the scale is still derived from the allocation
+   rather than from the rows on screen, which is exactly what a sortable table needs.
 
    The track is the bar's own colour at 12%, so the empty part reads as the same measure
    unfilled. Mixed from --accent since #181, where it was `rgba(76, 141, 255, 0.12)` — the
@@ -1622,33 +1607,31 @@ html {
 
 /* ---- Flex Query import (M3, Story #20) ----------------------------------- */
 
-/* The data-sources card's two controls (Story #189). They were a right-aligned column in a
-   card header, beside a title and a paragraph of intro copy; in a 260px rail there is no
-   "beside", so they stretch and stack. `.flex-import-intro` went with the header — the card
-   opens with the coverage sentence now, which says the same thing in one line — and
-   `.flex-import-summary` went with it, the import receipt having become a card of its own. */
+/* The data-sources card's two controls (Story #189, un-stretched by Story #266). They stacked
+   and filled the width because "in a 260px rail there is no *beside*"; the card is 400px and
+   out of the rail, so they stand beside each other at their own width. `.flex-import-intro`
+   and `.flex-import-summary` went with the card header and the inline summary they styled —
+   the card opens with the coverage sentence, and the receipt is a card of its own.
+
+   `wrap` is what makes the confirm work in a row: armed, `ConfirmAction` becomes a block of
+   warning copy that cannot fit beside the Import button, so it takes the next line — which is
+   where Story #189's stacked column put it anyway. */
 .flex-import-actions {
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
+  flex-wrap: wrap;
   gap: var(--space-3);
 }
 
-/* The rail's copy of the shared confirm (DDR-0012). Only its alignment changes: the control
-   is right-aligned and capped at 26rem where it sits in a card header, and both of those are
-   wrong against a rail narrower than the cap. The buttons, the tone and the interaction are
-   the primitive's and are not touched here. */
+/* One override left of Story #189's four, and it is the one the width did not answer: the
+   shared confirm is right-aligned because its home is a right-aligned card header (DDR-0012),
+   and this card's copy reads from the left. The cap, the buttons, the tone and the phases are
+   the primitive's again — a 400px card is inside the 26rem it was capped at. */
 .flex-import-actions .confirm-action {
-  align-items: stretch;
-  max-width: none;
+  align-items: flex-start;
 }
 
 .flex-import-actions .confirm-warning {
   text-align: left;
-}
-
-.flex-import-actions .confirm-buttons .btn {
-  flex: 1;
 }
 
 .flex-import-file {

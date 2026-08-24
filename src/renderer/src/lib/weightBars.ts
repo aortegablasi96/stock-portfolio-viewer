@@ -1,10 +1,14 @@
 /**
- * How a set of allocation weights becomes a set of drawn bars (Story #189).
+ * How an allocation weight becomes a drawn bar (Story #189, narrowed by Story #266).
  *
- * The Portfolio view draws the same fact twice — the rail's weight list and the micro-bar under
- * each holdings row — so the scaling lives here rather than in either component, and both read
- * the same numbers. It is a pure module for the usual reason: no test in this repo may render a
- * component, so the arithmetic has to be reachable without one.
+ * The Portfolio view drew the same fact twice — the rail's weight list and the micro-bar under
+ * each holdings row — which is why the scaling lives here rather than in a component. Story #266
+ * retires the rail and its list, and the module stays for the other half of its job: the scale is
+ * a property of the **whole allocation**, not of the rows on screen, so a table that sorts and a
+ * table that does not draw the same bars. It is a pure module for the usual reason too — no test
+ * in this repo may render a component, so the arithmetic has to be reachable without one.
+ *
+ * `weightBars()`, which ordered a whole set largest-first, went with the list that ordered them.
  *
  * The redesign's prototype scaled each bar against a hard-coded divisor (`weight / 30`,
  * `weight / 28`). That is wrong in both directions: a portfolio whose top holding is 45% draws
@@ -42,19 +46,6 @@ export const WEIGHT_BAR_FLOOR = 0.25
  */
 export const WEIGHT_BAR_MIN_FILL = 1
 
-/** A weighted thing, keyed by whatever its owner keys rows on. */
-export interface Weighted {
-  readonly conid: number
-  readonly symbol: string
-  readonly weight: number
-}
-
-/** One drawn bar: the weight it reports, and the percentage of the track it fills. */
-export interface WeightBar extends Weighted {
-  /** 0–100, ready for a `width` percentage. */
-  readonly fill: number
-}
-
 /**
  * The denominator one set of bars shares. Negative and non-finite weights cannot scale anything,
  * so they are ignored here; {@link weightBarFill} clamps them where they are drawn.
@@ -71,16 +62,4 @@ export function weightBarScale(weights: readonly number[]): number {
 export function weightBarFill(weight: number, scale: number): number {
   if (!Number.isFinite(weight) || weight <= 0 || scale <= 0) return 0
   return Math.min(Math.max((weight / scale) * 100, WEIGHT_BAR_MIN_FILL), 100)
-}
-
-/**
- * The bars for one allocation, largest first — the order the rail lists them in, and the order
- * the scale is derived from. The holdings table keys off `conid` instead of using this order,
- * because its own rows are sorted by whichever column the owner clicked.
- */
-export function weightBars(slices: readonly Weighted[]): WeightBar[] {
-  const scale = weightBarScale(slices.map((slice) => slice.weight))
-  return [...slices]
-    .sort((a, b) => b.weight - a.weight)
-    .map((slice) => ({ ...slice, fill: weightBarFill(slice.weight, scale) }))
 }
