@@ -126,6 +126,44 @@ describe('the pairing list', () => {
   })
 
   /**
+   * The toned badge's boundary (Story #257, DDR-0086).
+   *
+   * DDR-0086 tones the Trades `Side` column in the two hues the row's last cell already uses, and
+   * what keeps the badge from being read as that figure is that it is a *box around a word*. So
+   * the box is the argument, and the argument is a number: a toned border that fell to the fill
+   * step between two surfaces would leave the tone as bare coloured text beside coloured figures,
+   * which is exactly the reading DDR-0065 refused and DDR-0086 answers.
+   *
+   * `findFailures` already holds both edges above {@link SURFACE_EDGE}. What it cannot see is the
+   * comparison that settles the decision: the quieter of the two toned edges has to be at least as
+   * loud as the **neutral** border this column wore until Story #257, or the reversal would have
+   * bought a tone by giving up an edge.
+   */
+  it('keeps both toned badge borders at least as loud as the neutral one they replaced', () => {
+    const tokens = readColorTokens(CSS)
+    const card = tokens.get('--card')!
+    const neutral = contrastRatio(tokens.get('--border')!, card)
+    for (const tone of ['--pos', '--neg'] as const) {
+      const edge = contrastRatio(mixOver(tokens.get(tone)!, 50, tokens.get('--border')!), card)
+      expect(edge, `the ${tone} badge border is quieter than the neutral one`).toBeGreaterThan(
+        neutral,
+      )
+    }
+    // And the mix this measures is the one the stylesheet paints with, or the two pairings above
+    // describe a colour nothing renders — the trap the ink ramp and the band tint both pin.
+    for (const [variant, tone] of [
+      ['positive', '--pos'],
+      ['negative', '--neg'],
+    ] as const) {
+      expect(CLEAN, `.badge-${variant}`).toMatch(
+        new RegExp(
+          `\\.badge-${variant}\\s*\\{[^}]*border:\\s*1px solid color-mix\\(in srgb, var\\(${tone}\\) 50%, var\\(--border\\)\\)`,
+        ),
+      )
+    }
+  })
+
+  /**
    * The surface-edge floor (Story #219, DDR-0069). It is the one threshold in this module that no
    * standard hands us, so what it means has to be pinned rather than remembered: it sits above the
    * separation two surfaces manage by fill alone, and below every accessibility bar — a decorative

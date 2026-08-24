@@ -575,24 +575,70 @@ export const PAIRINGS: readonly Pairing[] = [
    * pointer. Story #186's entries measured `--text` and `--muted` on that lift; these are the two
    * inks it has no counterpart for, and they are the ones with the least headroom — `--pos` and
    * `--neg-text` were tuned against `--card` and nothing has measured them one step lighter.
+   *
+   * **Story #257 gave them a second table** — the Trades view's `Side` column, toned by DDR-0086 —
+   * and did not add two more entries beside them. The selector, the ink and the lift are the same
+   * three things; a copy would measure identical arithmetic under a second view's name and could
+   * never fail on its own, which is the duplication `.data-table .data-table-dim` was consolidated
+   * out of the stylesheet to avoid. What the second call site changes is the *reach* of the
+   * measurement, so it is named here rather than measured again.
    */
   {
-    where: '.badge-positive — the gain ink on a hovered transaction row',
+    where: '.badge-positive — the gain ink on a hovered transaction or trade row',
     foreground: { token: '--pos' },
     background: { mix: { token: '--text', percent: 4, over: '--card' } },
     minimum: AA_NORMAL,
     reason:
       'A toned badge is text on the row lift, and the hovered row is the row’s worse state — the ' +
-      'same argument Story #186 made for the two inks it did measure there.',
+      'same argument Story #186 made for the two inks it did measure there. 6.71:1, against ' +
+      '7.30:1 at rest: two tables now, the Dividends type column and the Trades side column.',
   },
   {
-    where: '.badge-negative — the loss ink on a hovered transaction row',
+    where: '.badge-negative — the loss ink on a hovered transaction or trade row',
     foreground: { token: '--neg-text' },
     background: { mix: { token: '--text', percent: 4, over: '--card' } },
     minimum: AA_NORMAL,
     reason:
       'The half of the split that has to stay balanced against --pos (DDR-0046), on the surface ' +
-      'the Dividends transactions table renders it on hundreds of times.',
+      'the Dividends and Trades tables render it on hundreds of times: 6.33:1 against 6.71:1, ' +
+      'inside the 0.5 the guard enforces.',
+  },
+  /**
+   * The two pairings Story #257 added: the toned badge's **boundary**, at rest on `--card`
+   * (DDR-0086).
+   *
+   * DDR-0064 built the toned variants as a border and an ink and measured only the ink, which was
+   * defensible while the tone merely restated a figure in the same row. DDR-0086 makes the border
+   * load-bearing: the argument for toning the side at all is that a *bordered chip containing a
+   * word* is a different mark from a *signed figure*, so the box is the channel that keeps the two
+   * apart, and an unmeasured box is an unmeasured argument.
+   *
+   * {@link SURFACE_EDGE} and deliberately not {@link NON_TEXT}. What identifies the badge is its
+   * ink and its wording; the boundary's job is the weaker one that threshold was cut for — mark a
+   * box on the surface rather than dissolve into it. The two are far apart and the asymmetry is
+   * the finding: 3.12:1 for the gain edge against 1.97:1 for the loss edge, because `--neg` is a
+   * darker token than `--pos` and both are mixed 50% into `--border`. Both clear the floor, and
+   * the number that settles it is that the **neutral** border this column wore until Story #257 is
+   * 1.25:1 — so the quieter of the two toned edges is still the louder box.
+   */
+  {
+    where: '.badge-positive’s border — the gain chip’s box, mixed 50% into --border',
+    foreground: { mix: { token: '--pos', percent: 50, over: '--border' } },
+    background: { token: '--card' },
+    minimum: SURFACE_EDGE,
+    reason:
+      'The channel DDR-0086 rests on: a toned badge is a box around a word, which is what keeps ' +
+      'it from being read as the signed figure four columns away. 3.12:1, the louder of the pair.',
+  },
+  {
+    where: '.badge-negative’s border — the loss chip’s box, mixed 50% into --border',
+    foreground: { mix: { token: '--neg', percent: 50, over: '--border' } },
+    background: { token: '--card' },
+    minimum: SURFACE_EDGE,
+    reason:
+      'The tighter half, at 1.97:1 — --neg is the darker token, so the loss chip’s box is the ' +
+      'first thing a dimmed border or a lighter card would break. Still louder than the 1.25:1 ' +
+      'neutral border this column wore before, which is why the toned box is not a loss of edge.',
   },
   /**
    * The two pairings Story #229 added: the gain and loss tones as **marks** on a chart card
