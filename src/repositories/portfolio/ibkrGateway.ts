@@ -68,6 +68,17 @@ const rawPositionSchema = z
     mktPrice: z.number().optional(),
     mktValue: z.number().optional(),
     avgCost: z.number().optional(),
+    /**
+     * IBKR's own unrealized P&L for the position, in the position's currency (Story #263).
+     *
+     * Optional because it is the gateway's to offer: a build that omits it must degrade to the
+     * derivation in `portfolioRepository`, not fail the whole overview. Verified present on every
+     * row of a live `/portfolio/{acct}/positions/0` read (Build 10.46.2d, 2026-08-24), where it
+     * agreed with `mktValue - avgCost * position` to the cent on all eight positions — and
+     * differed by one cent on one of them, which is why the broker's figure is preferred over
+     * the derivation rather than merely cross-checked against it.
+     */
+    unrealizedPnl: z.number().optional(),
     currency: z.string().optional(),
   })
   .passthrough()

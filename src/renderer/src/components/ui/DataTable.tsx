@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react'
+import { CardHeader, CardTitle } from './Card'
 import {
   DEFAULT_DATA_TABLE_HEIGHT,
   DEFAULT_DATA_TABLE_SURFACE,
@@ -86,6 +87,7 @@ export function DataTable<T>({
   activeRowKey = null,
   onRowActivate,
   notice,
+  title,
   className,
 }: {
   /** Names the table for a screen reader. Required: a table of figures with sortable headers
@@ -109,6 +111,17 @@ export function DataTable<T>({
   onRowActivate?: (key: string | number | null) => void
   /** A line above the table, inside its container — the dashboard's unconverted-rows notice. */
   notice?: ReactNode
+  /**
+   * A visible name, on the ruled strip every card in the app states its title on (Story #263).
+   *
+   * Only the table that brings its own surface has anywhere to put one: the other eleven sit in a
+   * `CardContent` whose card has already drawn the strip above them, and a second title inside the
+   * body would be the same name twice. So this is not an axis — it is the slot that makes
+   * `surface="card"` a whole card rather than a bordered box, and it composes with `caption`
+   * rather than replacing it. `caption` still names the *table* for a screen reader; this names
+   * the *card*, exactly as `CardTitle` does beside a `caption` in `StoredStatementsCard`.
+   */
+  title?: string
   /** Placement only: how the container sits in the layout around it (ADR-0008). */
   className?: string
 }): React.JSX.Element {
@@ -129,6 +142,11 @@ export function DataTable<T>({
 
   return (
     <div className={dataTableScrollClassName(surface, height, className)}>
+      {title !== undefined && (
+        <CardHeader>
+          <CardTitle>{title}</CardTitle>
+        </CardHeader>
+      )}
       {notice}
       <table className="data-table">
         <caption className="sr-only">{caption}</caption>

@@ -21,6 +21,7 @@ function holding(overrides: Partial<Holding> & Pick<Holding, 'conid' | 'symbol' 
     quantity: 1,
     averageCost: null,
     marketPrice: null,
+    unrealizedPnl: null,
     currency: 'USD',
     ...overrides,
   }
@@ -159,6 +160,70 @@ describe('portfolioService.getOverview — display currency (Story #28)', () => 
     expect(overview.allocation).toHaveLength(1)
     expect(overview.allocation[0]?.conid).toBe(1)
     expect(overview.allocation[0]?.weight).toBeCloseTo(1)
+  })
+
+  /**
+   * The unrealized P&L converts, and does it here rather than in the repository or the renderer
+   * (DDR-0007, Story #263). A gain is an *amount*, which is why it converts at all where
+   * `marketPrice` and `averageCost` deliberately do not — a quote is a native-currency fact.
+   */
+  describe('unrealized P&L conversion', () => {
+    it('converts it at the same rate as the market value beside it', async () => {
+      mockRepo.getHoldings.mockResolvedValue([
+        holding({ conid: 1, symbol: 'USD1', marketValue: 100, unrealizedPnl: 20, currency: 'USD' }),
+      ])
+      mockRepo.getExchangeRates.mockResolvedValue({ EUR: 1, USD: 0.9 })
+
+      const overview = await portfolioService.getOverview('EUR')
+
+      expect(overview.holdings[0]?.displayValue).toBe(90)
+      expect(overview.holdings[0]?.displayUnrealizedPnl).toBe(18)
+    })
+
+    it('keeps a loss signed through the conversion', async () => {
+      mockRepo.getHoldings.mockResolvedValue([
+        holding({ conid: 1, symbol: 'USD1', marketValue: 100, unrealizedPnl: -50, currency: 'USD' }),
+      ])
+      mockRepo.getExchangeRates.mockResolvedValue({ EUR: 1, USD: 0.9 })
+
+      const overview = await portfolioService.getOverview('EUR')
+
+      expect(overview.holdings[0]?.displayUnrealizedPnl).toBe(-45)
+    })
+
+    it('reports null where the position has no available rate', async () => {
+      mockRepo.getHoldings.mockResolvedValue([
+        holding({ conid: 1, symbol: 'XYZ1', marketValue: 100, unrealizedPnl: 20, currency: 'XYZ' }),
+      ])
+      mockRepo.getExchangeRates.mockResolvedValue({ EUR: 1 })
+
+      const overview = await portfolioService.getOverview('EUR')
+
+      expect(overview.holdings[0]?.displayUnrealizedPnl).toBeNull()
+    })
+
+    it('reports null where the native figure itself is unknown', async () => {
+      mockRepo.getHoldings.mockResolvedValue([
+        holding({ conid: 1, symbol: 'USD1', marketValue: 100, unrealizedPnl: null, currency: 'USD' }),
+      ])
+      mockRepo.getExchangeRates.mockResolvedValue({ EUR: 1, USD: 0.9 })
+
+      const overview = await portfolioService.getOverview('EUR')
+
+      // Not 0 — a rate that exists cannot manufacture a figure that does not.
+      expect(overview.holdings[0]?.displayUnrealizedPnl).toBeNull()
+    })
+
+    it('leaves it absent on the native overview, like the market value', async () => {
+      mockRepo.getHoldings.mockResolvedValue([
+        holding({ conid: 1, symbol: 'USD1', marketValue: 100, unrealizedPnl: 20, currency: 'USD' }),
+      ])
+
+      const overview = await portfolioService.getOverview()
+
+      expect(overview.holdings[0]?.displayUnrealizedPnl).toBeUndefined()
+      expect(overview.holdings[0]?.unrealizedPnl).toBe(20)
+    })
   })
 
   it('uses a rate of 1 when a holding is already in the display currency', async () => {

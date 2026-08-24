@@ -13,13 +13,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current Repository State
 
-M0–M7 are delivered: live IBKR holdings/balances/allocation in a display currency, immutable
-snapshots, Flex statement import, and four analytics views over it — all behind a vertical sidebar.
-
+M0–M9 are delivered: live IBKR holdings/balances/allocation in a display currency, immutable
+snapshots, Flex statement import, and four analytics views over it, behind a vertical sidebar.
 Not built: AI, multi-broker, benchmarks, tax reporting.
 
 **Which Epics are open is deliberately not recorded here** — read the backlog (*Current Priority*).
-The **lifecycle** is the stable rule: an Epic closes with its stories, and refinement opens a *new*
+The **lifecycle** is the rule: an Epic closes with its stories, and refinement opens a *new*
 area-scoped Epic rather than reopening a delivered one (#240 → #245). `docs/github-issues.md` has
 the one narrow exception; Epic #125 is the precedent.
 
@@ -93,12 +92,9 @@ docs/flex-queries/  real Flex exports (parser ground truth) — gitignored
 
 - **Minimal slice / test style** — `app:ping` and `metaService.getInstallId()`; see
   `services/meta/metaService.test.ts` for the repository-mocking pattern.
-- **External data source** — `portfolio:getOverview`: a repository fronting IBKR with Zod at
-  ingress, and connection state modelled as data. ADR-0004, DDR-0002.
-- **Local persistence + policy** — the `snapshot:*` channels: a service owning a capture policy
-  over an append-only table, plus a main→renderer event. DDR-0003.
-- **Read-only analytics** — the `analytics:*` channels: read through a read-only repository,
-  convert in the service.
+- **External data source** — `portfolio:getOverview`: Zod at ingress, connection state modelled as
+  data (ADR-0004, DDR-0002). **Local persistence + policy** — `snapshot:*` (DDR-0003).
+  **Read-only analytics** — `analytics:*`. All three are the Domains above, as slices.
 - **Fire-and-forget command + state event** — the `window:*` channels. DDR-0011.
 - **Destructive action** — `flex:clear` / `snapshot:clear`: the in-place `ConfirmAction` control —
   no modal, no `window.confirm`. ADR-0006, DDR-0012.
@@ -179,6 +175,10 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
   item** (DDR-0022). Classification stops at the first timeout; `getExchangeRates` instead issues
   every pair **concurrently**, bounding the wait the same way while keeping rates that answered
   (DDR-0024).
+- **`avgCost` is per share and IBKR's own `unrealizedPnl` beats deriving one** (DDR-0087): read as
+  a position total it scales each row by its quantity and still looks right, and the derivation
+  needs **no multiplier term** (both sides carry it). This build also sends **no `ticker`**, so
+  `symbol` and `description` both fall back to `contractDesc` — DDR-0066's trap, on every live row.
 - **Portfolio reads are coalesced** by `gatewayCache` between repository and gateway, so one
   overview costs one of each call however many service methods run. A failed read is never cached,
   and a not-connected *or* timeout error drops **every** entry. The policy stops at the repository
@@ -362,13 +362,13 @@ alternatives this table can only name.
 | Primitive | Axes | The rule that isn't obvious |
 | --- | --- | --- |
 | `Button` (DDR-0032) | `variant` × `size` (`icon` is a *shape*) | `ghost` changed meaning — the old `.ghost-button` is now `secondary`. `type` defaults to `"button"`. `className` is for **placement, not colour**. |
-| `Card` (DDR-0033, DDR-0059, DDR-0084) | `variant` (surface colour) × `size` (`--surface-pad-*`) | `CardContent` is a **scope** — descendant rules hang off it, keeping a state panel's prose out of reach. The ruled header strip bleeds to the edges by negating `--card-pad`, which each size **restates beside its `padding`** (change one, change both). `.card-header:last-child` gives it back; so does `.card-header.chart-card-header`, **compound or it ties** (DDR-0084). |
+| `Card` (DDR-0033, DDR-0059, DDR-0084) | `variant` (surface colour) × `size` (`--surface-pad-*`) | `CardContent` is a **scope** — descendant rules hang off it, keeping a state panel's prose out of reach. The ruled header strip bleeds to the edges by negating `--card-pad`, which each size **restates beside its `padding`** (change one, change both). `.card-header:last-child` gives it back; so does `.card-header.chart-card-header`, **compound or it ties** (DDR-0084). Its third host is `.data-table-scroll-card`, which has no `--card-pad`: that rule **restates** `margin`/`padding` (inherited, the bleed `calc()` is invalid and drops) and is `sticky` (DDR-0087). |
 | `StatTile` / `StatRow` (DDR-0034, DDR-0060) | `tone` only | A tile **is** a `Card`, so it declares no surface. **Neutral is the absence of a rule.** Its label is the app's *one* micro-label — the same four declarations as `.data-table thead th`; don't grow a second. |
 | `Field` + `Select` + `DateInput` (DDR-0035) | `kind` only | **`Field` generates its id with `useId()` and takes no `id` prop** — tabs stay mounted, so all three `RangeFilter`s can be in the document at once and a fixed id would name only the first. |
 | `ToggleGroup` (DDR-0036) | `mode`, which is **worn** (`--radius-md` vs `--radius-pill`) | **Never a tablist**: `aria-pressed`, not `role="tab"`. Only `.app-tab` is a real tablist. |
 | `Badge` (DDR-0037, DDR-0064, DDR-0065) | `variant` × `size` | **Never a pill** (that corner means multi-select) and **never a background** — the toned pair keeps both: `--pos` / `--neg-text` ink, the *borders* take the fill tokens. `BADGE_VARIANTS` ⊇ `STAT_TONES`, so `toneOf()` names a variant. `sm` carries no vertical padding — with it, every holdings row grows ~7px; alone in a cell it also needs `BADGE_CELL_CLASS`, because CSS cannot see that an inline chip follows a *text node*. Trades' side badge **is** toned (DDR-0086 reverses DDR-0065): the *box*, not the hue, separates it from the figure. |
 | `StatePanel` (DDR-0038) | `variant` (the state) × `surface` | Only `error` paints; the axis exists because the copy and the *announcement* differ. `role` is derived. No heading → the panel **is** a `<p>`. |
-| `DataTable` (DDR-0039, DDR-0059, DDR-0065) | the *container's* `surface` × `height` | Sorting is **opt-in per column**; a **missing value sorts last in both directions**. `.data-table-dim` is the absent-value cell — a *neutral* tone is the **absence** of a class, so an untoned cell keeps `--text`. The 11px column head and its `0.06em` tracking are a **pair**. The linked row's lift is scoped to match the hover's specificity and win on source order — unscoped, `tr:hover > th` silently out-specifies it. |
+| `DataTable` (DDR-0039, DDR-0059, DDR-0065, DDR-0087) | the *container's* `surface` × `height` | Sorting is **opt-in per column**; a **missing value sorts last in both directions**. `.data-table-dim` is the absent-value cell — a *neutral* tone is the **absence** of a class, so an untoned cell keeps `--text`. The 11px column head and its `0.06em` tracking are a **pair**. The linked row's lift is scoped to match the hover's specificity and win on source order — unscoped, `tr:hover > th` silently out-specifies it. `title` is a **slot, not a third axis** — it puts the card's strip on `surface="card"` (see `Card`). |
 
 ## Stack
 

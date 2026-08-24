@@ -80,6 +80,67 @@ describe('portfolioRepository.getHoldings', () => {
     const holdings = await portfolioRepository.getHoldings()
     expect(holdings.map((h) => h.symbol)).toEqual(['AAA'])
   })
+
+  /**
+   * The unrealized P&L (Story #263). The values here are a real position from a live
+   * `/portfolio/{acct}/positions/0` read (Build 10.46.2d, 2026-08-24), including the one-cent
+   * disagreement between IBKR's own figure and the derivation — which is the whole reason the
+   * broker's number is preferred rather than merely checked against.
+   */
+  describe('unrealized P&L', () => {
+    it("takes IBKR's own figure where the payload carries it", async () => {
+      gw.getPositions.mockResolvedValue([
+        {
+          conid: 1,
+          ticker: 'IBKR',
+          position: 5.9312,
+          avgCost: 71.243138,
+          mktValue: 553.97,
+          unrealizedPnl: 131.42,
+          currency: 'USD',
+        },
+      ])
+
+      const [holding] = await portfolioRepository.getHoldings()
+      // Not 131.4127, which is what deriving from this row's own `avgCost` would have produced —
+      // a cent adrift once rounded for display. The broker's figure is the account's truth.
+      expect(holding?.unrealizedPnl).toBe(131.42)
+    })
+
+    it('derives it from the average cost where the gateway omits it', async () => {
+      gw.getPositions.mockResolvedValue([
+        { conid: 1, ticker: 'MMY', position: 7790, avgCost: 0.89458075, mktValue: 8055.1, currency: 'CAD' },
+      ])
+
+      const [holding] = await portfolioRepository.getHoldings()
+      expect(holding?.unrealizedPnl).toBeCloseTo(1086.32, 2)
+    })
+
+    /**
+     * `avgCost` is stated **per share**, not as a position total — confirmed against the live
+     * gateway, where it equalled `avgPrice` on every row. Reading it as a total would scale each
+     * row by its own quantity and still look plausible, so the derivation is pinned on a position
+     * whose quantity is far from 1: at 7790 shares the two readings differ by orders of magnitude.
+     */
+    it('reads the average cost per share rather than as a position total', async () => {
+      gw.getPositions.mockResolvedValue([
+        { conid: 1, ticker: 'MMY', position: 7790, avgCost: 0.89458075, mktValue: 8055.1, currency: 'CAD' },
+      ])
+
+      const [holding] = await portfolioRepository.getHoldings()
+      // The position-total reading would give 8055.1 - 0.8946 = 8054.21.
+      expect(holding?.unrealizedPnl).toBeLessThan(2000)
+    })
+
+    it('reports null where there is neither a figure nor an average cost to derive one from', async () => {
+      gw.getPositions.mockResolvedValue([
+        { conid: 1, ticker: 'AAA', position: 3, mktValue: 30, currency: 'USD' },
+      ])
+
+      const [holding] = await portfolioRepository.getHoldings()
+      expect(holding?.unrealizedPnl).toBeNull()
+    })
+  })
 })
 
 describe('portfolioRepository — gateway round trips (Story #106)', () => {
