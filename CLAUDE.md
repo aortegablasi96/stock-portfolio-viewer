@@ -26,9 +26,11 @@ the one narrow exception; Epic #125 is the precedent.
 
 Each exists end-to-end and is the reference pattern for its shape.
 
-- **portfolio** — live IBKR read, no SQLite. `portfolioService` → `portfolioRepository` →
-  `ibkrGateway` (HTTP + Zod). Converts with **live gateway FX**, not Flex `fxRateToBase`;
-  unconvertible rows carry `displayValue === null` and leave totals/allocation (DDR-0007).
+- **portfolio** — live IBKR read. `portfolioService` → `portfolioRepository` → `ibkrGateway`
+  (HTTP + Zod). Converts with **live gateway FX**, not Flex `fxRateToBase`; unconvertible rows
+  carry `displayValue === null` and leave totals/allocation (DDR-0007). Its **one** local read is
+  the instrument *name*, joined from `flexReadRepository` by conid — the gateway has none
+  (DDR-0088).
 - **snapshots** — immutable local history. `snapshotService` (12h de-dupe on open, always-write on
   demand) → `snapshotRepository` → SQLite. Reads IBKR only *through* `portfolioService` (DDR-0003).
 - **flex** — imported Flex history, split **write-only** `flexRepository` / **read-only**
@@ -178,7 +180,8 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
 - **`avgCost` is per share and IBKR's own `unrealizedPnl` beats deriving one** (DDR-0087): read as
   a position total it scales each row by its quantity and still looks right, and the derivation
   needs **no multiplier term** (both sides carry it). This build also sends **no `ticker`**, so
-  `symbol` and `description` both fall back to `contractDesc` — DDR-0066's trap, on every live row.
+  `symbol` and `description` both fall back to `contractDesc` — DDR-0066's trap, on every live row,
+  and why a live holding's name is `companyName` (Flex, by conid) *before* `description` (DDR-0088).
 - **Portfolio reads are coalesced** by `gatewayCache` between repository and gateway, so one
   overview costs one of each call however many service methods run. A failed read is never cached,
   and a not-connected *or* timeout error drops **every** entry. The policy stops at the repository

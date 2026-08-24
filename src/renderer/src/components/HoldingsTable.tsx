@@ -4,7 +4,7 @@ import {
   formatPercent,
   formatQuantity,
   formatSignedCurrency,
-  instrumentName,
+  holdingName,
 } from '../lib/format'
 import { unrealizedPnlOf, unrealizedPnlTone } from '../lib/holdingPnl'
 import { toneClassName } from '../lib/statTileVariants'
@@ -40,8 +40,9 @@ import { DataTable, type DataColumn } from './ui/DataTable'
  *   - **The card states its name.** The table's `caption` is `sr-only`, so this was the one
  *     table card in the app a reader could not name — the strip is the same `.card-header` the
  *     other fifteen wear, not a second treatment (DDR-0059).
- *   - **Description goes through `instrumentName`.** It rendered the raw description, which on
- *     the live gateway is the ticker a second time; see the column below.
+ *   - **The second column names the company.** It rendered the raw description, which on the live
+ *     gateway is the ticker a second time; it now takes the name imported Flex history knows the
+ *     instrument by, shortened through the app's one `instrumentName`. See the column below.
  *
  * Story #189 draws a micro-bar under each Weight figure — the same fact the rail's allocation
  * list draws, on the same scale, because both go through `lib/weightBars`. It is keyed by
@@ -66,6 +67,7 @@ export function HoldingsTable({
   const hasUnconverted = displayCurrency != null && holdings.some((h) => h.displayValue === null)
   const valueOf = (h: Holding): number | null =>
     displayCurrency != null ? (h.displayValue ?? null) : h.marketValue
+  const nameOf = (h: Holding): string | null => holdingName(h.symbol, h.description, h.companyName)
 
   const columns: DataColumn<Holding>[] = [
     {
@@ -81,17 +83,20 @@ export function HoldingsTable({
       // rendered `description` raw, and on the live gateway that is the ticker a second time —
       // Build 10.46.2d sends no `ticker` field at all and puts the symbol in `contractDesc`, so
       // `portfolioRepository`'s fallback resolves both fields to the same string and every row
-      // read `IBKR · IBKR`. `instrumentName` is the same predicate the Flex views go through, and
-      // it answers from the row rather than from an asset-class vocabulary, so a build that does
-      // send real names still fills this column with them.
+      // read `IBKR · IBKR`.
+      //
+      // Going through `instrumentName` alone emptied the column, which was honest but useless:
+      // the same instrument is named on Allocation, from imported Flex history. So the service
+      // now resolves that name by conid and `holdingName` prefers it, which is what lets the
+      // header say **Company** — a claim the gateway's description could not support.
       key: 'description',
-      header: 'Description',
+      header: 'Company',
       className: 'data-table-note',
-      cellClassName: (h) => (instrumentName(h.symbol, h.description) === null ? 'data-table-dim' : ''),
-      cell: (h) => instrumentName(h.symbol, h.description) ?? '—',
+      cellClassName: (h) => (nameOf(h) === null ? 'data-table-dim' : ''),
+      cell: (h) => nameOf(h) ?? '—',
       // Sorts on the resolved name, so the rows with no name are the missing values the
       // comparator parks at the bottom in both directions rather than a run of identical tickers.
-      sortValue: (h) => instrumentName(h.symbol, h.description),
+      sortValue: (h) => nameOf(h),
     },
     {
       key: 'quantity',

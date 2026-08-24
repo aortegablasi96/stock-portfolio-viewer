@@ -253,3 +253,25 @@ export function instrumentName(symbol: string, description: string): string | nu
   if (name.toUpperCase() === symbol.trim().toUpperCase()) return null
   return formatCompanyName(name)
 }
+
+/**
+ * The name for a *live* holding, which has two candidate descriptions rather than one (Story #263
+ * follow-up).
+ *
+ * The gateway's `description` is the symbol again on this build, so the Portfolio view read
+ * `IBKR · IBKR` where Allocation — drawing the same instrument from imported Flex history — read
+ * `Interactive Brokers`. `companyName` is that history's answer, resolved by conid in the service.
+ *
+ * **The Flex name wins where there is one**, and the gateway's description is the fallback rather
+ * than the other way round: a build that does send real names would put them in `description`, and
+ * the account's own imported `SecurityInfo` is still the better answer for an instrument it knows.
+ * Both go through {@link instrumentName}, so the *same* string shortens the same way here as in
+ * every other view, and a description that only repeats the ticker still resolves to `null`.
+ */
+export function holdingName(
+  symbol: string,
+  description: string,
+  companyName: string | null,
+): string | null {
+  return instrumentName(symbol, companyName ?? description)
+}

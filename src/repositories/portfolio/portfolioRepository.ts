@@ -48,6 +48,9 @@ function toHolding(p: RawPosition): Holding {
     conid: p.conid,
     symbol: p.ticker ?? p.contractDesc ?? String(p.conid),
     description: p.contractDesc ?? p.ticker ?? '',
+    // The gateway carries no instrument name — `contractDesc` is the symbol again on this build.
+    // The service resolves one from imported Flex history; this layer states that it has none.
+    companyName: null,
     quantity: p.position ?? 0,
     averageCost: p.avgCost ?? null,
     marketPrice: p.mktPrice ?? null,

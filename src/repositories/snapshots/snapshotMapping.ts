@@ -77,6 +77,10 @@ export function rowToHolding(row: SnapshotHoldingRow): Holding {
     conid: row.conid,
     symbol: row.symbol,
     description: row.description,
+    // Not persisted: the name is *reference* data resolved live from imported Flex history, and
+    // freezing one into an immutable capture would pin a holding to whatever the import knew that
+    // day. A snapshot keeps the gateway's own `description`, unchanged.
+    companyName: null,
     quantity: row.quantity,
     averageCost: fromMinorOrNull(row.averageCost),
     marketPrice: fromMinorOrNull(row.marketPrice),

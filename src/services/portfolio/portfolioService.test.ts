@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { portfolioService } from './portfolioService'
+import { flexReadRepository } from '@repositories/flex/flexReadRepository'
 import { portfolioRepository } from '@repositories/portfolio/portfolioRepository'
 import { IbkrNotConnectedError } from '@shared/errors'
 import type { AccountBalances, Holding } from '@shared/domain/portfolio'
@@ -13,11 +14,19 @@ vi.mock('@repositories/portfolio/portfolioRepository', () => ({
   },
 }))
 
+// The names come from imported Flex history rather than from the gateway, so the service reaches
+// a second repository. Mocked for the same reason as the first: no SQLite in a unit test.
+vi.mock('@repositories/flex/flexReadRepository', () => ({
+  flexReadRepository: { getInstrumentNames: vi.fn(() => []) },
+}))
+
 const mockRepo = vi.mocked(portfolioRepository)
+const mockFlex = vi.mocked(flexReadRepository)
 
 function holding(overrides: Partial<Holding> & Pick<Holding, 'conid' | 'symbol' | 'marketValue'>): Holding {
   return {
     description: overrides.symbol,
+    companyName: null,
     quantity: 1,
     averageCost: null,
     marketPrice: null,
@@ -259,6 +268,126 @@ describe('portfolioService.getOverview — display currency (Story #28)', () => 
 
     expect(overview.balances.currency).toBe('EUR')
     expect(overview.balances.netLiquidation).toBe(5000)
+  })
+})
+
+/**
+ * The company name (Story #263 follow-up). The gateway has none to give — this build sends no
+ * `ticker`, so a position's `description` is its symbol again — while the imported Flex
+ * `SecurityInfo` rows do, for every instrument the owner has ever traded. The service joins the
+ * two locally, which is why the Portfolio view can now name a holding the way Allocation does.
+ */
+describe('resolving the company name from imported history', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockRepo.getBalances.mockResolvedValue(balances)
+    mockFlex.getInstrumentNames.mockReturnValue([])
+  })
+
+  it('names a holding by conid', async () => {
+    mockRepo.getHoldings.mockResolvedValue([holding({ conid: 43645865, symbol: 'IBKR', marketValue: 10 })])
+    mockFlex.getInstrumentNames.mockReturnValue([
+      { conid: 43645865, symbol: 'IBKR', description: 'INTERACTIVE BROKERS GRO-CL A' },
+    ])
+
+    const overview = await portfolioService.getOverview()
+
+    expect(overview.holdings[0]!.companyName).toBe('INTERACTIVE BROKERS GRO-CL A')
+  })
+
+  /**
+   * The conid wins where both could answer, and this is the case that shows why: one instrument
+   * listed twice carries one conid and two tickers, and the live position may be held under a
+   * third. Matching on the identifier gets the name; matching on the ticker would not.
+   */
+  it('prefers the conid over a symbol that says otherwise', async () => {
+    mockRepo.getHoldings.mockResolvedValue([holding({ conid: 389383088, symbol: 'NWL1', marketValue: 10 })])
+    mockFlex.getInstrumentNames.mockReturnValue([
+      { conid: 389383088, symbol: 'NWL', description: 'NEWPRINCES SPA' },
+      { conid: 999, symbol: 'NWL1', description: 'SOMETHING ELSE PLC' },
+    ])
+
+    const overview = await portfolioService.getOverview()
+
+    expect(overview.holdings[0]!.companyName).toBe('NEWPRINCES SPA')
+  })
+
+  /** Falls back to the ticker where history recorded no conid for the row. */
+  it('falls back to the symbol when the imported row has no conid', async () => {
+    mockRepo.getHoldings.mockResolvedValue([holding({ conid: 7, symbol: 'GSY', marketValue: 10 })])
+    mockFlex.getInstrumentNames.mockReturnValue([
+      { conid: null, symbol: 'GSY', description: 'GOEASY LTD' },
+    ])
+
+    const overview = await portfolioService.getOverview()
+
+    expect(overview.holdings[0]!.companyName).toBe('GOEASY LTD')
+  })
+
+  /**
+   * A position bought since the last Flex import — and, by the same path, the whole view before
+   * any import at all. The column falls back to the gateway's description and empties itself
+   * rather than the view failing: an un-imported instrument is a missing name, not an error.
+   */
+  it('reports no name for an instrument history has never seen', async () => {
+    mockRepo.getHoldings.mockResolvedValue([holding({ conid: 5, symbol: 'NEW', marketValue: 10 })])
+    mockFlex.getInstrumentNames.mockReturnValue([
+      { conid: 43645865, symbol: 'IBKR', description: 'INTERACTIVE BROKERS GRO-CL A' },
+    ])
+
+    const overview = await portfolioService.getOverview()
+
+    expect(overview.holdings[0]!.companyName).toBeNull()
+  })
+
+  it('leaves every name null when nothing has been imported', async () => {
+    mockRepo.getHoldings.mockResolvedValue([holding({ conid: 1, symbol: 'AAA', marketValue: 10 })])
+
+    const overview = await portfolioService.getOverview()
+
+    expect(overview.holdings[0]!.companyName).toBeNull()
+  })
+
+  /** An empty exported description is not a name, and must not shadow a symbol match that is. */
+  it('ignores an empty description rather than storing it as a name', async () => {
+    mockRepo.getHoldings.mockResolvedValue([holding({ conid: 8, symbol: 'SBI', marketValue: 10 })])
+    mockFlex.getInstrumentNames.mockReturnValue([
+      { conid: 8, symbol: 'SBI', description: '' },
+      { conid: null, symbol: 'SBI', description: 'SERABI GOLD PLC' },
+    ])
+
+    const overview = await portfolioService.getOverview()
+
+    expect(overview.holdings[0]!.companyName).toBe('SERABI GOLD PLC')
+  })
+
+  /** The converted branch names the same rows — the view takes it whenever a currency is chosen. */
+  it('names holdings on the display-currency path too', async () => {
+    mockRepo.getHoldings.mockResolvedValue([holding({ conid: 3, symbol: 'MMY', marketValue: 10, currency: 'CAD' })])
+    mockRepo.getExchangeRates.mockResolvedValue({ CAD: 0.65, EUR: 1 })
+    mockFlex.getInstrumentNames.mockReturnValue([
+      { conid: 3, symbol: 'MMY', description: 'MONUMENT MINING LTD' },
+    ])
+
+    const overview = await portfolioService.getOverview('EUR')
+
+    expect(overview.holdings[0]!.companyName).toBe('MONUMENT MINING LTD')
+  })
+
+  /**
+   * The name is looked up, never *shortened*, here. Every view shortens at the point of drawing
+   * through `instrumentName`, and a service that pre-shortened would be a second naming path —
+   * the exact defect DDR-0066 closed.
+   */
+  it('carries the exported string through unshortened', async () => {
+    mockRepo.getHoldings.mockResolvedValue([holding({ conid: 9, symbol: 'VBNK', marketValue: 10 })])
+    mockFlex.getInstrumentNames.mockReturnValue([
+      { conid: 9, symbol: 'VBNK', description: 'VERSABANK' },
+    ])
+
+    const overview = await portfolioService.getOverview()
+
+    expect(overview.holdings[0]!.companyName).toBe('VERSABANK')
   })
 })
 
