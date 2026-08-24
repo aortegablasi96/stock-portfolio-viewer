@@ -101,7 +101,16 @@ export const portfolioService = {
 
     const convertedHoldings: Holding[] = holdings.map((h) => {
       const rate = rates[h.currency]
-      return { ...h, displayValue: rate === undefined ? null : round2(h.marketValue * rate) }
+      return {
+        ...h,
+        displayValue: rate === undefined ? null : round2(h.marketValue * rate),
+        // A gain is an amount and converts, unlike the price and average cost beside it, which
+        // stay native because a quote is a native-currency fact (DDR-0007). Same rate, so the
+        // column agrees with the Market value beside it; `null` where either the rate or the
+        // native figure is missing, which is what the table draws an em dash for (Story #263).
+        displayUnrealizedPnl:
+          rate === undefined || h.unrealizedPnl === null ? null : round2(h.unrealizedPnl * rate),
+      }
     })
 
     const totalMarketValue = convertedHoldings.reduce((sum, h) => sum + (h.displayValue ?? 0), 0)

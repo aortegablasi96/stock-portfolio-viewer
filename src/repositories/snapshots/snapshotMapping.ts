@@ -81,6 +81,11 @@ export function rowToHolding(row: SnapshotHoldingRow): Holding {
     averageCost: fromMinorOrNull(row.averageCost),
     marketPrice: fromMinorOrNull(row.marketPrice),
     marketValue: fromMinor(row.marketValue),
+    // A snapshot records what a position was *worth*, not what it had made (Story #263). The
+    // figures to derive one are all here — `marketValue - averageCost * quantity` — but doing it
+    // would date a live-only column to a capture, so the historical path reports "unknown" and a
+    // back-filled history stays a story of its own.
+    unrealizedPnl: null,
     currency: row.currency,
   }
 }

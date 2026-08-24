@@ -21,6 +21,19 @@ export const holdingSchema = z.object({
   averageCost: z.number().nullable(),
   marketPrice: z.number().nullable(),
   marketValue: z.number(),
+  /**
+   * Unrealized gain or loss on the position, in the position's **native** currency (Story #263).
+   *
+   * `null` where it cannot be known — a gateway build that reports neither its own figure nor an
+   * `avgCost` to derive one, and every snapshot-sourced holding, which records what a position was
+   * worth and not what it had made at the time.
+   *
+   * Deliberately distinct from the Trades view's unrealized P&L, which comes from the Flex FIFO
+   * summary: that one is a base-currency balance as of the latest statement's end date, this one is
+   * live at current market prices. The two are measured on different days from different sources
+   * and are not expected to agree.
+   */
+  unrealizedPnl: z.number().nullable(),
   currency: z.string(),
   /**
    * Market value converted into the overview's `displayCurrency` (live Portfolio view
@@ -32,6 +45,15 @@ export const holdingSchema = z.object({
    * and `averageCost` are deliberately *not* converted — a quote is a native-currency fact.
    */
   displayValue: z.number().nullable().optional(),
+  /**
+   * `unrealizedPnl` converted into the overview's `displayCurrency`, on the same terms as
+   * `displayValue` and at the same rate (Story #263).
+   *
+   * A gain is an *amount*, not a quote, so unlike `marketPrice` and `averageCost` it does convert.
+   * Absent on the native overview and on snapshot-sourced holdings; `null` where the rate was
+   * unavailable or the native figure itself is unknown.
+   */
+  displayUnrealizedPnl: z.number().nullable().optional(),
 })
 export type Holding = z.infer<typeof holdingSchema>
 

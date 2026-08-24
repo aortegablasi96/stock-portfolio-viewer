@@ -29,6 +29,7 @@ function overview(overrides: Partial<PortfolioOverview> = {}): PortfolioOverview
         averageCost: 150.1,
         marketPrice: 212.34,
         marketValue: 10617,
+        unrealizedPnl: 3112,
         currency: 'USD',
       },
       {
@@ -39,6 +40,7 @@ function overview(overrides: Partial<PortfolioOverview> = {}): PortfolioOverview
         averageCost: null,
         marketPrice: null,
         marketValue: 13446.56,
+        unrealizedPnl: null,
         currency: 'USD',
       },
     ],
@@ -203,6 +205,7 @@ describe('row → domain', () => {
       averageCost: null,
       marketPrice: null,
       marketValue: 13446.56,
+      unrealizedPnl: null,
       currency: 'USD',
     })
   })
@@ -210,6 +213,22 @@ describe('row → domain', () => {
   it('round-trips a holding through minor units without drift', () => {
     const original = overview().holdings[0]!
     const row = { id: 1, ...toHoldingValues(original, 1) } as SnapshotHoldingRow
-    expect(rowToHolding(row)).toEqual(original)
+    // Everything a snapshot stores survives the trip; the live-only unrealized P&L is the one
+    // field it deliberately does not, which the next test states outright rather than leaving
+    // to be inferred from this override.
+    expect(rowToHolding(row)).toEqual({ ...original, unrealizedPnl: null })
+  })
+
+  /**
+   * A snapshot records what a position was *worth*, not what it had made (Story #263). The store
+   * has every figure needed to derive a P&L — `marketValue - averageCost * quantity` — so the
+   * omission is a decision and not an oversight, and this is where it is written down: back-filling
+   * a historical P&L is a story of its own, and until it is written a captured holding reports
+   * "unknown" rather than a figure dated to the capture.
+   */
+  it('does not persist the live-only unrealized P&L', () => {
+    const original = overview().holdings[0]!
+    expect(original.unrealizedPnl).not.toBeNull()
+    expect(toHoldingValues(original, 1)).not.toHaveProperty('unrealizedPnl')
   })
 })

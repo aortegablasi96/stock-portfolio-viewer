@@ -1331,6 +1331,30 @@ html {
   border-radius: var(--radius-lg);
 }
 
+/* The strip on the one table that brings its own surface (Story #263).
+
+   It is the card's strip, not a second one — same `.card-header` element, same rule, same
+   `border-bottom`, so a reader cannot tell this card states its title differently from the
+   fifteen that sit inside a `Card`. What it cannot inherit is the *geometry*: the strip's job
+   there is to cancel the card's inline padding with a negative margin and re-apply it
+   (DDR-0059), and this container has no padding to cancel — `--card-pad` is not even defined
+   here, so the inherited `calc(-1 * var(--card-pad))` would be an invalid length and drop the
+   whole declaration. It restates the two properties instead: no margin, because the rule
+   already reaches both edges, and the inline padding of a cell, so the title sits over the
+   Ticker column rather than half a step left of it.
+
+   `sticky` is the part that is not decoration. This container is the horizontal scroller
+   (`overflow-x` above), so an unpinned header would slide out of view on a narrow window and
+   leave the table nameless exactly where the columns are hardest to read. Pinning it at the
+   left edge is the same move the income chart's value axis makes inside its own scroller
+   (DDR-0077). */
+.data-table-scroll-card > .card-header {
+  position: sticky;
+  left: 0;
+  margin: 0;
+  padding: var(--space-5);
+}
+
 .data-table {
   width: 100%;
   border-collapse: collapse;

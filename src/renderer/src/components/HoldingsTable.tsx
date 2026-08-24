@@ -1,5 +1,13 @@
 import type { AllocationSlice, Holding } from '@shared/domain/portfolio'
-import { formatCurrency, formatPercent, formatQuantity } from '../lib/format'
+import {
+  formatCurrency,
+  formatPercent,
+  formatQuantity,
+  formatSignedCurrency,
+  instrumentName,
+} from '../lib/format'
+import { unrealizedPnlOf, unrealizedPnlTone } from '../lib/holdingPnl'
+import { toneClassName } from '../lib/statTileVariants'
 import { weightBarFill, weightBarScale } from '../lib/weightBars'
 import { Badge } from './ui/Badge'
 import { DataTable, type DataColumn } from './ui/DataTable'
@@ -20,6 +28,20 @@ import { DataTable, type DataColumn } from './ui/DataTable'
  * own surface (Story #134). Market value sorts on the figure actually shown, so a position with
  * no rate — the `displayValue === null` case above — is the missing value the comparator parks
  * at the bottom rather than treating as zero.
+ *
+ * Story #263 finishes the table to the redesign's drawing of it, and each of the three changes
+ * answers a question the six-column version left open:
+ *
+ *   - **A seventh column, Unrealized P&L.** Story #189 drew the layout and put "new columns in
+ *     the holdings table" out of scope; this is that column. It is the one figure on the page
+ *     that says whether a position has *done* anything, and everything it needs was already
+ *     arriving in the positions payload the overview reads — so it costs nothing at the wire
+ *     (DDR-0024). Converted in the service on `displayValue`'s terms, never here (DDR-0007).
+ *   - **The card states its name.** The table's `caption` is `sr-only`, so this was the one
+ *     table card in the app a reader could not name — the strip is the same `.card-header` the
+ *     other fifteen wear, not a second treatment (DDR-0059).
+ *   - **Description goes through `instrumentName`.** It rendered the raw description, which on
+ *     the live gateway is the ticker a second time; see the column below.
  *
  * Story #189 draws a micro-bar under each Weight figure — the same fact the rail's allocation
  * list draws, on the same scale, because both go through `lib/weightBars`. It is keyed by
@@ -54,11 +76,22 @@ export function HoldingsTable({
       sortValue: (h) => h.symbol,
     },
     {
+      // The app's standing rule, applied to the one table that had not been (Story #263):
+      // **a description that repeats the symbol is not a name** (DDR-0066/0067). This column
+      // rendered `description` raw, and on the live gateway that is the ticker a second time —
+      // Build 10.46.2d sends no `ticker` field at all and puts the symbol in `contractDesc`, so
+      // `portfolioRepository`'s fallback resolves both fields to the same string and every row
+      // read `IBKR · IBKR`. `instrumentName` is the same predicate the Flex views go through, and
+      // it answers from the row rather than from an asset-class vocabulary, so a build that does
+      // send real names still fills this column with them.
       key: 'description',
       header: 'Description',
       className: 'data-table-note',
-      cell: (h) => h.description,
-      sortValue: (h) => h.description,
+      cellClassName: (h) => (instrumentName(h.symbol, h.description) === null ? 'data-table-dim' : ''),
+      cell: (h) => instrumentName(h.symbol, h.description) ?? '—',
+      // Sorts on the resolved name, so the rows with no name are the missing values the
+      // comparator parks at the bottom in both directions rather than a run of identical tickers.
+      sortValue: (h) => instrumentName(h.symbol, h.description),
     },
     {
       key: 'quantity',
@@ -102,11 +135,28 @@ export function HoldingsTable({
       },
       sortValue: (h) => weightByConid.get(h.conid) ?? null,
     },
+    {
+      // The seventh column, and the one the prototype drew that this table did not have
+      // (Story #263). It is a bare toned figure rather than a `Badge`: what a badge adds is the
+      // box, and the box is what separates a *label* from the figures around it (DDR-0086) — this
+      // is one of those figures. The tone follows the same `cellClassName` route the realized-gains
+      // table's three signed columns take, so the table places the class and the column decides it.
+      key: 'unrealizedPnl',
+      header: 'Unrealized P&L',
+      numeric: true,
+      cellClassName: (h) => toneClassName(unrealizedPnlTone(unrealizedPnlOf(h, displayCurrency))),
+      cell: (h) => {
+        const pnl = unrealizedPnlOf(h, displayCurrency)
+        return pnl.value === null ? '—' : formatSignedCurrency(pnl.value, pnl.currency)
+      },
+      sortValue: (h) => unrealizedPnlOf(h, displayCurrency).value,
+    },
   ]
 
   return (
     <DataTable
       caption="Current holdings"
+      title="Holdings"
       surface="card"
       columns={columns}
       rows={holdings}

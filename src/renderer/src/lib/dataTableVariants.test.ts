@@ -192,6 +192,47 @@ describe('the stylesheet backs the primitive', () => {
     expect(card).toContain('border-radius: var(--radius-lg)')
   })
 
+  /**
+   * The titled strip on the standalone table (Story #263).
+   *
+   * Three things have to hold together and each fails quietly on its own.
+   *
+   * It must be **`.card-header`** — the card's own strip, so this card cannot be told apart from
+   * the fifteen that sit inside a `Card` (DDR-0059). A new class here would be the second header
+   * treatment DDR-0033 exists to prevent.
+   *
+   * It must **restate `margin` and `padding`**. The strip's geometry there is a bleed: cancel the
+   * card's inline padding with a negative margin, re-apply it as its own. This container has no
+   * padding and never defines `--card-pad`, so the inherited `calc(-1 * var(--card-pad))` is an
+   * invalid length and the browser drops the declaration — the failure would be a header sitting
+   * at the wrong offset, which no assertion about the class list would catch.
+   *
+   * It must be **sticky at the left edge**. This container is the horizontal scroller, so an
+   * unpinned title scrolls out of view on a narrow window and leaves the table nameless.
+   */
+  it('titles the standalone table with the card strip, re-stated for a container with no padding', () => {
+    const strip = /^\.data-table-scroll-card > \.card-header \{([^}]*)\}/m.exec(RULES)?.[1] ?? ''
+    expect(strip, 'the rule must exist and hang off .card-header').not.toBe('')
+    expect(strip).toContain('position: sticky')
+    expect(strip).toContain('left: 0')
+    // Restated, not inherited — and neither may be a `--card-pad` expression this container
+    // cannot resolve.
+    expect(strip).toContain('margin: 0')
+    expect(strip).toMatch(/padding: var\(--space-\d\)/)
+    expect(strip).not.toContain('--card-pad')
+  })
+
+  /**
+   * The strip is a *slot*, not an axis. `surface` and `height` stay the two axes DDR-0039 named:
+   * a title is something the `card` surface can carry, and adding one must not have grown a third
+   * value on either axis or a class of its own to go with it.
+   */
+  it('adds no axis value and no class of its own for the title', () => {
+    expect(DATA_TABLE_SURFACES).toEqual(['inline', 'card'])
+    expect(DATA_TABLE_HEIGHTS).toEqual(['auto', 'capped'])
+    expect(declaresRule('.data-table-title')).toBe(false)
+  })
+
   /** Padding, type and gaps come from the scale, never a hand-picked length (DDR-0031). */
   it('takes its padding and type from the token scale', () => {
     expect(CSS).toMatch(

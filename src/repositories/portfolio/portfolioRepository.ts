@@ -20,6 +20,28 @@ import { ibkrGateway, type LedgerEntry, type RawPosition } from './ibkrGateway'
  * about that is built here yet (no speculative abstraction).
  */
 
+/**
+ * The position's unrealized P&L in its own currency, or `null` where it cannot be known
+ * (Story #263).
+ *
+ * **IBKR's own figure wins.** A live read (Build 10.46.2d, 2026-08-24) carries `unrealizedPnl` on
+ * every row, and it agreed with the derivation below to the cent on seven of eight positions and
+ * differed by one cent on the eighth — so the broker's number is the answer and the derivation is
+ * the fallback for a build that omits it, not a cross-check to prefer.
+ *
+ * The fallback is `mktValue - avgCost * position`, and it needs **no multiplier term** even for a
+ * contract that has one: IBKR states `avgCost` per share *including* the multiplier, and `mktValue`
+ * includes it too, so it cancels. The same read confirmed `avgCost` is per-share rather than a
+ * position total — it equalled `avgPrice` on all eight rows, and `multiplier` was absent on all of
+ * them. Getting that wrong would have scaled every row by its own quantity while still looking
+ * entirely plausible, which is why it was checked against the gateway rather than inferred.
+ */
+function toUnrealizedPnl(p: RawPosition): number | null {
+  if (p.unrealizedPnl !== undefined) return p.unrealizedPnl
+  if (p.avgCost === undefined || p.mktValue === undefined || p.position === undefined) return null
+  return p.mktValue - p.avgCost * p.position
+}
+
 /** Map a raw IBKR position into the `Holding` domain model. */
 function toHolding(p: RawPosition): Holding {
   return {
@@ -30,6 +52,7 @@ function toHolding(p: RawPosition): Holding {
     averageCost: p.avgCost ?? null,
     marketPrice: p.mktPrice ?? null,
     marketValue: p.mktValue ?? 0,
+    unrealizedPnl: toUnrealizedPnl(p),
     currency: p.currency ?? '',
   }
 }
