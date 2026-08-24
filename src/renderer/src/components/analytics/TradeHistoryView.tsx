@@ -19,6 +19,7 @@ import { RangeFilter } from './RangeFilter'
 import { StatRow, StatTile } from '../ui/StatTile'
 import { statPartClassName, toneClassName, toneOf } from '../../lib/statTileVariants'
 import { BADGE_CELL_CLASS } from '../../lib/badgeVariants'
+import { sideVariant } from '../../lib/tradeSide'
 import { Badge } from '../ui/Badge'
 import { InstrumentName } from './InstrumentName'
 import { TypeFilter } from './TypeFilter'
@@ -290,11 +291,18 @@ function closedSomething(t: TradeRow): boolean {
  * muted ink as well — `toneClassName` emits *no* class for a neutral figure, so without it the
  * dash inherits `--text` and sits at the same weight as the figures above and below it.
  *
- * The side is a badge rather than bare text, and a deliberately **untoned** one (DDR-0065): the
- * redesign paints `Buy` in the gain tone and `Sell` in the loss tone, and those two hues already
- * mean gain and loss in this row's own last cell. Rendering a red `Sell` beside a red figure
- * reads as though the side caused the number. What the badge is here for is the boundary — a run
- * of boxes at one x-position, where a bare word left the column ragged.
+ * The side is a badge, and since Story #257 a **toned** one — `Buy` in the gain tone, `Sell` in
+ * the loss tone (DDR-0086, reversing DDR-0065). The argument it reverses was that those two hues
+ * already mean gain and loss in this row's own last cell, so a red `Sell` beside a red figure
+ * would read as though the side caused the number. Measured against the owner's import that
+ * collision is 4 rows in 260, and it is outnumbered 14-to-4 by a red `Sell` beside a *green*
+ * figure; every `Buy` in the history sits beside the dimmed em dash, because an opening buy
+ * realizes nothing. What separates the two marks is shape: polarity in this app is always a
+ * *signed figure*, and this is a bordered chip containing a word.
+ *
+ * The tone comes from `sideVariant`, not from a ternary here. This function is where a colour
+ * decision gets made by accident, so the one branch lives in a module that can be tested
+ * behaviourally — and `tradesLayout.test.ts` still fails on `=== 'Buy'` in this file.
  */
 function tradeColumns(sc: (v: number) => string): DataColumn<TradeRow>[] {
   return [
@@ -320,7 +328,7 @@ function tradeColumns(sc: (v: number) => string): DataColumn<TradeRow>[] {
       key: 'side',
       header: 'Side',
       cell: (t) => (
-        <Badge size="sm" className={BADGE_CELL_CLASS}>
+        <Badge variant={sideVariant(t.side)} size="sm" className={BADGE_CELL_CLASS}>
           {t.side}
         </Badge>
       ),

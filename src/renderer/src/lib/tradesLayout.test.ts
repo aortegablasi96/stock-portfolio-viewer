@@ -9,10 +9,13 @@ import { describe, expect, it } from 'vitest'
  * `tokenAdoption.test.ts`. What this story decided, and what nothing else can see, is three
  * things, each of which fails as something that still renders:
  *
- * - the side badge is **untoned**, deliberately. The prototype paints `Buy` in the gain tone and
- *   `Sell` in the loss tone, and those two hues already mean gain and loss in the same row's last
- *   cell. `variant={toneOf(…)}` here would type-check, render, and quietly say that selling at a
- *   loss was the selling's fault;
+ * - the side badge is **toned from `sideVariant`**, and from nothing else. Story #257 reversed
+ *   DDR-0065's untoned column (DDR-0086), which turns this guard around without weakening it:
+ *   what fails is no longer *a* tone but a tone reached in this file — a literal `variant="…"`,
+ *   or the `=== 'Buy'` branch the original guard was written for. The one branch lives in
+ *   `tradeSide.ts`, where `tradeSide.test.ts` can assert the mapping itself rather than scan for
+ *   it. `variant={toneOf(t.realizedBase)}` is the failure that would still type-check and render:
+ *   it would say the side *is* the row's P&L, which is the reading DDR-0086 answers;
  * - the Realized P&L column's dash is **muted**, not neutral. `toneClassName` emits *no* class
  *   for a neutral figure, so the em dash inherits `--text` and reads at the weight of the figures
  *   around it — absent is a quieter thing than zero;
@@ -43,26 +46,45 @@ const VIEW = strip(
 const CSS = readFileSync(new URL('../app.css', import.meta.url), 'utf8')
 const RULES = CSS.replace(/\/\*[\s\S]*?\*\//g, '')
 
-describe('the trade side is a badge, and deliberately an untoned one', () => {
+describe('the trade side is a badge, toned from one mapping and nothing else', () => {
   it('renders the side through Badge rather than as bare text', () => {
     expect(VIEW).toMatch(/key: 'side',[\s\S]*?cell: \(t\) => \([\s\S]*?<Badge/)
     expect(VIEW).not.toMatch(/key: 'side',[\s\S]{0,120}cell: \(t\) => t\.side/)
   })
 
   /**
-   * The decision this story exists to make (DDR-0065). `Buy` is not a gain and `Sell` is not a
-   * loss; the gain/loss pair is spoken for by the Realized P&L cell on the same row, and no
-   * substitute hue is invented either — `--accent` means *news* (DDR-0037) and the `--series-*`
-   * slots are a dimension's categorical set (DDR-0030).
+   * The decision Story #257 reversed (DDR-0086, superseding DDR-0065's side badge). The tone is
+   * the side's own, taken from the module that holds the mapping — so this file asserts the
+   * *route*, and `tradeSide.test.ts` asserts which tone each side gets.
    */
-  it('passes no variant at all, so the side takes the default neutral badge', () => {
-    expect(VIEW).toMatch(/key: 'side',[\s\S]*?<Badge size="sm" className=\{BADGE_CELL_CLASS\}>/)
-    expect(VIEW).not.toMatch(/key: 'side',[\s\S]{0,400}?<Badge[^>]*variant=/)
+  it('takes its variant from sideVariant, applied to the side itself', () => {
+    expect(VIEW).toMatch(
+      /key: 'side',[\s\S]*?<Badge variant=\{sideVariant\(t\.side\)\} size="sm" className=\{BADGE_CELL_CLASS\}>/,
+    )
+    expect(VIEW).toContain("import { sideVariant } from '../../lib/tradeSide'")
   })
 
-  /** No branch on the side string either — a tone reached that way is the same decision. */
-  it('never branches on the side to pick a colour', () => {
+  /**
+   * The guard that survives the reversal intact, because what it forbids never changed: a tone
+   * decided *here*. A literal `variant="positive"` puts the mapping in two places, and
+   * `variant={toneOf(t.realizedBase)}` would tone the side by the row's P&L — which is not a
+   * different implementation of DDR-0086 but the misreading DDR-0086 exists to argue against,
+   * rendered as fact.
+   */
+  it('never decides the colour in the view — no literal tone, no branch on the side', () => {
     expect(VIEW).not.toMatch(/=== 'Buy'|=== 'Sell'|side === /)
+    expect(VIEW).not.toMatch(/variant=\{?['"](positive|negative|neutral|accent|plain)['"]/)
+    expect(VIEW).not.toMatch(/key: 'side',[\s\S]{0,400}?<Badge[^>]*variant=\{toneOf/)
+  })
+
+  /**
+   * The word stays inside the badge, so the column is legible with no hue at all (DDR-0021, still
+   * governing). It is the same assertion that made DDR-0065's untoned column satisfy that rule by
+   * construction; under DDR-0086 it is the rule's only remaining guarantee here, and therefore
+   * load-bearing rather than incidental.
+   */
+  it('keeps the side written inside the badge, so colour is never the only channel', () => {
+    expect(VIEW).toMatch(/<Badge variant=\{sideVariant\(t\.side\)\}[^>]*>\s*\{t\.side\}\s*<\/Badge>/)
   })
 
   /**
@@ -71,7 +93,7 @@ describe('the trade side is a badge, and deliberately an untoned one', () => {
    * carries the gap from a value that is not there (DDR-0037, DDR-0064).
    */
   it('is the inline size in the cell placement, so no row grows', () => {
-    expect(VIEW).toContain('<Badge size="sm" className={BADGE_CELL_CLASS}>')
+    expect(VIEW).toContain('size="sm" className={BADGE_CELL_CLASS}>')
     expect(VIEW).not.toMatch(/<Badge[^>]*size="md"/)
   })
 

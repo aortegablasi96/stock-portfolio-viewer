@@ -1,6 +1,10 @@
 # 0065. A side badge with no tone at all, and the dimmed cell moves into the table's namespace
 
-- **Status:** Accepted
+- **Status:** Accepted — *the untoned side badge superseded by
+  [[0086-the-side-badge-takes-the-tone-it-was-refused]], which counted the collision predicted
+  below and found it 4 rows in 260; the dimmed cell, the `closedSomething` predicate, the
+  `Best` / `Worst` tone and the nested-card re-measurement all still govern, as does the refusal
+  of a **substitute** hue*
 - **Date:** 2026-08-19
 
 ## Context
