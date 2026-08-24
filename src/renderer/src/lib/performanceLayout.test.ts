@@ -161,16 +161,21 @@ describe('a chart is named the same thing in every range (Story #221)', () => {
   })
 })
 
-describe('the Custom range is the RangeFilter’s own, not a fifth control', () => {
+describe('the Custom range is the RangeFilter’s own, not a separate control', () => {
   /**
    * DDR-0017 and DDR-0035 settled this before the redesign proposed it: `Custom` is one of the
    * presets, and choosing it reveals the two `Field` + `DateInput` edges inside the same
-   * `RangeFilter`. The prototype draws a fifth pill beside `1M / 3M / 1Y / All`, which is what
+   * `RangeFilter`. The prototype draws a further pill beside `1M / 3M / 1Y / All`, which is what
    * this already is — so the reconciliation is that nothing is added, and this is what would
    * fail if a second custom-range control appeared beside the first.
+   *
+   * The list itself is `dateRange.test.ts`'s to pin (Story #256 added `ytd` after `1Y`); what this
+   * asserts is that `Custom` is still the last of the presets rather than a control of its own.
    */
-  it('is the fifth preset of the one shared vocabulary', () => {
-    expect(RANGE_OPTIONS.map((o) => o.id)).toEqual(['1m', '3m', '1y', 'all', 'custom'])
+  it('is the last preset of the one shared vocabulary', () => {
+    const ids = RANGE_OPTIONS.map((o) => o.id)
+    expect(ids[ids.length - 1]).toBe('custom')
+    expect(ids.filter((id) => id === 'custom')).toHaveLength(1)
   })
 
   it('renders exactly one RangeFilter, and no date input of its own', () => {
