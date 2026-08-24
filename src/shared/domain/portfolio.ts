@@ -17,6 +17,20 @@ export const holdingSchema = z.object({
   conid: z.number().int(),
   symbol: z.string(),
   description: z.string(),
+  /**
+   * The instrument's name as the imported Flex `SecurityInfo` records it, e.g. `SERABI GOLD PLC`
+   * (Story #263 follow-up) — resolved by conid against local history, never fetched.
+   *
+   * It exists because `description` is the *gateway's* answer and this build has none: it sends no
+   * `ticker`, so `description` falls back to `contractDesc` and repeats the symbol (DDR-0066). The
+   * raw exported string is carried, not a shortened one — every view shortens through
+   * `instrumentName` at the point of drawing, and a pre-shortened value here would be a second
+   * naming path.
+   *
+   * `null` where local history knows nothing of the instrument — one bought since the last Flex
+   * import, or nothing imported at all — and on snapshot-sourced holdings.
+   */
+  companyName: z.string().nullable(),
   quantity: z.number(),
   averageCost: z.number().nullable(),
   marketPrice: z.number().nullable(),

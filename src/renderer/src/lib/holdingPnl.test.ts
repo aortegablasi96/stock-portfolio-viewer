@@ -12,6 +12,7 @@ function holding(overrides: Partial<Holding> = {}): Holding {
     conid: 1,
     symbol: 'AAA',
     description: 'AAA',
+    companyName: null,
     quantity: 10,
     averageCost: 5,
     marketPrice: 7,

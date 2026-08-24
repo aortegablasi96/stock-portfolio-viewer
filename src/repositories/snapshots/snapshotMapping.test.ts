@@ -25,6 +25,7 @@ function overview(overrides: Partial<PortfolioOverview> = {}): PortfolioOverview
         conid: 265598,
         symbol: 'AAPL',
         description: 'APPLE INC',
+        companyName: 'APPLE INC',
         quantity: 50,
         averageCost: 150.1,
         marketPrice: 212.34,
@@ -36,6 +37,7 @@ function overview(overrides: Partial<PortfolioOverview> = {}): PortfolioOverview
         conid: 272093,
         symbol: 'MSFT',
         description: 'MICROSOFT CORP',
+        companyName: null,
         quantity: 30,
         averageCost: null,
         marketPrice: null,
@@ -201,6 +203,7 @@ describe('row → domain', () => {
       conid: 272093,
       symbol: 'MSFT',
       description: 'MICROSOFT CORP',
+      companyName: null,
       quantity: 30,
       averageCost: null,
       marketPrice: null,
@@ -213,10 +216,10 @@ describe('row → domain', () => {
   it('round-trips a holding through minor units without drift', () => {
     const original = overview().holdings[0]!
     const row = { id: 1, ...toHoldingValues(original, 1) } as SnapshotHoldingRow
-    // Everything a snapshot stores survives the trip; the live-only unrealized P&L is the one
-    // field it deliberately does not, which the next test states outright rather than leaving
-    // to be inferred from this override.
-    expect(rowToHolding(row)).toEqual({ ...original, unrealizedPnl: null })
+    // Everything a snapshot stores survives the trip; the two live-only fields deliberately do
+    // not, which the tests below state outright rather than leaving to be inferred from these
+    // overrides. The gateway's own `description` is stored and does come back.
+    expect(rowToHolding(row)).toEqual({ ...original, unrealizedPnl: null, companyName: null })
   })
 
   /**
@@ -230,5 +233,21 @@ describe('row → domain', () => {
     const original = overview().holdings[0]!
     expect(original.unrealizedPnl).not.toBeNull()
     expect(toHoldingValues(original, 1)).not.toHaveProperty('unrealizedPnl')
+  })
+
+  /**
+   * Nor the resolved company name. It is *reference* data the service looks up in imported Flex
+   * history at read time, so freezing one into an immutable capture would pin the holding to
+   * whatever that import happened to know on the day. The gateway's own `description` is stored
+   * and comes back unchanged; a snapshot read simply reports no name and the view falls back to it.
+   */
+  it('does not persist the resolved company name', () => {
+    const original = overview().holdings[0]!
+    expect(original.companyName).not.toBeNull()
+    expect(toHoldingValues(original, 1)).not.toHaveProperty('companyName')
+    expect(rowToHolding({ id: 1, ...toHoldingValues(original, 1) } as SnapshotHoldingRow)).toMatchObject({
+      companyName: null,
+      description: 'APPLE INC',
+    })
   })
 })

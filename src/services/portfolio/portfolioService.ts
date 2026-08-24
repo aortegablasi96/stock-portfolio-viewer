@@ -1,3 +1,4 @@
+import { flexReadRepository } from '@repositories/flex/flexReadRepository'
 import { portfolioRepository } from '@repositories/portfolio/portfolioRepository'
 import type {
   AccountBalances,
@@ -17,6 +18,35 @@ import type {
  * failures raised by the repository propagate as typed errors; the IPC handler maps
  * them to the renderer's `not_connected` / `error` states.
  */
+
+/**
+ * Give each holding the instrument name imported Flex history knows it by (Story #263 follow-up).
+ *
+ * The live gateway has no name to give: this build sends no `ticker`, so a position's
+ * `description` is `contractDesc` — the symbol again (DDR-0066). The imported `SecurityInfo`
+ * rows do have one, and every position the owner holds has been traded, so the join is a **local
+ * read of history the app already stores**, not a request. It costs one query per overview and
+ * cannot fail the view: with nothing imported the index is empty and every name is `null`.
+ *
+ * Resolved **by conid, falling back to symbol** — the same resolver the dividend tables use, for
+ * the same reason: a conid is stable where a ticker is not (`NWL` and `NWLm` are one instrument on
+ * two listings, and this account holds it under a third symbol live). The raw exported string is
+ * carried through; shortening happens once, in the renderer, through `instrumentName`.
+ */
+function nameHoldings(holdings: Holding[]): Holding[] {
+  const byConid = new Map<number, string>()
+  const bySymbol = new Map<string, string>()
+  for (const n of flexReadRepository.getInstrumentNames()) {
+    if (n.description === '') continue
+    if (n.conid != null && !byConid.has(n.conid)) byConid.set(n.conid, n.description)
+    if (n.symbol !== '' && !bySymbol.has(n.symbol)) bySymbol.set(n.symbol, n.description)
+  }
+  if (byConid.size === 0 && bySymbol.size === 0) return holdings
+  return holdings.map((h) => ({
+    ...h,
+    companyName: byConid.get(h.conid) ?? bySymbol.get(h.symbol) ?? null,
+  }))
+}
 
 /** Round a money amount to cents, so displayed per-position values sum exactly to the total. */
 function round2(value: number): number {
@@ -83,10 +113,14 @@ export const portfolioService = {
    * DDR-0007.
    */
   async getOverview(displayCurrency?: string): Promise<PortfolioOverview> {
-    const [holdings, balances] = await Promise.all([
+    const [rawHoldings, balances] = await Promise.all([
       portfolioRepository.getHoldings(),
       portfolioRepository.getBalances(),
     ])
+    // Both branches, so the view is named whichever one it took. The snapshot capture path reads
+    // the native branch and simply ignores the field — `toHoldingValues` persists what a position
+    // was worth, and a name is not that.
+    const holdings = nameHoldings(rawHoldings)
 
     if (!displayCurrency) {
       const totalMarketValue = holdings.reduce((sum, h) => sum + h.marketValue, 0)

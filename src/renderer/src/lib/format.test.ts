@@ -12,6 +12,7 @@ import {
   formatSignedCurrency,
   formatSignedPercent,
   formatUpdatedAt,
+  holdingName,
   instrumentName,
 } from './format'
 
@@ -265,6 +266,43 @@ describe('instrumentName', () => {
   it('keeps a name that only resembles the symbol', () => {
     expect(instrumentName('NWLm', 'NEWPRINCES SPA')).toBe('Newprinces')
     expect(instrumentName('VBNK', 'VERSABANK')).toBe('Versabank')
+  })
+})
+
+/**
+ * The holdings table's Company column (Story #263 follow-up). A live position has two candidate
+ * descriptions rather than one: the gateway's, which on this build is the symbol again, and the
+ * name the service resolved from imported Flex history.
+ */
+describe('holdingName', () => {
+  it('names the holding from imported history where the gateway repeated the ticker', () => {
+    expect(holdingName('IBKR', 'IBKR', 'INTERACTIVE BROKERS GRO-CL A')).toBe('Interactive Brokers')
+    expect(holdingName('SBI', 'SBI', 'SERABI GOLD PLC')).toBe('Serabi Gold')
+  })
+
+  /** Shortened by the same one function, so the cell reads identically to Allocation's mark. */
+  it('shortens it exactly as every other view does', () => {
+    expect(holdingName('NXT', 'NXT', 'NUEVA EXPRESION TEXTIL SA')).toBe(
+      instrumentName('NXT', 'NUEVA EXPRESION TEXTIL SA'),
+    )
+  })
+
+  it('falls back to the description where history knows the instrument by no name', () => {
+    expect(holdingName('AAPL', 'APPLE INC', null)).toBe('Apple')
+  })
+
+  /**
+   * The fallback is still subject to the rule: a description that only repeats the symbol is not
+   * a name, so an un-imported instrument on this gateway build empties the cell rather than
+   * printing its ticker twice.
+   */
+  it('finds no name when neither source says anything the symbol does not', () => {
+    expect(holdingName('SEZL', 'SEZL', null)).toBeNull()
+  })
+
+  /** An imported name that is itself just the ticker — a bare currency row — is no better. */
+  it('rejects an imported name that repeats the symbol too', () => {
+    expect(holdingName('CAD', 'CAD', 'CAD')).toBeNull()
   })
 })
 
