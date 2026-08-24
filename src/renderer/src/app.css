@@ -2452,8 +2452,29 @@ html {
    So the row never wraps and the *title* is what yields: it shrinks and ellipsizes while the
    legend keeps its full width, because a clipped key is unreadable where a clipped title is merely
    abbreviated — and the chart states its own full name in `aria-label` either way. */
-.chart-card-header {
+/* A chart card carries **no rule between its title and its plot** (Story #255, DDR-0084). The
+   strip above is right for a card whose header offers something to do with the card — the periods
+   table, By Ticker, the upcoming panel, Data Sources and the Portfolio cards all keep it — and
+   wrong for a card that is a title over a picture, where a full-width line reads as a second axis
+   drawn above the plot.
+
+   Dropping the border alone would not finish it, because the strip is a geometry as well as a
+   line: the header would still bleed out to the card's edges and still re-apply `--card-pad` as
+   its own, leaving a title spaced for a division that is no longer there. So all three
+   declarations go back together — the same three, in the same order, that `.card-header:last-child`
+   gives back — and the header becomes a plain row inside the card's own padding with **one chosen
+   gap beneath it**: `--space-5`, which is the proposal's own 16px and the step `.card-title`
+   already carries under a bare title.
+
+   Compound rather than bare, and that is the load-bearing half: `.card-header` and
+   `.chart-card-header` are both one class, so a bare selector here would *tie* the strip on
+   specificity and win only on source order — DDR-0059's trap, which has shipped once. Naming both
+   classes says what is true (a card header that is a chart's) and wins wherever it is written. */
+.card-header.chart-card-header {
   flex-wrap: nowrap;
+  margin: 0 0 var(--space-5);
+  padding: 0;
+  border-bottom: none;
 }
 
 .chart-card-header .card-title {

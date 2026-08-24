@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
+import { sep } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   CARD_HEADER_ALIGNMENTS,
@@ -23,6 +24,9 @@ import {
  */
 
 const CSS = readFileSync(new URL('../app.css', import.meta.url), 'utf8')
+
+/** Every component in the renderer, for the scan that keeps the chart-card exception scoped. */
+const COMPONENTS = new URL('../components/', import.meta.url)
 
 /**
  * The stylesheet with its comments removed. The "gone" assertions below have to read this
@@ -139,6 +143,48 @@ describe('the stylesheet backs every declared variant, size, alignment and part'
     expect(rule).toContain('margin: 0')
     expect(rule).toContain('padding: 0')
     expect(rule).toContain('border-bottom: none')
+  })
+
+  /**
+   * The chart card is the strip's one stated exception (Story #255, DDR-0084): a title over a
+   * picture, where a full-width rule reads as a second axis. It gives back the same three
+   * declarations `:last-child` does, and for the same reason — the strip is a geometry as well as
+   * a line, so a header that keeps the bleed and the re-applied padding without the rule is spaced
+   * for a division that is not there.
+   *
+   * The compound selector is asserted rather than assumed. `.card-header` and `.chart-card-header`
+   * are both one class, so a bare selector would tie the strip on specificity and win only on
+   * source order — the failure DDR-0059 records and this repo has shipped once.
+   */
+  it('un-draws the strip on a chart card, at a specificity that cannot lose', () => {
+    const rule = /^\.card-header\.chart-card-header \{([^}]*)\}/m.exec(CSS)?.[1] ?? ''
+    expect(rule).not.toBe('')
+    expect(rule).toContain('margin: 0 0 var(--space-5)')
+    expect(rule).toContain('padding: 0')
+    expect(rule).toContain('border-bottom: none')
+    // The row still never wraps, which is what keeps the four Performance cards one line tall.
+    expect(rule).toContain('flex-wrap: nowrap')
+    // A bare `.chart-card-header {` rule would be the tie; there must not be one.
+    expect(RULES).not.toMatch(/^\.chart-card-header \{/m)
+  })
+
+  /**
+   * Scoped once, on the class both chart cards already wore. A call site's `className` is for
+   * placement, not decoration (DDR-0032), so the un-ruling may not appear at one — and every card
+   * that is not a chart card keeps the strip by never naming the class.
+   */
+  it('is scoped to the chart-card class alone, at exactly the two call sites', () => {
+    const components = readdirSync(COMPONENTS, { recursive: true, encoding: 'utf8' }).filter((f) =>
+      f.endsWith('.tsx'),
+    )
+    expect(components.length).toBeGreaterThan(10)
+
+    const wearing = components
+      .filter((file) => readFileSync(new URL(file, COMPONENTS), 'utf8').includes('chart-card-header'))
+      .map((file) => file.split(sep).join('/'))
+      .sort()
+
+    expect(wearing).toEqual(['analytics/DividendsView.tsx', 'analytics/PerformanceView.tsx'])
   })
 
   /** The title sits *on* the strip now, so it carries the page's ink rather than the muted tone. */

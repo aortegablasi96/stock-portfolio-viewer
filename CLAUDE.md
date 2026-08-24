@@ -362,7 +362,7 @@ alternatives this table can only name.
 | Primitive | Axes | The rule that isn't obvious |
 | --- | --- | --- |
 | `Button` (DDR-0032) | `variant` × `size` (`icon` is a *shape*) | `ghost` changed meaning — the old `.ghost-button` is now `secondary`. `type` defaults to `"button"`. `className` is for **placement, not colour**. |
-| `Card` (DDR-0033, DDR-0059) | `variant` (surface colour) × `size` (`--surface-pad-*`) | `CardContent` is a **scope** — descendant rules hang off it, keeping a state panel's prose out of reach. The ruled header strip bleeds to the edges by negating `--card-pad`, which each size **restates beside its `padding`** (change one, change both). `.card-header:last-child` gives the strip back. |
+| `Card` (DDR-0033, DDR-0059, DDR-0084) | `variant` (surface colour) × `size` (`--surface-pad-*`) | `CardContent` is a **scope** — descendant rules hang off it, keeping a state panel's prose out of reach. The ruled header strip bleeds to the edges by negating `--card-pad`, which each size **restates beside its `padding`** (change one, change both). `.card-header:last-child` gives it back; so does `.card-header.chart-card-header`, **compound or it ties** (DDR-0084). |
 | `StatTile` / `StatRow` (DDR-0034, DDR-0060) | `tone` only | A tile **is** a `Card`, so it declares no surface. **Neutral is the absence of a rule.** Its label is the app's *one* micro-label — the same four declarations as `.data-table thead th`; don't grow a second. |
 | `Field` + `Select` + `DateInput` (DDR-0035) | `kind` only | **`Field` generates its id with `useId()` and takes no `id` prop** — tabs stay mounted, so all three `RangeFilter`s can be in the document at once and a fixed id would name only the first. |
 | `ToggleGroup` (DDR-0036) | `mode`, which is **worn** (`--radius-md` vs `--radius-pill`) | **Never a tablist**: `aria-pressed`, not `role="tab"`. Only `.app-tab` is a real tablist. |
@@ -466,7 +466,7 @@ override an accepted decision.**
 ## MCP Servers
 
 `.claude/settings.local.json` enables `context7`, `filesystem`, `playwright`, `interactive-brokers`
-and `shadcn`. The `shadcn` server is for *reading* component APIs only (ADR-0008). The
+and `shadcn`. The
 `interactive-brokers` entry in `.mcp.json` still has a **placeholder runtime**
 (`REPLACE_WITH_RUNTIME`), so enabling it does not make it functional. A connected
 `Interactive_Brokers_IBKR` MCP has read-only account/market tools allowlisted — **no

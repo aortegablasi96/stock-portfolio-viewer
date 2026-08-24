@@ -1,6 +1,8 @@
 # 0033. One card surface: two variants, three paddings, and a body that is a scope
 
-- **Status:** Accepted
+- **Status:** Accepted — one stated exception in
+  [[0084-the-chart-card-drops-the-strip]] (the chart card's header, scoped by class rather than by a
+  third axis)
 - **Date:** 2026-07-31
 
 ## Context

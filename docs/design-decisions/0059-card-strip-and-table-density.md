@@ -1,6 +1,7 @@
 # 0059. The card's ruled header strip, and the table's density
 
-- **Status:** Accepted
+- **Status:** Accepted — the strip's *scope* amended by
+  [[0084-the-chart-card-drops-the-strip]] (the chart card alone; every other card keeps it)
 - **Date:** 2026-08-19
 
 ## Context
@@ -35,6 +36,11 @@ in this app would put a re-render behind every pointer move across a 260-row tra
 ## Decision
 
 ### The strip is one rule over two selectors, and it bleeds with a negative margin
+
+> **Amended 2026-08-24 by [[0084-the-chart-card-drops-the-strip]]** — the *scope* only. A chart
+> card, which is a title over a picture, gives all three declarations back; the rule below and the
+> two selectors it serves are unchanged for every card that is not one.
+
 
 ```css
 .card-header,
