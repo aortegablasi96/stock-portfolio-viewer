@@ -5,10 +5,15 @@ import { Field } from '../ui/Field'
 import { ToggleGroup } from '../ui/ToggleGroup'
 
 /**
- * The time-range control: a group of period presets (1M / 3M / 1Y / All / Custom) plus the two
- * date inputs that appear when Custom is chosen. Introduced for the Performance view (Story #69)
- * and shared with the dividends and trades tables (Story #75), so every period selector in the
- * app looks and behaves the same.
+ * The time-range control: a group of period presets (1M / 3M / 1Y / YTD / All / Custom) plus the
+ * two date inputs that appear when Custom is chosen. Introduced for the Performance view (Story
+ * #69) and shared with the dividends and trades tables (Story #75), so every period selector in
+ * the app looks and behaves the same.
+ *
+ * The list is `RANGE_OPTIONS` and nothing here filters it: a preset belongs to the vocabulary or
+ * it does not exist, which is what keeps the three views from drifting apart. YTD was added that
+ * way rather than as a Performance-only option (Story #256, DDR-0085) — "dividends this year" and
+ * "trades this year" are the same question the Performance view asks.
  *
  * Presentational only — the owning view holds the selection (through `useRangeSelection`) and
  * resolves it to a window (through `lib/dateRange`), because what a window *does* differs by

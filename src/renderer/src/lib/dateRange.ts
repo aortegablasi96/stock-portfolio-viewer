@@ -9,8 +9,11 @@
  * matching the rest of the app.
  */
 
-/** The selectable ranges: trailing windows back from the latest data point, plus custom. */
-export type RangeId = '1m' | '3m' | '1y' | 'all' | 'custom'
+/**
+ * The selectable ranges: trailing windows back from the latest data point, one calendar-anchored
+ * window (`ytd`), the full history, and custom.
+ */
+export type RangeId = '1m' | '3m' | '1y' | 'ytd' | 'all' | 'custom'
 
 export interface RangeOption {
   id: RangeId
@@ -20,10 +23,25 @@ export interface RangeOption {
   title: string
 }
 
+/**
+ * One vocabulary for every view that offers presets — `RangeFilter` renders this list for
+ * Performance, Dividends and Trades alike, so "1M" means one window everywhere by construction.
+ *
+ * `ytd` sits **after** `1Y`, not between `3M` and `1Y` where its length would put it (Story #256,
+ * DDR-0085). The group is not ordered by length but by kind: `1M`, `3M` and `1Y` are one run of
+ * trailing windows, and breaking it to interleave the one calendar-anchored preset would make the
+ * odd one out look like a member of the run. After `1Y` it reads as what it is — a window of its
+ * own, before the two that are not periods at all.
+ *
+ * Its title says "Since 1 January" rather than "Year to date": the window is anchored to the data,
+ * so in a history that stops in an earlier year it is *that* year's 1 January, which "to date"
+ * would overclaim.
+ */
 export const RANGE_OPTIONS: readonly RangeOption[] = [
   { id: '1m', label: '1M', title: 'Last month' },
   { id: '3m', label: '3M', title: 'Last 3 months' },
   { id: '1y', label: '1Y', title: 'Last year' },
+  { id: 'ytd', label: 'YTD', title: 'Since 1 January' },
   { id: 'all', label: 'All', title: 'Full history' },
   { id: 'custom', label: 'Custom', title: 'Custom date range' },
 ] as const
@@ -48,6 +66,11 @@ function subtractMonths(ms: number, months: number): number {
   )
 }
 
+/** UTC midnight on 1 January of the year containing `ms`. */
+function startOfUtcYear(ms: number): number {
+  return Date.UTC(new Date(ms).getUTCFullYear(), 0, 1)
+}
+
 /**
  * Resolve a range selection to a concrete window. Trailing presets end at the latest data
  * point (`extent.to`) and start N months back, clamped so a short history never starts before
@@ -55,6 +78,18 @@ function subtractMonths(ms: number, months: number): number {
  *
  * Anchoring to the data rather than to "now" matters for imported history: a statement exported
  * last month would otherwise leave "1M" empty.
+ *
+ * `ytd` is the one **calendar-anchored** preset (Story #256, DDR-0085), and it takes the same
+ * anchor as the trailing ones — `extent.to`, not today. Two reasons, and both are the anchor
+ * rather than the arithmetic: this function is a pure function of its arguments, which is what
+ * lets its whole contract be asserted without a clock; and a history that stops in an earlier year
+ * resolves to that year's 1 January through its last point, which is the tail of the last year
+ * that has data. Anchored to today the same history would resolve to an empty window — a chart
+ * showing nothing, with no way for a reader to tell the preset from the data.
+ *
+ * The `switch` is deliberately **exhaustive without a `default`**: the declared return type makes
+ * a missing case a compile error, where a `default` would have quietly folded a new id into
+ * `all` — a window over everything looks plausible enough to ship.
  */
 export function boundsFor(range: RangeId, extent: Bounds, custom: Bounds): Bounds {
   switch (range) {
@@ -64,6 +99,8 @@ export function boundsFor(range: RangeId, extent: Bounds, custom: Bounds): Bound
       return { from: Math.max(subtractMonths(extent.to, 3), extent.from), to: extent.to }
     case '1y':
       return { from: Math.max(subtractMonths(extent.to, 12), extent.from), to: extent.to }
+    case 'ytd':
+      return { from: Math.max(startOfUtcYear(extent.to), extent.from), to: extent.to }
     case 'custom': {
       const lo = Math.min(custom.from, custom.to)
       const hi = Math.max(custom.from, custom.to)
@@ -72,7 +109,6 @@ export function boundsFor(range: RangeId, extent: Bounds, custom: Bounds): Bound
       return { from: Math.min(from, to), to }
     }
     case 'all':
-    default:
       return extent
   }
 }

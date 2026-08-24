@@ -204,12 +204,11 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
   entry.
 - **A figure is a role, not a font** (DDR-0053). `--font-figure` + `--tracking-figure` +
   `font-variant-numeric: tabular-nums` are **one rule** listing its selectors — they only work as a
-  set. It declares no `font-size`, which is what keeps DDR-0018 intact where it
-  reaches SVG `<text>`. `lib/figureRole.ts` **throws rather than merging** if a second rule applies it. Mono is ~20% wider for digits — a story adding a column should re-measure.
+  set. It declares no `font-size`, which keeps DDR-0018 intact in SVG `<text>`. `lib/figureRole.ts` **throws rather than merging** if a second rule applies it. Mono is ~20% wider for digits — a story adding a column should re-measure.
 - **Motion is two durations and two easings** (DDR-0044): `--duration-fast` (90ms) ·
   `--duration-base` (120ms) · `--ease-out` · `--ease-linear` (for a width *reporting a number*).
-  One `prefers-reduced-motion` block **zeroes the tokens** rather than listing what moves, so later
-  additions are covered. **Source order is the mechanism** — the block sits directly under `:root`
+  One `prefers-reduced-motion` block **zeroes the tokens** rather than listing what moves, covering
+  later additions. **Source order is the mechanism** — the block sits directly under `:root`
   and `designTokens.test.ts` fails if it moves. A raw duration is the only way out.
 - **The loss tone is two tokens and picking the wrong one is silent** (DDR-0046, DDR-0054): `--neg`
   is **fill only**, `--neg-text` **text only**; same shape for `--accent` (labels + ring) vs
@@ -255,10 +254,14 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
   `refreshing`. **Portfolio is deliberately excluded** and re-reads on every visit — it shows live
   data that changes with no event to signal it.
 - **`AnalyticsShell` owns the four-branch guard, the `<main>`, and the page header** (DDR-0043,
-  DDR-0058). Children are a **function of the report, not elements**, because three of four states
-  have no report, and **the shell holds no state**, which is what keeps DDR-0027 intact. The status
+  DDR-0058). Children are a **function of the report, not elements**, and **the shell holds no
+  state**, which is what keeps DDR-0027 intact. The status
   row is **absent, not empty**, where there is nothing to refresh. `lib/analyticsShell.ts` holds
   the branch mapping; its test fails if a view re-declares the guard, wrapper, or header.
+- **The range presets are one vocabulary** (DDR-0085): `RangeFilter` renders `RANGE_OPTIONS`
+  unfiltered, so a preset lands in all three views or none. All anchor to `extent.to`, **never
+  `Date.now()`** — a clock empties a history ending last year — and `boundsFor` carries **no
+  `default`**: a missing case must be a compile error, not a silent `all`.
 - **Charts are dependency-free inline SVG** sized by **aspect ratio, never a pixel width**
   (DDR-0018): an axis label is 11 *viewBox units*, so halving the column halves the label.
   Performance's four charts share one geometry (`lib/chartGeometry`), and both grid breakpoints
@@ -277,9 +280,8 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
   `--surface-raised`; its padding, corner and `MIN_WIDTH` are **viewBox units**, not CSS lengths.
   The income chart is **two bars a month across one baseline** (never a stack), sized in **pixels**
   (`COLUMN_UNIT_PX` = 1, from the label floor) inside `.chart-scroll` — the app's one chart off
-  DDR-0018's aspect rule. Gross rises, **withholding hangs below zero** — legal only because
-  direction is the **series'**, never the value; a *net* bar is the signed series DDR-0078 refused
-  (DDR-0080). A bar or row with no figure is **absent, not zero**; only the undrawn net is toned.
+  DDR-0018's aspect rule. Gross rises, **withholding hangs below zero**: direction is the
+  **series'**, never the value, and a *net* bar is the signed series DDR-0078 refused (DDR-0080). A bar or row with no figure is **absent, not zero**; only the undrawn net is toned.
   `pairedDomain` is **not** `columnDomain` — the step is the dominant side's and the tax side keeps
   its own scale, so the axis is **uneven across zero on purpose** (DDR-0081). Its **value axis is
   HTML**, sticky **inside** the scroller — outside it a scrollbar puts every tick 15px low once the
@@ -317,12 +319,11 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
   `portfolio:getOverview` result, which is why that tab is excluded from stay-mounted. The one
   `setTimeout` in `SidebarRail.tsx` is a **clock** arming the moment a live reading goes stale,
   not an interval. `displayCurrency` is the **app's** selection, so the control is never
-  disabled, and since #234 it is a boxed chip too — its `<select>` giving up its resting
+  disabled, and it is a boxed chip too — its `<select>` giving up its resting
   `border-color` and `padding-inline`, and **nothing else**, so the box is the one boundary
-  (amends DDR-0035; DDR-0075). The badge is a **boxed chip** on `--surface-raised` — the app's one
-  surface step that goes *up*, and one of **three** users (the hover card and that currency field
-  are the others) — so every tone is measured **there**, not on `--card`, and `SURFACE_EDGE` is not
-  a WCAG bar (DDR-0069).
+  (amends DDR-0035; DDR-0075). The badge is a **boxed chip** on `--surface-raised`, one of **three**
+  users (the hover card and that currency field are the others) — so every tone is measured
+  **there**, not on `--card`, and `SURFACE_EDGE` is not a WCAG bar (DDR-0069).
   `sidebarRail.test.ts` **counts** its uses — a fourth adopter must measure its own inks
   (DDR-0070). The nav's **"Views" title is the tablist's `aria-labelledby`**, not a caption beside
   it (DDR-0075).
@@ -353,8 +354,7 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
 
 ### UI primitives (`components/ui/`, Epic #125)
 
-Each replaced several hand-rolled class families and has a guard test in `lib/*Variants.test.ts`
-failing the same three ways: a superseded selector reappears, an axis value has no rule in
+Each has a guard test in `lib/*Variants.test.ts` failing the same three ways: a superseded selector reappears, an axis value has no rule in
 `app.css`, or the primitive re-declares something the shared rules own (focus ring, `:disabled`,
 `outline`). **Read the DDR before changing an axis** — each records call sites and rejected
 alternatives this table can only name.
@@ -414,15 +414,13 @@ Mock repositories and external providers; services are the primary target.
 
 **Vitest runs every test under `src/` in a Node environment with no jsdom, so no test may render a
 React component.** This shapes the renderer: chart maths, filtering, sorting, formatting and state
-are **extracted into pure modules under `renderer/src/lib/`** precisely so they can be tested —
-follow that split when adding a component with real logic. Pure repository helpers touching no
-data source are tested alike.
+are **extracted into pure modules under `renderer/src/lib/`** so they can be tested — follow that
+split when adding a component with real logic. Pure repository helpers are tested alike.
 
 Several `lib/*.test.ts` files have **no module under test** — they guard `app.css`, the components,
-a view's own composition, or accessibility by scanning source text. What no Node test can see is
-pinned by Playwright: `e2e/page-header.spec.ts`, `e2e/tab-navigation.spec.ts`,
-`e2e/view-shortcuts.spec.ts`, `e2e/reduced-motion.spec.ts` (that the media query actually wins the
-cascade), `e2e/window-state.spec.ts`, `e2e/sidebar-collapse.spec.ts`.
+a view's composition, or accessibility by scanning source text. What a text scan cannot see is
+pinned by Playwright (`ls e2e/`; enumerating it here goes stale): a **cascade** resolving, a
+**measured width**, a key reaching the app.
 
 Every completed feature should include unit tests, regression review, edge-case validation, and a
 Testing Report.
