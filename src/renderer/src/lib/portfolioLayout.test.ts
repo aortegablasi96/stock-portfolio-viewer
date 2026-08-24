@@ -1,9 +1,9 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { GRID_CONTENT_BREAKPOINT_PX, SIDEBAR_PX } from './chartGeometry'
 
 /**
- * The Portfolio view's composition (Story #189).
+ * The Portfolio view's composition (Story #189, re-stated by Story #266).
  *
  * No module under test: the subject is `PortfolioDashboard.tsx`, `DataSources.tsx` and the rules
  * that place them — the same shape as `sidebarRail.test.ts` and `analyticsShell.test.ts`, and a
@@ -15,8 +15,15 @@ import { GRID_CONTENT_BREAKPOINT_PX, SIDEBAR_PX } from './chartGeometry'
  * Every promise below is one a later story could break while every other test still passed: the
  * destructive reset could quietly become a `confirm()`, the `dataVersion` bump could be dropped
  * while moving a button, the snapshot section could be deleted for looking absent from the
- * prototype, and the rail could be folded inside the `ok` branch — which reads as tidying and
- * costs the owner the import button on exactly the day the gateway is down.
+ * prototype, and the imported store's row could be folded inside the `ok` branch — which reads as
+ * tidying and costs the owner the import button on exactly the day the gateway is down.
+ *
+ * Story #266 turns four of them around rather than deleting them (DDR-0089). The rail is gone, so
+ * "the rail is outside the branches" becomes "the row is", "the bars are one fact drawn twice"
+ * becomes "drawn once", and the geometry guard measures a different pair. A guard that fails
+ * because the layout changed is doing its job; the answer is to re-state the promise, not to drop
+ * it — the decisions underneath (the import survives a dead gateway, one scale, one confirm) are
+ * the same ones.
  */
 
 const read = (path: string): string => readFileSync(new URL(path, import.meta.url), 'utf8')
@@ -36,7 +43,6 @@ const strip = (source: string): string =>
 const DASHBOARD = strip(read('../components/PortfolioDashboard.tsx'))
 const SOURCES = strip(read('../components/DataSources.tsx'))
 const HOLDINGS = strip(read('../components/HoldingsTable.tsx'))
-const ALLOCATION = strip(read('../components/AllocationPanel.tsx'))
 const APP = strip(read('../App.tsx'))
 const CSS = strip(read('../app.css'))
 
@@ -53,7 +59,7 @@ describe('the page is one block, in the redesign’s order', () => {
   })
 
   it('places the four sections in the order the story states', () => {
-    const order = ['<PageHeader', '<BalancesSummary', 'dashboard-columns', '<StoredStatementsCard']
+    const order = ['<PageHeader', '<BalancesSummary', '<HoldingsTable', 'dashboard-sources']
     const positions = order.map((token) => DASHBOARD.indexOf(token))
 
     expect(positions.every((at) => at >= 0)).toBe(true)
@@ -70,22 +76,30 @@ describe('the page is one block, in the redesign’s order', () => {
       DASHBOARD.indexOf('<StoredStatementsCard'),
     )
   })
+
+  it('gives the holdings table the page, with no column beside it', () => {
+    // Story #266. The `1fr / 260px` pair and the rail's two class names go together — a grid
+    // left behind with one child is the arrangement this story removed, drawn invisibly.
+    expect(DASHBOARD).not.toMatch(/col-main|col-side|dashboard-columns/)
+    expect(CSS).not.toMatch(/\.col-main\s*\{|\.col-side\s*\{|\.dashboard-columns\s*\{/)
+  })
 })
 
-describe('the rail is beside the live states, not inside them', () => {
-  it('renders the data-sources card outside every gateway branch', () => {
+describe('the imported store renders beside the live states, not inside them', () => {
+  it('renders both store cards outside every gateway branch, in one row', () => {
     // Imported history is local and has never needed the gateway. A card that only rendered
     // under `state.phase === 'ok'` would hide the import button precisely when the dashboard is
-    // showing not_connected — the moment importing is the useful thing to do.
-    const railStart = DASHBOARD.indexOf('<aside className="col-side">')
-    const railEnd = DASHBOARD.indexOf('</aside>')
-    const rail = DASHBOARD.slice(railStart, railEnd)
+    // showing not_connected — the moment importing is the useful thing to do. Story #189 kept
+    // that by putting the card in a rail beside the branches; Story #266 keeps it by making the
+    // row a sibling of them, which is why the guard is that the row's own span holds no branch.
+    const rowStart = DASHBOARD.indexOf('<div className="dashboard-sources">')
+    const rowEnd = DASHBOARD.indexOf('</div>', rowStart)
+    const row = DASHBOARD.slice(rowStart, rowEnd)
 
-    expect(railStart).toBeGreaterThan(-1)
-    expect(rail).toMatch(/<DataSourcesCard/)
-    // The allocation list is the one thing in the rail that is a reading of the live positions,
-    // so it is the one thing gated on them.
-    expect(rail).toMatch(/state\.phase === 'ok'[\s\S]*<AllocationPanel/)
+    expect(rowStart).toBeGreaterThan(-1)
+    expect(row).toMatch(/<StoredStatementsCard/)
+    expect(row).toMatch(/<DataSourcesCard/)
+    expect(row).not.toMatch(/state\.phase/)
   })
 
   it('keeps the five live states as states, none of them an error panel', () => {
@@ -126,13 +140,26 @@ describe('the destructive reset keeps its settled interaction', () => {
   })
 
   it('leaves the shared primitive’s behaviour alone, overriding only its alignment', () => {
-    // The rail's copy is narrower than the control's 26rem cap and cannot be right-aligned, but a
-    // placement override is all it may be — the tone, the buttons and the phases are the
+    // Story #189 overrode four things because a 260px rail is narrower than the control's 26rem
+    // cap; a 400px card is not, so three of them are gone and the one that is left is the one
+    // width never answered — the card's copy reads from the left, its home reads from the right.
+    // A placement override is all it may ever be: the tone, the buttons and the phases are the
     // primitive's (ADR-0008: `className` is for placement, not colour).
     const scoped = rule('.flex-import-actions .confirm-action')
 
-    expect(scoped).toMatch(/align-items:\s*stretch/)
-    expect(scoped).not.toMatch(/color|background|border-color/)
+    expect(scoped).toMatch(/align-items:\s*flex-start/)
+    expect(scoped).not.toMatch(/max-width|color|background|border-color/)
+    expect(CSS).not.toMatch(/\.flex-import-actions \.confirm-buttons/)
+  })
+
+  it('lets the two controls stand beside each other, and wrap rather than squeeze', () => {
+    // The stack was a consequence of the rail ("in a 260px rail there is no *beside*"), not a
+    // decision about the controls — so it goes with the rail. `wrap` is what keeps the armed
+    // confirm readable: it takes the next line instead of a sliver beside the Import button.
+    const actions = rule('.flex-import-actions')
+
+    expect(actions).not.toMatch(/flex-direction:\s*column|align-items:\s*stretch/)
+    expect(actions).toMatch(/flex-wrap:\s*wrap/)
   })
 })
 
@@ -185,13 +212,12 @@ describe('coverage stays a service fact', () => {
   })
 })
 
-describe('the weight bars are one fact drawn twice', () => {
-  it('scales both drawings through the shared module, never a hard-coded divisor', () => {
+describe('the weight bar is one fact, now drawn once', () => {
+  it('scales the drawing through the shared module, never a hard-coded divisor', () => {
     // The prototype used `weight / 30` in the rail and `weight / 28` in the table — two magic
-    // numbers that disagree with each other and with the portfolio.
-    expect(ALLOCATION).toMatch(/from '\.\.\/lib\/weightBars'/)
+    // numbers that disagreed with each other and with the portfolio. One drawing is left and the
+    // module still owns its scale, because *where* the scale comes from is the load-bearing part.
     expect(HOLDINGS).toMatch(/from '\.\.\/lib\/weightBars'/)
-    expect(ALLOCATION).not.toMatch(/weight\s*\/\s*\d/)
     expect(HOLDINGS).not.toMatch(/weight\s*\/\s*\d/)
   })
 
@@ -200,56 +226,68 @@ describe('the weight bars are one fact drawn twice', () => {
     expect(HOLDINGS).toMatch(/weightBarScale\(allocation\.map/)
   })
 
-  it('draws one track and one fill for both, rather than a class family each', () => {
+  it('keeps the one track and fill, and leaves no second drawing behind', () => {
     expect(rule('.weight-track')).toBeDefined()
     expect(rule('.weight-fill')).toBeDefined()
-    // The superseded pair, gone rather than left beside their replacements.
+    // The pair `.weight-*` superseded, and the list that was the second drawing — each gone
+    // rather than left in the stylesheet for a later story to find and re-use (Story #266).
     expect(CSS).not.toMatch(/\.allocation-track\s*\{/)
     expect(CSS).not.toMatch(/\.allocation-bar\s*\{/)
+    expect(CSS).not.toMatch(/\.allocation-list\s*\{|\.allocation-row\s*\{|\.allocation-head\s*\{/)
+    expect(existsSync(new URL('../components/AllocationPanel.tsx', import.meta.url))).toBe(false)
   })
 
-  it('reports the weight to a screen reader, and hides the drawing of it', () => {
-    // The `meter` carries the fact; the in-table bar is a second visual channel on a percentage
-    // that is already spelled out beside it, so announcing it again would double the table's
-    // length to hear for no information (the same rule the tab icons follow, DDR-0048).
-    expect(ALLOCATION).toMatch(/role="meter"[\s\S]*aria-valuenow=\{Math\.round\(bar\.weight \* 100\)\}/)
+  it('keeps the weight a written figure, and the bar the silent channel', () => {
+    // The rail's `meter` announced the weight; the table's cell announces it as a figure under a
+    // Weight column header, which is what the story means by "no allocation figure is lost". The
+    // bar stays `aria-hidden`: a meter per row would double the table's length to hear for a
+    // number already spelled out beside it (the same rule the tab icons follow, DDR-0048).
+    expect(HOLDINGS).toMatch(/header: 'Weight'/)
+    expect(HOLDINGS).toMatch(/formatPercent\(weight\)/)
     expect(HOLDINGS).toMatch(/weight-track-micro" aria-hidden="true"/)
     expect(HOLDINGS).not.toMatch(/role="meter"/)
   })
 })
 
-describe('the rail’s geometry', () => {
+describe('the sources row’s geometry', () => {
   it('is one width token, quoted by the grid that places it', () => {
-    expect(CSS).toMatch(/--rail-width:\s*260px/)
-    expect(rule('.dashboard-columns')).toMatch(/grid-template-columns:.*var\(--rail-width\)/)
+    expect(CSS).toMatch(/--sources-width:\s*416px/)
+    expect(rule('.dashboard-sources')).toMatch(/grid-template-columns:.*var\(--sources-width\)/)
+    // The rail's token goes with the rail: a measure with no consumer is one a later story
+    // reaches for and mis-reads.
+    expect(CSS).not.toMatch(/--rail-width/)
   })
 
-  it('collapses below the table rather than squeezing it', () => {
-    // The criterion is which way the pair breaks, not where: the rail goes *under* the table,
-    // and the table keeps the full column.
+  it('stacks rather than squeezing, statements first', () => {
+    // The criterion is which way the row breaks, not where: the cards go one above the other and
+    // each takes the full column, rather than the table being squeezed to hold the card beside it.
     const collapsed = CSS.match(
-      /@media \(max-width: (\d+)px\) \{\s*\.dashboard-columns \{([^}]*)\}/,
+      /@media \(max-width: (\d+)px\) \{\s*\.dashboard-sources \{([^}]*)\}/,
     )
 
     expect(collapsed).not.toBeNull()
     expect(collapsed?.[2]).toMatch(/grid-template-columns:\s*minmax\(0, 1fr\)/)
   })
 
-  it('breaks at a width the pair genuinely stops fitting at', () => {
+  it('breaks at a width the row genuinely stops fitting at', () => {
     // Derived rather than eyeballed, and derived from the numbers already in the stylesheet: the
-    // sidebar, both content paddings, the rail and the gap, over a table column no narrower than
-    // the one the chart grid already treats as a full-width content column.
+    // sidebar, both content paddings, the card and the gap, over a statements column no narrower
+    // than what its four columns need before the table scrolls inside its own card.
     const breakpoint = Number(
-      CSS.match(/@media \(max-width: (\d+)px\) \{\s*\.dashboard-columns/)?.[1],
+      CSS.match(/@media \(max-width: (\d+)px\) \{\s*\.dashboard-sources/)?.[1],
     )
     const CONTENT_PAD_PX = 32
-    const RAIL_PX = 260
+    const SOURCES_PX = 416
     const GAP_PX = 24
-    const TABLE_MIN_PX = 560
+    const STATEMENTS_MIN_PX = 480
 
-    expect(breakpoint).toBe(SIDEBAR_PX + CONTENT_PAD_PX * 2 + RAIL_PX + GAP_PX + TABLE_MIN_PX)
-    // And the table's minimum is under the chart grid's content column, so the rail is never the
-    // reason a window that fits the 2×2 grid cannot fit the pair.
-    expect(TABLE_MIN_PX + RAIL_PX + GAP_PX).toBeLessThanOrEqual(GRID_CONTENT_BREAKPOINT_PX - 200)
+    expect(breakpoint).toBe(
+      SIDEBAR_PX + CONTENT_PAD_PX * 2 + SOURCES_PX + GAP_PX + STATEMENTS_MIN_PX,
+    )
+    // And the row fits inside the chart grid's content column, so it is never the reason a
+    // window that fits the 2×2 grid cannot fit this page.
+    expect(STATEMENTS_MIN_PX + SOURCES_PX + GAP_PX).toBeLessThanOrEqual(
+      GRID_CONTENT_BREAKPOINT_PX - 200,
+    )
   })
 })

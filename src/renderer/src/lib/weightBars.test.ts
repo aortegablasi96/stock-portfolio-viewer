@@ -4,14 +4,7 @@ import {
   WEIGHT_BAR_MIN_FILL,
   weightBarFill,
   weightBarScale,
-  weightBars,
 } from './weightBars'
-
-const slice = (conid: number, symbol: string, weight: number): { conid: number; symbol: string; weight: number } => ({
-  conid,
-  symbol,
-  weight,
-})
 
 describe('weightBarScale', () => {
   it('is the set’s own maximum where that maximum is meaningful', () => {
@@ -53,38 +46,30 @@ describe('weightBarFill', () => {
   })
 })
 
-describe('weightBars', () => {
-  it('orders largest first and scales every bar against the same maximum', () => {
-    const bars = weightBars([
-      slice(1, 'AAPL', 0.2),
-      slice(2, 'MSFT', 0.5),
-      slice(3, 'NVDA', 0.3),
-    ])
-
-    expect(bars.map((b) => b.symbol)).toEqual(['MSFT', 'NVDA', 'AAPL'])
-    expect(bars.map((b) => b.fill)).toEqual([100, 60, 40])
-  })
-
-  it('leaves the reported weights untouched — only the drawing is rescaled', () => {
-    const bars = weightBars([slice(1, 'AAPL', 0.04), slice(2, 'MSFT', 0.02)])
-
-    expect(bars.map((b) => b.weight)).toEqual([0.04, 0.02])
-  })
-
+/**
+ * The two edge cases DDR-0062 states, over the pair of functions the holdings table calls.
+ *
+ * They were asserted through `weightBars()` until Story #266 retired the allocation list that
+ * needed a whole ordered set. The rule they exercise is unchanged, and it is the rule rather
+ * than the removed helper that a later story could break.
+ */
+describe('one column of bars, scaled together', () => {
   it('draws a single holding’s full weight as a full bar, because it is the whole portfolio', () => {
-    expect(weightBars([slice(1, 'AAPL', 1)])).toEqual([
-      { conid: 1, symbol: 'AAPL', weight: 1, fill: 100 },
-    ])
+    const weights = [1]
+    expect(weightBarFill(1, weightBarScale(weights))).toBe(100)
   })
 
   it('degrades for a portfolio whose largest weight is tiny, rather than pinning it full', () => {
-    const bars = weightBars([slice(1, 'AAPL', 0.04), slice(2, 'MSFT', 0.02)])
+    const weights = [0.04, 0.02]
+    const scale = weightBarScale(weights)
 
     // 0.04 / 0.25 → 16% of the track, not 100%.
-    expect(bars.map((b) => b.fill)).toEqual([16, 8])
+    expect(weights.map((w) => weightBarFill(w, scale))).toEqual([16, 8])
   })
 
-  it('renders an empty allocation as no bars at all', () => {
-    expect(weightBars([])).toEqual([])
+  it('scales every row against the same maximum, whatever order they are drawn in', () => {
+    const scale = weightBarScale([0.2, 0.5, 0.3])
+
+    expect([0.2, 0.5, 0.3].map((w) => weightBarFill(w, scale))).toEqual([40, 100, 60])
   })
 })
