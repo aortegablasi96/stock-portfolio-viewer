@@ -4,7 +4,6 @@ import {
   ANIMATED_CLASS,
   COLLAPSED_CLASS,
   SIDEBAR_TOGGLE_LABELS,
-  collapsedTitle,
   shellClassName,
   sidebarClassName,
   sidebarToggleLabel,
@@ -167,10 +166,16 @@ describe('a collapsed row keeps its name', () => {
     expect(APP).not.toMatch(/role="tab"[\s\S]{0,600}aria-label=/)
   })
 
-  it('adds the tooltip only while the label is clipped', () => {
-    expect(collapsedTitle(true, 'Performance')).toBe('Performance')
-    expect(collapsedTitle(false, 'Performance')).toBeUndefined()
-    expect(APP).toMatch(/title=\{collapsedTitle\(collapsed, t\.label\)\}/)
+  it('keeps the tooltip an addition rather than the mechanism', () => {
+    // The row's title carried the label alone, and only while that label was clipped — a tooltip
+    // repeating text legible beside it says nothing. Story #254 gave it something the sidebar
+    // cannot otherwise state, so it is a row's title in both states now and it is built by
+    // `lib/viewShortcut.ts` (DDR-0083 amends DDR-0057). What must not change is that the row is
+    // still named by its own label: a `title` is only consulted for an accessible name when an
+    // element has no content to take one from, and the label is clipped rather than removed.
+    expect(APP).toMatch(/title=\{navRowTitle\(t\.label, index, navigator\.userAgent\)\}/)
+    expect(APP).not.toMatch(/collapsedTitle/)
+    expect(rule('.app-collapsed .app-tab-label')).toBeUndefined()
   })
 })
 

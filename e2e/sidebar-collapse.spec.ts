@@ -18,8 +18,8 @@ const mainEntry = join(__dirname, '..', 'out', 'main', 'index.js')
  * Collapsing the sidebar to its icon rail (Story #184, DDR-0057).
  *
  * Everything here needs a real browser and most of it needs a real *launch*: a computed width, an
- * accessible name computed from clipped text, a `title` that is present in one state and absent in
- * the other, and a preference that has to survive the process ending. None of that is reachable
+ * accessible name computed from clipped text, a `title` that says something other than that name,
+ * and a preference that has to survive the process ending. None of that is reachable
  * from Vitest, which runs in Node with no jsdom (DDR-0029) — `lib/sidebarCollapse.test.ts` guards
  * the decisions, and this guards the behaviour.
  *
@@ -210,14 +210,17 @@ test.describe('within one launch', () => {
 
     // The names are computed from the tabs' own text, which is clipped rather than removed. If it
     // were `display: none` these five lookups would find nothing, and `title` would be doing work
-    // it is not allowed to do.
+    // it is not allowed to do — and since Story #254 that is sharper than it was, because the
+    // title is no longer the same string as the name.
     for (const name of ['Portfolio', 'Performance', 'Allocation', 'Dividends', 'Trades']) {
       await expect(page.getByRole('tab', { name, exact: true })).toBeVisible()
     }
-    // The tooltip is an addition, and only while the label is invisible.
+    // The tooltip is an addition, in both states now: it states the row's name *and* the
+    // accelerator that reaches it, which is the one thing the sidebar cannot otherwise say
+    // (DDR-0083 amends DDR-0057).
     await expect(page.getByRole('tab', { name: 'Performance' })).toHaveAttribute(
       'title',
-      'Performance',
+      'Performance (Ctrl+2)',
     )
 
     // And the currency select is still named by its own label, which is clipped the same way.
@@ -225,7 +228,11 @@ test.describe('within one launch', () => {
 
     await toggle(page, true).click()
     await expect.poll(() => sidebarWidth(page)).toBe(220)
-    await expect(page.getByRole('tab', { name: 'Performance' })).not.toHaveAttribute('title', /.*/)
+    // Still there expanded, and still not the name.
+    await expect(page.getByRole('tab', { name: 'Performance' })).toHaveAttribute(
+      'title',
+      'Performance (Ctrl+2)',
+    )
   })
 
   test('selecting a view while collapsed does not force the sidebar back open', async () => {

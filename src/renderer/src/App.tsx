@@ -15,8 +15,8 @@ import {
   TradesIcon,
 } from './components/TabIcons'
 import { nextTabIndex } from './lib/tabKeyboard'
-import { isTextEntry, viewShortcutHint, viewShortcutIndex, viewShortcutKeys } from './lib/viewShortcut'
-import { collapsedTitle, shellClassName, sidebarClassName } from './lib/sidebarCollapse'
+import { isTextEntry, navRowTitle, viewShortcutIndex, viewShortcutKeys } from './lib/viewShortcut'
+import { shellClassName, sidebarClassName } from './lib/sidebarCollapse'
 import type { GatewayReading } from './lib/gatewayStatus'
 
 /**
@@ -76,8 +76,9 @@ import type { GatewayReading } from './lib/gatewayStatus'
  * without animating until a frame has passed; and the flag is set once, on the root element, so
  * nothing in the rail takes a `collapsed` prop and no view below knows the sidebar moved.
  *
- * **Story #254 adds a second way into that list** (DDR-0083): `Ctrl`/`Cmd` and the digit drawn
- * beside a view's name select it from anywhere, without first walking focus back to the rail.
+ * **Story #254 adds a second way into that list** (DDR-0083): `Ctrl`/`Cmd` and a view's own digit
+ * select it from anywhere, without first walking focus back to the rail. The binding is written on
+ * screen in one place only — each row's `title` — and announced through `aria-keyshortcuts`.
  * It is an addition to the tabs pattern, not a change to it — the tablist's own keys, its roving
  * `tabindex` and its automatic activation are untouched, and `nextTabIndex` still declines every
  * key it does not own. Two consequences live here: the listener is on `window` rather than on the
@@ -352,17 +353,20 @@ export function App(): React.JSX.Element {
                   // exactly the broken promise this story is about.
                   aria-controls={isActive ? panelDomId(t.id) : undefined}
                   aria-selected={isActive}
-                  // The binding, in the attribute the platform has for it (Story #254). The hint
-                  // below is drawn for a sighted reader; this is the same fact for a reader who is
-                  // listening, and it is why the accelerator does not need a legend somewhere else.
+                  // The binding, in the attribute the platform has for it (Story #254). The
+                  // tooltip states it for a sighted reader; this is the same fact for a reader who
+                  // is listening, and neither is the row's name.
                   aria-keyshortcuts={viewShortcutKeys(index)}
                   // Roving tabindex: the tablist is one stop in the Tab order, and Tab from the
                   // selected tab moves on into its panel rather than along the other four.
                   tabIndex={isActive ? 0 : -1}
                   className={`app-tab ${isActive ? 'app-tab-active' : ''}`}
-                  // An addition, never the mechanism: the row's accessible name is still the
-                  // label below, which is clipped rather than removed when the rail collapses.
-                  title={collapsedTitle(collapsed, t.label)}
+                  // The row's name, and the accelerator that reaches it — the one place the
+                  // binding is written on screen (Story #254). An addition, never the mechanism:
+                  // the accessible name is still the label below, which is clipped rather than
+                  // removed when the rail collapses, and a `title` is only consulted for a name
+                  // when an element has no content to take one from (DDR-0057, DDR-0083).
+                  title={navRowTitle(t.label, index, navigator.userAgent)}
                   onClick={() => select(t.id)}
                 >
                   {/* Icon first, label second. The label is wrapped only so the collapsed rail
@@ -370,14 +374,6 @@ export function App(): React.JSX.Element {
                       tab's `textContent` is still exactly its name. */}
                   <Icon />
                   <span className="app-tab-label">{t.label}</span>
-                  {/* The digit that reaches this row, drawn where it is read: beside the name it
-                      belongs to, so nothing has to be inferred from the row's position. It is
-                      `aria-hidden` for the reason the icon is — the row's accessible name is still
-                      the label alone, and `aria-keyshortcuts` above is how a reader who is
-                      listening is told the same thing (DDR-0083). */}
-                  <span className="app-tab-key" aria-hidden="true">
-                    {viewShortcutHint(index)}
-                  </span>
                 </button>
               )
             })}

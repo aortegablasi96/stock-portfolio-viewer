@@ -1,4 +1,4 @@
-# 0083. A view accelerator beside the tabs pattern, and the digit it draws
+# 0083. A view accelerator beside the tabs pattern, disclosed in the row's tooltip
 
 - **Status:** Accepted
 
@@ -59,8 +59,8 @@ sides in one test rather than assumed.
 
 Reading `code` is not incidental. `event.key` is the *layout's* answer, and on AZERTY the unshifted
 top row is `&`, `é`, `"`, `'`, `(` — a binding read off `key` would simply not exist on that
-keyboard. `code` is the position, which is what a reader pressing the digit printed beside the view's
-name actually strikes. The numpad is the same digit under a different code and is accepted too.
+keyboard. `code` is the position, which is what a reader told "Ctrl and the row's number"
+actually strikes. The numpad is the same digit under a different code and is accepted too.
 
 ### Focus lands on the destination row, deliberately
 
@@ -73,51 +73,51 @@ arrowing lands: on the destination tab, one Tab from its panel.
 ### The accelerator does not fire while text is being entered
 
 With focus in a `Field`, `Select`, `DateInput` ([[0035-field-and-form-control-primitives]]) or
-anything editable, the keystroke is the control's. This is Epic #253's standing rule, adopted as **the rule
-and not the collision**: today's binding carries a modifier and so collides with none of the three.
-It is implemented anyway because the rule is what survives a future story changing the binding, and a
-bare digit would collide with all three at once. `isContentEditable` rather than the attribute, so an
+anything editable, the keystroke is the control's. This is Epic #253's standing rule, adopted as
+**the rule and not the collision**: today's binding carries a modifier and so collides with none
+of the three. It is implemented anyway because the rule is what survives a future story changing
+the binding, and a bare digit would collide with all three at once. `isContentEditable` rather than the attribute, so an
 element *inside* an editable host is caught as well as the host.
 
 Its cost is stated: `Ctrl`+3 with the cursor in the display-currency field does nothing. That is the
 rule choosing the control, and it is the choice the Epic makes.
 
-### The binding is drawn on the row it reaches
+### The binding is written in the row's tooltip, and nowhere else on screen
 
-A hint is required to exist and its placement was open. It is the digit itself, at the trailing edge
-of each nav row — not a tooltip, because a sighted keyboard user never hovers, and not a legend under
-"Views", because a legend states a range and leaves the reader to infer which row is which.
+A hint is required to exist and its placement was open. Each nav row's `title` becomes
+`Portfolio (Ctrl+1)`.
 
-Two properties make it cheap:
+That amends [[0057-sidebar-collapse-and-the-frameless-corner]], which gave a row a `title` **only
+while its label was clipped** — because a tooltip repeating text legible beside it says nothing.
+That reasoning is untouched, and it is exactly why the tooltip may now stand in both states: it no
+longer repeats the label, it adds the one thing the sidebar cannot otherwise state.
 
-- **It carries no ink of its own.** Like `.app-tab-icon`, it inherits `currentColor` and follows the
-  row through muted → text → accent. It is therefore rendered in exactly the ink the label beside it
-  already wears, on exactly the same ground, and adds **nothing to `lib/contrast.ts`** — a tone
-  picked here would have needed measuring three times over: at rest on `--card`, on the hover's
-  `--text` lift, and on the active row's `--accent` wash
-  ([[0064-toned-badges-and-the-income-key]]). Subordination is by **size** instead: `--text-2xs`,
-  the scale's smallest step.
-- **It is `aria-hidden`,** for the reason the icon is. The row's accessible name is still the label
-  alone, and `aria-keyshortcuts="Control+N Meta+N"` carries the same fact to a reader who is
-  listening — the attribute the platform has for exactly this, and the reason the binding needs no
-  legend elsewhere.
+It remains **an addition, never the mechanism**. A `title` is consulted for an accessible name only
+where an element has no content to take one from, and the label is content — clipped rather than
+removed on the rail, so the row is still named by its own text in both states. The e2e assertion
+that all five rows are reachable by name is *sharper* than it was, because the title is no longer
+the same string as the name.
 
-On the 56px rail the hint is **removed** (`display: none`), which is the one place in the sidebar
-where that is right. The clip rule exists so a collapsed row keeps its accessible *name*
-([[0057-sidebar-collapse-and-the-frameless-corner]]); the hint has no name to keep,
-`aria-keyshortcuts` is width-independent, and a clipped-but-in-flow element would push the centred
-icon off centre.
+`aria-keyshortcuts="Control+N Meta+N"` carries the same fact to a reader who is listening — the
+attribute the platform has for exactly this. The tooltip names **one** modifier, chosen from the
+platform, because a tooltip is read rather than parsed and "Ctrl+1 / Cmd+1" states a choice the
+reader does not have. The platform is a *parameter* of `shortcutLabel` rather than a `navigator`
+read inside it, so the function stays pure and one Node test asks it both questions; `App.tsx`
+holds the app's only `navigator` read.
 
-### `textContent` is no longer the row's name; the accessible name still is
+### A drawn digit was built, seen, and withdrawn
 
-The row was one text node, so its `textContent` and its accessible name were the same string, and
-four e2e assertions across three specs were written against the easier of the two. The drawn digit
-ends that: `textContent` is now `Portfolio1`.
+The first implementation drew the digit itself at the trailing edge of each row — `currentColor`
+like `.app-tab-icon`, `aria-hidden`, `--text-2xs`, removed rather than clipped on the rail. It
+worked and it cost `lib/contrast.ts` nothing, and it was **withdrawn on the owner's call** after
+being seen in the running app: five persistent digits are permanent weight in the app's primary
+navigation, spent on something a reader learns once.
 
-The property that mattered is unchanged, and those assertions now test **it** —
-`toHaveAccessibleName` in `tab-navigation.spec.ts`, `reduced-motion.spec.ts` and
-`sidebar-collapse.spec.ts`. The convenience is gone; the invariant is stronger than it was, because
-it is now asserted directly rather than through a coincidence.
+The withdrawal takes a real cost back with it. A row is one text node again, so its `textContent`
+and its accessible name are the same string — the property `.app-tab` has carried since Story #184.
+The four e2e assertions that briefly had to move off `textContent` keep `toHaveAccessibleName`
+anyway: that is what they always meant, and asserting it directly rather than through a coincidence
+costs nothing.
 
 ## Consequences
 
@@ -126,20 +126,22 @@ Benefits:
 * The app's most frequent action is one keystroke from anywhere, with no prior focus move.
 * It selects **exactly** its destination: a first jump to an analytics view mounts that view and no
   other, where arrowing across the list mounts every view it crosses.
-* No new IPC channel, service, repository, table or dependency. One pure module, one `useEffect`, one
-  CSS rule and a span.
-* No new contrast pairing and no new token — `--text-2xs` and the row's own ink.
-* Four e2e assertions moved off `textContent` and onto the accessible name.
+* No new IPC channel, service, repository, table or dependency. One pure module, one `useEffect`
+  and two attributes.
+* Nothing is added to the sidebar's layout, ink or type: the disclosure is an attribute, so
+  `app.css` is untouched and there is no new contrast pairing and no new token.
+* A row's `textContent` is still exactly its accessible name, and four e2e assertions now say so
+  directly rather than relying on the two being the same string.
 
 Tradeoffs:
 
-* **`textContent` no longer equals the row's name**, above. A future assertion written the old way
-  passes with `Portfolio1` in it, which reads as a typo rather than as a rule.
+* **A tooltip is discoverable only by hovering.** A reader who never reaches for the pointer learns
+  the binding from `aria-keyshortcuts` or not at all. That is the accepted cost of leaving the
+  sidebar unweighted, and it is why `aria-keyshortcuts` is not optional here.
 * **The accelerator is inert inside a text control**, above. The rule is Epic #253's and outlives
   today's binding.
-* A fifth thing now shares the nav row's width. Measured against DDR-0075's numbers: a row leaves
-  152.8px, "Performance" advances 89.35px, and the digit plus its gap is ~18px — so the label was not
-  the binding constraint before and is not now. A sixth view, or a longer name, re-opens that.
+* Four of the five rows previously showed no tooltip at all when expanded. Every row shows one now,
+  which is new furniture for a pointer user who wanted none.
 * The listener is on `window`, so it is live whenever the app is. That is the feature; it is also why
   the text-entry guard is asked *before* the key is examined.
 
@@ -164,38 +166,41 @@ story adds — the exact shadowing Epic #253 rules out.
 
 Rejected above. It buys reach the renderer already has, at the price of a channel.
 
-### The hint as a tooltip on the row
+### A digit drawn on each row
 
-`title` is already the collapsed rail's mechanism and would have cost nothing to extend. Rejected
-because a tooltip is discoverable only by hovering, and the reader this story is for is not using a
-pointer.
+Built and reviewed on screen before being withdrawn, above. It is the strongest disclosure — nothing
+to hover for and nothing to infer — and it is the only option that puts permanent weight into the
+app's primary navigation to state something a reader learns once.
 
-### The hint as a legend under "Views"
+### No disclosure at all, only `aria-keyshortcuts`
 
-One line — "Ctrl 1–5" — stating the whole binding in one place, touching no row and leaving
-`textContent` intact. Genuinely cheaper, and rejected on what it asks of the reader: it states a
-range and leaves which digit reaches which row to be inferred from position. The digit belongs beside
-the name it selects.
+The lightest possible sidebar. Rejected because Story #254 requires the binding to be discoverable
+from inside the app, and an attribute that only a screen reader surfaces does not reach the reader
+the accelerator was built for.
+
+### A legend under "Views"
+
+One line — "Ctrl 1–5" — stating the whole binding in one place and touching no row. Rejected on what
+it asks of the reader: it states a range and leaves which digit reaches which row to be inferred
+from position, where a tooltip answers for the row under the pointer.
 
 ### Manual activation for the tablist, so arrowing stops mounting views
 
 Would remove the accelerator's *reason* rather than the accelerator. Out of scope by construction:
-automatic activation is [[0029-tab-shell-aria-pattern-and-keyboard-navigation]]'s decision, and the APG's caveat does
-not bite here — every view paints its own loading or empty state immediately.
+automatic activation is [[0029-tab-shell-aria-pattern-and-keyboard-navigation]]'s decision, and
+the APG's caveat does not bite here — every view paints its own loading or empty state immediately.
 
 ## References
 
-* [[0029-tab-shell-aria-pattern-and-keyboard-navigation]] — the tabs pattern this extends and does not alter.
-* [[0055-vertical-sidebar-tablist]] / [[0057-sidebar-collapse-and-the-frameless-corner]] / [[0068-sidebar-toggle-beside-the-app-name]] —
-  the sidebar, the rail, and the head row none of this moves.
-* [[0027-analytics-views-persist-and-explicit-refresh]] — why arrowing past a tab mounts it, and what a direct jump
-  therefore saves.
+* [[0029-tab-shell-aria-pattern-and-keyboard-navigation]] — the tabs pattern this extends and
+  does not alter.
+* [[0057-sidebar-collapse-and-the-frameless-corner]] — the rail, and the tooltip rule this amends.
+* [[0055-vertical-sidebar-tablist]] / [[0068-sidebar-toggle-beside-the-app-name]] — the sidebar and
+  the head row, neither of which this moves.
+* [[0027-analytics-views-persist-and-explicit-refresh]] — why arrowing past a tab mounts it, and
+  what a direct jump therefore saves.
 * [[0035-field-and-form-control-primitives]] — the three controls the accelerator must not shadow.
 * [[0011-custom-frameless-window-shell]] — why there is no menu bar to hang an accelerator from.
-* [[0064-toned-badges-and-the-income-key]] — the three grounds a picked tone would have had to be measured
-  on, and the reason `currentColor` avoids all three.
-* [[0053-bundled-typefaces-and-the-figure-role]] — why the digit is deliberately *not* in the figure role: it is the name of a
-  key, not a quantity.
 * `renderer/src/lib/viewShortcut.ts`, `renderer/src/lib/tabKeyboard.ts` — the two predicates, and the
   arithmetic they leave alone.
 * `e2e/view-shortcuts.spec.ts` — its own app instance, so "the views it passed over were never

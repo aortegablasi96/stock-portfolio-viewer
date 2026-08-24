@@ -5,7 +5,13 @@
  * by one class on the app's root element and everything else follows in CSS: the brand keeps its
  * name, the badge keeps its wording, the tabs keep their labels, and each of those is *clipped*
  * rather than removed. Nothing in the rail takes a `collapsed` prop, which is why this module is
- * three functions and a wording pair rather than a state machine.
+ * two functions and a wording pair rather than a state machine.
+ *
+ * A nav row's tooltip used to live here too, as `collapsedTitle` — a `title` carrying the row's own
+ * label, and only while that label was clipped, because a tooltip repeating text legible beside it
+ * says nothing. Story #254 gave the tooltip something the sidebar cannot otherwise state (the
+ * accelerator that reaches the row), so it is a row's title in *both* states now and it moved to
+ * `lib/viewShortcut.ts`, which owns the binding it discloses (DDR-0083 amends DDR-0057).
  *
  * It lives here for the reason every other bit of renderer logic does: Vitest runs Node-only, so
  * nothing inside a component is testable (DDR-0029). What is worth testing is exactly the part
@@ -48,15 +54,4 @@ export function shellClassName(collapsed: boolean): string {
 /** The sidebar's own classes. See {@link ANIMATED_CLASS} for why the transition arrives late. */
 export function sidebarClassName(animated: boolean): string {
   return animated ? `app-sidebar ${ANIMATED_CLASS}` : 'app-sidebar'
-}
-
-/**
- * A nav row's tooltip: its own label, and only while the label is clipped.
- *
- * An addition, never the mechanism — the row's accessible name is still the label text itself,
- * which stays in the accessibility tree. A `title` on an expanded row would repeat what is
- * already legible beside it.
- */
-export function collapsedTitle(collapsed: boolean, label: string): string | undefined {
-  return collapsed ? label : undefined
 }

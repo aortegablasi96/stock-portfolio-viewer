@@ -38,8 +38,8 @@ export interface ShortcutTarget {
  *
  * `event.key` is the layout's answer and it is the wrong one for an accelerator: on AZERTY the
  * unshifted top row is `&`, `é`, `"`, `'`, `(`, so a binding read off `key` would simply not exist
- * on that keyboard. `code` is the position, which is what a reader who is told "Ctrl and the
- * number beside the view" actually presses. The numpad is the same digit under a different code.
+ * on that keyboard. `code` is the position, which is what a reader who is told "Ctrl and the row's
+ * number" actually presses. The numpad is the same digit under a different code.
  */
 const DIGIT_CODE = /^(?:Digit|Numpad)([1-9])$/
 
@@ -50,12 +50,41 @@ const DIGIT_CODE = /^(?:Digit|Numpad)([1-9])$/
  * of alternatives: `Control` is the binding on Windows and Linux, `Meta` the same gesture on macOS.
  */
 export function viewShortcutKeys(index: number): string {
-  const digit = viewShortcutHint(index)
+  const digit = viewShortcutDigit(index)
   return `Control+${digit} Meta+${digit}`
 }
 
-/** The digit drawn beside a view's name, and pressed with the modifier. Rows are 1-based. */
-export function viewShortcutHint(index: number): string {
+/**
+ * The binding as a reader would say it, for the one place it is written out in prose.
+ *
+ * Unlike {@link viewShortcutKeys} this names **one** modifier, because a tooltip is read rather
+ * than parsed and "Ctrl+1 / Cmd+1" states a choice the reader does not have to make — only one of
+ * the two is on the keyboard in front of them. The platform string is a parameter rather than a
+ * `navigator` read, so this stays a pure function a Node test can ask both questions of.
+ */
+export function shortcutLabel(index: number, platform: string): string {
+  const modifier = /mac|iphone|ipad/i.test(platform) ? 'Cmd' : 'Ctrl'
+  return `${modifier}+${viewShortcutDigit(index)}`
+}
+
+/**
+ * A nav row's tooltip: its name, and the accelerator that reaches it (Story #254, DDR-0083).
+ *
+ * This is the **only** place the binding is written on screen, and it is why the row now carries a
+ * `title` in both states where DDR-0057 gave it one only while the label was clipped. That rule's
+ * reason was that a tooltip repeating the label beside it says nothing; this one does not repeat
+ * the label, it adds the thing the sidebar cannot otherwise state.
+ *
+ * It remains **an addition, never the mechanism**: the row is named by its own label text, which is
+ * clipped rather than removed on the rail, and a `title` is only consulted for an accessible name
+ * when an element has no content to take one from.
+ */
+export function navRowTitle(label: string, index: number, platform: string): string {
+  return `${label} (${shortcutLabel(index, platform)})`
+}
+
+/** The digit that reaches a view, pressed with the modifier. Rows are 1-based. */
+export function viewShortcutDigit(index: number): string {
   return String(index + 1)
 }
 

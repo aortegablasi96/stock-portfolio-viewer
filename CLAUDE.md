@@ -245,10 +245,9 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
   own text. The toggle shares the head row with the app name, which **wraps** to fit it — never
   re-ellipsise it, and never widen the column (DDR-0068). An accelerator sits **beside** the
   pattern, never in it (DDR-0083): `Ctrl`/`Cmd`+`1`–`5` on a `window` listener in `App.tsx`.
-  Neither handler checks for the other: they read different properties — the tablist `key`,
-  the accelerator `code`. It **declines while text is being entered**, and its drawn digit is
-  `aria-hidden` but *is* in the DOM,
-  so a tab's `textContent` is **no longer its accessible name** — assert `toHaveAccessibleName`.
+  Neither handler checks for the other: they read different properties, `key` vs `code`. It **declines while text is being entered**, and it is disclosed by an
+  *attribute*: each row's `title` (amending DDR-0057) plus `aria-keyshortcuts`. A drawn digit per
+  row was built and **withdrawn** — don't re-propose it.
 - **An analytics tab mounts on first visit and then stays mounted**, hidden rather than unmounted,
   so view-local state survives; unvisited tabs issue no IPC (DDR-0006, DDR-0027). The consequence:
   a mounted view can go stale, so both Flex write paths bump `lib/dataVersion` and every
@@ -261,7 +260,7 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
   row is **absent, not empty**, where there is nothing to refresh. `lib/analyticsShell.ts` holds
   the branch mapping; its test fails if a view re-declares the guard, wrapper, or header.
 - **Charts are dependency-free inline SVG** sized by **aspect ratio, never a pixel width**
-  (DDR-0018), because an axis label is 11 *viewBox units* — halving the column halves the label.
+  (DDR-0018): an axis label is 11 *viewBox units*, so halving the column halves the label.
   Performance's four charts share one geometry (`lib/chartGeometry`), and both grid breakpoints
   derive from **one** number (`GRID_CONTENT_BREAKPOINT_PX`, 1200) with the sidebar width as a
   defaulted parameter, so neither can be tuned alone. Don't "restore" the old breakpoint by

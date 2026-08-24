@@ -117,16 +117,23 @@ test('a digit past the last view selects nothing', async () => {
   expect(await focusedId()).toBe('tab-portfolio')
 })
 
-test('the binding is on screen and in the accessibility tree, and is not the row’s name', async () => {
+test('the binding is on screen and in the accessibility tree, and is neither the row’s name', async () => {
   const rows = await page.evaluate(() =>
     [...document.querySelectorAll('[role="tab"]')].map((tab) => ({
       shortcut: tab.getAttribute('aria-keyshortcuts'),
-      hint: tab.querySelector('.app-tab-key')?.textContent,
-      hidden: tab.querySelector('.app-tab-key')?.getAttribute('aria-hidden'),
+      title: tab.getAttribute('title'),
       label: tab.querySelector('.app-tab-label')?.textContent,
     })),
   )
-  expect(rows.map((r) => r.hint)).toEqual(['1', '2', '3', '4', '5'])
+  // Written once, in the row's tooltip — the only place the binding appears on screen. The digits
+  // were drawn beside each name for one round and withdrawn (DDR-0083); nothing renders one now.
+  expect(rows.map((r) => r.title)).toEqual([
+    'Portfolio (Ctrl+1)',
+    'Performance (Ctrl+2)',
+    'Allocation (Ctrl+3)',
+    'Dividends (Ctrl+4)',
+    'Trades (Ctrl+5)',
+  ])
   expect(rows.map((r) => r.shortcut)).toEqual([
     'Control+1 Meta+1',
     'Control+2 Meta+2',
@@ -134,46 +141,24 @@ test('the binding is on screen and in the accessibility tree, and is not the row
     'Control+4 Meta+4',
     'Control+5 Meta+5',
   ])
-  expect(rows.every((r) => r.hidden === 'true')).toBe(true)
+  await expect(page.locator('.app-tab-key')).toHaveCount(0)
 
-  // The drawn digit is not part of what a screen reader is told the row is called: the accessible
-  // name is still the label alone, which is what `aria-hidden` above buys.
+  // And neither statement is the row's name: a `title` is only consulted for an accessible name
+  // when an element has no content to take one from, and the label is content.
   for (const { label } of rows) {
     await expect(page.getByRole('tab', { name: label!, exact: true })).toHaveCount(1)
   }
 })
 
-test('the hint renders in the row’s own ink, so it introduces no tone to measure', async () => {
-  // `currentColor` by omission (DDR-0064): whatever the row is wearing, the digit is wearing, on
-  // exactly the ground the label beside it is on — at rest and on the selected row alike.
-  const inks = await page.evaluate(() => {
-    const active = document.querySelector('.app-tab-active')
-    const resting = document.querySelector('.app-tab:not(.app-tab-active)')
-    const read = (row: Element | null) => ({
-      row: row ? getComputedStyle(row).color : null,
-      hint: row ? getComputedStyle(row.querySelector('.app-tab-key')!).color : null,
-      size: row ? getComputedStyle(row.querySelector('.app-tab-key')!).fontSize : null,
-      label: row ? getComputedStyle(row.querySelector('.app-tab-label')!).fontSize : null,
-    })
-    return { active: read(active), resting: read(resting) }
-  })
-  expect(inks.active.hint).toBe(inks.active.row)
-  expect(inks.resting.hint).toBe(inks.resting.row)
-  expect(inks.active.hint).not.toBe(inks.resting.hint)
-  // Subordinated by size instead — the scale's smallest step, under the label's own.
-  expect(parseFloat(inks.resting.size!)).toBeLessThan(parseFloat(inks.resting.label!))
-})
-
-test('the collapsed rail drops the hint and keeps the binding', async () => {
+test('the collapsed rail keeps the tooltip, and the accelerator with it', async () => {
   await page.getByRole('button', { name: 'Collapse sidebar' }).click()
-  await expect(page.locator('.app-tab-key').first()).toBeHidden()
-  // The label is still clipped rather than removed, so the row is still named — and the binding
-  // is still announced, which is what makes removing the drawn hint free.
-  await expect(page.getByRole('tab', { name: 'Portfolio', exact: true })).toHaveCount(1)
-  await expect(page.getByRole('tab', { name: 'Portfolio', exact: true })).toHaveAttribute(
-    'aria-keyshortcuts',
-    'Control+1 Meta+1',
-  )
+
+  // The label is clipped rather than removed, so the row is still named by its own text — and the
+  // tooltip, which is now the reader's only visible text on the rail, states the name and the key.
+  const portfolio = page.getByRole('tab', { name: 'Portfolio', exact: true })
+  await expect(portfolio).toHaveCount(1)
+  await expect(portfolio).toHaveAttribute('title', 'Portfolio (Ctrl+1)')
+  await expect(portfolio).toHaveAttribute('aria-keyshortcuts', 'Control+1 Meta+1')
 
   // And it still switches view from the rail.
   await page.locator('#panel-portfolio').focus()
@@ -181,5 +166,5 @@ test('the collapsed rail drops the hint and keeps the binding', async () => {
   await expect(page.getByRole('tab', { selected: true })).toHaveAttribute('id', 'tab-allocation')
 
   await page.getByRole('button', { name: 'Expand sidebar' }).click()
-  await expect(page.locator('.app-tab-key').first()).toBeVisible()
+  await expect(page.locator('.app-sidebar')).toHaveCSS('width', '220px')
 })

@@ -3,7 +3,9 @@ import { join } from 'node:path'
 import { describe, it, expect } from 'vitest'
 import {
   isTextEntry,
-  viewShortcutHint,
+  navRowTitle,
+  shortcutLabel,
+  viewShortcutDigit,
   viewShortcutIndex,
   viewShortcutKeys,
   type ShortcutEvent,
@@ -16,19 +18,17 @@ const COUNT = 5
 const APP = readFileSync(join(__dirname, '..', 'App.tsx'), 'utf8')
 const CSS = readFileSync(join(__dirname, '..', 'app.css'), 'utf8')
 
+/** The two platform strings the tooltip's modifier turns on. */
+const WINDOWS = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+const MACOS = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'
+
 /** A `keydown` with nothing held, so each case states only the part it is about. */
 function press(code: string, held: Partial<ShortcutEvent> = {}): ShortcutEvent {
   return { code, ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, ...held }
 }
 
-/** One rule's body, by exact selector. */
-function rule(selector: string): string | undefined {
-  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  return CSS.match(new RegExp(`\\n${escaped}\\s*\\{([^}]*)\\}`))?.[1]
-}
-
 describe('viewShortcutIndex', () => {
-  it('maps Ctrl and a digit to the view drawn beside it', () => {
+  it('maps Ctrl and a digit to the view that digit names', () => {
     expect(viewShortcutIndex(press('Digit1', { ctrlKey: true }), COUNT)).toBe(0)
     expect(viewShortcutIndex(press('Digit5', { ctrlKey: true }), COUNT)).toBe(4)
   })
@@ -44,7 +44,7 @@ describe('viewShortcutIndex', () => {
   it('reads the key by position, not by the character the layout produces', () => {
     // The reason this matches `code`: on AZERTY the unshifted top row is `&`, `é`, `"`, `'`, `(`,
     // so a binding read off `event.key` would not exist at all on that keyboard. The digit a
-    // reader presses is the one printed on the key beside the view's name.
+    // reader presses is the one printed on the key in front of them.
     expect(viewShortcutIndex({ ...press('Digit2', { ctrlKey: true }), code: '2' }, COUNT)).toBeNull()
   })
 
@@ -105,9 +105,9 @@ describe('isTextEntry', () => {
   })
 })
 
-describe('the hint and the announced binding are one fact', () => {
+describe('the tooltip and the announced binding are one fact', () => {
   it('numbers the rows from one, top to bottom', () => {
-    expect([0, 1, 2, 3, 4].map(viewShortcutHint)).toEqual(['1', '2', '3', '4', '5'])
+    expect([0, 1, 2, 3, 4].map(viewShortcutDigit)).toEqual(['1', '2', '3', '4', '5'])
   })
 
   it('announces both modifiers, because both are accepted', () => {
@@ -117,10 +117,21 @@ describe('the hint and the announced binding are one fact', () => {
     expect(viewShortcutKeys(4)).toBe('Control+5 Meta+5')
   })
 
-  it('draws the digit from the same function it announces', () => {
-    // Two copies of "the fifth row is 5" is one chance for the drawn hint and the announced
-    // binding to drift apart.
-    expect(viewShortcutKeys(2)).toContain(`+${viewShortcutHint(2)}`)
+  it('writes only the modifier the reader has, because a tooltip is read rather than parsed', () => {
+    expect(shortcutLabel(0, WINDOWS)).toBe('Ctrl+1')
+    expect(shortcutLabel(0, MACOS)).toBe('Cmd+1')
+  })
+
+  it('builds the tooltip from the row name and that binding', () => {
+    expect(navRowTitle('Performance', 1, WINDOWS)).toBe('Performance (Ctrl+2)')
+    expect(navRowTitle('Trades', 4, MACOS)).toBe('Trades (Cmd+5)')
+  })
+
+  it('takes the digit from one place, so the two statements cannot drift', () => {
+    // Two copies of "the fifth row is 5" is one chance for the written binding and the announced
+    // one to disagree.
+    expect(viewShortcutKeys(2)).toContain(`+${viewShortcutDigit(2)}`)
+    expect(shortcutLabel(2, WINDOWS)).toContain(viewShortcutDigit(2))
   })
 })
 
@@ -161,10 +172,19 @@ describe('the tabs pattern is extended, not changed', () => {
   })
 })
 
-describe('the hint is drawn without becoming a second name', () => {
-  it('is aria-hidden, so the row is still named by its label alone', () => {
-    expect(APP).toMatch(/<span className="app-tab-key" aria-hidden="true">/)
-    // No `aria-label` on the tab, in either state: the name is the label text (DDR-0057).
+describe('the binding is stated without becoming a second name', () => {
+  it('lives in the row’s title, in both states, and nowhere else on screen', () => {
+    expect(APP).toMatch(/title=\{navRowTitle\(t\.label, index, navigator\.userAgent\)\}/)
+    // The digits were drawn beside each name for one round and withdrawn (DDR-0083). Nothing in
+    // the sidebar renders one now, and no rule is left behind for one.
+    expect(APP).not.toMatch(/app-tab-key/)
+    expect(CSS).not.toMatch(/app-tab-key/)
+  })
+
+  it('leaves the row named by its label alone', () => {
+    // A `title` is only consulted for an accessible name when an element has no content to take
+    // one from, so the label — clipped rather than removed on the rail — still wins.
+    expect(APP).toMatch(/<span className="app-tab-label">\{t\.label\}<\/span>\s*<\/button>/)
     expect(APP).not.toMatch(/role="tab"[\s\S]{0,900}aria-label=/)
   })
 
@@ -172,25 +192,8 @@ describe('the hint is drawn without becoming a second name', () => {
     expect(APP).toMatch(/aria-keyshortcuts=\{viewShortcutKeys\(index\)\}/)
   })
 
-  it('subordinates by size and takes no ink of its own', () => {
-    const key = rule('.app-tab-key')
-    expect(key, '.app-tab-key must exist').toBeDefined()
-    expect(key).toMatch(/font-size:\s*var\(--text-2xs\)/)
-    // `currentColor` by omission: a tone picked here would need measuring on three grounds — the
-    // card, the hover lift and the active wash — and all three are already the label's (DDR-0064).
-    expect(key).not.toMatch(/color/)
-    expect(key).not.toMatch(/background/)
-    // The focus ring is the `:where(...)` base rule's, here as everywhere.
-    expect(key).not.toMatch(/outline/)
-    // Not the figure role: this is the name of a key, not a quantity (DDR-0053).
-    expect(key).not.toMatch(/--font-figure|tabular-nums/)
-  })
-
-  it('is removed on the rail rather than clipped, unlike every label there', () => {
-    // The clip rule exists to keep an accessible *name* in the tree. The hint has none to keep,
-    // and a clipped-but-in-flow element would push the centred icon off centre.
-    expect(rule('.app-collapsed .app-tab-key')).toMatch(/display:\s*none/)
-    // And it stays out of the clip rule, which is about the four names and the nav title.
-    expect(CSS).not.toMatch(/\.app-collapsed \.app-tab-key,/)
+  it('reads the platform once, at the only place that writes the modifier', () => {
+    // `shortcutLabel` takes the platform as a parameter precisely so this is the single read.
+    expect(APP.match(/navigator\./g)).toHaveLength(1)
   })
 })
