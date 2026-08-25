@@ -2,14 +2,13 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> **Budget: keep this file under 36 KB** (`wc -c CLAUDE.md` ≤ 36864). It is loaded into every
+> **Budget: keep this file under 36 KB** (`wc -c CLAUDE.md` ≤ 36864) — it is loaded into every
 > session, so its cost is paid before any work starts.
 >
-> The failure mode is re-narrating a decision this repo already records: **every ADR and DDR is
-> 8–20 KB and carries its own reasoning**, and `docs/design-decisions/README.md` indexes all of
-> them in one line each. When a story lands, add *the trap* here in a sentence with its DDR number
-> — never the argument. If the budget is exceeded, find the paragraph that argues a case rather
-> than drop a trap.
+> Every ADR and DDR is 8–20 KB and carries its own reasoning, and
+> `docs/design-decisions/README.md` indexes each in one line. So when a story lands, add *the
+> trap* in a sentence with its DDR number — never the argument. If the budget is exceeded, cut a
+> paragraph that argues a case rather than drop a trap.
 
 ## Current Repository State
 
@@ -96,7 +95,7 @@ docs/flex-queries/  real Flex exports (parser ground truth) — gitignored
   `services/meta/metaService.test.ts` for the repository-mocking pattern.
 - **External data source** — `portfolio:getOverview`: Zod at ingress, connection state modelled as
   data (ADR-0004, DDR-0002). **Local persistence + policy** — `snapshot:*` (DDR-0003).
-  **Read-only analytics** — `analytics:*`. All three are the Domains above, as slices.
+  **Read-only analytics** — `analytics:*`. All three are the Domains above.
 - **Fire-and-forget command + state event** — the `window:*` channels. DDR-0011.
 - **Destructive action** — `flex:clear` / `snapshot:clear`: the in-place `ConfirmAction` control —
   no modal, no `window.confirm`. ADR-0006, DDR-0012.
@@ -223,12 +222,11 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
 - **The palette is navy/indigo; the eight `--series-*` slots did not move** (DDR-0054).
   `designTokens.test.ts` guards the stylesheet itself: it fails if `outline` gains a second value,
   a scale stops ascending, or a validated colour moves.
-- **A text-scanning guard must strip comments first.** This trap has now bitten five times
-  (DDR-0042, DDR-0047, DDR-0048, DDR-0058, DDR-0070) — `app.css` and the components quote their own values in
-  prose, so an assertion can pass off the commentary alone. **Its inverse is worse**: prose left
-  *outside* a comment becomes rules and the browser drops every declaration after it — every gate
-  passed with `.app-tab`'s rule dead, and only a screenshot saw it. `designTokens.test.ts` now
-  walks the delimiters (DDR-0075).
+- **A text-scanning guard must strip comments first.** Bitten five times (DDR-0042, DDR-0047,
+  DDR-0048, DDR-0058, DDR-0070) — `app.css` and the components quote their own values in prose, so
+  an assertion can pass off the commentary alone. **Its inverse is worse**: prose left *outside* a
+  comment becomes rules and the browser drops every declaration after it, which shipped `.app-tab`'s
+  rule dead past every gate. `designTokens.test.ts` now walks the delimiters (DDR-0075).
 
 ### Renderer: structure and behaviour
 
@@ -245,11 +243,17 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
   never a `collapsed` prop**, which makes "selecting a view must not reopen the column"
   unexpressible; a collapsed label is **clipped, never removed**, so a row is still named by its
   own text. The toggle shares the head row with the app name, which **wraps** to fit it — never
-  re-ellipsise it, and never widen the column (DDR-0068). An accelerator sits **beside** the
-  pattern, never in it (DDR-0083): `Ctrl`/`Cmd`+`1`–`5` on a `window` listener in `App.tsx`.
-  Neither handler checks for the other: they read different properties, `key` vs `code`. It **declines while text is being entered**, and it is disclosed by an
-  *attribute*: each row's `title` (amending DDR-0057) plus `aria-keyshortcuts`. A drawn digit per
-  row was built and **withdrawn** — don't re-propose it.
+  re-ellipsise it, and never widen the column (DDR-0068). Accelerators sit **beside** the pattern,
+  never in it — one `window` listener in `App.tsx` holds both: `Ctrl`/`Cmd`+`1`–`5` per row
+  (DDR-0083) and `Ctrl`(+`Shift`)+`Tab` rotating (DDR-0090), the latter **`Ctrl`-only**, `Shift`
+  the *direction*, reading `key` where the digits read `code`. For `Tab` both are `'Tab'`, so the
+  handlers' separation is **`nextTabIndex` declining `'Tab'`**: delete that case and plain Tab
+  rotates. `preventDefault` is load-bearing there (the default *is* a focus move); wrapping is
+  `stepIndex`, shared with the arrows. Both **decline while text is being entered**, and each is
+  disclosed at **the scope of what it acts on** — a row's `title` for its digit (amending
+  DDR-0057), the "Views" label's `title` + the tablist's `aria-keyshortcuts` for the rotation. Two
+  bindings are still not a table. A drawn digit per row was built and **withdrawn** — don't
+  re-propose it, or a legend.
 - **An analytics tab mounts on first visit and then stays mounted**, hidden rather than unmounted,
   so view-local state survives; unvisited tabs issue no IPC (DDR-0006, DDR-0027). The consequence:
   a mounted view can go stale, so both Flex write paths bump `lib/dataVersion` and every
@@ -312,19 +316,17 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
   soften by **mix, not opacity** (only a value is measurable) and stay *under* their full-strength
   edge (DDR-0076). A ribbon carries **no** palette class: a CSS `fill` beats `url(#…)` and the
   tint, hence the `<g>`.
-- **The map popup's tint is banked into its edges, and the geometry is what lets it be loud**
-  (DDR-0041): the gradient's inner stops sit at `--popup-pad-y`, an **absolute length, not a
-  percentage** (a percentage band creeps under the text of taller popups), and
-  `--popup-edge-hold` must stay **strictly below** it or the first line lands on undiluted `--pos`.
-  `--pos`/`--neg` may never be the *only* channel on a mark; a figure must accompany them
-  (DDR-0021, superseded but still governing).
+- **The map popup's tint is banked into its edges** (DDR-0041): the gradient's inner stops sit at
+  `--popup-pad-y`, an **absolute length, never a percentage** (which creeps under taller popups'
+  text), and `--popup-edge-hold` must stay **strictly below** it or the first line lands on
+  undiluted `--pos`. `--pos`/`--neg` may never be a mark's *only* channel — a figure must
+  accompany them (DDR-0021, superseded but still governing).
 - **The sidebar's gateway badge is derived, never polled** (DDR-0056) — its source is the last
   `portfolio:getOverview` result, which is why that tab is excluded from stay-mounted. The one
   `setTimeout` in `SidebarRail.tsx` is a **clock** arming the moment a live reading goes stale,
-  not an interval. `displayCurrency` is the **app's** selection, so the control is never
-  disabled, and it is a boxed chip too — its `<select>` giving up its resting
-  `border-color` and `padding-inline`, and **nothing else**, so the box is the one boundary
-  (amends DDR-0035; DDR-0075). The badge is a **boxed chip** on `--surface-raised`, one of **three**
+  not an interval. `displayCurrency` is the **app's** selection, so the control is never disabled,
+  and it is a boxed chip too — its `<select>` giving up its resting `border-color` and
+  `padding-inline`, and **nothing else** (amends DDR-0035; DDR-0075). The badge is a **boxed chip** on `--surface-raised`, one of **three**
   users (the hover card and that currency field are the others) — so every tone is measured
   **there**, not on `--card`, and `SURFACE_EDGE` is not a WCAG bar (DDR-0069).
   `sidebarRail.test.ts` **counts** its uses — a fourth adopter must measure its own inks
@@ -378,8 +380,8 @@ alternatives this table can only name.
 Node ≥22.12 (CI runs 24) · npm · Electron · React + Vite · TypeScript (renderer **and** main) ·
 SQLite via Drizzle · Zod · IBKR Client Portal Gateway · Vitest · Playwright.
 
-Runtime dependencies are deliberately few (see `package.json`; `mapbox-gl` is the Allocation
-basemap and nothing else). **Avoid adding dependencies without clear long-term value.**
+Runtime dependencies are deliberately few (`mapbox-gl` is the Allocation basemap and nothing
+else). **Avoid adding dependencies without clear long-term value.**
 
 ## Commands
 
@@ -406,10 +408,9 @@ npm run db:migrate     # apply to ./local.dev.db (dev tooling only; override wit
 npm run db:studio
 ```
 
-There is no lint-fix or aggregate `check` script. **CI** runs exactly `lint`, `typecheck`, `test` and `build`
-on every push to `main` and every PR (Node 24, Ubuntu). The Playwright suite is **intentionally
-excluded from CI** (needs a display server) — run `npm run test:e2e` locally. Run all four before
-opening a PR.
+There is no lint-fix or aggregate `check` script. **CI** runs exactly `lint`, `typecheck`, `test`
+and `build` on every push to `main` and every PR (Node 24, Ubuntu); Playwright is **intentionally
+excluded** (needs a display server). Run all four, plus `test:e2e` locally, before opening a PR.
 
 ## Testing
 
@@ -434,9 +435,8 @@ Four tiers, each stage's artifact the next stage's input; execution skills consu
 artifacts and must not redefine requirements, design, or architecture. They are
 **plain `SKILL.md` files, not `Skill`-tool skills** — nested one level deeper
 than the loader looks, so read `.claude/skills/<tier>/<name>/SKILL.md` directly; invoking one by
-name resolves nothing. **`run-app` is the exception**: it sits at the top level and *is* invocable
-(`/run-app`). It either launches the app for the owner **or** captures view screenshots, never
-both at once.
+name resolves nothing. **`run-app` is the exception**: top level and *is* invocable (`/run-app`),
+launching the app for the owner **or** capturing view screenshots, never both at once.
 
 - **workflow-skills** (planning) — `product-manager` → `ui-designer` / `architect` →
   `database-designer` → `implementation-engineer` → `testing`.
@@ -467,11 +467,10 @@ override an accepted decision.**
 ## MCP Servers
 
 `.claude/settings.local.json` enables `context7`, `filesystem`, `playwright`, `interactive-brokers`
-and `shadcn`. The
-`interactive-brokers` entry in `.mcp.json` still has a **placeholder runtime**
+and `shadcn`. The `interactive-brokers` entry in `.mcp.json` still has a **placeholder runtime**
 (`REPLACE_WITH_RUNTIME`), so enabling it does not make it functional. A connected
-`Interactive_Brokers_IBKR` MCP has read-only account/market tools allowlisted — **no
-order-placing tools**.
+`Interactive_Brokers_IBKR` MCP has read-only account/market tools allowlisted — **no order-placing
+tools**.
 
 **Prefer Context7 over model memory** for framework or library documentation. Setup notes: `docs/mcp.md`.
 
