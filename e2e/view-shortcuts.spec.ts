@@ -168,3 +168,106 @@ test('the collapsed rail keeps the tooltip, and the accelerator with it', async 
   await page.getByRole('button', { name: 'Expand sidebar' }).click()
   await expect(page.locator('.app-sidebar')).toHaveCSS('width', '220px')
 })
+
+/**
+ * The rotation: `Ctrl`+`Tab` to the next view, `Ctrl`+`Shift`+`Tab` to the previous (Story #259,
+ * DDR-0090).
+ *
+ * Here rather than in a file of its own, because it shares the listener, the text-entry guard and
+ * the landing spot with the accelerator above — and because the one assertion that needed a
+ * pristine app (the first test in this file) has already been spent. What is only provable here is
+ * everything about a real `Tab` arriving at a real window: that the app takes it, that
+ * `preventDefault` holds the focus move, and that plain `Tab` still hands off to the panel.
+ */
+/** The role of the element currently holding focus, for asserting that focus left the tablist. */
+const focusedRole = (): Promise<string | null | undefined> =>
+  page.evaluate(() => document.activeElement?.getAttribute('role'))
+
+test('steps to the next view and back to the previous', async () => {
+  await page.getByRole('tab', { name: 'Portfolio', exact: true }).click()
+
+  await page.keyboard.press('Control+Tab')
+  await expect(page.getByRole('tab', { selected: true })).toHaveAttribute('id', 'tab-performance')
+
+  await page.keyboard.press('Control+Tab')
+  await expect(page.getByRole('tab', { selected: true })).toHaveAttribute('id', 'tab-allocation')
+
+  await page.keyboard.press('Control+Shift+Tab')
+  await expect(page.getByRole('tab', { selected: true })).toHaveAttribute('id', 'tab-performance')
+})
+
+test('wraps at both ends of the list', async () => {
+  // Down off the bottom lands on the first view, up off the top on the last — the tablist's own
+  // wrapping rule, reached through the same `stepIndex`.
+  await page.keyboard.press('Control+5')
+  await expect(page.getByRole('tab', { selected: true })).toHaveAttribute('id', 'tab-trades')
+  await page.keyboard.press('Control+Tab')
+  await expect(page.getByRole('tab', { selected: true })).toHaveAttribute('id', 'tab-portfolio')
+
+  await page.keyboard.press('Control+Shift+Tab')
+  await expect(page.getByRole('tab', { selected: true })).toHaveAttribute('id', 'tab-trades')
+})
+
+test('rotates without moving focus as a side effect, and leaves plain Tab alone', async () => {
+  // From inside the panel that is about to be hidden — the position the whole binding is about.
+  await page.getByRole('tab', { name: 'Portfolio', exact: true }).click()
+  await page.locator('#panel-portfolio').focus()
+  expect(await focusedId()).toBe('panel-portfolio')
+
+  // The default focus move is suppressed, so focus lands where DDR-0083 puts it: the destination
+  // row. Without `preventDefault` this would be the next focusable element inside the panel.
+  await page.keyboard.press('Control+Tab')
+  expect(await focusedId()).toBe('tab-performance')
+  await page.keyboard.press('Control+Shift+Tab')
+  expect(await focusedId()).toBe('tab-portfolio')
+
+  // And only for those two. Plain Tab still hands off out of the tablist to the next control in
+  // the sidebar — the currency field, since the order is toggle → tabs → currency → panel
+  // (DDR-0068) — which is the single-stop move the roving `tabindex` exists to make possible
+  // (DDR-0029). The selection does not change, and neither does it on the way back out.
+  //
+  // The field's id is read rather than written: `Field` generates it with `useId()` (DDR-0035).
+  const currencyId = await page.locator('.app-currency select').getAttribute('id')
+  expect(currencyId).toBeTruthy()
+  await page.keyboard.press('Tab')
+  expect(await focusedId()).toBe(currencyId)
+  await expect(page.getByRole('tab', { selected: true })).toHaveAttribute('id', 'tab-portfolio')
+
+  await page.getByRole('tab', { name: 'Portfolio', exact: true }).focus()
+  await page.keyboard.press('Shift+Tab')
+  expect(await focusedRole()).not.toBe('tab')
+  await expect(page.getByRole('tab', { selected: true })).toHaveAttribute('id', 'tab-portfolio')
+})
+
+test('the rotation belongs to the control while text is being entered', async () => {
+  // The Epic's standing rule (DDR-0035), and it bites harder here than it does for a digit: inside
+  // the currency `<select>`, `Ctrl`+`Tab` is the browser's again, so the view does not change.
+  await page.getByRole('tab', { name: 'Portfolio', exact: true }).click()
+  await page.locator('.app-currency select').focus()
+  await page.keyboard.press('Control+Tab')
+  await expect(page.getByRole('tab', { selected: true })).toHaveAttribute('id', 'tab-portfolio')
+})
+
+test('the rotation is disclosed on the list, not on any row, and is not the list’s name', async () => {
+  // A binding with no destination has no row to hang a tooltip on, so it hangs on the label that
+  // names the whole list — the same mechanism as the rows', one level up.
+  await expect(page.locator('.app-nav-label')).toHaveAttribute(
+    'title',
+    'Ctrl+Tab next view, Ctrl+Shift+Tab previous',
+  )
+  await expect(page.getByRole('tablist')).toHaveAttribute(
+    'aria-keyshortcuts',
+    'Control+Tab Control+Shift+Tab',
+  )
+
+  // The label is the tablist's `aria-labelledby` target, so the tooltip could have become its
+  // name. It does not: an element with content is named by its content.
+  await expect(page.getByRole('tablist')).toHaveAccessibleName('Views')
+
+  // And the rows still carry their own digit, unchanged — one disclosure per binding, each at the
+  // scope of what it states.
+  await expect(page.getByRole('tab', { name: 'Trades' })).toHaveAttribute(
+    'aria-keyshortcuts',
+    'Control+5 Meta+5',
+  )
+})

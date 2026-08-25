@@ -13,6 +13,11 @@
  * way to move — a tablist that answers to both announces `aria-orientation="vertical"` and then
  * behaves like neither orientation, and Left/Right belong to whatever the row of controls
  * inside the focused panel does with them.
+ *
+ * Story #259 splits the wrapping step out of the key mapping as {@link stepIndex}, because
+ * `Ctrl`+`Tab` moves along the same list by the same rule from outside the tablist entirely
+ * (DDR-0090). The mapping below is unchanged and still declines every key it does not own —
+ * `'Tab'` above all, which is now load-bearing rather than incidental: see `viewRotation.ts`.
  */
 
 /**
@@ -28,9 +33,9 @@ export function nextTabIndex(key: string, current: number, count: number): numbe
 
   switch (key) {
     case 'ArrowDown':
-      return wrap(current + 1, count)
+      return stepIndex(current, 1, count)
     case 'ArrowUp':
-      return wrap(current - 1, count)
+      return stepIndex(current, -1, count)
     case 'Home':
       return 0
     case 'End':
@@ -38,6 +43,23 @@ export function nextTabIndex(key: string, current: number, count: number): numbe
     default:
       return null
   }
+}
+
+/**
+ * Step `delta` places along the list, **wrapping** at both ends (Story #259).
+ *
+ * "Next or previous, wrapping" is the same movement whether an arrow key asks for it from inside
+ * the tablist or `Ctrl`+`Tab` asks for it from anywhere in the app (DDR-0090), so it is stated
+ * once here and both callers reach for it. `nextTabIndex` above is the tablist's *key* mapping and
+ * the rotation deliberately does not go through it — a rotation that asked for `'ArrowDown'` would
+ * be naming a key it does not use, and would break the moment the tablist changed its own.
+ *
+ * `null` for an empty list, like every other answer in this module, so a caller never has to
+ * decide what index zero of nothing means.
+ */
+export function stepIndex(current: number, delta: number, count: number): number | null {
+  if (count <= 0) return null
+  return wrap(current + delta, count)
 }
 
 /**

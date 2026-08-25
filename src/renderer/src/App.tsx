@@ -16,6 +16,7 @@ import {
 } from './components/TabIcons'
 import { nextTabIndex } from './lib/tabKeyboard'
 import { isTextEntry, navRowTitle, viewShortcutIndex, viewShortcutKeys } from './lib/viewShortcut'
+import { ROTATION_HINT, ROTATION_KEYS, rotatedTabIndex } from './lib/viewRotation'
 import { shellClassName, sidebarClassName } from './lib/sidebarCollapse'
 import type { GatewayReading } from './lib/gatewayStatus'
 
@@ -84,6 +85,15 @@ import type { GatewayReading } from './lib/gatewayStatus'
  * key it does not own. Two consequences live here: the listener is on `window` rather than on the
  * tablist (the whole point is that focus is elsewhere), and it moves focus onto the destination
  * tab, because the panel focus was standing in is about to be `hidden`.
+ *
+ * **Story #259 adds the other gesture to that same listener** (DDR-0090): `Ctrl`+`Tab` steps to the
+ * next view and `Ctrl`+`Shift`+`Tab` to the previous, each wrapping, for the reader who wants the
+ * neighbouring view rather than a named one. Two bindings are not a shortcut table, so it goes
+ * beside the digits rather than into a registry — both are the same question ("which view does this
+ * keystroke name"), asked of two predicates and answered at one landing spot. Its disclosure cannot
+ * be the digits': a rotation has no destination and therefore no row to hang a tooltip on, so it
+ * hangs on the thing that names the whole list — the "Views" label's own `title`, with
+ * `aria-keyshortcuts` on the tablist carrying the same fact to a reader who is listening.
  */
 type Tab = 'portfolio' | 'performance' | 'allocation' | 'dividends' | 'trades'
 
@@ -216,6 +226,16 @@ export function App(): React.JSX.Element {
    * It selects exactly its destination. Unlike arrowing, the views it passes over are neither
    * selected nor mounted (DDR-0027), which is what makes a jump to Trades cost one view rather
    * than four.
+   *
+   * **The rotation shares it** (Story #259): `Ctrl`+`Tab` and `Ctrl`+`Shift`+`Tab` step to the
+   * neighbouring view. Both predicates answer the same question — which view does this keystroke
+   * name — so they are asked in turn and their answer lands in one place, with one `preventDefault`
+   * for both. That one matters more here than it does for a digit: without it `Tab` would move
+   * focus as well as the view, and the rotation would fight the roving `tabindex` it depends on.
+   *
+   * The rotation reads the selected view, so the listener is re-seated on every switch. That is a
+   * `removeEventListener` and an `addEventListener` per view change, and it is the honest form —
+   * a ref mirroring `tab` would buy nothing and could go stale.
    */
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
@@ -223,17 +243,24 @@ export function App(): React.JSX.Element {
       // anything editable, this keystroke is not ours to take (DDR-0035).
       if (isTextEntry(event.target as HTMLElement | null)) return
 
-      const target = viewShortcutIndex(event, TABS.length)
+      const target =
+        viewShortcutIndex(event, TABS.length) ??
+        rotatedTabIndex(
+          event,
+          TABS.findIndex((t) => t.id === tab),
+          TABS.length,
+        )
       if (target === null) return
 
-      // Only now: an unhandled combination has to stay the browser's.
+      // Only now: an unhandled combination has to stay the browser's — `Tab` above all, which is
+      // the browser's own focus move whenever this declines it.
       event.preventDefault()
       selectAndFocus(TABS[target]!.id)
     }
 
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [selectAndFocus])
+  }, [selectAndFocus, tab])
 
   /**
    * Arrow / Home / End movement along the tablist.
@@ -322,7 +349,13 @@ export function App(): React.JSX.Element {
               `aria-labelledby`: two names for one region is the redundancy this replaces, not a
               second label. It sits outside the tablist because a non-tab child inside one is
               invalid — every child of `role="tablist"` is a `role="tab"`. */}
-          <p className="app-nav-label" id={NAV_LABEL_ID}>
+          {/* It also carries the rotation's tooltip (Story #259, DDR-0090). A binding with no
+              destination has no row to hang one on, so it hangs on the element that names the
+              whole list — the same mechanism DDR-0083 chose, moved up one level to match the
+              scope of what it states. It cannot become a second name for the tablist: an
+              `aria-labelledby` target contributes its *content*, and a `title` is consulted only
+              where there is no content to take a name from. */}
+          <p className="app-nav-label" id={NAV_LABEL_ID} title={ROTATION_HINT}>
             Views
           </p>
 
@@ -330,6 +363,10 @@ export function App(): React.JSX.Element {
             className="app-sidebar-tabs"
             role="tablist"
             aria-labelledby={NAV_LABEL_ID}
+            // The rotation, in the attribute the platform has for it — on the tablist rather than
+            // on any row, because that is the element it acts upon. `Control` only: `Cmd`+`Tab` is
+            // the macOS application switcher and never reaches the window (DDR-0090).
+            aria-keyshortcuts={ROTATION_KEYS}
             // The list runs down the sidebar, so Up/Down are the keys that move along it and
             // assistive technology has to be told which axis it is on (DDR-0055).
             aria-orientation="vertical"
