@@ -258,6 +258,32 @@ describe('the sources row’s geometry', () => {
     expect(CSS).not.toMatch(/--rail-width/)
   })
 
+  it('takes each card’s height from the row, not from its own contents', () => {
+    // Story #271. The two contents can never agree — a table as tall as the number of imported
+    // statements beside a fixed set of import controls — so whichever was taller set the row and
+    // the shorter one left a ragged gap against the page background. `align-items: start` is
+    // right where it is doing real work (a stacked card is sized by its content, and
+    // `.performance-charts` places four cards whose equal height comes from having identical
+    // content, DDR-0051 and DDR-0072); on this row the equal height has to come from the row.
+    expect(rule('.dashboard-sources')).toMatch(/align-items:\s*stretch/)
+    expect(rule('.dashboard-sources')).not.toMatch(/align-items:\s*start/)
+
+    // The other row keeps its own reason, and is not swept along with this one.
+    expect(rule('.performance-charts')).toMatch(/align-items:\s*start/)
+  })
+
+  it('leaves the stacked layout sized by each card, as Story #266 left it', () => {
+    // One column puts each card in its own implicit row, and an implicit row is auto-sized — so
+    // stretching to it is stretching to the card's own content, and a stacked card is unchanged.
+    // The guard is that the breakpoint restates the columns and nothing else: an `align-items`
+    // in here would mean the row above was being corrected twice.
+    const collapsed = CSS.match(
+      /@media \(max-width: \d+px\) \{\s*\.dashboard-sources \{([^}]*)\}/,
+    )
+
+    expect(collapsed?.[1]).not.toMatch(/align-items/)
+  })
+
   it('stacks rather than squeezing, statements first', () => {
     // The criterion is which way the row breaks, not where: the cards go one above the other and
     // each takes the full column, rather than the table being squeezed to hold the card beside it.

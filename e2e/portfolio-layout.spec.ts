@@ -107,6 +107,45 @@ test('pairs the stored statements with the data sources in one top-aligned row',
   expect(Math.round(card.width)).toBe(416)
 })
 
+test('gives both store cards the row’s height, without stretching their contents', async () => {
+  // Story #271. `align-items: start` sized each card by its own content, and the two contents can
+  // never agree — a table as tall as the number of imported statements beside a fixed set of
+  // import controls — so whichever was taller set the row and the shorter one left a ragged gap
+  // against the page background. A resolved height is exactly what a text guard cannot see, which
+  // is why `lib/portfolioLayout.test.ts` can only assert the declaration and this asserts the
+  // picture.
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await expect(page.locator('.dashboard-sources')).toBeVisible()
+
+  const measured = await page.locator('.dashboard-sources').evaluate((row) =>
+    [...row.children].map((el) => {
+      const box = el.getBoundingClientRect()
+      const content = el.querySelector('.card-content')!.getBoundingClientRect()
+      return {
+        height: box.height,
+        bottom: box.bottom,
+        contentHeight: content.height,
+        contentBottom: content.bottom,
+        padBottom: Number.parseFloat(getComputedStyle(el).paddingBottom),
+      }
+    }),
+  )
+
+  const [statements, sources] = measured
+  expect(Math.round(statements.height)).toBe(Math.round(sources.height))
+
+  // Nothing was imported in this run, so Stored statements is showing its empty panel and is the
+  // shorter of the two contents — the first of the two directions the story asks for. It is the
+  // card the row has stretched, and its contents stay at the top: the slack is below them, not
+  // spread through them.
+  expect(statements.contentHeight).toBeLessThan(sources.contentHeight)
+  expect(statements.bottom - statements.padBottom - statements.contentBottom).toBeGreaterThan(8)
+
+  // And the row's height is the taller card's own, rather than a floor either card was given:
+  // Data sources ends where its controls do, plus its padding.
+  expect(sources.bottom - sources.padBottom - sources.contentBottom).toBeLessThan(4)
+})
+
 test('stands the two import controls side by side, on one line', async () => {
   // The width the card is given exists for this. Story #189 stacked them because a 260px rail
   // has no "beside"; a measured pair of tops is the only thing that can prove 400px does.
@@ -170,6 +209,11 @@ test('the row stacks rather than squeezing the statements on a narrow window', a
   // Under, not beside — and each half has the full column rather than a squeezed share of it.
   expect(card.y).toBeGreaterThanOrEqual(statements.y + statements.height)
   expect(card.x).toBeCloseTo(statements.x, 0)
+
+  // A stacked card is still sized by its own content, which is what the row above stopped doing
+  // (Story #271): one column puts each card in its own auto-sized grid row, so the equal height
+  // does not follow them down here. The empty store makes the two contents plainly different.
+  expect(Math.round(card.height)).not.toBe(Math.round(statements.height))
 
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
