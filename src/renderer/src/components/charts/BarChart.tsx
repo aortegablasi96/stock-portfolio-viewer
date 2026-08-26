@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import type { ValuePoint } from '@shared/domain/performance'
-import { PERFORMANCE_PLOT } from '../../lib/chartGeometry'
+import { PERFORMANCE_PLOTS } from '../../lib/chartGeometry'
 import { bandIndexAt, columnDomain } from '../../lib/column'
 import { StatePanel } from '../ui/StatePanel'
 import { signInk } from '../../lib/chartTooltip'
@@ -40,8 +40,13 @@ import { ChartTooltip } from './ChartTooltip'
 /* The plot's aspect ratio, shared with the two other charts in the grid (Story #172, DDR-0051).
    Sharing it was already deliberate when the three sat in one switcher — nothing should jump when
    the selection changes — and it is load-bearing now that they sit side by side: two charts in one
-   row plotting the same date range at different heights would read as different spans. */
-const { width: W, height: H, pad: PAD } = PERFORMANCE_PLOT
+   row plotting the same date range at different heights would read as different spans.
+
+   The **gutter** is the percentage one, and this chart has no reason to take it as a prop: it
+   plots a daily return and nothing else, so the axis it labels is a property of the chart rather
+   than of the caller (Story #269). `LineChart` is the one that had to be told. */
+const PLOT = PERFORMANCE_PLOTS.percent
+const { width: W, height: H, pad: PAD } = PLOT
 
 /** Share of its band a bar occupies. The gap closes on its own as the series densifies. */
 const BAR_FILL = 0.7
@@ -179,6 +184,7 @@ export function BarChart({
       {active && hover !== null && (
         <ChartTooltip
           anchorX={PAD.left + (hover + 0.5) * band}
+          plot={PLOT}
           title={formatDate(active.date)}
           rows={[
             { label: seriesLabel, value: formatValue(active.value), ink: signInk(active.value) },

@@ -1,11 +1,16 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
+import { formatCurrency, formatSignedPercent } from './format'
 import {
   AXIS_LABEL_ADVANCE_UNITS,
   AXIS_LABEL_BUDGET_CHARS,
   AXIS_LABEL_GAP_UNITS,
   AXIS_LABEL_UNITS,
   GRID_CONTENT_BREAKPOINT_PX,
+  PERFORMANCE_FRAME,
+  PERFORMANCE_PLOTS,
+  axisGutterUnits,
+  type AxisLabelKind,
   PERFORMANCE_GRID_BREAKPOINT_COLLAPSED_PX,
   SIDEBAR_COLLAPSED_PX,
   MAX_GRID_AXIS_LABEL_PX,
@@ -81,26 +86,71 @@ describe('the plot geometry', () => {
    * simply never been checked against a label.
    */
   it('keeps DDR-0018’s padding, because it is sized by the label rather than by the plot', () => {
-    expect(PERFORMANCE_PLOT.pad).toEqual({ top: 16, right: 16, bottom: 28, left: 80 })
+    expect(PERFORMANCE_PLOTS.currency.pad).toEqual({ top: 16, right: 16, bottom: 28, left: 80 })
+    expect(PERFORMANCE_PLOT.pad).toEqual(PERFORMANCE_PLOTS.currency.pad)
   })
 
   /**
-   * The y-axis gutter, checked against the label it exists for rather than restated.
+   * The gutter differs by axis kind and **nothing else does** (Story #269).
+   *
+   * This is the property that keeps DDR-0051's grid a grid: one `viewBox`, one height, one right
+   * edge. A second pad edge appearing in this diff would mean two charts in a row plotting the
+   * same dates in differently shaped plots, which is what sharing the geometry exists to prevent.
+   */
+  it('varies the gutter by axis kind and leaves every other edge alone', () => {
+    const kinds = Object.values(PERFORMANCE_PLOTS)
+    for (const plot of kinds) {
+      expect(plot.width).toBe(PERFORMANCE_FRAME.width)
+      expect(plot.height).toBe(PERFORMANCE_FRAME.height)
+      expect({ top: plot.pad.top, right: plot.pad.right, bottom: plot.pad.bottom }).toEqual({
+        top: 16,
+        right: 16,
+        bottom: 28,
+      })
+    }
+    // ...and the gutters genuinely differ, or the story changed nothing.
+    expect(PERFORMANCE_PLOTS.percent.pad.left).toBeLessThan(PERFORMANCE_PLOTS.currency.pad.left)
+  })
+
+  /**
+   * The y-axis gutter, checked against the label it exists for rather than restated — now once
+   * per kind of label (Story #269).
    *
    * `left: 64` held eight characters and every value chart in this grid labels its axis with ten
    * (`€68,517.70`, `€80,000.00`), so the widest ticks began at x = −7.8 and the root `<svg>`
    * clipped their currency symbol — invisibly, because an SVG has no layout engine to complain
-   * to. Nothing in the suite could see it, which is exactly why the arithmetic is here now: the
+   * to. Nothing in the suite could see it, which is exactly why the arithmetic is here: the
    * assertion is that a label of the budgeted width **starts inside the viewBox**, so a wider
    * figure fails a test rather than losing its €.
+   *
+   * The upper bound is the half Story #269 was filed for, and it is the half nothing can report:
+   * a gutter with more than one glyph of slack never clips, it just quietly costs the plot the
+   * width. One budget standing in for four charts passed this assertion for the two charts it was
+   * measured against and failed it by four characters on the two it was not.
    */
-  it('leaves a y-axis label its whole width, symbol included', () => {
-    const label = AXIS_LABEL_BUDGET_CHARS * AXIS_LABEL_ADVANCE_UNITS
-    // The charts anchor a tick at `pad.left - 8`, `text-anchor="end"`, so it grows leftward.
-    const startsAt = PERFORMANCE_PLOT.pad.left - AXIS_LABEL_GAP_UNITS - label
-    expect(startsAt).toBeGreaterThanOrEqual(0)
-    // And not so generous that the gutter is buying slack the plot pays for.
-    expect(startsAt).toBeLessThan(AXIS_LABEL_ADVANCE_UNITS)
+  it.each(['currency', 'percent'] as const)(
+    'leaves a %s y-axis label its whole width, and no more',
+    (kind) => {
+      const label = AXIS_LABEL_BUDGET_CHARS[kind] * AXIS_LABEL_ADVANCE_UNITS
+      // The charts anchor a tick at `pad.left - 8`, `text-anchor="end"`, so it grows leftward.
+      const startsAt = PERFORMANCE_PLOTS[kind].pad.left - AXIS_LABEL_GAP_UNITS - label
+      expect(startsAt).toBeGreaterThanOrEqual(0)
+      // And not so generous that the gutter is buying slack the plot pays for.
+      expect(startsAt).toBeLessThan(AXIS_LABEL_ADVANCE_UNITS)
+    },
+  )
+
+  /** The derivation is the gutter — neither number is written down anywhere else. */
+  it('derives each gutter from its budget rather than stating it', () => {
+    expect(PERFORMANCE_PLOTS.currency.pad.left).toBe(
+      axisGutterUnits(AXIS_LABEL_BUDGET_CHARS.currency),
+    )
+    expect(PERFORMANCE_PLOTS.percent.pad.left).toBe(
+      axisGutterUnits(AXIS_LABEL_BUDGET_CHARS.percent),
+    )
+    // A wider budget can only ever buy a wider gutter; the derivation is monotonic, so widening
+    // `AXIS_LABEL_BUDGET_CHARS` can never narrow the plot's allowance by accident.
+    expect(axisGutterUnits(12)).toBeGreaterThan(axisGutterUnits(11))
   })
 
   /**
@@ -131,6 +181,110 @@ describe('the plot geometry', () => {
     const { width, height, pad } = PERFORMANCE_PLOT
     expect(width - pad.left - pad.right).toBeGreaterThan(400)
     expect(height - pad.top - pad.bottom).toBeGreaterThan(130)
+  })
+})
+
+/**
+ * The relationship Story #269 exists to hold: **a chart's gutter is sized from the labels that
+ * chart draws.**
+ *
+ * The number was right and the relationship was not. Story #190 derived `pad.left` from a
+ * character budget and checked the derivation, which is what caught a clipped `€` — but the
+ * budget it derived from was one global, and by then two of the four charts in the grid labelled
+ * their axis in percent. A single number cannot be sized from four different sets of labels, and
+ * the half of that it got wrong is the half nothing reports: too much gutter never clips.
+ *
+ * So the guard is on the pairing rather than on either number. It runs the app's own formatters
+ * — not a transcription of them — over the ticks each axis is actually asked to render, and
+ * fails if what comes out is wider than the budget that chart's gutter was derived from. Change
+ * a formatter's decimals, point a chart at the other formatter, or forget the `axis` beside it,
+ * and this is where it lands.
+ */
+describe('every chart’s gutter is sized from the labels that chart draws', () => {
+  /* Real ticks, from the ranges these charts plot. Currency runs from a zero baseline out past
+     `€250,000.00`; percent covers a flat day, a daily move, a rebased window and a cumulative
+     return that has run away with itself. `formatCurrency`/`formatSignedPercent` are the very
+     functions `PerformanceView` hands the charts. */
+  const LABELS: Record<AxisLabelKind, readonly string[]> = {
+    currency: [0, 1234.5, 68_517.7, 80_000, 250_000].map((v) => formatCurrency(v, 'EUR')),
+    percent: [0, -1.23, 7.5, -16.14, 123.45, 999.99, -999.99].map(formatSignedPercent),
+  }
+
+  const widest = (labels: readonly string[]): number => Math.max(...labels.map((l) => l.length))
+
+  it.each(['currency', 'percent'] as const)('a %s axis draws nothing wider than its budget', (kind) => {
+    expect(widest(LABELS[kind])).toBeLessThanOrEqual(AXIS_LABEL_BUDGET_CHARS[kind])
+  })
+
+  /**
+   * Both budgets bind, and where they stop is stated rather than discovered. A budget nothing
+   * reaches is a budget nobody has measured — which is how eleven characters came to stand in
+   * for `+16.14%`.
+   */
+  it('stops where the module says it stops', () => {
+    expect(formatSignedPercent(1000).length).toBeGreaterThan(AXIS_LABEL_BUDGET_CHARS.percent)
+    expect(formatCurrency(1_000_000, 'EUR').length).toBeGreaterThan(
+      AXIS_LABEL_BUDGET_CHARS.currency,
+    )
+  })
+
+  /**
+   * The defect itself, as arithmetic. Eleven characters of gutter behind an eight-character
+   * budget leaves more than one glyph of slack, which is the bound the per-kind assertion above
+   * applies — so the old shared gutter fails the story's own test on the two percentage charts.
+   */
+  it('fails the percentage charts if they are put back on the currency gutter', () => {
+    const slack =
+      PERFORMANCE_PLOTS.currency.pad.left -
+      AXIS_LABEL_GAP_UNITS -
+      AXIS_LABEL_BUDGET_CHARS.percent * AXIS_LABEL_ADVANCE_UNITS
+    expect(slack).toBeGreaterThan(AXIS_LABEL_ADVANCE_UNITS)
+  })
+
+  const chartCode = (chart: string): string =>
+    readFileSync(new URL(`../components/charts/${chart}.tsx`, import.meta.url), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^\s*\/\/.*$/gm, '')
+
+  /** Two of the three plot one kind of figure and nothing else, so their kind is not a prop. */
+  it('pins the daily-return bars to the percentage gutter', () => {
+    expect(chartCode('BarChart')).toContain('PERFORMANCE_PLOTS.percent')
+  })
+
+  it('pins the composition stack to the currency gutter', () => {
+    expect(chartCode('StackedAreaChart')).toContain('PERFORMANCE_PLOTS.currency')
+  })
+
+  /** And the one that draws both takes its kind from the caller, never from a default. */
+  it('lets LineChart take its kind from the caller, with no kind of its own', () => {
+    const code = chartCode('LineChart')
+    expect(code).toContain('PERFORMANCE_PLOTS[axis]')
+    expect(code).not.toContain('PERFORMANCE_PLOTS.currency')
+    expect(code).not.toContain('PERFORMANCE_PLOTS.percent')
+    // A default would hand a new caller the currency gutter silently — the failure mode with no
+    // symptom. The prop is required, so `axis` may not carry one.
+    expect(code).not.toMatch(/axis\s*=\s*['"]/)
+  })
+
+  /**
+   * The pairing at the call site, which is the only place the two facts meet: `LineChart` is
+   * handed a formatter *and* an axis, and nothing but this can see whether they agree.
+   */
+  it('states an axis beside every formatter the view hands a LineChart', () => {
+    const view = readFileSync(
+      new URL('../components/analytics/PerformanceView.tsx', import.meta.url),
+      'utf8',
+    )
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^\s*\/\/.*$/gm, '')
+
+    const elements = view.match(/<LineChart[\s\S]*?\/>/g) ?? []
+    expect(elements).toHaveLength(2)
+    for (const element of elements) {
+      const kind = element.match(/axis="(currency|percent)"/)?.[1]
+      // `c` is the view's base-currency formatter; the other curve takes `formatSignedPercent`.
+      expect(kind).toBe(element.includes('formatValue={c}') ? 'currency' : 'percent')
+    }
   })
 })
 

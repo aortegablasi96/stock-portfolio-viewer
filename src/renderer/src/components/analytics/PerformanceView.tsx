@@ -163,11 +163,21 @@ export function PerformanceView(): React.JSX.Element {
 
             {/* Row 1 is the two cumulative curves, row 2 the two charts that break them apart:
                 the daily bars say how the curve was travelled, composition says what was held
-                while it was. Reading order matches, so a screen reader gets the same argument. */}
+                while it was. Reading order matches, so a screen reader gets the same argument.
+
+                Each row pairs a currency axis with a percentage one, and since Story #269 those
+                two take different gutters — so the four plots no longer share a **left** edge.
+                That is spent deliberately and it is the only edge spent: `pad.right` is shared,
+                so the end of the window still lines up across the grid (DDR-0091). */}
             <div className="performance-charts">
               <ChartCard title="Portfolio value over time">
                 <LineChart
                   points={valueSeries}
+                  /* Stated beside the formatter it describes, which is the whole point of the
+                     prop: `axis` is what sizes the y-axis gutter, and the only thing that can
+                     tell it apart from the chart below is which formatter this one was handed
+                     (Story #269). */
+                  axis="currency"
                   formatValue={c}
                   formatDate={formatDate}
                   ariaLabel="Portfolio value over time"
@@ -178,6 +188,7 @@ export function PerformanceView(): React.JSX.Element {
               <ChartCard title="Performance change over time" aside={<BaselineNote />}>
                 <LineChart
                   points={returnSeries}
+                  axis="percent"
                   formatValue={formatSignedPercent}
                   formatDate={formatDate}
                   ariaLabel={returnChartLabel}

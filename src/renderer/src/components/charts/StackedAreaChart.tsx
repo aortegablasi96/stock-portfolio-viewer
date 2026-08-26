@@ -1,6 +1,6 @@
 import { useId, useRef, useState } from 'react'
 import type { CompositionBand, CompositionPoint } from '@shared/domain/performance'
-import { PERFORMANCE_PLOT } from '../../lib/chartGeometry'
+import { PERFORMANCE_PLOTS } from '../../lib/chartGeometry'
 import { formatPercent } from '../../lib/format'
 import {
   bandPaint,
@@ -55,8 +55,13 @@ import { ChartTooltip } from './ChartTooltip'
    different height would make the same date range look like a different span. Story #172 revisited
    it for the 2×2 grid and moved it to `lib/chartGeometry` (DDR-0051); this chart no longer shares
    a *card* with those curves, only a row and a `RangeFilter`, which makes agreeing on the geometry
-   matter more rather than less. */
-const { width: W, height: H, pad: PAD } = PERFORMANCE_PLOT
+   matter more rather than less.
+
+   Its axis is money (DDR-0052), so it takes the currency gutter — the wider of the two, and the
+   one Story #190 measured `€80,000.00` against on this very chart. Fixed here rather than passed
+   in, for the same reason `BarChart`'s is: the axis is the chart's, not the caller's (#269). */
+const PLOT = PERFORMANCE_PLOTS.currency
+const { width: W, height: H, pad: PAD } = PLOT
 
 export function StackedAreaChart({
   bands,
@@ -184,6 +189,7 @@ export function StackedAreaChart({
       {activePoint && activeIndex !== null && (
         <ChartTooltip
           anchorX={xs[activeIndex] ?? 0}
+          plot={PLOT}
           title={formatDate(activePoint.date)}
           rows={compositionRows(activePoint, stack, formatValue)}
         />
