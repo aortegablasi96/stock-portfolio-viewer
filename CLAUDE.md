@@ -277,8 +277,10 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
   lowering it — that ships illegible labels; capping a chart's width stays **rejected**
   (DDR-0051, DDR-0057). **A `viewBox` clips an overflowing label in silence**, so `pad.left` is
   *derived* from a glyph advance and a character budget — **one per axis kind**, because too much
-  gutter never clips and so is never reported; only `left` varies (DDR-0051 §#190, DDR-0091). A stacked
-  chart's key lives in the **card header**, not a `<figcaption>` — `ColumnChart` and
+  gutter never clips and so is never reported; only `left` varies. The budget is measured against
+  the **rounded** domain, so the currency clip arrives at €800k of portfolio, not €1M (DDR-0051
+  §#190, DDR-0091, DDR-0092). A stacked chart's key lives in the **card header**, not a
+  `<figcaption>` — `ColumnChart` and
   `StackedAreaChart` both emit a bare `<svg>` (DDR-0052, DDR-0064). **A chart title never varies
   with the range**; the return curve's rebasing is disclosed by a *fixed* header note beside the
   key (DDR-0072).
@@ -303,6 +305,10 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
   crossing zero gives a **negative height**, and SVG then renders *nothing*. Gradient `fill`s are
   per element (`useId()`). Dots need a **doubled** selector; `.chart-dot` out-orders a bare one
   (DDR-0059; shipped once).
+- **A value axis is `lib/column`'s, never a chart's own** (DDR-0092): `seriesDomain` rounds both
+  extremes *outward* to `niceStep`, always ticks zero — so the emphasised rule is the class **that**
+  line takes and `showZero` asks whether the series *crosses* zero — and never draws more than
+  `MAX_SERIES_TICKS` (6).
 - **Chart maths that has drawn a wrong picture before.** The performance curve is **cumulative
   TWR**, not a value curve, so deposits and withdrawals don't move it (DDR-0013). Daily returns are
   **chain-linked from that curve** (`lib/dailyReturns`), never differenced from `valueSeries`, and

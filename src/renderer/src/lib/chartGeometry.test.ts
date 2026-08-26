@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { formatCurrency, formatSignedPercent } from './format'
+import { MAX_SERIES_TICKS, seriesDomain } from './column'
 import {
   AXIS_LABEL_ADVANCE_UNITS,
   AXIS_LABEL_BUDGET_CHARS,
@@ -285,6 +286,110 @@ describe('every chart’s gutter is sized from the labels that chart draws', () 
       // `c` is the view's base-currency formatter; the other curve takes `formatSignedPercent`.
       expect(kind).toBe(element.includes('formatValue={c}') ? 'currency' : 'percent')
     }
+  })
+})
+
+/**
+ * The largest portfolio whose **rounded** value axis still fits the currency gutter, in base
+ * currency (Story #270).
+ *
+ * Not a limit the app enforces — a statement of where the axis starts clipping, kept beside the
+ * tests that check both sides of it. At €800,000 the step is €200,000 and the top tick lands on
+ * the series maximum exactly; one euro past it the step becomes €500,000 and the top rounds to
+ * `€1,000,000.00`, two characters wider than `AXIS_LABEL_BUDGET_CHARS.currency` holds.
+ */
+const CURRENCY_DOMAIN_CEILING = 800_000
+
+/**
+ * The grid reads across its rows, so its four value axes are **one rule** (Story #270).
+ *
+ * `LineChart` was the quadrant that never adopted it. Its ticks were the window's own extremes and
+ * their midpoint, which is evenly spaced and arbitrarily levelled — `€0.00 / €34,258.85 /
+ * €68,517.70` beside a composition stack already labelled `€0 … €80,000`, plotting the same NAV.
+ * Two charts in one grid, drawn against the same quantity, disagreeing about where a gridline
+ * goes.
+ *
+ * What this file can add to `column.test.ts`'s maths is the half that only exists once the domain
+ * is drawn: how many gridlines a 136-unit plot can be asked to hold, and how wide the labels
+ * beside them are allowed to get now that the top tick is a **rounded** figure rather than one the
+ * series contains.
+ */
+describe('one value-axis rule across the grid', () => {
+  const chartSource = (chart: string): string =>
+    readFileSync(new URL(`../components/charts/${chart}.tsx`, import.meta.url), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^\s*\/\/.*$/gm, '')
+
+  it('takes every grid chart’s value axis from lib/column', () => {
+    expect(chartSource('LineChart')).toContain('seriesDomain(')
+    expect(chartSource('BarChart')).toContain('seriesDomain(')
+    // The stack's domain is `lib/composition`'s, which delegates to the same module — the chart
+    // is handed a `ColumnDomain` and reads `domain.ticks` off it.
+    expect(chartSource('StackedAreaChart')).toContain('domain.ticks')
+    expect(
+      readFileSync(new URL('./composition.ts', import.meta.url), 'utf8'),
+    ).toContain('columnDomain(')
+  })
+
+  /**
+   * Comments are stripped first, and here that is load-bearing rather than habitual: both charts
+   * *quote* the expression they replaced, so a scan run over the raw text would fail on the prose
+   * explaining why the code is gone (DDR-0075's trap, from the other side).
+   */
+  it('leaves no chart computing a tick of its own beside it', () => {
+    for (const chart of ['LineChart', 'BarChart', 'StackedAreaChart']) {
+      const code = chartSource(chart)
+      expect(code).not.toMatch(/spanV\s*\/\s*2/)
+      expect(code).not.toMatch(/const ticks\s*=\s*\[/)
+    }
+  })
+
+  /* The plot the gridlines are laid down in. Only `pad.left` varies by axis kind (DDR-0091), so
+     the vertical measure is the same for all four charts. */
+  const plotHeightUnits =
+    PERFORMANCE_FRAME.height - PERFORMANCE_PLOTS.percent.pad.top - PERFORMANCE_PLOTS.percent.pad.bottom
+  const gapUnits = plotHeightUnits / (MAX_SERIES_TICKS - 1)
+
+  it('keeps the tightest possible gridline spacing clear of the label between them', () => {
+    // Two label-heights apart at the worst domain the rule can produce. A step fine enough to
+    // divide any range exactly is the eleven-gridline trade DDR-0081 refused; this is the number
+    // that says the round-step rule never approaches it.
+    expect(gapUnits).toBeGreaterThan(2 * AXIS_LABEL_UNITS)
+  })
+
+  it('holds that spacing on screen at the narrowest column the grid draws', () => {
+    // One pixel past the breakpoint is the narrowest a chart is ever drawn in two columns; below
+    // it the grid collapses and every chart doubles in width.
+    const width = chartWidthPx(PERFORMANCE_GRID_BREAKPOINT_PX + 1)
+    const gapPx = (gapUnits * width) / PERFORMANCE_FRAME.width
+
+    expect(gapPx).toBeGreaterThan(2 * axisLabelPx(width))
+    expect(gapPx).toBeGreaterThan(2 * MIN_AXIS_LABEL_PX)
+  })
+
+  /**
+   * **The top tick is no longer a figure the series contains**, and that is the one thing this
+   * story hands the gutter to worry about. Rounding outward means the label beside the top
+   * gridline can be an order of magnitude wider than anything plotted — `€900,000` of portfolio
+   * draws a `€1,000,000.00` tick — so the currency budget has to be measured against the *domain*
+   * rather than against the data, and where it stops is stated rather than discovered.
+   */
+  it('fits the currency gutter for every portfolio up to the ceiling it states', () => {
+    for (const max of [1_000, 68_517.7, 250_000, 400_000, CURRENCY_DOMAIN_CEILING]) {
+      const labels = seriesDomain([0, max]).ticks.map((t) => formatCurrency(t, 'EUR'))
+      expect(Math.max(...labels.map((l) => l.length))).toBeLessThanOrEqual(
+        AXIS_LABEL_BUDGET_CHARS.currency,
+      )
+    }
+  })
+
+  it('states where the rounded top outgrows that gutter', () => {
+    // Past the ceiling the step jumps to 500,000 and the top rounds to a seven-figure tick, which
+    // is thirteen characters against a budget of eleven. The bound DDR-0091 recorded at €1M
+    // therefore arrives at €800,000 of *series* — the same clip, reached sooner, and the honest
+    // place to widen it is still `AXIS_LABEL_BUDGET_CHARS`.
+    const top = seriesDomain([0, CURRENCY_DOMAIN_CEILING + 1]).top
+    expect(formatCurrency(top, 'EUR').length).toBeGreaterThan(AXIS_LABEL_BUDGET_CHARS.currency)
   })
 })
 

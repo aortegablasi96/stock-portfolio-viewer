@@ -185,6 +185,47 @@ export function columnDomain(columns: ColumnDatum[]): ColumnDomain {
 }
 
 /**
+ * The same value axis for a **single signed series** — one number a point, no stack (Story #270).
+ *
+ * A curve and a row of bars are the degenerate column: `upper` is 0 and `lower` is the reading, so
+ * everything {@link columnDomain} states already holds — the extremes round *outward* to one nice
+ * step, the spacing is uniform, and zero is always a tick because both edges are whole multiples
+ * of that step. This is the named way to say so, rather than three call sites each writing
+ * `{ lower: v, upper: 0 }` and each free to drift.
+ *
+ * **It is what the two Performance curves adopted.** `LineChart` built its own three ticks inline
+ * until this story — `[minV, minV + spanV / 2, maxV]` — which is evenly *spaced* and arbitrarily
+ * *levelled*: the extremes are wherever the window's data happened to land, so the value curve
+ * labelled `€0.00 / €34,258.85 / €68,517.70` and the return curve `-12.20% / +8.03% / +28.25%`,
+ * and no line in either sat on a number a reader would have picked. The two charts beside them in
+ * the grid were already drawn against `€0 … €80,000` and `-5% … +10%` — the grid exists to be
+ * read across its rows, and one quadrant was reading in a different vocabulary from the other
+ * three.
+ *
+ * The cost is stated where it is paid: rounding outward means the top gridline is at or above the
+ * series maximum, so a window whose range lands just past a step boundary spends up to about half
+ * the plot on empty domain. That is the trade [[0081-the-tax-side-keeps-its-own-scale]] already
+ * named from the other end — the alternative is a step fine enough to fit the data exactly, which
+ * is how a 180-unit plot ends up behind eleven gridlines — and it is bounded: no domain this rule
+ * produces carries more than {@link MAX_SERIES_TICKS} of them.
+ */
+export function seriesDomain(values: readonly number[]): ColumnDomain {
+  return columnDomain(values.map((value) => ({ lower: value, upper: 0 })))
+}
+
+/**
+ * The most gridlines {@link seriesDomain} or {@link columnDomain} can ever produce, which is
+ * arithmetic rather than a policy: `niceStep` rounds up, so one step is at least a quarter of the
+ * raw span, and rounding each extreme outward adds less than one more at each end — under six
+ * intervals, and an integer count of them is therefore at most five.
+ *
+ * It is exported because the number nothing else can see is the *rendered* one: six labels down a
+ * 136-unit plot is what the axis has to stay legible at, and `chartGeometry.test.ts` is where that
+ * is checked against {@link AXIS_LABEL_UNITS} at the narrowest column the grid draws.
+ */
+export const MAX_SERIES_TICKS = 6
+
+/**
  * Which evenly-spaced band a pointer at `x` (in `viewBox` units) falls in, or `null` when there
  * are no bands to hit.
  *
