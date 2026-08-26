@@ -359,8 +359,10 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
   breakdown, and its ratio and floor are **one budget** derived from `WINDOW_DEFAULT_HEIGHT` — a
   taller map puts the breakdown's title below the fold (DDR-0074, superseding DDR-0063's ordering).
   Its popup is **not** clipped by the map: Mapbox flips one above or below a mark and nowhere else,
-  so the clip lives on `.mapboxgl-canvas-container` and the popup may overlap the card below. Marks
-  **name** their holdings — bounded, `instrumentName`, `Badge` via `badgeClassName`.
+  so the clip lives on `.mapboxgl-canvas-container`, which needs `position: absolute; inset: 0` to
+  be the marks' containing block — left static and unsized it clips nothing, and they draw over the
+  tiles, the title and the sidebar (#272). The popup may overlap the card below. Marks **name**
+  their holdings — bounded, `instrumentName`, `Badge` via `badgeClassName`.
 - **The Allocation breakdown's table and donut link on the slice's `key`, never on position** — the
   table sorts by any column, so row order and arc order have no reason to agree. Emphasis **never
   touches `fill`**: the active wedge keeps its colour and the rest drop to 0.35 opacity (DDR-0040).

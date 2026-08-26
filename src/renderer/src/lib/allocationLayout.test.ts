@@ -295,6 +295,27 @@ describe('the popup is no longer clipped by the frame it floats over', () => {
   })
 
   /**
+   * The two declarations that make the clip above a fact rather than a claim (Bug #272).
+   *
+   * This is the assertion's own trap, and it is a new one: the pair above passed for three stories
+   * while clipping nothing. `mapbox-gl.css` gives `.mapboxgl-canvas-container` no `position` and
+   * Mapbox sizes it with neither, so it resolved `static` at 0px tall — and an `overflow: hidden`
+   * ancestor clips an absolutely positioned descendant only when it is that descendant's
+   * *containing block*. Every marker is absolutely positioned inside this element, so their
+   * containing block was the map, which the rule above had just opened for the popup. Six donut
+   * pairs drew over the KPI tiles, the page title and the sidebar.
+   *
+   * So it is not enough that the clip is *declared* where the comment says it is. `absolute` makes
+   * this element the marks' containing block and `inset: 0` gives it the map's box to be; drop
+   * either and `overflow` goes quiet again with nothing else changing. What no text scan can see
+   * — the cascade resolving against a third-party stylesheet — is `e2e/map-clip.spec.ts`.
+   */
+  it('is the marks’ containing block, or the clip above is inert', () => {
+    expect(declaration('.country-map .mapboxgl-canvas-container | position')).toBe('absolute')
+    expect(declaration('.country-map .mapboxgl-canvas-container | inset')).toBe('0')
+  })
+
+  /**
    * A popup that hangs outside the map is a *earlier* sibling's descendant to the card below it,
    * so without an order of its own the next card's surface paints straight over it. Mapbox
    * declares none.

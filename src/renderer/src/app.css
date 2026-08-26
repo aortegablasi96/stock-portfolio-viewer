@@ -3334,7 +3334,30 @@ html {
   overflow: visible;
 }
 
+/* `position: absolute; inset: 0` is what makes the clip above a fact rather than a claim
+   (Bug #272). `overflow` and `border-radius` were here from Story #223 and cut nothing for three
+   stories: `mapbox-gl.css` gives `.mapboxgl-canvas-container` no `position`, and Mapbox sizes it
+   with neither, so it resolved `static` at **0px tall** — measured in the running app at 1440x1000,
+   a 1103x0 box inside a 1103x276 map. An `overflow: hidden` ancestor only clips an absolutely
+   positioned descendant when it is that descendant's **containing block**, and a static box is
+   never one. Mapbox mounts every marker into this container (`getCanvasContainer().appendChild`)
+   and positions it `absolute`, so each mark's containing block was the map — which #223 had just
+   set to `overflow: visible` for the popup's sake. Six donut pairs then drew outside the frame at
+   zoom, over the KPI tiles, the page title and the sidebar (the screenshot on #272).
+
+   So the two halves are one rule and neither works alone: `absolute` makes this the marks' and the
+   canvas's containing block, `inset: 0` gives it the map's own box to be, and only then do the
+   clip and the corner below apply to anything. The popup is untouched — Mapbox appends it to the
+   *map* container, a sibling of this one, so it still leaves by the rule above.
+
+   `.mapboxgl-control-container` is that sibling too and keeps its `z-index: 2`, so the attribution
+   and the zoom stack still paint over the basemap and stay reachable (DDR-0047).
+
+   A text scan cannot see any of this — `overflow: hidden` was *declared* the whole time — so what
+   holds it is `e2e/map-clip.spec.ts`, driving the real cascade against `mapbox-gl.css`. */
 .country-map .mapboxgl-canvas-container {
+  position: absolute;
+  inset: 0;
   border-radius: var(--radius-sm);
   overflow: hidden;
 }
