@@ -265,6 +265,11 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
   state**, which is what keeps DDR-0027 intact. The status
   row is **absent, not empty**, where there is nothing to refresh. `lib/analyticsShell.ts` holds
   the branch mapping; its test fails if a view re-declares the guard, wrapper, or header.
+- **A row of two cards takes its height from the row, not from either card** — `.dashboard-sources`
+  is `align-items: stretch` (DDR-0093): its two contents can never agree, so `start` left whichever
+  was shorter above the row. The contents stay blocks — a flex card or a `height: 100%` content
+  spreads the slack *through* the controls instead of below them. `.performance-charts` keeps
+  `start`; four identical charts already agree.
 - **The range presets are one vocabulary** (DDR-0085): `RangeFilter` renders `RANGE_OPTIONS`
   unfiltered, so a preset lands in all three views or none. All anchor to `extent.to`, **never
   `Date.now()`** — a clock empties a history ending last year — and `boundsFor` carries **no

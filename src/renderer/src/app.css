@@ -1226,16 +1226,28 @@ html {
    existed — its subject is the store Stored statements lists, so the two are one row.
 
    The idiom is the app's third instance of it (`.dashboard-columns` had it, `.breakdown-split`
-   still does): a flexible content column and a **fixed** track beside it, `align-items: start`
-   so both halves begin at the row's top edge. Fixed for the reason DDR-0062 gave for the rail
-   and #191 for the donut — the card is read at a glance and stops needing width, so every
-   pixel the window gains goes to the half with figures to line up. */
+   still does): a flexible content column and a **fixed** track beside it. Fixed for the reason
+   DDR-0062 gave for the rail and #191 for the donut — the card is read at a glance and stops
+   needing width, so every pixel the window gains goes to the half with figures to line up.
+
+   `align-items: stretch` is the one thing this row does *not* share with them (Story #271,
+   DDR-0093). `start` sizes each half by its own content, and these two contents can never
+   agree: Stored statements is a table as tall as the number of imported statements, Data
+   sources a fixed set of controls. Whichever is taller set the row and the other left a ragged
+   gap against the page background. So the height comes from the row, both ways round — an empty
+   store, where the statements panel is the shorter card, and a full one, where its table is the
+   taller. The *contents* do not stretch with it: a card is a block, so the controls stay at its
+   top edge and the box grows underneath them.
+
+   It costs the stacked layout below nothing. One column puts each card in its own grid row, and
+   a row is auto-sized, so stretching to it is stretching to the card's own content — which is
+   why the media query below restates the columns and nothing else. */
 
 .dashboard-sources {
   display: grid;
   grid-template-columns: minmax(0, 1fr) var(--sources-width);
   gap: var(--space-7);
-  align-items: start;
+  align-items: stretch;
 }
 
 /* Both halves are grid children that must be allowed to shrink, the same rule
