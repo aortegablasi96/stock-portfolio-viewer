@@ -6,6 +6,7 @@ import {
   type AxisLabelKind,
 } from '../../lib/chartGeometry'
 import { signInk } from '../../lib/chartTooltip'
+import { seriesDomain } from '../../lib/column'
 import { signedBands } from '../../lib/signedCurve'
 import { StatePanel } from '../ui/StatePanel'
 import { ChartTooltip } from './ChartTooltip'
@@ -96,30 +97,36 @@ export function LineChart({
 
   const values = points.map((p) => p.value)
   const dates = points.map((p) => p.date)
-  const minV = Math.min(...values, 0)
-  const maxV = Math.max(...values)
+  /* The value axis is the grid's own, not this chart's (Story #270). `seriesDomain` is the rule
+     the bars and the stack beside it already draw against — `niceStep`'s 1, 2 or 5 times a power
+     of ten, both extremes rounded *outward*, zero always a tick — so a gridline lands on a number
+     a reader would have picked instead of on whichever value the window happened to end at. It
+     replaces a private `[minV, minV + spanV / 2, maxV]`, and the two must not both exist: a chart
+     that computes its own ticks beside `lib/column` is how one quadrant of a 2×2 grid ends up
+     labelled in a vocabulary the other three do not use. */
+  const { top, bottom, ticks } = seriesDomain(values)
   const minD = Math.min(...dates)
   const maxD = Math.max(...dates)
-  const spanV = maxV - minV || 1
+  const spanV = top - bottom || 1
   const spanD = maxD - minD || 1
 
   const x = (d: number): number => PAD.left + ((d - minD) / spanD) * (W - PAD.left - PAD.right)
-  const y = (v: number): number => H - PAD.bottom - ((v - minV) / spanV) * (H - PAD.top - PAD.bottom)
+  const y = (v: number): number => H - PAD.bottom - ((v - bottom) / spanV) * (H - PAD.top - PAD.bottom)
 
   const line = points.map((p) => `${x(p.date)},${y(p.value)}`).join(' ')
   /* The wash is anchored at the level it is measuring *from*, and the two charts measure from
      different places (Story #229). A value curve's baseline is the bottom of its domain — the
      area says "this much portfolio". A signed curve's baseline is **zero**, because the area says
-     "this far from break-even"; anchored at `minV` instead, a stretch spent entirely under water
-     would fill downward from the curve and be drawn exactly the way a gain is. */
-  const areaBase = tone === 'sign' ? y(0) : y(minV)
+     "this far from break-even"; anchored at the domain floor instead, a stretch spent entirely
+     under water would fill downward from the curve and be drawn exactly the way a gain is. */
+  const areaBase = tone === 'sign' ? y(0) : y(bottom)
   const area = `${PAD.left},${areaBase} ${line} ${x(maxD)},${areaBase}`
-  const ticks = [minV, minV + spanV / 2, maxV]
-  // The return curve is a signed percentage and spends whole periods below zero; the value curve
-  // never does, because `minV` floors at 0 and the baseline *is* the zero line. So the emphasised
-  // rule is drawn only where zero is a level the series crosses rather than the floor it sits on,
-  // which is the same test the two column charts apply (Story #188).
-  const showZero = minV < 0
+  // Zero is *in* every domain `seriesDomain` returns, so the question the emphasised rule answers
+  // is no longer whether zero is on the chart but whether the series **crosses** it: a value curve
+  // rests on zero as its floor and gets a plain gridline, a return curve passes through it and
+  // gets the rule. That is the reading Story #188 gave it and the test the two column charts
+  // apply, now asked of the data rather than of the axis (Story #270).
+  const showZero = Math.min(...values) < 0
 
   /** Map a pointer event to the nearest data point index (viewBox-space nearest by date). */
   function onMove(e: React.MouseEvent<SVGSVGElement>): void {
@@ -210,16 +217,23 @@ export function LineChart({
 
       {ticks.map((t) => (
         <g key={t}>
-          <line className="chart-grid" x1={PAD.left} x2={W - PAD.right} y1={y(t)} y2={y(t)} />
+          {/* One line a tick, and the zero rule is one of them rather than a second line drawn
+              over the first (Story #270). Zero was always in this domain; before it was a tick it
+              was a rule at `y(0)` with no gridline under it and no label beside it, which is why
+              the return curve's break-even was the one level on the chart the reader could not
+              read a number off. `BarChart` has drawn it this way since Story #170. */}
+          <line
+            className={t === 0 && showZero ? 'chart-zero' : 'chart-grid'}
+            x1={PAD.left}
+            x2={W - PAD.right}
+            y1={y(t)}
+            y2={y(t)}
+          />
           <text className="chart-axis-label" x={PAD.left - 8} y={y(t)} dy="0.32em" textAnchor="end">
             {formatValue(t)}
           </text>
         </g>
       ))}
-
-      {showZero && (
-        <line className="chart-zero" x1={PAD.left} x2={W - PAD.right} y1={y(0)} y2={y(0)} />
-      )}
 
       {tone === 'series' ? (
         <>

@@ -11,6 +11,8 @@ import {
   columnDomain,
   columnPlot,
   columnPlotWidthPx,
+  seriesDomain,
+  MAX_SERIES_TICKS,
   pairedDomain,
   pairedTooltipRows,
   type ColumnDatum,
@@ -93,6 +95,108 @@ describe('columnDomain', () => {
  * The daily-return chart's hover target. The plot below is the real one: `PERFORMANCE_PLOT` is
  * 500 wide with `pad.left` 64 and `pad.right` 16, leaving 420 units of bands.
  */
+/**
+ * The value axis the two Performance curves adopted (Story #270).
+ *
+ * `LineChart` laid three ticks at `[minV, minV + spanV / 2, maxV]` — evenly spaced and arbitrarily
+ * levelled. Measured on the owner's real import, the value curve read `€0.00 / €34,258.85 /
+ * €68,517.70` and the return curve `-12.20% / +8.03% / +28.25%`, in a 2×2 grid whose other two
+ * charts were already drawn against `€0 … €80,000` and `-5% … +10%`. Both windows below are those
+ * exact series, so a change to the rule shows up here as the numbers a reader would see.
+ *
+ * The properties are asserted over a sweep rather than a case, because the failure this rule can
+ * still have is not a wrong label — it is a domain that clips its own series, drops zero, or hangs
+ * more gridlines behind a 136-unit plot than fit in it, and none of those announce themselves.
+ */
+describe('seriesDomain', () => {
+  /** Every window the two curves and the daily bars plausibly plot, plus the degenerate ones. */
+  const WINDOWS: readonly number[][] = [
+    [0, 4.2, 16.14],
+    [0, -12.2, 8.03, 28.25],
+    [0, 34_258.85, 68_517.7],
+    [-0.004, 0.0121, -0.0098],
+    [1_000_000, 1_240_000],
+    [-3, -12.2],
+    [42, 42, 42],
+    [0.5],
+    [0, 0, 0],
+    [],
+  ]
+
+  it('lands a 0–16% window on round, evenly stepped levels', () => {
+    const domain = seriesDomain([0, 4.2, 16.14])
+
+    expect(domain.ticks).toEqual([0, 5, 10, 15, 20])
+    expect(domain.bottom).toBe(0)
+    expect(domain.top).toBe(20)
+  })
+
+  it('draws the return curve’s full history against zero, not against its own extremes', () => {
+    // What the chart showed before this story: -12.20% / +8.03% / +28.25%.
+    expect(seriesDomain([0, -12.2, 8.03, 28.25]).ticks).toEqual([-20, 0, 20, 40])
+  })
+
+  it('gives the value curve the axis the composition stack beside it already had', () => {
+    // Both plot the same NAV, so agreeing is the point: €0 … €80,000 in €20,000 steps.
+    expect(seriesDomain([0, 34_258.85, 68_517.7]).ticks).toEqual([0, 20_000, 40_000, 60_000, 80_000])
+  })
+
+  it('rounds outward, so no window is clipped by its own axis', () => {
+    for (const values of WINDOWS) {
+      if (values.length === 0) continue
+      const { top, bottom } = seriesDomain(values)
+      expect(top).toBeGreaterThanOrEqual(Math.max(...values))
+      expect(bottom).toBeLessThanOrEqual(Math.min(...values))
+    }
+  })
+
+  it('keeps zero a tick, and the ticks even, in every window', () => {
+    for (const values of WINDOWS) assertEvenAndZeroed(seriesDomain(values).ticks)
+  })
+
+  it('never hangs more gridlines behind the plot than MAX_SERIES_TICKS', () => {
+    for (const values of WINDOWS) {
+      expect(seriesDomain(values).ticks.length).toBeLessThanOrEqual(MAX_SERIES_TICKS)
+    }
+    // The bound is arithmetic, not observation: `niceStep` rounds up, so a step is at least a
+    // quarter of the raw span, and rounding each extreme outward adds under one more at each end.
+    // Swept across three orders of magnitude and every offset within them, it holds.
+    for (let magnitude = -2; magnitude <= 6; magnitude++) {
+      for (let frac = 1; frac <= 100; frac++) {
+        const span = frac * 10 ** magnitude
+        expect(seriesDomain([0, span]).ticks.length).toBeLessThanOrEqual(MAX_SERIES_TICKS)
+        expect(seriesDomain([-span / 3, span]).ticks.length).toBeLessThanOrEqual(MAX_SERIES_TICKS)
+      }
+    }
+  })
+
+  it('holds a flat series between round levels rather than collapsing the plot onto it', () => {
+    expect(seriesDomain([42, 42, 42]).ticks).toEqual([0, 20, 40, 60])
+  })
+
+  it('gives a single reading an axis of its own', () => {
+    expect(seriesDomain([0.5]).ticks).toEqual([0, 0.2, 0.4, 0.6])
+  })
+
+  it('leaves a window that never crosses zero resting on it', () => {
+    // All-positive floors at zero; all-negative hangs from it. Either way zero is an edge the
+    // series touches rather than a level it passes through — which is what `showZero` reads.
+    expect(seriesDomain([12, 68]).bottom).toBe(0)
+    expect(seriesDomain([-3, -12.2]).top).toBe(0)
+  })
+
+  it('collapses an empty or all-zero window to a single 0 tick', () => {
+    expect(seriesDomain([]).ticks).toEqual([0])
+    expect(seriesDomain([0, 0, 0]).ticks).toEqual([0])
+  })
+
+  it('is the stack’s own rule, applied to a series with no upper segment', () => {
+    for (const values of WINDOWS) {
+      expect(seriesDomain(values)).toEqual(columnDomain(values.map((v) => ({ lower: v, upper: 0 }))))
+    }
+  })
+})
+
 describe('bandIndexAt', () => {
   const LEFT = 64
   const PLOT_W = 420

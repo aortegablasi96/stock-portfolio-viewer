@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import type { ValuePoint } from '@shared/domain/performance'
 import { PERFORMANCE_PLOTS } from '../../lib/chartGeometry'
-import { bandIndexAt, columnDomain } from '../../lib/column'
+import { bandIndexAt, seriesDomain } from '../../lib/column'
 import { StatePanel } from '../ui/StatePanel'
 import { signInk } from '../../lib/chartTooltip'
 import { ChartTooltip } from './ChartTooltip'
@@ -88,9 +88,11 @@ export function BarChart({
 
   const plotH = H - PAD.top - PAD.bottom
   const plotW = W - PAD.left - PAD.right
-  // `columnDomain` already rounds outward to nice steps, always spans zero, and always puts a tick
-  // on it — everything this axis needs. A single series is the degenerate stack: no upper segment.
-  const { top, bottom, ticks } = columnDomain(points.map((p) => ({ lower: p.value, upper: 0 })))
+  // `seriesDomain` already rounds outward to nice steps, always spans zero, and always puts a tick
+  // on it — everything this axis needs. A single series is the degenerate stack: no upper segment,
+  // said once in `lib/column` since Story #270 rather than at each of the three call sites, so the
+  // two curves in the grid and these bars cannot end up on three readings of one rule.
+  const { top, bottom, ticks } = seriesDomain(points.map((p) => p.value))
   const span = top - bottom || 1
 
   // One band per point rather than a date-proportional axis: trading days are irregular, and
