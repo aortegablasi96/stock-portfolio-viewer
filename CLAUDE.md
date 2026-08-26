@@ -276,7 +276,8 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
   defaulted parameter, so neither can be tuned alone. Don't "restore" the old breakpoint by
   lowering it — that ships illegible labels; capping a chart's width stays **rejected**
   (DDR-0051, DDR-0057). **A `viewBox` clips an overflowing label in silence**, so `pad.left` is
-  *derived* from a measured glyph advance and a character budget (DDR-0051 §#190). A stacked
+  *derived* from a glyph advance and a character budget — **one per axis kind**, because too much
+  gutter never clips and so is never reported; only `left` varies (DDR-0051 §#190, DDR-0091). A stacked
   chart's key lives in the **card header**, not a `<figcaption>` — `ColumnChart` and
   `StackedAreaChart` both emit a bare `<svg>` (DDR-0052, DDR-0064). **A chart title never varies
   with the range**; the return curve's rebasing is disclosed by a *fixed* header note beside the

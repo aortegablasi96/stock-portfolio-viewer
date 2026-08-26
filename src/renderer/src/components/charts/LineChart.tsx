@@ -1,6 +1,10 @@
 import { useId, useRef, useState } from 'react'
 import type { ValuePoint } from '@shared/domain/performance'
-import { PERFORMANCE_PLOT } from '../../lib/chartGeometry'
+import {
+  PERFORMANCE_FRAME,
+  PERFORMANCE_PLOTS,
+  type AxisLabelKind,
+} from '../../lib/chartGeometry'
 import { signInk } from '../../lib/chartTooltip'
 import { signedBands } from '../../lib/signedCurve'
 import { StatePanel } from '../ui/StatePanel'
@@ -27,14 +31,19 @@ import { ChartTooltip } from './ChartTooltip'
 /* The plot's aspect ratio lives in `lib/chartGeometry` now (Story #172, DDR-0051): this chart
    shares a 2×2 grid with the bar and stacked-area charts, all three are read against each other,
    and three private copies of the same 1080×240 is how they would stop agreeing. 500×180 is what
-   half a column needs — see that module for why the width halved and the ratio shortened. */
-const { width: W, height: H, pad: PAD } = PERFORMANCE_PLOT
+   half a column needs — see that module for why the width halved and the ratio shortened.
+
+   The *frame* is shared and the **y-axis gutter is not** (Story #269). This one component draws
+   both a currency axis and a percentage one, and the two need different amounts of room, so the
+   `pad` is picked per instance from the `axis` prop below and only `W`/`H` can be read once here. */
+const { width: W, height: H } = PERFORMANCE_FRAME
 
 /** Above this many points the per-vertex markers are dropped (dense daily series). */
 const MAX_MARKERS = 30
 
 export function LineChart({
   points,
+  axis,
   formatValue,
   formatDate,
   ariaLabel,
@@ -42,6 +51,16 @@ export function LineChart({
   tone = 'series',
 }: {
   points: ValuePoint[]
+  /**
+   * What kind of figure `formatValue` returns, and therefore how much gutter the y-axis needs
+   * (Story #269).
+   *
+   * Required rather than defaulted, and deliberately not inferred from `tone`: a defaulted axis
+   * would silently give a new caller the currency gutter, which is the wrong one for a percentage
+   * chart in the one direction nothing can see — an over-wide gutter costs plot and never clips,
+   * so it would never be reported. It has to be stated beside the formatter it describes.
+   */
+  axis: AxisLabelKind
   formatValue: (v: number) => string
   formatDate: (epochMs: number) => string
   ariaLabel: string
@@ -64,6 +83,12 @@ export function LineChart({
   const svgRef = useRef<SVGSVGElement>(null)
   const gradientId = useId()
   const [hover, setHover] = useState<number | null>(null)
+
+  /* This instance's plot: the shared frame, and the gutter its own axis needs. Everything below
+     that reads a padding reads it from here, the hover card included — a card laid out against
+     the other kind's plot would clamp to a left edge this chart does not have. */
+  const PLOT = PERFORMANCE_PLOTS[axis]
+  const PAD = PLOT.pad
 
   if (points.length < 2) {
     return <StatePanel surface="inline">Not enough data points to plot a trend yet.</StatePanel>
@@ -119,7 +144,7 @@ export function LineChart({
   /* The two clipped halves and the ids that address them. `useId()` already mints one unique
      string for this instance; deriving the rest from it keeps the two curves in the grid from
      pointing at each other's clips, which is the same trap DDR-0061 recorded for the gradient. */
-  const bands = signedBands(y(0), PERFORMANCE_PLOT)
+  const bands = signedBands(y(0), PLOT)
   const aboveId = `${gradientId}-above`
   const belowId = `${gradientId}-below`
   const posGradientId = `${gradientId}-pos`
@@ -261,6 +286,7 @@ export function LineChart({
               different greens — and it returns nothing on a flat day (DDR-0070, DDR-0071). */}
           <ChartTooltip
             anchorX={x(active.date)}
+            plot={PLOT}
             title={formatDate(active.date)}
             rows={[
               {

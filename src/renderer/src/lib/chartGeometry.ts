@@ -50,16 +50,68 @@ export const AXIS_LABEL_ADVANCE_UNITS = 6.4
 export const AXIS_LABEL_GAP_UNITS = 8
 
 /**
- * The longest y-axis label the gutter is sized to hold, in characters.
+ * Which kind of figure a chart labels its **value axis** with (Story #269).
  *
- * Eleven is `€999,999.99` — a formatted base-currency figure with grouping and two decimals, at
- * the widest a six-figure portfolio produces. Ten is what this view actually renders today
- * (`€68,517.70`, `€80,000.00`), and a budget fitted to today's data is a budget that clips on
- * the first good year. Above €1M the symbol clips again; that is a real bound, and the honest
- * place to widen it is here rather than at the two decimals, which the tooltip has no way to
- * restate if the axis stops showing them.
+ * Not a style and not a formatter — it is the one fact the gutter has to be derived from, and it
+ * is a type rather than a number because four charts draw two kinds of label. `pad.left` was one
+ * number for all of them until this story: correct on the two charts it was measured against
+ * (`€999,999.99`) and twenty units of empty gutter on the two it was not, which the plot paid for.
  */
-export const AXIS_LABEL_BUDGET_CHARS = 11
+export type AxisLabelKind = 'currency' | 'percent'
+
+/**
+ * The longest y-axis label each kind of axis is given room for, in characters.
+ *
+ * **currency — eleven.** `€999,999.99`: a formatted base-currency figure with grouping and two
+ * decimals, at the widest a six-figure portfolio produces. Ten is what the value curve and the
+ * composition stack render today (`€68,517.70`, `€80,000.00`), and a budget fitted to today's
+ * data is a budget that clips on the first good year. Above €1M the symbol clips again; that is a
+ * real bound, and the honest place to widen it is here rather than at the two decimals, which the
+ * tooltip has no way to restate if the axis stops showing them.
+ *
+ * **percent — eight.** `+999.99%`, as `formatSignedPercent` writes it: a sign, up to three
+ * digits, two decimals and the symbol. The return curve labels its axis `+16.14%` and the daily
+ * bars `-1.23%` — seven and six — so eight holds a cumulative return of ±999.99%, an order of
+ * magnitude past anything either chart has plotted, and clips at ±1,000% where the grouping comma
+ * arrives. The same shape of bound as the currency one, stated in the same place.
+ *
+ * Story #269 read the percent labels as five or six characters, which assumes one decimal;
+ * `formatPercentValue` writes two, so the real spread is six to eight and the gutter hands back
+ * twenty units rather than the twenty-seven the issue estimated. The budget is what moved, not
+ * the estimate — sizing to five characters would clip the return curve the first time it passed
+ * +100%.
+ */
+export const AXIS_LABEL_BUDGET_CHARS: Readonly<Record<AxisLabelKind, number>> = {
+  currency: 11,
+  percent: 8,
+}
+
+/**
+ * The step a `pad` edge is stated in.
+ *
+ * The three edges every chart shares — 16, 16, 28 — have sat on a 4-unit grid since DDR-0018, and
+ * `left: 80` landed on it by arithmetic rather than by intent. Rounding the derivation up to the
+ * same step is what keeps a gutter a whole number of units instead of the 59.2 the percent budget
+ * produces, and it is why the currency gutter is still exactly the 80 Story #190 arrived at.
+ */
+const PAD_STEP_UNITS = 4
+
+/**
+ * The y-axis gutter a character budget needs, in viewBox units.
+ *
+ * This is Story #190's derivation with the budget passed in rather than read off a global — the
+ * one change this story makes to the *rule*. The charts anchor a tick at
+ * `pad.left - AXIS_LABEL_GAP_UNITS` with `text-anchor="end"`, so the label grows leftward from
+ * there and the gutter has to hold the gap plus the label.
+ *
+ * Nothing at runtime will notice if it does not. A `viewBox` has no layout engine, the root
+ * `<svg>` clips to its viewport in silence, and a label that starts at a negative x simply loses
+ * its leading glyph — which is exactly how a clipped `€` survived two milestones.
+ */
+export function axisGutterUnits(budgetChars: number): number {
+  const needed = budgetChars * AXIS_LABEL_ADVANCE_UNITS + AXIS_LABEL_GAP_UNITS
+  return Math.ceil(needed / PAD_STEP_UNITS) * PAD_STEP_UNITS
+}
 
 /**
  * 500×180 — **25:9, ≈2.78:1**, down from DDR-0018's 1080×240 (4.5:1).
@@ -70,18 +122,53 @@ export const AXIS_LABEL_BUDGET_CHARS = 11
  * carrying 4.5:1 into half the width would halve the height too, and a 180px-tall value curve
  * flattens a drawdown into a wobble — the plot needs its vertical resolution back.
  *
- * `pad` is an absolute allowance for text, not a fraction of the plot — an axis label does not
- * get shorter because the chart did. **`left` is 80, up from the 64 DDR-0051 recorded** (Story
- * #190): 64 holds eight characters and every value chart in this grid labels its axis with ten,
- * so `€68,517.70` began at x = −7.8 and the root `<svg>` clipped the currency symbol off every
- * tick but the smallest. The rule was right and the number never implemented it; it is derived
- * from the three constants above now, so a wider figure fails a test instead of losing its €.
+ * This is the part all four charts share and the part that must never differ between them: the
+ * ratio decides how big an axis label renders, and two charts in one row at two ratios would read
+ * as two different spans of the same dates.
  */
-export const PERFORMANCE_PLOT: PlotGeometry = {
-  width: 500,
-  height: 180,
-  pad: { top: 16, right: 16, bottom: 28, left: 80 },
+export const PERFORMANCE_FRAME = { width: 500, height: 180 } as const
+
+/**
+ * The three edges of the padding that do not depend on what a chart labels its axis with.
+ *
+ * `right` in particular is shared on purpose (Story #269): with the gutters now differing, the
+ * **right** edge of the plot is what still lines up across the grid, and it is the edge carrying
+ * the end of the window — the reading every one of these charts is scanned to.
+ */
+const SHARED_PAD = { top: 16, right: 16, bottom: 28 } as const
+
+/**
+ * The plot each kind of axis is drawn in — one frame, two gutters (Story #269).
+ *
+ * `pad` is an absolute allowance for text, not a fraction of the plot: an axis label does not get
+ * shorter because the chart did. What Story #190 could not see, with two charts to look at, is
+ * that it does not get *longer* either — `+16.14%` is seven characters however wide the column
+ * is, and holding eleven characters' worth of gutter for it spends 20 units of plot on nothing.
+ *
+ * So the gutter is per axis kind and derived from that kind's budget. Currency is still 80, to
+ * the unit. Percent is 60, and every one of the 20 units the two percentage charts gain is a unit
+ * that carried no ink.
+ */
+export const PERFORMANCE_PLOTS: Readonly<Record<AxisLabelKind, PlotGeometry>> = {
+  currency: {
+    ...PERFORMANCE_FRAME,
+    pad: { ...SHARED_PAD, left: axisGutterUnits(AXIS_LABEL_BUDGET_CHARS.currency) },
+  },
+  percent: {
+    ...PERFORMANCE_FRAME,
+    pad: { ...SHARED_PAD, left: axisGutterUnits(AXIS_LABEL_BUDGET_CHARS.percent) },
+  },
 }
+
+/**
+ * The plot a caller with no value axis of its own is laid out against — the widest gutter of the
+ * two, so anything defaulted here is bounded by the narrowest plot in the grid rather than by the
+ * roomiest.
+ *
+ * Its remaining users are the ones that do not draw a y-axis: `ChartTooltip`'s fallback, and the
+ * pure modules' tests. Every chart in the grid names its own kind.
+ */
+export const PERFORMANCE_PLOT: PlotGeometry = PERFORMANCE_PLOTS.currency
 
 /**
  * `.chart-axis-label`'s `font-size`, in viewBox units — one of `lib/tokenAdoption`'s permanent

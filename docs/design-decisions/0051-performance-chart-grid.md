@@ -1,6 +1,6 @@
 # 0051. The four Performance charts in a 2×2 grid, and the aspect ratio that pays for it
 
-- **Status:** Accepted, with two amendments.
+- **Status:** Accepted, with three amendments.
   - The **collapse breakpoint** is amended by [[0055-vertical-sidebar-tablist]] and then by
     [[0057-sidebar-collapse-and-the-frameless-corner]]. The threshold is the content column and the column is still 1200px
     wide; the *media query* is 1420px, because Story #182 put a 220px sidebar beside it, and
@@ -11,6 +11,10 @@
     answering rather than a preference.
   - **`pad.left` is 80, not 64** — see the amendment at the end of this record (Story #190). The
     *rule* stated below is unchanged and is what the correction restores.
+  - **`pad.left` is no longer one number** — [[0091-a-gutter-per-axis-kind]] derives it **per axis
+    kind** (Story #269). The currency gutter is still exactly 80 and the rule below is still the
+    rule; what changes is that the two charts labelling their axis in percent take 60 instead, so
+    the four plots no longer share a left edge. `pad.right`, the `viewBox` and the ratio do.
   - Everything else here stands, the 500×180 plot and the legibility walk included.
 - **Date:** 2026-08-13
 
