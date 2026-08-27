@@ -3,10 +3,18 @@ node_modules/
 
 # Build output
 dist/
-build/
 out/
 release/
 .vite/
+
+# `build/` is electron-builder's buildResources directory (see electron-builder.yml), so
+# despite the name it holds *source* — the icon stamped onto the executable, the installer
+# and the taskbar entry, plus the dependency-free script that draws it. It was ignored
+# wholesale here, under the heading above, which is why the app shipped with Electron's
+# default icon. Ignore anything else that lands there; keep the two sources.
+build/*
+!build/icon.ico
+!build/icon.mjs
 
 # electron-vite writes a timestamped copy of its config beside the original while it
 # loads it, and does not always clean it up if the build is interrupted.
