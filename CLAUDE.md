@@ -187,6 +187,23 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
   `@shared/domain/assetClass` because the profile stores the allocation report's own key; a second
   copy would leave targets joining with nothing and reading 0%.
 
+### The OpenAI gateway
+
+- **`repositories/assistant/aiGateway.ts` is the only code that reaches OpenAI** (ADR-0010,
+  DDR-0096). Plain HTTPS, **not** the `openai` SDK — its retry must be off, its socket timeout is
+  the wrong bound, and its errors get re-mapped anyway. It **returns a result union, never throws**:
+  one operation, seven states. `not_configured` (no key) is OpenAI's `not_connected` and a fresh
+  clone's resting state; **`too_large` is not `refused`** — the first means *nothing was sent*;
+  `not_responding` absorbs stall, unreachable host **and 5xx**, because DDR-0022 divides by
+  *recovery*; a `200` with no answer is `invalid`, never an empty `ok`. `MAX_PROMPT_CHARS` is a
+  **constant, not an env var**, and counts characters — a tokenizer is a dependency for a ceiling
+  that only has to stop runaway growth. A refusal is **redacted** before it leaves the file: a wrong
+  key comes back quoting a masked fragment of itself.
+- **The key is read in one place and never bundled.** `OPENAI_API_KEY` is unprefixed on purpose;
+  `aiGatewayIsolation.test.ts` fails if `src/renderer` or `src/preload` so much as names an
+  `OPENAI_` variable, if anything outside main imports the gateway, or if the CSP's `connect-src`
+  gains an origin.
+
 ### The IBKR gateway
 
 - **`https://localhost:5000`** (override `IBKR_GATEWAY_URL`). Its **self-signed certificate is
