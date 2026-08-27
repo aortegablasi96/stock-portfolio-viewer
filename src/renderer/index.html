@@ -12,8 +12,14 @@
 
       events.mapbox.com is DELIBERATELY ABSENT. Mapbox GL JS posts usage telemetry there by
       default; omitting the origin makes the browser block it regardless of library version or
-      configuration, which is what structurally guarantees that no portfolio data leaves this
-      machine. This is not an oversight -- do not add it.
+      configuration, which is what structurally guarantees that no portfolio data leaves the
+      RENDERER. This is not an oversight -- do not add it.
+
+      Scope note (ADR-0010): this CSP is the renderer's boundary, not the application's. The AI
+      assistant sends portfolio-derived figures to OpenAI from the MAIN process, gated on the
+      owner's consent, and main is not subject to this policy. Do not add an origin here for it
+      -- the renderer must stay unable to reach a model provider, which is what keeps the API
+      key out of this bundle.
     -->
     <meta
       http-equiv="Content-Security-Policy"

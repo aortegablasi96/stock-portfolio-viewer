@@ -2,6 +2,11 @@
 
 - **Status:** Accepted
 - **Date:** 2026-07-26
+- **Amended by:** [[0010-openai-provider-and-the-network-policy]] (2026-08-27) — *Confine network
+  access to the basemap surface* below remains true **of the renderer**, which still carries no
+  application data off the machine. It is no longer true of the application as a whole: the AI
+  assistant sends portfolio-derived figures to OpenAI **from the main process**, gated on the owner's
+  consent. The CSP, and the deliberate omission of `events.mapbox.com`, are unchanged.
 
 ## Context
 
