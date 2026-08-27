@@ -37,17 +37,6 @@ export interface VocabularyTerm {
 export type ProfileVocabulary = Record<TargetDimension, readonly VocabularyTerm[]>
 
 /**
- * Sector keys that are an *absence* rather than a policy.
- *
- * The allocation report collects unclassified positions into their own slice so the view can
- * prompt a classification run. It is a real slice and a real weight, and it is not something an
- * owner can hold a target for — "I intend 10% of my portfolio to be instruments IBKR has not told
- * me the sector of" is not a policy. Filtered from the *suggestions* only: were one somehow in a
- * stored profile it would still be listed, like any other unheld key.
- */
-export const NON_POLICY_SECTOR_KEYS: readonly string[] = ['Unclassified']
-
-/**
  * The terms to offer in each dimension: what the portfolio holds, plus what the form already
  * names, sorted by label and never duplicated.
  *
@@ -60,15 +49,24 @@ export function vocabularyFrom(
 ): ProfileVocabulary {
   return {
     currency: merge(slicesOf(report?.byCurrency), form[FORM_FIELDS.currency]),
-    sector: merge(
-      slicesOf(report?.bySector).filter((term) => !NON_POLICY_SECTOR_KEYS.includes(term.key)),
-      form[FORM_FIELDS.sector],
-    ),
+    sector: merge(slicesOf(report?.bySector), form[FORM_FIELDS.sector]),
     assetClass: merge(slicesOf(report?.byAssetClass), form[FORM_FIELDS.assetClass]),
   }
 }
 
-/** The report's own terms for one dimension. A slice with no key is not a term. */
+/**
+ * The report's own terms for one dimension. **A slice with a blank key is not a term.**
+ *
+ * That blank is not a formality, it is how the allocation report spells *absence*: unclassified
+ * positions group under the empty sector and are labelled "Unclassified" for the view (the label
+ * is the prose, the key is the data). Offering it as something to hold a target for would be
+ * offering "I intend 10% of my portfolio to be instruments IBKR has not told me the sector of",
+ * which is not a policy. Story #281 measures the same absence as a *surfaced residual* rather
+ * than a bucket, for the same reason (DDR-0095).
+ *
+ * It is filtered from the **suggestions** only: a key already in the profile is listed either
+ * way, like any other unheld term.
+ */
 function slicesOf(slices: readonly AllocationSlice[] | undefined): VocabularyTerm[] {
   return (slices ?? [])
     .filter((slice) => slice.key.trim() !== '')

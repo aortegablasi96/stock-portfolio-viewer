@@ -70,6 +70,82 @@ describe('portfolioRepository.getBalances', () => {
   })
 })
 
+/**
+ * Cash per currency (Story #281, DDR-0095).
+ *
+ * `getBalances` above reads the `BASE` aggregate, which is the base-currency *equivalent* of cash
+ * held across several currencies — the right shape for one dashboard tile and the wrong one for a
+ * currency-exposure question, where attributing it to the base currency would invent an exposure
+ * the owner may not have.
+ */
+describe('portfolioRepository.getCashByCurrency', () => {
+  const multi: Record<string, LedgerEntry> = {
+    BASE: { currency: 'BASE', cashbalance: 500, stockmarketvalue: 9000, exchangerate: 1 },
+    EUR: { currency: 'EUR', cashbalance: 300, exchangerate: 1 },
+    USD: { currency: 'USD', cashbalance: 220, exchangerate: 0.9 },
+  }
+
+  it('reports each currency’s own balance', async () => {
+    gw.getLedger.mockResolvedValue(multi)
+
+    expect(await portfolioRepository.getCashByCurrency()).toEqual([
+      { currency: 'EUR', amount: 300 },
+      { currency: 'USD', amount: 220 },
+    ])
+  })
+
+  /**
+   * The `BASE` entry is a placeholder, not an ISO code, and its balance is the *sum* of the
+   * entries beside it. Including it would double every figure downstream — the same guard
+   * `resolveBaseCurrency` needs, for the same reason.
+   */
+  it('excludes the BASE aggregate, so cash is never counted twice', async () => {
+    gw.getLedger.mockResolvedValue(multi)
+    const cash = await portfolioRepository.getCashByCurrency()
+
+    expect(cash.map((c) => c.currency)).not.toContain('BASE')
+    expect(cash.reduce((sum, c) => sum + c.amount, 0)).toBe(520)
+  })
+
+  /** A currency the owner holds no cash in is not an exposure. */
+  it('drops zero balances', async () => {
+    gw.getLedger.mockResolvedValue({
+      ...multi,
+      GBP: { currency: 'GBP', cashbalance: 0, exchangerate: 1.15 },
+    })
+
+    expect((await portfolioRepository.getCashByCurrency()).map((c) => c.currency)).toEqual([
+      'EUR',
+      'USD',
+    ])
+  })
+
+  /** A negative balance is a margin loan, which is a real exposure and stays. */
+  it('keeps a negative balance', async () => {
+    gw.getLedger.mockResolvedValue({
+      BASE: { currency: 'BASE', cashbalance: -100, exchangerate: 1 },
+      USD: { currency: 'USD', cashbalance: -100, exchangerate: 0.9 },
+    })
+
+    expect(await portfolioRepository.getCashByCurrency()).toEqual([
+      { currency: 'USD', amount: -100 },
+    ])
+  })
+
+  /**
+   * It costs no extra round trip: `gatewayCache` keys the ledger by account, so this is the read
+   * `getBalances` already made in the same overview (DDR-0024).
+   */
+  it('shares the ledger read with getBalances rather than making a second one', async () => {
+    gw.getLedger.mockResolvedValue(multi)
+
+    await portfolioRepository.getBalances()
+    await portfolioRepository.getCashByCurrency()
+
+    expect(gw.getLedger).toHaveBeenCalledTimes(1)
+  })
+})
+
 describe('portfolioRepository.getHoldings', () => {
   it('excludes closed (zero-quantity) positions', async () => {
     gw.getPositions.mockResolvedValue([

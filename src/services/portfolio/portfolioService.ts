@@ -1,11 +1,24 @@
 import { flexReadRepository } from '@repositories/flex/flexReadRepository'
-import { portfolioRepository } from '@repositories/portfolio/portfolioRepository'
+import {
+  portfolioRepository,
+  type CashBalance,
+} from '@repositories/portfolio/portfolioRepository'
 import type {
   AccountBalances,
   AllocationSlice,
   Holding,
   PortfolioOverview,
 } from '@shared/domain/portfolio'
+
+/**
+ * Cash in one currency, valued in a display currency on a holding's terms (Story #281).
+ *
+ * `displayValue === null` means **unconvertible, not zero** — the rule DDR-0007 states for a
+ * holding, and the reason this shape exists rather than a bare converted number.
+ */
+export interface CashPosition extends CashBalance {
+  displayValue: number | null
+}
 
 /**
  * Portfolio business logic for the read-only dashboard (Milestone M1, refined in M3
@@ -158,6 +171,40 @@ export const portfolioService = {
       totalMarketValue: round2(totalMarketValue),
       displayCurrency,
     }
+  },
+
+  /**
+   * Cash per currency, each valued in `displayCurrency` on the same terms as a holding
+   * (Story #281, DDR-0095).
+   *
+   * `getOverview` reports cash as the one base-currency total the dashboard's tile shows. A
+   * currency-exposure question is the one place that is the wrong shape: the total is the
+   * base-currency *equivalent* of cash held across several currencies, so attributing it to the
+   * base currency would invent an exposure the owner may not have.
+   *
+   * `displayValue` follows DDR-0007 exactly, which is the whole reason this lives here rather
+   * than in the repository: an unavailable rate is `null` — **unconvertible, not zero** — so a
+   * cash balance the gateway could not price leaves every total instead of quietly landing in
+   * one at face value. Native `amount` is retained beside it, as a holding's is.
+   *
+   * It reuses the ledger read `getOverview` already made and the rates it already fetched, both
+   * coalesced by the repository's cache, so calling both costs one gateway round trip (DDR-0024).
+   */
+  async getCashPositions(displayCurrency: string): Promise<CashPosition[]> {
+    const cash = await portfolioRepository.getCashByCurrency()
+    if (cash.length === 0) return []
+
+    const rates = await portfolioRepository.getExchangeRates(
+      cash.map((c) => c.currency),
+      displayCurrency,
+    )
+    return cash.map((c) => {
+      const rate = rates[c.currency]
+      return {
+        ...c,
+        displayValue: rate === undefined ? null : round2(c.amount * rate),
+      }
+    })
   },
 
   /**

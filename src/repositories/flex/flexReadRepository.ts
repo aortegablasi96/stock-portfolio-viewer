@@ -172,6 +172,13 @@ export interface InstrumentName {
   description: string
 }
 
+/** An instrument's asset category as imported history records it (Story #281). */
+export interface InstrumentAssetClass {
+  conid: number | null
+  symbol: string
+  assetCategory: string
+}
+
 /** A declared-but-unpaid dividend from the latest statement, in native currency (Story #31). */
 export interface DividendAccrualRow {
   symbol: string
@@ -473,6 +480,31 @@ export const flexReadRepository = {
         conid: flexSecurities.conid,
         symbol: flexSecurities.symbol,
         description: flexSecurities.description,
+      })
+      .from(flexSecurities)
+      .all()
+  },
+
+  /**
+   * Each instrument's asset category from `SecurityInfo`, for resolving one by conid/symbol
+   * (Story #281, DDR-0095).
+   *
+   * A sibling of `getInstrumentNames` rather than a column added to it, and for the same reason
+   * that read exists: **the live gateway carries no asset class** — a position DTO has a conid, a
+   * description, a price and a currency, and nothing that says whether it is a stock or an option
+   * (DDR-0088 records the same gap for the instrument's name). Imported history does carry it, and
+   * every position the owner holds has been traded, so this is a local read of what the app
+   * already stores rather than a request.
+   *
+   * Distinct across statements, like the names: an instrument's asset category is stable, so
+   * cross-statement duplicates collapse and there is no fan-out.
+   */
+  getInstrumentAssetClasses(): InstrumentAssetClass[] {
+    return getDb()
+      .selectDistinct({
+        conid: flexSecurities.conid,
+        symbol: flexSecurities.symbol,
+        assetCategory: flexSecurities.assetCategory,
       })
       .from(flexSecurities)
       .all()

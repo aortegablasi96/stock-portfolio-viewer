@@ -43,12 +43,15 @@ Each exists end-to-end and is the reference pattern for its shape.
   (`flexImportService` / `flexStatementsService`). See ADR-0005, DDR-0004, DDR-0026.
 - **analytics / dividends** — read-only over Flex through `flexReadRepository`, converting to base
   (EUR) **in the service**, each returning `ok | needs_import`. See DDR-0005, DDR-0010, DDR-0015.
-- **profile** — the owner's investor profile: style tags and target ranges. `investorProfileService`
-  → `metaRepository` → **one overwritten `app_meta` value**, because a profile is a *setting*, not
-  history — ADR-0006 governs history and DDR-0009's mutable-table exception is for a *cache of
-  derived reference data*, which this is neither. "Clear" **removes the key**, so "never written"
-  and "cleared" are one state. `metaRepository.remove` is not ADR-0006's refused delete-by-id
-  (DDR-0094).
+- **profile** — the owner's investor profile, and how far the portfolio sits from it.
+  `investorProfileService` → `metaRepository` → **one overwritten `app_meta` value**, because a
+  profile is a *setting*, not history — ADR-0006 governs history and DDR-0009's mutable-table
+  exception is for a *cache of derived reference data*, which this is neither. "Clear" **removes
+  the key**, so "never written" and "cleared" are one state. `metaRepository.remove` is not
+  ADR-0006's refused delete-by-id (DDR-0094). `balanceDriftService` beside it computes drift
+  **deterministically — no model ever does this arithmetic** — over the **live** portfolio, not
+  Flex, which is why it is the one `profile:*` channel with gateway states. Its traps are below
+  (DDR-0095).
 - **classification** — sector/industry. `classificationRepository` fronts *both* the mutable
   SQLite cache and `ibkrGateway`; `analytics:classifyInstruments` is the only analytics channel
   reaching IBKR. Refreshes are **resumable, not transactional** — a run that dies at 30 of 40 keeps
@@ -175,6 +178,14 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
   **integer minor units** plus a currency (DDR-0003); `flex_*` tables store **`real`** (DDR-0004).
   All timestamps are epoch-ms UTC integers.
 - **Base-currency conversion happens in the service** — never the repository, never the renderer.
+- **Drift's residuals are surfaced, never redistributed** (DDR-0095). Cash has no sector, an
+  instrument the classification cache missed has none either, one absent from imported history has
+  no asset class — each is its own weight, and `Σ bands + Σ residuals + untargeted === 100` per
+  dimension. An **unconvertible** holding is *unplaced* and gets **no percentage**: the gap against
+  IBKR's `netLiquidation` is two rate paths disagreeing, not a quantity (Bug #68) — which also makes
+  the concentration ceiling a **lower bound**. The asset-class vocabulary lives in
+  `@shared/domain/assetClass` because the profile stores the allocation report's own key; a second
+  copy would leave targets joining with nothing and reading 0%.
 
 ### The IBKR gateway
 

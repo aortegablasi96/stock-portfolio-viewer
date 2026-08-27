@@ -2,6 +2,8 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { IpcChannels } from '@shared/ipc/channels'
 import type {
   AllocationResult,
+  BalanceDriftRequest,
+  BalanceDriftResult,
   CaptureSnapshotResult,
   ClassificationProgress,
   ClassifyInstrumentsResult,
@@ -96,6 +98,10 @@ const api: RendererApi = {
     ipcRenderer.invoke(IpcChannels.profileSave, draft),
   clearInvestorProfile: (): Promise<ClearInvestorProfileResult> =>
     ipcRenderer.invoke(IpcChannels.profileClear),
+  // Balance drift (Story #281). Carries the display currency, because every weight in the report
+  // is a share of a total expressed in it.
+  getBalanceDrift: (request: BalanceDriftRequest): Promise<BalanceDriftResult> =>
+    ipcRenderer.invoke(IpcChannels.profileGetDrift, request),
 }
 
 contextBridge.exposeInMainWorld('api', api)
