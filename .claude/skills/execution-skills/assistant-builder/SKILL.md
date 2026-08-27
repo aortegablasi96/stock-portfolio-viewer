@@ -18,7 +18,7 @@ It must remain safe, deterministic where possible, and strictly bounded to the a
 Owns:
 
 * assistant orchestration logic
-* Anthropic (Claude) tool-use setup
+* model provider setup, and tool-use where tools are used (OpenAI `gpt-4.1-mini`, ADR-0010)
 * tool definitions and schemas
 * prompt design for assistant behavior
 * tool execution routing
@@ -81,7 +81,10 @@ Review:
 
 ## Tool-Based Architecture Only
 
-The assistant must only interact with the system through explicit tools.
+The assistant must only interact with the system through explicit tools, where tools are used at
+all. ADR-0009 permits either a deterministically assembled context or tool selection, provided
+every tool returns a **computed report** — the model may never derive a figure of its own. The
+first Assistant story starts without tool calling; these rules govern the moment it gains any.
 
 Tools must map to:
 
@@ -96,20 +99,27 @@ Never allow the model to access:
 
 ---
 
-## Single Owner & Analytics-Only
+## Single Owner & Read-Only Tools
 
 This is a single-user, local-first app: there is **no user identity, no tenant, and no
 `userId`** — tools operate on the one owner's local data. There is no identity for the model
 to choose or modify.
 
-The real safety boundary is behavioural: per the AI Principles in CLAUDE.md, the assistant is
-**analytics-only**. Tools must:
+The real safety boundary is behavioural: per the AI Principles in CLAUDE.md and ADR-0009, the
+assistant **proposes but never acts, and never sets the policy**. Tools must:
 
 * read and analyze the owner's portfolio data
-* never place trades, modify holdings, or execute transactions
-* never recommend investments or decide allocations
+* never place trades, modify holdings, or execute transactions — and expose no path to one
+* never propose changes to the owner's investor profile; that is the allocation decision and it
+  is theirs
 
-The user remains the decision maker.
+The assistant *may* judge balance against the profile the owner authored and suggest how to close
+a gap, naming positions. It **must not produce a figure of its own**: every number comes from a
+service that computed it, assembled deterministically, and the model phrases it. A suggestion
+naming an instrument the owner does not hold is not grounded in the app's data — mark it apart
+from computed claims.
+
+The user remains the decision maker: every suggestion is read and acted on by hand.
 
 ---
 
@@ -186,7 +196,7 @@ All tools must:
 * map directly to a service method
 * accept validated inputs only
 * return structured JSON
-* remain analytics-only (never trade, mutate holdings, or execute transactions)
+* remain read-only (never trade, mutate holdings, or execute transactions)
 * avoid side effects outside service scope
 
 Prefer:
@@ -236,7 +246,7 @@ Update assistant orchestration logic.
 
 ## Step 4
 
-Ensure tools remain analytics-only (no trading or mutation).
+Ensure tools remain read-only (no trading or mutation).
 
 ## Step 5
 
@@ -254,14 +264,14 @@ Test:
 
 * tool invocation correctness
 * multi-step reasoning flows
-* analytics-only safety (no trading or mutation)
+* read-only safety (no trading or mutation)
 * invalid tool inputs
 * fallback behavior
 * error handling
 
 Mock:
 
-* the Anthropic (Claude) API
+* the model provider API (OpenAI, reached through the repository-layer gateway)
 * service layer functions
 * tool execution layer
 
@@ -297,7 +307,7 @@ Summarize system prompt or behavior changes.
 
 ### Safety Considerations
 
-* analytics-only (no trading, no order execution)
+* read-only tools (no trading, no order execution)
 * tool restrictions
 * failure handling
 

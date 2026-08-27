@@ -56,8 +56,13 @@ Subsequent workflow skills may refine implementation details but must not redefi
 ## Product Vision
 
 Stock Portfolio Viewer is a personal, single-user desktop application for understanding and
-analyzing investment portfolios. It is local-first and private, and analytics-first — not
-advice-first.
+analyzing investment portfolios. It is local-first, with one qualification: the AI assistant
+sends portfolio-derived figures to OpenAI, gated on the owner's consent (ADR-0010).
+
+The app **proposes; it never acts, and it never sets the policy** (ADR-0009). It may judge
+balance against the owner's own investor profile and suggest how to close a gap, naming
+positions. It places no orders and has no path to one, and it never proposes changes to the
+profile itself — that decision is the owner's.
 
 Its purpose is to help an investor:
 

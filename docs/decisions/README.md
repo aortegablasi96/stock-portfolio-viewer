@@ -44,3 +44,5 @@ Trade-offs, follow-ups, and what becomes easier or harder.
 - `0006` — Sanctioned full reset of imported/captured local history (owner-confirmed clear)
 - `0007` — Mapbox GL JS basemap and the renderer's network policy (single allowlisted origin)
 - `0008` — An in-house design system for the renderer; shadcn/ui declined, its component API adopted
+- `0009` — The AI assistant's grounding and advisory boundary: it may propose, it never acts
+- `0010` — OpenAI as the assistant's model provider, and portfolio data leaving the machine

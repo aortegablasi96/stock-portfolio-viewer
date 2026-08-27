@@ -93,7 +93,26 @@ Keep domains cohesive.
 ## AI Principles
 
 AI enhances portfolio *understanding* (explain changes, summarize performance, compare
-periods, answer questions). AI must never recommend investments, suggest trades, decide
-allocations, or execute transactions.
+periods, answer questions) and, against the owner's own **investor profile**, judges balance
+and may propose rebalancing — naming positions (ADR-0009).
+
+Three architectural rules make that safe, and they replace the former analytics-only guardrail:
+
+- **The model never produces a figure.** Every number is computed by a service, from
+  repositories, exactly as the analytics views compute theirs; the model is given assembled
+  reports and asked to phrase them. Context assembly is deterministic and unit-tested. The
+  model has no tools and no data access — it reaches neither the database, the repositories,
+  nor the IBKR gateway.
+- **The app never acts.** No order placement, no broker write, no path to one.
+- **The app never sets the policy.** It proposes moves toward the owner's targets; it never
+  proposes the targets.
+
+A proposal about a held position is grounded and carries its arithmetic. An instrument the
+owner does not hold comes from the model's training data — unverified, not price-checked — and
+must be marked apart from computed claims.
+
+The provider is `gpt-4.1-mini` on the OpenAI API, reached from the **main process** through a
+repository-layer gateway and gated on the owner's consent (ADR-0010). The renderer's CSP is
+unchanged and the renderer never reaches it.
 
 > Architecture Reviews (see the `architect` skill) produce the input to this document.

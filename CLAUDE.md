@@ -127,8 +127,9 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
   `nodeIntegration: false`, and `frame: false` with an in-app `TitleBar` (DDR-0011). Keep it.
 - **The renderer's CSP admits exactly one external origin** (`https://api.mapbox.com`);
   `events.mapbox.com` is **omitted on purpose**, so the platform blocks Mapbox telemetry however
-  the library is configured. Only tiles and the viewport leave the machine — no portfolio data
-  (ADR-0007).
+  the library is configured. Only tiles and the viewport leave the *renderer* — no portfolio data
+  (ADR-0007). **The CSP is not the app's boundary**: the assistant sends figures to OpenAI from
+  **main**, which the CSP never sees. Don't add an origin here for it (ADR-0010).
 - **Exactly one instance runs at a time** — `app.requestSingleInstanceLock()` at **module load**,
   before any `whenReady` work, so the loser quits without migrating, capturing, or opening the DB.
   Every write path assumes it is the only writer. Scoped to the user-data dir, which is why the
@@ -491,11 +492,23 @@ tools**.
 ## Product guardrails
 
 Stock Portfolio Viewer is a **standalone, single-user, local-first desktop application** for
-personal portfolio analytics, **analytics-first, not advice-first**.
+personal portfolio analytics.
 
-AI features (a later milestone) may explain, summarize, compare periods and answer questions. AI
-must **never** recommend investments, suggest trades, decide allocations, or execute transactions.
-Robo-advisor functionality is out of scope; the owner decides.
+**The AI assistant proposes; it never acts, and it never sets the policy** (ADR-0009, reversing the
+former analytics-only guardrail — don't restore it from an older doc). It may explain, summarize,
+compare periods, judge balance against the owner's **investor profile**, and suggest rebalancing
+**naming positions**. It may not place an order or reach any path to one, propose changes to the
+profile itself, or rebalance on a schedule. The profile is the allocation decision and the owner
+writes it.
+
+**The model never produces a figure.** Every number in an answer is computed by a service and
+*phrased* by the model; context assembly is deterministic and unit-tested, and the model gets no
+tools and no data access. A trim is grounded; an instrument the owner doesn't hold is repeated from
+training data — unverified, not price-checked — and the two are **marked apart** in the answer.
+
+**Portfolio data leaves the machine** for that one feature (ADR-0010): `gpt-4.1-mini`, from **main
+only**, gated on consent. `OPENAI_API_KEY` is unprefixed on purpose — a `RENDERER_VITE_` prefix
+ships the secret in the bundle.
 
 ## Current Priority
 
