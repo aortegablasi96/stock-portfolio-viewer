@@ -2,13 +2,18 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> **Budget: keep this file under 36 KB** (`wc -c CLAUDE.md` ≤ 36864) — it is loaded into every
-> session, so its cost is paid before any work starts.
+> **Budget: keep this file under 44 KB** (`wc -c CLAUDE.md` ≤ 45056) — it is loaded into every
+> session, so its cost is paid before any work starts. **`src/claudeMdBudget.test.ts` enforces it**
+> — unenforced, it was overrun for six commits unnoticed.
 >
 > Every ADR and DDR is 8–20 KB and carries its own reasoning, and
 > `docs/design-decisions/README.md` indexes each in one line. So when a story lands, add *the
 > trap* in a sentence with its DDR number — never the argument. If the budget is exceeded, cut a
 > paragraph that argues a case rather than drop a trap.
+>
+> **Raised once from 36 KB, deliberately** — nine stories had landed within 30 bytes of it. Cut
+> what restates a machine-readable fact (`package.json`, a directory listing) before compressing a
+> trap: this indexes ~1 MB of records, so a dropped trap costs a DDR re-read or a re-shipped bug.
 
 ## Current Repository State
 
@@ -79,14 +84,12 @@ src/
   preload/       contextBridge → window.api (types + channel names only, no Zod)
   renderer/      React + Vite (src/renderer/src/*): App sidebar shell under a custom TitleBar,
                  components/{analytics,charts,ui}/, lib/ (pure, unit-tested), assets/fonts/
-  services/      pure business logic — primary unit-test target; beyond the domains above,
-                 system/ (app:ping) and window/ (windowStateService, sidebarStateService)
+  services/      pure business logic; beyond the domains above, system/ (app:ping) and
+                 window/ (windowStateService, sidebarStateService)
   repositories/  the ONLY layer touching a data source (SQLite, the IBKR gateway, or both)
   db/            client.ts (better-sqlite3 + Drizzle singleton), migrate.ts, schema.ts
   shared/        ipc/contract.ts (Zod + inferred types), ipc/channels.ts, domain/, errors.ts
-drizzle/         generated SQL migrations + meta journal
 e2e/             Playwright specs launching the built app
-docs/flex-queries/  real Flex exports (parser ground truth) — gitignored
 ```
 
 ### Reference slices to copy
@@ -391,8 +394,9 @@ alternatives this table can only name.
 
 ## Stack
 
-Node ≥22.12 (CI runs 24) · npm · Electron · React + Vite · TypeScript (renderer **and** main) ·
-SQLite via Drizzle · Zod · IBKR Client Portal Gateway · Vitest · Playwright.
+Node ≥22.12, CI runs 24 — **no `engines` field enforces it**; the requirement lives in `ci.yml`'s
+comment (`@electron/rebuild` / `node-abi` need it). The rest of the stack is `package.json`; the
+one external dependency is the IBKR Client Portal Gateway.
 
 Runtime dependencies are deliberately few (`mapbox-gl` is the Allocation basemap and nothing
 else). **Avoid adding dependencies without clear long-term value.**
@@ -400,26 +404,18 @@ else). **Avoid adding dependencies without clear long-term value.**
 ## Commands
 
 ```bash
+# The script list is package.json (dev · build · start · package · typecheck · test:watch ·
+# db:generate · db:studio do what their names say). What package.json does NOT tell you:
+
 npm install            # postinstall: electron-rebuild for better-sqlite3 (native)
-
-npm run dev            # Electron + Vite dev server (hot reload)
-npm run build          # build main + preload + renderer into out/
-npm start              # preview the built app
-npm run package        # build + distributable via electron-builder
-
-npm run lint           # eslint . (also enforces the layer-boundary import rules)
-npm run typecheck      # tsc --noEmit
+npm run lint           # eslint . — also enforces the layer-boundary import rules
 npm test               # vitest run — Node env, *.test.ts under src/
-npm run test:watch
-npm run test:e2e       # builds, then Playwright launches the built app
+npm run test:e2e       # builds first, then Playwright launches the built app
+npm run db:migrate     # applies to ./local.dev.db, NOT the app's DB (override: DATABASE_URL)
 
 npx vitest run src/services/meta/metaService.test.ts   # a single unit test
 npx vitest run -t "generates and persists"             # by test-name substring
 npm run build && npx playwright test e2e/tab-navigation.spec.ts   # a single e2e spec
-
-npm run db:generate    # emit SQL migration from schema.ts changes
-npm run db:migrate     # apply to ./local.dev.db (dev tooling only; override with DATABASE_URL)
-npm run db:studio
 ```
 
 There is no lint-fix or aggregate `check` script. **CI** runs exactly `lint`, `typecheck`, `test`
@@ -470,8 +466,12 @@ and return to the owning workflow skill rather than being made inline.**
 
 `docs/` holds `architecture.md`, `database.md`, `product.md`, `mcp.md`, `github-issues.md`, plus
 `decisions/` (ADRs) and `design-decisions/` (DDRs), each with a README indexing every record in one
-line. `flex-queries/` is **gitignored** (see above). Adding a repository means keeping
-`src/repositories/README.md` in step; the layering itself is `docs/architecture.md`.
+line. Adding a repository means keeping `src/repositories/README.md` in step; the layering itself
+is `docs/architecture.md`.
+
+Two `docs/` subdirectories are **gitignored**, absent from a fresh clone: `flex-queries/` (see
+*Flex data traps*) and `figma_design/` — a design reference, never built or imported by `src/`,
+carrying **its own `CLAUDE.md`/`AGENTS.md` that replace this file** for work inside it.
 
 Consult documentation in this order: **`docs/decisions/` → `docs/design-decisions/` →
 `docs/product.md` → GitHub Issues → `docs/architecture.md` → `docs/database.md`.** On a conflict:
