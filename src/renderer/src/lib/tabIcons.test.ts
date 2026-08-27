@@ -34,8 +34,22 @@ const ICONS = strip(read('../components/TabIcons.tsx'))
 const APP = strip(read('../App.tsx'))
 const CSS = strip(read('../app.css'))
 
-/** The five tabs, in the order `App.tsx` declares them and `tab-navigation.spec.ts` asserts. */
-const TABS = ['Portfolio', 'Performance', 'Allocation', 'Dividends', 'Trades'] as const
+/**
+ * The tabs, in the order `App.tsx` declares them and `tab-navigation.spec.ts` asserts.
+ *
+ * Six since Story #280: the investor profile is the first row that is not a data view, and it
+ * arrives here rather than in a settings surface the app does not have (DDR-0094). Its glyph
+ * follows the same rule as the other five — it names what the view *draws*, a target with a band
+ * around its centre, rather than the gear or the person a "settings" reading would have picked.
+ */
+const TABS = [
+  'Portfolio',
+  'Performance',
+  'Allocation',
+  'Dividends',
+  'Trades',
+  'Profile',
+] as const
 
 describe('every icon renders through the shared frame', () => {
   it.each(TABS)('%s has an icon component', (tab) => {

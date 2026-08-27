@@ -24,6 +24,9 @@ is out of scope — that decision is theirs (ADR-0009).
 - Performance analytics
 - Allocation analysis
 - Dividend tracking
+- **An investor profile** — the owner's own style tags and target ranges for currency, sector and
+  asset-class weight, plus a single-position size band. It is the standard the app measures
+  against, and the app never proposes one of its own (Story #280, DDR-0094).
 
 ## Future Capabilities
 

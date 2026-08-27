@@ -1032,6 +1032,28 @@ html {
   color-scheme: light dark;
 }
 
+/* The third kind (Story #280, DDR-0094). Like the date input it is text edited
+   in place; unlike either sibling its content has a *known* measure — a
+   percentage is at most five characters — so the box is sized to that rather
+   than to its container, which is what lets eight of them line up down a column
+   of target rows. `ch` rather than a step off the spacing scale because the
+   thing being sized is a count of glyphs, not a gap (DDR-0031). */
+.control-percent {
+  cursor: text;
+  inline-size: 5ch;
+  text-align: right;
+}
+
+/* The fourth (Story #280, DDR-0094). A vocabulary term — a currency code or a
+   sector name — with a `<datalist>` behind it, so the app's own terms drop down
+   while anything else can still be typed. Unlike `.control-percent` its content
+   has no bound, so it takes whatever the row can spare. */
+.control-term {
+  cursor: text;
+  inline-size: 100%;
+  min-inline-size: 0;
+}
+
 /* ---- Dashboard layout ---------------------------------------------------- */
 
 .dashboard {
@@ -3807,4 +3829,131 @@ html {
   height: 100%;
   background: var(--series-1);
   border-radius: var(--radius-pill);
+}
+
+/* ---- Profile view (M10, Story #280) --------------------------------------- */
+
+/* What the page is, what it says, and how the last write went — three lines
+   about the profile as a whole, tighter than the `--space-7` that separates the
+   cards below, because they are one statement rather than three sections. */
+.profile-intro-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* The page's lede and each card's. Both are `--muted` prose at the small step,
+   which is the treatment `.source-note` and `.table-notice` already carry — a
+   sentence explaining what is below it, rather than a label naming a figure
+   (DDR-0060). The measure is capped so a paragraph does not run the full width
+   of a 1400px window; `.confirm-warning` caps itself the same way. */
+.profile-intro {
+  margin: 0;
+  max-width: 60ch;
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  color: var(--muted);
+}
+
+.profile-lede {
+  margin: 0 0 var(--space-5);
+  max-width: 60ch;
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+  color: var(--muted);
+}
+
+/* What a dimension with no targets says. Deliberately not a `StatePanel`:
+   nothing failed and nothing is missing — an unset dimension is a valid
+   profile, so it reads as a statement rather than as a prompt (DDR-0038). */
+.profile-empty {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+/* The write's outcome, in a live region that is always in the document so a
+   screen reader has something to announce into. It reserves its own line, which
+   is why it is `min-height` rather than conditionally rendered: a message
+   appearing would otherwise push the whole page down by a line. */
+.profile-notice {
+  margin: 0;
+  min-height: var(--text-sm);
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+/* The failure tone is `--neg-text`, never `--neg`: one is ink and one is fill,
+   and picking the wrong one is silent (DDR-0046, DDR-0054). */
+.profile-notice-error {
+  color: var(--neg-text);
+}
+
+/* What the stored profile currently says, counted rather than listed — the lists
+   are on screen directly below it. It was in the first card's header for one
+   round and read as a fact about *investing style*; it is a fact about the
+   page. */
+.profile-summary {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+/* Discard beside Save in the page header's action slot. */
+.profile-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.profile-targets {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.profile-target {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* Three labelled controls and a Remove, on one line that wraps whole fields
+   rather than splitting a label from its control. */
+.profile-target-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-5);
+}
+
+/* The key is the row's flexible part — a sector name is far longer than a
+   currency code, and the two percentage boxes are fixed by `.control-percent` —
+   but flexible is not unbounded: unclamped it took every pixel the page had
+   spare, so a three-letter currency code sat in a 700px box. The cap is the
+   longest real sector name (`Consumer, Cyclical`) with room to spare. */
+.profile-target-key {
+  flex: 1 1 10rem;
+  max-inline-size: 20rem;
+  min-width: 0;
+}
+
+/* `TermInput` renders its `<datalist>` as a sibling of the input, so the field
+   holds two children rather than one — the list draws nothing, but it must not
+   be counted as a flex item beside the control it belongs to. */
+.profile-target-key .control {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* A row's own fault, under the row it belongs to — which is the whole reason
+   the form validates at all, since the IPC boundary rejects the document as a
+   whole and cannot say which of eight rows to look at (ADR-0002). */
+.profile-target-issue {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--neg-text);
 }

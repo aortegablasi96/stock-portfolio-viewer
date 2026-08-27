@@ -11,6 +11,16 @@ import {
   type ClassificationProgress,
   type ClassifyInstrumentsResult,
 } from '@shared/domain/classification'
+import {
+  clearInvestorProfileResultSchema,
+  investorProfileSchema,
+  saveInvestorProfileResultSchema,
+  validatedInvestorProfileDraftSchema,
+  type ClearInvestorProfileResult,
+  type InvestorProfile,
+  type InvestorProfileDraft,
+  type SaveInvestorProfileResult,
+} from '@shared/domain/investorProfile'
 
 /**
  * The typed contract for every IPC channel: the Zod schema used by the main
@@ -201,6 +211,33 @@ export const sidebarStateSchema = z.object({
 })
 export type SidebarState = z.infer<typeof sidebarStateSchema>
 
+// ---- profile:* (M10, Story #280) --------------------------------------------
+
+/**
+ * The owner's investor profile: style tags and target ranges (Story #280, DDR-0094).
+ *
+ * The read has no result variant, like `snapshot:list` and `flex:listStatements`: it is a pure
+ * local read of a setting, and an owner who has never written one gets the *empty profile*
+ * rather than an absence to branch on. The write and the clear do have variants, because both
+ * can fail in ways the renderer must render — `invalid` above all, which is the Zod parse of
+ * this schema failing at the boundary and never reaching storage (ADR-0002, DDR-0022).
+ *
+ * The request is the **draft** schema, which carries no `updatedAt`: when the profile was last
+ * written is the service's fact, not the caller's.
+ */
+export {
+  investorProfileSchema,
+  validatedInvestorProfileDraftSchema,
+  saveInvestorProfileResultSchema,
+  clearInvestorProfileResultSchema,
+}
+export type {
+  InvestorProfile,
+  InvestorProfileDraft,
+  SaveInvestorProfileResult,
+  ClearInvestorProfileResult,
+}
+
 // ---- window.api bridge shape ------------------------------------------------
 
 /**
@@ -256,4 +293,10 @@ export interface RendererApi {
   getSidebarState: () => Promise<SidebarState>
   /** Remember the sidebar's collapsed state; resolves to what was stored (Story #184). */
   setSidebarState: (state: SidebarState) => Promise<SidebarState>
+  /** The owner's investor profile; the empty profile when none has been written (Story #280). */
+  getInvestorProfile: () => Promise<InvestorProfile>
+  /** Store the investor profile; `invalid` when a range is out of bounds or inverted (Story #280). */
+  saveInvestorProfile: (draft: InvestorProfileDraft) => Promise<SaveInvestorProfileResult>
+  /** Un-set the investor profile, resolving to the empty profile now in force (Story #280). */
+  clearInvestorProfile: () => Promise<ClearInvestorProfileResult>
 }

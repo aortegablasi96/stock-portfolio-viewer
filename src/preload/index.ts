@@ -6,10 +6,13 @@ import type {
   ClassificationProgress,
   ClassifyInstrumentsResult,
   ClearHistoryResult,
+  ClearInvestorProfileResult,
   ClearStatementsResult,
   DividendResult,
   FlexImportResult,
   FlexStatementStore,
+  InvestorProfile,
+  InvestorProfileDraft,
   PerformanceResult,
   PingRequest,
   PingResponse,
@@ -17,6 +20,7 @@ import type {
   PortfolioOverviewResult,
   RealizedGainsResult,
   RendererApi,
+  SaveInvestorProfileResult,
   SidebarState,
   SnapshotList,
   SnapshotListRequest,
@@ -85,6 +89,13 @@ const api: RendererApi = {
     ipcRenderer.invoke(IpcChannels.windowGetSidebarState),
   setSidebarState: (state: SidebarState): Promise<SidebarState> =>
     ipcRenderer.invoke(IpcChannels.windowSetSidebarState, state),
+  // The owner's investor profile (Story #280). A read with no variant to discriminate, and two
+  // writes whose outcomes cross as data — `invalid` for a range the boundary rejected.
+  getInvestorProfile: (): Promise<InvestorProfile> => ipcRenderer.invoke(IpcChannels.profileGet),
+  saveInvestorProfile: (draft: InvestorProfileDraft): Promise<SaveInvestorProfileResult> =>
+    ipcRenderer.invoke(IpcChannels.profileSave, draft),
+  clearInvestorProfile: (): Promise<ClearInvestorProfileResult> =>
+    ipcRenderer.invoke(IpcChannels.profileClear),
 }
 
 contextBridge.exposeInMainWorld('api', api)

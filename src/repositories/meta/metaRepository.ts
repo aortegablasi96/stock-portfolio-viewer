@@ -27,4 +27,19 @@ export const metaRepository = {
       })
       .run()
   },
+
+  /**
+   * Remove one metadata value, reporting whether a row was there to remove (Story #280).
+   *
+   * This is **not** the delete-by-id variant ADR-0006 refuses. That rule guards the append-only
+   * history stores — snapshots and the `flex_*` tables — where a row records something that
+   * happened and deleting one silently rewrites the past. `app_meta` records no history: every
+   * value in it is a current setting the app overwrites in place whenever the owner changes it
+   * (DDR-0028), and un-setting one is the same class of act as re-writing it. The investor
+   * profile's "Clear" is the first caller (DDR-0094).
+   */
+  remove(key: string): boolean {
+    const result = getDb().delete(appMeta).where(eq(appMeta.key, key)).run()
+    return result.changes > 0
+  },
 }
