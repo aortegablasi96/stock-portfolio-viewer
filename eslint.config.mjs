@@ -19,6 +19,7 @@ export default tseslint.config(
       'src/preload/**/*.{ts,tsx}',
       '*.{js,mjs,ts}',
       '.claude/skills/**/*.mjs',
+      'build/**/*.mjs',
     ],
     languageOptions: {
       globals: { ...globals.node },
