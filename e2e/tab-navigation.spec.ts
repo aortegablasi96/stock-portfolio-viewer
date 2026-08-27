@@ -41,8 +41,22 @@ test.afterAll(async () => {
 /** The id of the element currently holding focus — the only way to assert a roving tabindex. */
 const focusedId = (): Promise<string | undefined> => page.evaluate(() => document.activeElement?.id)
 
-/** The five views, in order, by the name a reader hears. */
-const TAB_NAMES = ['Portfolio', 'Performance', 'Allocation', 'Dividends', 'Trades'] as const
+/**
+ * The views, in order, by the name a reader hears.
+ *
+ * Six since Story #280: the investor profile is the first row that is not a data view, and it
+ * takes the last position so the five data views stay contiguous (DDR-0094). Every assertion
+ * below that names "the last tab" therefore names Profile, and that is the point — the pattern
+ * derives from the list rather than from a written-down count.
+ */
+const TAB_NAMES = [
+  'Portfolio',
+  'Performance',
+  'Allocation',
+  'Dividends',
+  'Trades',
+  'Profile',
+] as const
 
 test('the tablist is named, vertical, and every tab is a tab', async () => {
   const tablist = page.getByRole('tablist', { name: 'Views' })
@@ -88,6 +102,7 @@ test('the tablist is a single stop in the Tab order', async () => {
     { label: 'Allocation', tabIndex: -1 },
     { label: 'Dividends', tabIndex: -1 },
     { label: 'Trades', tabIndex: -1 },
+    { label: 'Profile', tabIndex: -1 },
   ])
 })
 
@@ -159,7 +174,7 @@ test('arrow keys wrap at both ends of the tablist', async () => {
 
   // Up from the first tab lands on the last.
   await page.keyboard.press('ArrowUp')
-  expect(await focusedId()).toBe('tab-trades')
+  expect(await focusedId()).toBe('tab-profile')
 
   // Down from the last tab comes back round to the first.
   await page.keyboard.press('ArrowDown')
@@ -182,8 +197,8 @@ test('Home and End jump to the first and last tabs', async () => {
   await page.getByRole('tab', { name: 'Portfolio' }).focus()
 
   await page.keyboard.press('End')
-  expect(await focusedId()).toBe('tab-trades')
-  await expect(page.getByRole('tab', { selected: true })).toHaveAccessibleName('Trades')
+  expect(await focusedId()).toBe('tab-profile')
+  await expect(page.getByRole('tab', { selected: true })).toHaveAccessibleName('Profile')
 
   await page.keyboard.press('Home')
   expect(await focusedId()).toBe('tab-portfolio')

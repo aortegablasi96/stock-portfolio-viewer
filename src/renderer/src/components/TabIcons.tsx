@@ -96,3 +96,21 @@ export function TradesIcon(): React.JSX.Element {
     </Glyph>
   )
 }
+
+/**
+ * Profile — a target with a band around its centre, which is what the view draws (Story #280).
+ *
+ * The paragraph above says a glyph names what its view *draws* rather than an abstract synonym of
+ * its label, and the sixth row is the first where that rule had a wrong answer ready: a gear or a
+ * person would say "settings" and "user", and this page is neither. It is a set of ranges the
+ * portfolio is meant to sit inside, so the mark is a target whose ring is the range and whose
+ * centre is the point a range is deliberately not (DDR-0094).
+ */
+export function ProfileIcon(): React.JSX.Element {
+  return (
+    <Glyph>
+      <circle cx="8" cy="8" r="5.75" />
+      <circle cx="8" cy="8" r="2.25" />
+    </Glyph>
+  )
+}

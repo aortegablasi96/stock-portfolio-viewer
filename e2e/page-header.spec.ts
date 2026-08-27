@@ -6,7 +6,7 @@ import { test, expect, _electron as electron, type ElectronApplication, type Pag
 const mainEntry = join(__dirname, '..', 'out', 'main', 'index.js')
 
 /**
- * The one page header the five views open with (Story #185, DDR-0058).
+ * The one page header every view opens with (Story #185, DDR-0058).
  *
  * Everything asserted here is composition — which elements a view renders, in what order, with
  * what heading level — and none of it is reachable from Vitest, which runs in Node with no jsdom
@@ -38,13 +38,22 @@ test.afterAll(async () => {
   await app?.close()
 })
 
-/** The five views, and the title each one's header carries. */
+/**
+ * The views, and the title each one's header carries.
+ *
+ * Six since Story #280, and the sixth is why the `source` column is worth reading rather than
+ * skimming: the Profile page names **no data source**, because it has none. It is the owner's own
+ * policy statement, and stating that in the slot the other five use for their provenance is where
+ * the page says which of "a standard the owner set" and "a standard the app invented" it holds
+ * (ADR-0009, DDR-0094).
+ */
 const VIEWS = [
   { tab: 'Portfolio', title: 'Portfolio', source: 'Live from Interactive Brokers' },
   { tab: 'Performance', title: 'Performance', source: 'From imported Flex Query data' },
   { tab: 'Allocation', title: 'Allocation', source: 'From imported Flex Query data' },
   { tab: 'Dividends', title: 'Dividends', source: 'From imported Flex Query data' },
   { tab: 'Trades', title: 'Trades & realized gains', source: 'From imported Flex Query data' },
+  { tab: 'Profile', title: 'Investor profile', source: 'Set by you' },
 ] as const
 
 /** The header of whichever panel is currently exposed. Hidden panels are out of the tree. */
@@ -67,7 +76,9 @@ test('every view opens with the same header, naming itself and its source', asyn
  * needs-import state — the branch with no report at all — and the title still has to be there.
  */
 test('the title survives a branch with no report', async () => {
-  for (const view of VIEWS.slice(1)) {
+  // The four analytics views only — Profile has no needs-import branch, because its content is a
+  // form the owner can fill in with nothing imported at all (DDR-0094).
+  for (const view of VIEWS.slice(1, 5)) {
     await page.getByRole('tab', { name: view.tab }).click()
     await expect(page.locator('.tab-panel:not([hidden])').getByText('No imported data yet')).toBeVisible()
     await expect(header().locator('h1')).toHaveText(view.title)

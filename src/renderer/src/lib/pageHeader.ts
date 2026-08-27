@@ -18,6 +18,19 @@ export const LIVE_SOURCE = 'Live from Interactive Brokers'
 export const IMPORTED_SOURCE = 'From imported Flex Query data'
 
 /**
+ * The Profile view's provenance (Story #280), and the app's third — the first that names no data
+ * source at all, because there isn't one.
+ *
+ * The other five views report figures the app read from somewhere, and the line says where. The
+ * profile is the one page whose content the app cannot read from anywhere: it is the owner's own
+ * policy statement, and stating that in the same slot the other views state their source is the
+ * point rather than a formality. The whole Epic's authority rests on the app measuring against a
+ * standard the owner set instead of one it invented (ADR-0009), and this is where the page says
+ * which of the two it is holding.
+ */
+export const OWNER_SOURCE = 'Set by you'
+
+/**
  * The freshness line: what was read, and when.
  *
  * `loadedAt` is tested **before** `refreshing`, which is a generalisation rather than a change.

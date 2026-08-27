@@ -7,11 +7,13 @@ import { PerformanceView } from './components/analytics/PerformanceView'
 import { AllocationView } from './components/analytics/AllocationView'
 import { DividendsView } from './components/analytics/DividendsView'
 import { TradeHistoryView } from './components/analytics/TradeHistoryView'
+import { ProfileView } from './components/ProfileView'
 import {
   AllocationIcon,
   DividendsIcon,
   PerformanceIcon,
   PortfolioIcon,
+  ProfileIcon,
   TradesIcon,
 } from './components/TabIcons'
 import { nextTabIndex } from './lib/tabKeyboard'
@@ -95,14 +97,26 @@ import type { GatewayReading } from './lib/gatewayStatus'
  * hangs on the thing that names the whole list — the "Views" label's own `title`, with
  * `aria-keyshortcuts` on the tablist carrying the same fact to a reader who is listening.
  */
-type Tab = 'portfolio' | 'performance' | 'allocation' | 'dividends' | 'trades'
+type Tab = 'portfolio' | 'performance' | 'allocation' | 'dividends' | 'trades' | 'profile'
 
+/**
+ * **Story #280 adds the sixth row, and the first that is not a data view** (DDR-0094). The
+ * investor profile is a page — five sections, a form, an owner-confirmed reset — rather than a
+ * preference behind a gear, and the tablist is already a complete, tested way to reach a page, so
+ * it goes in the list rather than into a settings surface the app does not have. It takes the
+ * **last** row so the five data views stay contiguous, and it needed no change to either
+ * accelerator: `viewShortcutIndex` has always covered digits 1–9 and derives a row's binding from
+ * its index, and `rotatedTabIndex` wraps over `TABS.length` (DDR-0083, DDR-0090). It is also the
+ * second tab excluded from nothing — it stays mounted like the four analytics views, which is
+ * what lets a half-finished profile survive a trip to Allocation and back (DDR-0027).
+ */
 const TABS: { id: Tab; label: string; icon: () => React.JSX.Element }[] = [
   { id: 'portfolio', label: 'Portfolio', icon: PortfolioIcon },
   { id: 'performance', label: 'Performance', icon: PerformanceIcon },
   { id: 'allocation', label: 'Allocation', icon: AllocationIcon },
   { id: 'dividends', label: 'Dividends', icon: DividendsIcon },
   { id: 'trades', label: 'Trades', icon: TradesIcon },
+  { id: 'profile', label: 'Profile', icon: ProfileIcon },
 ]
 
 /** Display currency on first launch: the account's base currency (Story #28). */
@@ -448,6 +462,7 @@ export function App(): React.JSX.Element {
           {panel('allocation', <AllocationView />)}
           {panel('dividends', <DividendsView />)}
           {panel('trades', <TradeHistoryView />)}
+          {panel('profile', <ProfileView />)}
         </div>
       </div>
     </div>

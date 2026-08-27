@@ -45,6 +45,13 @@ export const IpcChannels = {
   // rather than the payload-free commands above.
   windowGetSidebarState: 'window:getSidebarState',
   windowSetSidebarState: 'window:setSidebarState',
+  // The owner's investor profile — style tags and target ranges (M10, Story #280). Its own
+  // prefix rather than `window:` because it is not shell state: it is the one thing in the
+  // database the app cannot reconstruct from any source, since its source is the owner. Kept in
+  // a single overwritten `app_meta` value all the same (DDR-0094, extending DDR-0028).
+  profileGet: 'profile:get',
+  profileSave: 'profile:save',
+  profileClear: 'profile:clear',
 } as const
 
 export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels]

@@ -1,16 +1,21 @@
 import { BrowserWindow, dialog, ipcMain } from 'electron'
+import type { ZodError } from 'zod'
 import { IpcChannels } from '@shared/ipc/channels'
 import {
   pingRequestSchema,
   portfolioOverviewRequestSchema,
   sidebarStateSchema,
   snapshotListRequestSchema,
+  validatedInvestorProfileDraftSchema,
   type CaptureSnapshotResult,
   type ClearHistoryResult,
+  type ClearInvestorProfileResult,
   type ClearStatementsResult,
   type FlexImportResult,
   type FlexStatementStore,
+  type InvestorProfile,
   type PortfolioOverviewResult,
+  type SaveInvestorProfileResult,
   type SidebarState,
   type SnapshotList,
 } from '@shared/ipc/contract'
@@ -25,6 +30,7 @@ import { realizedGainsService } from '@services/analytics/realizedGainsService'
 import { dividendService } from '@services/dividends/dividendService'
 import { classificationService } from '@services/classification/classificationService'
 import { sidebarStateService } from '@services/window/sidebarStateService'
+import { investorProfileService } from '@services/profile/investorProfileService'
 import { IbkrNotConnectedError, IbkrTimeoutError, ValidationError } from '@shared/errors'
 
 /**
@@ -204,4 +210,52 @@ export function registerIpcHandlers(): void {
     sidebarStateService.set(state)
     return state
   })
+
+  // The owner's investor profile (M10, Story #280). A pure local read of a setting, so — like
+  // `snapshot:list` — there is no variant to discriminate and no payload to validate; an owner
+  // who has never written one gets the empty profile.
+  ipcMain.handle(IpcChannels.profileGet, (): InvestorProfile => investorProfileService.get())
+
+  // The one channel in the app whose payload is a whole document rather than a flag or a code,
+  // and therefore the one where Zod at the ingress does real work: an inverted or out-of-bounds
+  // range is rejected **here** and never reaches storage (ADR-0002). A parse failure is
+  // `invalid`, not `error` — the owner mistyped a number, which is a correctable statement about
+  // the form rather than a failure of the app (DDR-0022).
+  ipcMain.handle(IpcChannels.profileSave, (_event, rawInput: unknown): SaveInvestorProfileResult => {
+    const parsed = validatedInvestorProfileDraftSchema.safeParse(rawInput)
+    if (!parsed.success) {
+      return { status: 'invalid', message: firstIssueMessage(parsed.error) }
+    }
+    try {
+      return { status: 'saved', profile: investorProfileService.save(parsed.data) }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unexpected error saving the profile.'
+      return { status: 'error', message }
+    }
+  })
+
+  // Un-setting the profile. Local and reversible-by-retyping, so failures surface as an `error`
+  // result variant, never thrown. This is not ADR-0006's sanctioned reset — no history is
+  // deleted, because a profile is a setting rather than history (DDR-0094).
+  ipcMain.handle(IpcChannels.profileClear, (): ClearInvestorProfileResult => {
+    try {
+      return { status: 'cleared', profile: investorProfileService.clear() }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unexpected error clearing the profile.'
+      return { status: 'error', message }
+    }
+  })
+}
+
+/**
+ * The first thing wrong with a rejected profile, as a sentence the form can show.
+ *
+ * One issue rather than all of them: the form validates every row as it is typed and disables its
+ * own Save, so a payload reaching here with several faults means something bypassed the form
+ * entirely, and a list of Zod paths would be no more useful to the owner than the first line.
+ * The domain's own refinements already write their messages in the owner's vocabulary
+ * ("Currency USD is listed twice"), so those pass straight through.
+ */
+function firstIssueMessage(error: ZodError): string {
+  return error.issues[0]?.message ?? 'That profile could not be stored.'
 }

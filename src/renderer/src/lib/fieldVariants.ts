@@ -15,16 +15,23 @@
  */
 
 /**
- * The two native controls the app has. A `kind` carries **cursor and colour-scheme only** —
- * the differences that follow from the element rather than from any styling choice: a select
- * is clicked (`pointer`), a date input's text is edited in place (`text`), and only the date
- * input has a browser-supplied picker, whose calendar glyph needs `color-scheme` to be told
- * the surface under it is dark.
+ * The four native controls the app has. A `kind` carries **cursor, colour-scheme and measure
+ * only** — the differences that follow from the element rather than from any styling choice: a
+ * select is clicked (`pointer`), a text control's content is edited in place (`text`), only the
+ * date input has a browser-supplied picker whose calendar glyph needs `color-scheme` to be told
+ * the surface under it is dark, and the two typed controls differ in how wide their content is.
  *
  * Everything else — padding, border, radius, type, hover, disabled — is the shared `.control`
- * box, which is what makes the two read as one control family.
+ * box, which is what makes the four read as one control family.
+ *
+ * **`percent` and `term` arrived together with the Profile form** (Story #280, DDR-0094), the
+ * app's first typed controls. They are two kinds rather than a size axis, because DDR-0035's
+ * reason for refusing a size scale still holds — every control here is the same dense box — and
+ * what actually differs is the measure the content implies: a percentage is at most five
+ * characters and is set to exactly that, so a column of them lines up; a vocabulary term is a
+ * currency code or a sector name and takes whatever the row can spare.
  */
-export const CONTROL_KINDS = ['select', 'date'] as const
+export const CONTROL_KINDS = ['select', 'date', 'percent', 'term'] as const
 
 export type ControlKind = (typeof CONTROL_KINDS)[number]
 

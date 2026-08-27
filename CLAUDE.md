@@ -19,7 +19,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 M0–M9 are delivered: live IBKR holdings/balances/allocation in a display currency, immutable
 snapshots, Flex statement import, and four analytics views over it, behind a vertical sidebar.
-Not built: AI, multi-broker, benchmarks, tax reporting.
+M10 is in progress — the investor profile (**profile** domain) has landed; the assistant itself
+has not. Not built: the model, multi-broker, benchmarks, tax reporting.
 
 **Which Epics are open is deliberately not recorded here** — read the backlog (*Current Priority*).
 The **lifecycle** is the rule: an Epic closes with its stories, and refinement opens a *new*
@@ -42,6 +43,12 @@ Each exists end-to-end and is the reference pattern for its shape.
   (`flexImportService` / `flexStatementsService`). See ADR-0005, DDR-0004, DDR-0026.
 - **analytics / dividends** — read-only over Flex through `flexReadRepository`, converting to base
   (EUR) **in the service**, each returning `ok | needs_import`. See DDR-0005, DDR-0010, DDR-0015.
+- **profile** — the owner's investor profile: style tags and target ranges. `investorProfileService`
+  → `metaRepository` → **one overwritten `app_meta` value**, because a profile is a *setting*, not
+  history — ADR-0006 governs history and DDR-0009's mutable-table exception is for a *cache of
+  derived reference data*, which this is neither. "Clear" **removes the key**, so "never written"
+  and "cleared" are one state. `metaRepository.remove` is not ADR-0006's refused delete-by-id
+  (DDR-0094).
 - **classification** — sector/industry. `classificationRepository` fronts *both* the mutable
   SQLite cache and `ibkrGateway`; `analytics:classifyInstruments` is the only analytics channel
   reaching IBKR. Refreshes are **resumable, not transactional** — a run that dies at 30 of 40 keeps
@@ -151,7 +158,8 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
   `needs_import`, `canceled`, `invalid`, `error`). `not_connected` (gateway isn't running) and
   `not_responding` (accepted, then stalled) are **not interchangeable** — `IbkrTimeoutError` is
   deliberately not a subclass of `IbkrNotConnectedError` (DDR-0022). Success is **not** uniformly
-  `ok`: capture returns `captured`, import `imported`, both clears `cleared`.
+  `ok`: capture returns `captured`, import `imported`, the profile save `saved`, every clear
+  `cleared`.
 - **The four-file recipe assumes `invoke`/`handle`.** The exception is the payload-free
   `window:minimize | toggleMaximize | close`, which use `send`/`on` and skip `contract.ts`
   entirely. Main→renderer events return an unsubscribe function; **a service that emits one takes
@@ -257,13 +265,19 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
   disclosed at **the scope of what it acts on** — a row's `title` for its digit (amending
   DDR-0057), the "Views" label's `title` + the tablist's `aria-keyshortcuts` for the rotation. Two
   bindings are still not a table. A drawn digit per row was built and **withdrawn** — don't
-  re-propose it, or a legend.
+  re-propose it, or a legend. **Profile is the sixth row and the first that is not a data view**
+  (DDR-0094): last, so the five data views stay contiguous; no accelerator changed (both derive
+  from the index and `TABS.length`); it **stays mounted**; and it declares its own `<main>`/`<h1>`
+  because it has no four-branch guard to wear. Adding a row is a **list edit in five e2e specs**.
 - **An analytics tab mounts on first visit and then stays mounted**, hidden rather than unmounted,
   so view-local state survives; unvisited tabs issue no IPC (DDR-0006, DDR-0027). The consequence:
   a mounted view can go stale, so both Flex write paths bump `lib/dataVersion` and every
   `useAnalytics` re-reads. **`loading` means the first load only**; a reload reports through
   `refreshing`. **Portfolio is deliberately excluded** and re-reads on every visit — it shows live
   data that changes with no event to signal it.
+- **The page header's `source` has three values, not two** — `LIVE_SOURCE`, `IMPORTED_SOURCE` and
+  `OWNER_SOURCE` ("Set by you"), the last naming **no** data source because the Profile page has
+  none. That slot is where a page says whether its standard is the owner's or the app's (DDR-0094).
 - **`AnalyticsShell` owns the four-branch guard, the `<main>`, and the page header** (DDR-0043,
   DDR-0058). Children are a **function of the report, not elements**, and **the shell holds no
   state**, which is what keeps DDR-0027 intact. The status
@@ -387,7 +401,7 @@ alternatives this table can only name.
 | `Button` (DDR-0032) | `variant` × `size` (`icon` is a *shape*) | `ghost` changed meaning — the old `.ghost-button` is now `secondary`. `type` defaults to `"button"`. `className` is for **placement, not colour**. |
 | `Card` (DDR-0033, DDR-0059, DDR-0084) | `variant` (surface colour) × `size` (`--surface-pad-*`) | `CardContent` is a **scope** — descendant rules hang off it, keeping a state panel's prose out of reach. The ruled header strip bleeds to the edges by negating `--card-pad`, which each size **restates beside its `padding`** (change one, change both). `.card-header:last-child` gives it back; so does `.card-header.chart-card-header`, **compound or it ties** (DDR-0084). Its third host is `.data-table-scroll-card`, which has no `--card-pad`: that rule **restates** `margin`/`padding` (inherited, the bleed `calc()` is invalid and drops) and is `sticky` (DDR-0087). |
 | `StatTile` / `StatRow` (DDR-0034, DDR-0060) | `tone` only | A tile **is** a `Card`, so it declares no surface. **Neutral is the absence of a rule.** Its label is the app's *one* micro-label — the same four declarations as `.data-table thead th`; don't grow a second. |
-| `Field` + `Select` + `DateInput` (DDR-0035) | `kind` only | **`Field` generates its id with `useId()` and takes no `id` prop** — tabs stay mounted, so all three `RangeFilter`s can be in the document at once and a fixed id would name only the first. |
+| `Field` + `Select` + `DateInput` + `PercentInput` + `TermInput` (DDR-0035, DDR-0094) | `kind` only — **four**, and still no size axis | **`Field` generates its id with `useId()` and takes no `id` prop** — tabs stay mounted, so all three `RangeFilter`s can be in the document at once and a fixed id would name only the first; `TermInput`'s `<datalist>` id is generated for the same reason. A `kind` carries cursor, colour-scheme and **measure**: `percent` is 5ch so a column lines up, `term` takes the row's slack. `percent` is `type="text"` + `inputMode="decimal"` **on purpose** — a number input alters its value on a passing scroll wheel and drops a comma decimal, which `parsePercent` accepts. |
 | `ToggleGroup` (DDR-0036) | `mode`, which is **worn** (`--radius-md` vs `--radius-pill`) | **Never a tablist**: `aria-pressed`, not `role="tab"`. Only `.app-tab` is a real tablist. |
 | `Badge` (DDR-0037, DDR-0064, DDR-0065) | `variant` × `size` | **Never a pill** (that corner means multi-select) and **never a background** — the toned pair keeps both: `--pos` / `--neg-text` ink, the *borders* take the fill tokens. `BADGE_VARIANTS` ⊇ `STAT_TONES`, so `toneOf()` names a variant. `sm` carries no vertical padding — with it, every holdings row grows ~7px; alone in a cell it also needs `BADGE_CELL_CLASS`, because CSS cannot see that an inline chip follows a *text node*. Trades' side badge **is** toned (DDR-0086 reverses DDR-0065): the *box*, not the hue, separates it from the figure. |
 | `StatePanel` (DDR-0038) | `variant` (the state) × `surface` | Only `error` paints; the axis exists because the copy and the *announcement* differ. `role` is derived. No heading → the panel **is** a `<p>`. |
