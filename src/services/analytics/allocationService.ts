@@ -5,6 +5,11 @@ import {
   type SecurityRow,
 } from '@repositories/flex/flexReadRepository'
 import type { AllocationPosition, AllocationResult, AllocationSlice } from '@shared/domain/allocation'
+import {
+  assetClassLabel,
+  CASH_ASSET_KEY,
+  CASH_ASSET_LABEL,
+} from '@shared/domain/assetClass'
 
 /**
  * Allocation analytics (Milestone M3, Stories #22 and #30). Values the latest imported
@@ -25,28 +30,6 @@ import type { AllocationPosition, AllocationResult, AllocationSlice } from '@sha
  * never a network call, so this stays synchronous and works with the gateway closed
  * (DDR-0009). Positions with no cached sector fall into an 'Unclassified' slice.
  */
-
-const ASSET_CLASS_LABELS: Record<string, string> = {
-  STK: 'Stocks',
-  ETF: 'ETFs',
-  FUND: 'Funds',
-  BOND: 'Bonds',
-  OPT: 'Options',
-  FOP: 'Futures Options',
-  FUT: 'Futures',
-  CASH: 'Cash / FX',
-  WAR: 'Warrants',
-}
-
-function assetClassLabel(code: string): string {
-  return ASSET_CLASS_LABELS[code] ?? (code || 'Other')
-}
-
-/**
- * Asset-class key for uninvested cash (Story #47). Deliberately distinct from the Flex
- * `CASH` asset category (forex/FX *positions*, labelled 'Cash / FX') so the two never merge.
- */
-const CASH_ASSET_KEY = '__cash__'
 
 /**
  * A cash residual below this share of NAV (percentage points) is treated as rounding noise,
@@ -84,7 +67,7 @@ function withCash(
   }))
   const cash: AllocationSlice = {
     key: CASH_ASSET_KEY,
-    label: 'Cash',
+    label: CASH_ASSET_LABEL,
     marketValueBase: cashValueBase,
     percentOfNav: cashPercent,
   }

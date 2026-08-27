@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  availableTerms,
-  NON_POLICY_SECTOR_KEYS,
-  vocabularyFrom,
-  type VocabularyTerm,
-} from './profileVocabulary'
+import { availableTerms, vocabularyFrom, type VocabularyTerm } from './profileVocabulary'
 import { newTargetRow, type ProfileFormState, type TargetRowDraft } from './investorProfile'
 import type { AllocationReport, AllocationSlice } from '@shared/domain/allocation'
 
@@ -33,7 +28,10 @@ const report = (overrides: Partial<AllocationReport> = {}): AllocationReport => 
   byAssetClass: [slice('STK', 'Stocks'), slice('CASH', 'Cash')],
   byCurrency: [slice('EUR'), slice('USD')],
   byCountry: [],
-  bySector: [slice('Financial'), slice('Technology'), slice('Unclassified')],
+  // The real shape of an unclassified slice: the **key is blank** and 'Unclassified' is only
+  // the label. A fixture keyed 'Unclassified' would be a fixture the service never produces —
+  // and would have let an exclusion list that matches nothing look like it was working.
+  bySector: [slice('Financial'), slice('Technology'), slice('', 'Unclassified')],
   unclassifiedCount: 1,
   ...overrides,
 })
@@ -72,13 +70,16 @@ describe('vocabularyFrom', () => {
 
   /**
    * "I intend 10% of my portfolio to be instruments IBKR has not told me the sector of" is not a
-   * policy. The slice is real and carries a real weight; it is just not something to target.
+   * policy. The slice is real and carries a real weight; it is just not something to target — and
+   * the allocation report spells that absence as a **blank key** with 'Unclassified' as its
+   * label, which is why the blank-key filter is the one doing this work. Story #281 measures the
+   * same absence as a surfaced residual rather than a bucket (DDR-0095).
    */
   it('does not offer the unclassified sector as something to hold a target for', () => {
     const vocabulary = vocabularyFrom(report(), form())
 
     expect(keysOf(vocabulary.sector)).toEqual(['Financial', 'Technology'])
-    expect(NON_POLICY_SECTOR_KEYS).toContain('Unclassified')
+    expect(vocabulary.sector.map((t) => t.label)).not.toContain('Unclassified')
   })
 
   /**

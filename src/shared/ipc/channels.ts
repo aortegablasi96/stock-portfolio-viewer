@@ -52,6 +52,11 @@ export const IpcChannels = {
   profileGet: 'profile:get',
   profileSave: 'profile:save',
   profileClear: 'profile:clear',
+  // How far the live portfolio sits from the profile's targets (M10, Story #281). Under the
+  // `profile:` prefix rather than `analytics:` because it measures against the owner's own
+  // standard rather than reporting the portfolio, and because it reads **live** holdings where
+  // every `analytics:*` channel reads the imported Flex store (DDR-0095).
+  profileGetDrift: 'profile:getDrift',
 } as const
 
 export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels]

@@ -2,11 +2,13 @@ import { BrowserWindow, dialog, ipcMain } from 'electron'
 import type { ZodError } from 'zod'
 import { IpcChannels } from '@shared/ipc/channels'
 import {
+  balanceDriftRequestSchema,
   pingRequestSchema,
   portfolioOverviewRequestSchema,
   sidebarStateSchema,
   snapshotListRequestSchema,
   validatedInvestorProfileDraftSchema,
+  type BalanceDriftResult,
   type CaptureSnapshotResult,
   type ClearHistoryResult,
   type ClearInvestorProfileResult,
@@ -31,6 +33,7 @@ import { dividendService } from '@services/dividends/dividendService'
 import { classificationService } from '@services/classification/classificationService'
 import { sidebarStateService } from '@services/window/sidebarStateService'
 import { investorProfileService } from '@services/profile/investorProfileService'
+import { balanceDriftService } from '@services/profile/balanceDriftService'
 import { IbkrNotConnectedError, IbkrTimeoutError, ValidationError } from '@shared/errors'
 
 /**
@@ -245,6 +248,30 @@ export function registerIpcHandlers(): void {
       return { status: 'error', message }
     }
   })
+
+  // Balance drift (M10, Story #281). It reads the **live** portfolio, so it maps the gateway's
+  // two failures exactly as `portfolio:getOverview` does — and for the same reason they are not
+  // interchangeable: one means start the gateway, the other means it is running but stalled
+  // (DDR-0022). Everything the service can determine for itself — no profile, no targets, nothing
+  // to weigh — arrives as its own variant and passes straight through.
+  ipcMain.handle(
+    IpcChannels.profileGetDrift,
+    async (_event, rawInput: unknown): Promise<BalanceDriftResult> => {
+      try {
+        const { displayCurrency } = balanceDriftRequestSchema.parse(rawInput)
+        return await balanceDriftService.getBalanceDrift(displayCurrency)
+      } catch (err) {
+        if (err instanceof IbkrTimeoutError) {
+          return { status: 'not_responding', message: err.message }
+        }
+        if (err instanceof IbkrNotConnectedError) {
+          return { status: 'not_connected', message: err.message }
+        }
+        const message = err instanceof Error ? err.message : 'Unexpected error measuring drift.'
+        return { status: 'error', message }
+      }
+    },
+  )
 }
 
 /**

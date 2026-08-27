@@ -21,6 +21,11 @@ import {
   type InvestorProfileDraft,
   type SaveInvestorProfileResult,
 } from '@shared/domain/investorProfile'
+import {
+  balanceDriftResultSchema,
+  type BalanceDriftReport,
+  type BalanceDriftResult,
+} from '@shared/domain/balanceDrift'
 
 /**
  * The typed contract for every IPC channel: the Zod schema used by the main
@@ -238,6 +243,24 @@ export type {
   ClearInvestorProfileResult,
 }
 
+/**
+ * Balance drift (Story #281, DDR-0095): how far the live portfolio sits from the profile's
+ * targets, in a display currency the renderer names.
+ *
+ * The request carries the display currency for the reason `portfolio:getOverview` does — it is
+ * the app's selection, held in the sidebar, and every weight in the report is a share of a total
+ * expressed in it. Six result variants, and the two pairs that look alike are deliberately kept
+ * apart: `no_profile` / `no_targets` want different copy, and `not_connected` / `not_responding`
+ * are DDR-0022's pair, mapped from the same two errors `portfolio:getOverview` maps.
+ */
+export const balanceDriftRequestSchema = z.object({
+  displayCurrency: z.string().min(1),
+})
+export type BalanceDriftRequest = z.infer<typeof balanceDriftRequestSchema>
+
+export { balanceDriftResultSchema }
+export type { BalanceDriftReport, BalanceDriftResult }
+
 // ---- window.api bridge shape ------------------------------------------------
 
 /**
@@ -299,4 +322,6 @@ export interface RendererApi {
   saveInvestorProfile: (draft: InvestorProfileDraft) => Promise<SaveInvestorProfileResult>
   /** Un-set the investor profile, resolving to the empty profile now in force (Story #280). */
   clearInvestorProfile: () => Promise<ClearInvestorProfileResult>
+  /** How far the live portfolio sits from the profile's targets (Story #281). */
+  getBalanceDrift: (request: BalanceDriftRequest) => Promise<BalanceDriftResult>
 }

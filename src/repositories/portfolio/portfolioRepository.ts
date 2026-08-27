@@ -42,6 +42,12 @@ function toUnrealizedPnl(p: RawPosition): number | null {
   return p.mktValue - p.avgCost * p.position
 }
 
+/** Cash the account holds in one currency, in that currency (Story #281). */
+export interface CashBalance {
+  currency: string
+  amount: number
+}
+
 /** Map a raw IBKR position into the `Holding` domain model. */
 function toHolding(p: RawPosition): Holding {
   return {
@@ -129,6 +135,38 @@ export const portfolioRepository = {
       netLiquidation: Math.round((stockMarketValue + totalCashValue) * 100) / 100,
       stockMarketValue,
     }
+  },
+
+  /**
+   * Cash **per currency**, rather than the one base-currency total `getBalances` reports
+   * (Story #281, DDR-0095).
+   *
+   * The ledger has always been keyed by currency — `getBalances` reads the `BASE` aggregate
+   * because the dashboard's cash tile is one figure. A currency-exposure question is the one
+   * place that aggregate is the wrong shape: it is the base-currency *equivalent* of cash held
+   * across several currencies, so attributing it to the base currency would invent an exposure
+   * the owner may not have.
+   *
+   * It costs nothing extra. `gatewayCache` keys the ledger by account, so this is the same read
+   * `getBalances` already made moments earlier in the same overview (DDR-0024).
+   *
+   * The `BASE` entry is excluded on both its key *and* its `currency` field, the same guard
+   * `resolveBaseCurrency` needs: it is a placeholder, not an ISO code, and there is no `BASE→X`
+   * rate — summing it beside the real entries would double the cash. Zero balances are dropped,
+   * since a currency the owner holds no cash in is not an exposure.
+   */
+  async getCashByCurrency(): Promise<CashBalance[]> {
+    const accountId = await authenticatedAccountId()
+    const ledger = await gatewayCache.read(`ledger:${accountId}`, LIVE_TTL_MS, () =>
+      ibkrGateway.getLedger(accountId),
+    )
+    return Object.entries(ledger)
+      .filter(([code, entry]) => code !== 'BASE' && entry.currency !== 'BASE')
+      .map(([code, entry]) => ({
+        currency: entry.currency ?? code,
+        amount: entry.cashbalance ?? 0,
+      }))
+      .filter((cash) => cash.currency !== '' && cash.amount !== 0)
   },
 
   /**

@@ -10,6 +10,7 @@ vi.mock('@repositories/portfolio/portfolioRepository', () => ({
   portfolioRepository: {
     getHoldings: vi.fn(),
     getBalances: vi.fn(),
+    getCashByCurrency: vi.fn(),
     getExchangeRates: vi.fn(),
   },
 }))
@@ -409,5 +410,66 @@ describe('portfolioService.getExchangeRates (Bug #44)', () => {
     await expect(portfolioService.getExchangeRates(['USD'], 'EUR')).rejects.toBeInstanceOf(
       IbkrNotConnectedError,
     )
+  })
+})
+
+/**
+ * Cash per currency, valued like a holding (Story #281, DDR-0095).
+ *
+ * `getOverview` reports cash as the one base-currency total the dashboard's tile shows. A
+ * currency-exposure question is the one place that is the wrong shape, and the conversion has to
+ * follow DDR-0007 exactly — which is why it lives in the service rather than the repository.
+ */
+describe('portfolioService.getCashPositions', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('converts each balance at its own currency’s rate, keeping the native amount', async () => {
+    mockRepo.getCashByCurrency.mockResolvedValue([
+      { currency: 'USD', amount: 200 },
+      { currency: 'EUR', amount: 100 },
+    ])
+    mockRepo.getExchangeRates.mockResolvedValue({ EUR: 1, USD: 0.9 })
+
+    expect(await portfolioService.getCashPositions('EUR')).toEqual([
+      { currency: 'USD', amount: 200, displayValue: 180 },
+      { currency: 'EUR', amount: 100, displayValue: 100 },
+    ])
+  })
+
+  /**
+   * The rule the whole drift report rests on: **unconvertible is not zero** (DDR-0007). A cash
+   * balance read as 0 would sit inside the denominator contributing nothing, quietly shrinking
+   * every other weight; `null` takes it out and puts it in the unplaced block instead.
+   */
+  it('reports an unavailable rate as null rather than as zero', async () => {
+    mockRepo.getCashByCurrency.mockResolvedValue([
+      { currency: 'EUR', amount: 100 },
+      { currency: 'ZWL', amount: 5000 },
+    ])
+    mockRepo.getExchangeRates.mockResolvedValue({ EUR: 1 })
+
+    const cash = await portfolioService.getCashPositions('EUR')
+    expect(cash.find((c) => c.currency === 'ZWL')).toEqual({
+      currency: 'ZWL',
+      amount: 5000,
+      displayValue: null,
+    })
+  })
+
+  it('rounds the converted amount to cents, as every other money figure is', async () => {
+    mockRepo.getCashByCurrency.mockResolvedValue([{ currency: 'USD', amount: 100 }])
+    mockRepo.getExchangeRates.mockResolvedValue({ EUR: 1, USD: 0.876543 })
+
+    expect((await portfolioService.getCashPositions('EUR'))[0]!.displayValue).toBe(87.65)
+  })
+
+  /** An account holding no cash asks the gateway for no rates at all. */
+  it('fetches no rates when there is no cash', async () => {
+    mockRepo.getCashByCurrency.mockResolvedValue([])
+
+    expect(await portfolioService.getCashPositions('EUR')).toEqual([])
+    expect(mockRepo.getExchangeRates).not.toHaveBeenCalled()
   })
 })
