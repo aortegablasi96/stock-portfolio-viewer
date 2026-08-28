@@ -21,9 +21,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 M0–M9 are delivered: live IBKR holdings/balances/allocation in a display currency, immutable
 snapshots, Flex statement import, and four analytics views over it, behind a vertical sidebar.
-M10 is in progress — the investor profile, the assistant's **surface** (grounded Q&A) and the first
-two question shapes (a period explained, a performance summary) have landed; #287–#289 have not.
-Not built: multi-broker, benchmarks, tax.
+M10 is in progress — the investor profile, the assistant's **surface** (grounded Q&A), a period
+explained and a performance summary have landed. What remains was **reshaped after #286**: the box
+is free-text and always was, so the rest is not question shapes but **grounding** (#287: every
+standard period precomputed, so a question names its own; the drift-closing move computed, so a
+proposal narrates arithmetic instead of generating it) and **phrasing** (#288, prompt rules only).
+#289 is closed as superseded — read its closing comment before re-proposing an end-state check on
+model output. Not built: multi-broker, benchmarks, tax.
 
 **Which Epics are open is deliberately not recorded here** — read the backlog (*Current Priority*).
 The **lifecycle** is the rule: an Epic closes with its stories, and refinement opens a *new*
