@@ -7,11 +7,11 @@ import {
   measuredDrift,
   performanceSection,
   profileSection,
-  selectedPeriod,
   weightsSection,
-  type GroundingInputs,
+  wholeHistory,
+  type GroundingReports,
 } from './assistantContext'
-import type { PeriodChange } from './periodChange'
+import { periodChange, type PeriodChange, type PeriodSelection } from './periodChange'
 import type { PerformanceReport } from '@shared/domain/performance'
 import { DISCLOSURE_CATEGORY_IDS } from '@shared/domain/assistantDisclosure'
 import { EMPTY_INVESTOR_PROFILE, type InvestorProfile } from '@shared/domain/investorProfileTerms'
@@ -174,18 +174,30 @@ function performance(over: Partial<PerformanceReport> = {}): PerformanceReport {
   }
 }
 
-const inputs = (over: Partial<GroundingInputs> = {}): GroundingInputs => ({
+const inputs = (over: Partial<GroundingReports> = {}): GroundingReports => ({
   allocation: { status: 'ok', report: report() },
   profile: PROFILE,
   drift: { status: 'ok', report: drift() },
   performance: { status: 'ok', report: performance() },
-  period: { range: 'all', custom: null },
   ...over,
 })
 
-/** The `PeriodChange` the default fixture resolves to, for the section tests below. */
-const change = (over: Partial<GroundingInputs> = {}): PeriodChange => {
-  const resolved = selectedPeriod(inputs(over))
+/**
+ * A `PeriodChange` over the fixture, for the section tests below.
+ *
+ * It resolves through `periodChange` directly rather than through the grounding, because the
+ * grounding no longer carries a window: DDR-0102 removed the control that chose one, so
+ * `wholeHistory` is the only window the assembled context has. `performanceSection` is still a
+ * function of *any* period — that is what #287 windows this report with — so the section tests keep
+ * naming their own, and the two that pass a narrower one are testing the section, not the view.
+ */
+const change = (
+  over: { period?: PeriodSelection; report?: PerformanceReport } = {},
+): PeriodChange => {
+  const resolved = periodChange(
+    over.report ?? performance(),
+    over.period ?? { range: 'all', custom: null },
+  )
   if (resolved === null) throw new Error('fixture resolves to no period')
   return resolved
 }
@@ -570,12 +582,7 @@ describe('performanceSection', () => {
   /** The optional NAV-in-base Flex section degrades, never fails (DDR-0050). */
   it('says composition is unavailable rather than drawing a shape out of nothing', () => {
     const text = performanceSection(
-      change({
-        performance: {
-          status: 'ok',
-          report: performance({ compositionSeries: { bands: [], points: [] } }),
-        },
-      }),
+      change({ report: performance({ compositionSeries: { bands: [], points: [] } }) }),
     )
     expect(text).toContain('do not include the daily net-asset-value breakdown')
     expect(text).not.toContain('Net asset value:')
@@ -654,19 +661,16 @@ describe('performanceSection: the three overclaims', () => {
   it('permits naming a year-long period while still refusing to scale it', () => {
     const long = performanceSection(
       change({
-        performance: {
-          status: 'ok',
-          report: performance({
-            valueSeries: [
-              { date: Date.UTC(2024, 0, 1), value: 100_000 },
-              { date: Date.UTC(2026, 5, 3), value: 124_500 },
-            ],
-            returnSeries: [
-              { date: Date.UTC(2024, 0, 1), value: 0 },
-              { date: Date.UTC(2026, 5, 3), value: 2 },
-            ],
-          }),
-        },
+        report: performance({
+          valueSeries: [
+            { date: Date.UTC(2024, 0, 1), value: 100_000 },
+            { date: Date.UTC(2026, 5, 3), value: 124_500 },
+          ],
+          returnSeries: [
+            { date: Date.UTC(2024, 0, 1), value: 0 },
+            { date: Date.UTC(2026, 5, 3), value: 2 },
+          ],
+        }),
       }),
     )
     expect(long).toContain('This period covers a year or more')
@@ -729,11 +733,13 @@ describe('performanceSection: the three overclaims', () => {
   })
 })
 
-describe('selectedPeriod', () => {
+describe('wholeHistory', () => {
   /**
    * DDR-0085's anchor is the whole reason a preset is a pure function here: `1M` over a history
    * that stopped in an earlier month must still resolve to that history's last month. Anchored to
-   * the clock it would be empty, and an empty period reads as a flat one.
+   * the clock it would be empty, and an empty period reads as a flat one. Asserted through
+   * `periodChange` rather than the grounding, since the grounding no longer picks a preset — the
+   * anchor is what #287 windows this report with.
    */
   it('anchors a preset to the last day of the history, never to today', () => {
     const resolved = change({ period: { range: '1m', custom: null } })
@@ -741,8 +747,29 @@ describe('selectedPeriod', () => {
     expect(resolved.days).toBeGreaterThan(0)
   })
 
+  /**
+   * **The grounding is the history entire, not a window over it** (DDR-0102). #285 resolved
+   * whatever the owner had clicked; with the control gone the section describes everything there
+   * is, so both bounds are the extent's own and every imported day is inside them.
+   */
+  it('spans the whole imported history, both ends', () => {
+    const resolved = wholeHistory(inputs())
+    expect(resolved?.range).toBe('all')
+    expect(resolved?.bounds).toEqual(resolved?.extent)
+    expect(resolved?.bounds.from).toBe(DAY[0])
+    expect(resolved?.bounds.to).toBe(DAY[3])
+  })
+
+  /**
+   * Which makes the empty period unreachable *here* while remaining a real state of `periodChange`
+   * — the distinction the notice removal in `assistantAsk` rests on.
+   */
+  it('cannot resolve to an empty period, the window being the extent', () => {
+    expect(wholeHistory(inputs())?.days).toBeGreaterThan(0)
+  })
+
   it('is null when the history has nothing to window', () => {
-    expect(selectedPeriod(inputs({ performance: { status: 'needs_import' } }))).toBeNull()
+    expect(wholeHistory(inputs({ performance: { status: 'needs_import' } }))).toBeNull()
   })
 })
 

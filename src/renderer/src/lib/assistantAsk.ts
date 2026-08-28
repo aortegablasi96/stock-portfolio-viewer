@@ -1,7 +1,7 @@
 import { gateKind, type GateKind } from './assistantGate'
-import { hasProfile, selectedPeriod } from './assistantContext'
+import { hasProfile } from './assistantContext'
 import type { AssistantStatus, AssistantAskResult } from '@shared/domain/assistant'
-import type { GroundingInputs } from './assistantContext'
+import type { GroundingReports } from './assistantContext'
 
 /**
  * What the question box may do, what it must say instead, and what came back (Story #284,
@@ -67,7 +67,7 @@ export const ASK_BLOCKERS: Record<AskGateKind, string | null> = {
  * someone to import a statement while they have not agreed to the feature answers a question they
  * did not ask (DDR-0097).
  */
-export function askGate(status: AssistantStatus, grounding: GroundingInputs | null): AskGate {
+export function askGate(status: AssistantStatus, grounding: GroundingReports | null): AskGate {
   const kind = gateKind(status)
   if (kind !== 'ready') return { kind, ready: false, blocker: ASK_BLOCKERS[kind] }
 
@@ -82,7 +82,7 @@ export function askGate(status: AssistantStatus, grounding: GroundingInputs | nu
 }
 
 /** Whether anything at all was readable — the condition `no_grounding` is the absence of. */
-export function hasAnyGrounding(grounding: GroundingInputs): boolean {
+export function hasAnyGrounding(grounding: GroundingReports): boolean {
   return (
     grounding.allocation.status === 'ok' ||
     grounding.performance.status === 'ok' ||
@@ -93,7 +93,7 @@ export function hasAnyGrounding(grounding: GroundingInputs): boolean {
 
 /** A gap in what an answer can be grounded on. Named, never silently worked around. */
 export interface GroundingNotice {
-  id: 'no_import' | 'no_profile' | 'no_live' | 'empty_period'
+  id: 'no_import' | 'no_profile' | 'no_live'
   text: string
 }
 
@@ -107,7 +107,7 @@ export interface GroundingNotice {
  * not in front of the model, whichever of the two is true. The Portfolio view is where the gateway
  * states are reported in their own right.
  */
-export function groundingNotices(grounding: GroundingInputs): GroundingNotice[] {
+export function groundingNotices(grounding: GroundingReports): GroundingNotice[] {
   const notices: GroundingNotice[] = []
 
   if (grounding.allocation.status !== 'ok') {
@@ -115,19 +115,13 @@ export function groundingNotices(grounding: GroundingInputs): GroundingNotice[] 
       id: 'no_import',
       text: 'No Flex statements are imported, so the assistant cannot see what you hold, how it is divided, or how it has performed. Import one from the Portfolio view.',
     })
-  } else {
-    // Only where there *is* a history to window: with nothing imported, "your period is empty"
-    // would be the second sentence about the same absence, and the first one already names the
-    // recovery. A period that resolves to no day at all is a different fact and needs saying —
-    // a custom window can land outside the history entirely (Story #285).
-    const period = selectedPeriod(grounding)
-    if (period !== null && period.days === 0) {
-      notices.push({
-        id: 'empty_period',
-        text: 'The period selected above holds no day of imported history, so an explanation of it has nothing to be grounded in. Choose another period.',
-      })
-    }
   }
+
+  // #285's `empty_period` notice went with the control it was about (DDR-0102): it said "the period
+  // selected above holds no day", and there is no longer a period selected above. The grounding is
+  // the whole history now, which cannot be empty while the report resolves at all. The *state* is
+  // not gone — `periodChange` still reports a window with no day in it, and #287 windows this
+  // report again — it simply has no notice to raise until something can select one.
 
   if (!hasProfile(grounding.profile)) {
     notices.push({

@@ -5,7 +5,7 @@ import {
   formatSignedPercent,
   instrumentName,
 } from './format'
-import { periodChange, type PeriodChange, type PeriodSelection } from './periodChange'
+import { periodChange, type PeriodChange } from './periodChange'
 import type { AssistantContext } from '@shared/domain/assistantDisclosure'
 import type { AllocationReport, AllocationResult } from '@shared/domain/allocation'
 import type { PerformanceResult } from '@shared/domain/performance'
@@ -73,9 +73,11 @@ import {
 /**
  * What a view has read, in whatever state each read came back in.
  *
- * Split from {@link GroundingInputs} because the period is not a *read*: it is a selection the
- * owner makes on the view, and changing it must reframe the explanation without re-issuing four
- * IPC calls — the same relationship the Performance view's `RangeFilter` has with its report.
+ * **This is the whole input.** #285 split a `GroundingInputs` off this to carry the period the
+ * owner had selected on a `RangeFilter`; DDR-0102 removed that control, so the grounding is once
+ * again a function of the reads alone and the two types are one. What replaces the selection is not
+ * another input but *more computation over the same report* — the period set #287 adds is derived
+ * here, from `performance`, with nothing to pass in.
  */
 export interface GroundingReports {
   /** Composition from imported Flex history — `needs_import` when the store is empty. */
@@ -86,11 +88,6 @@ export interface GroundingReports {
   drift: BalanceDriftResult
   /** The performance history a period is explained out of — `needs_import` with no Flex data. */
   performance: PerformanceResult
-}
-
-/** Those reads, plus the period the owner chose to have explained (Story #285). */
-export interface GroundingInputs extends GroundingReports {
-  period: PeriodSelection
 }
 
 /**
@@ -110,33 +107,41 @@ export const MAX_LISTED_POSITIONS = 40
  * The keys are the disclosure's own ids and nothing else can be added here — `AssistantContext`
  * forbids it at compile time, and the IPC boundary drops it at runtime.
  */
-export function buildAssistantContext(inputs: GroundingInputs): AssistantContext {
+export function buildAssistantContext(reports: GroundingReports): AssistantContext {
   const context: AssistantContext = {}
 
-  if (inputs.allocation.status === 'ok') {
-    context.holdings = holdingsSection(inputs.allocation.report)
-    context.weights = weightsSection(inputs.allocation.report)
+  if (reports.allocation.status === 'ok') {
+    context.holdings = holdingsSection(reports.allocation.report)
+    context.weights = weightsSection(reports.allocation.report)
   }
 
-  const profile = profileSection(inputs.profile, inputs.drift)
+  const profile = profileSection(reports.profile, reports.drift)
   if (profile !== null) context.profile = profile
 
-  const change = selectedPeriod(inputs)
+  const change = wholeHistory(reports)
   if (change !== null) context.performance = performanceSection(change)
 
   return context
 }
 
 /**
- * The chosen period resolved against the imported history, or `null` where there is none.
+ * The whole imported history as one period, or `null` where there is none.
  *
- * One function so the view's notice and the section it explains cannot disagree about whether a
- * period exists: `needs_import` and a history with no dated value are both "nothing to window",
- * and an empty *window* is not — that one resolves, and the section says the period is empty.
+ * **`all` is not a default standing in for a missing selection — it is the only honest window when
+ * nothing has been asked yet.** #285 resolved whatever the owner had clicked on a `RangeFilter`;
+ * with that control gone (DDR-0102) the section describes the history entire, which is also the
+ * *identity* case of rebasing that DDR-0072 already argued the curve's baseline note out of being
+ * conditional on.
+ *
+ * `null` is the report having nothing to window, not a window being empty — the two are different
+ * states. Over the full extent the second is unreachable: `periodChange` returns `null` for an
+ * empty series and `boundsFor('all')` is the extent itself, so a resolved history always holds at
+ * least one day. `periodChange`'s own empty-window handling stays, because #287 windows this report
+ * again and a quarter with no data in it is exactly that state.
  */
-export function selectedPeriod(inputs: GroundingInputs): PeriodChange | null {
-  if (inputs.performance.status !== 'ok') return null
-  return periodChange(inputs.performance.report, inputs.period)
+export function wholeHistory(reports: GroundingReports): PeriodChange | null {
+  if (reports.performance.status !== 'ok') return null
+  return periodChange(reports.performance.report, { range: 'all', custom: null })
 }
 
 /**
