@@ -26,6 +26,7 @@ import {
   type BalanceDriftReport,
   type BalanceDriftResult,
 } from '@shared/domain/balanceDrift'
+import { assistantStatusSchema, type AssistantStatus } from '@shared/domain/assistant'
 
 /**
  * The typed contract for every IPC channel: the Zod schema used by the main
@@ -261,6 +262,26 @@ export type BalanceDriftRequest = z.infer<typeof balanceDriftRequestSchema>
 export { balanceDriftResultSchema }
 export type { BalanceDriftReport, BalanceDriftResult }
 
+// ---- assistant:* (M10, Story #283) ------------------------------------------
+
+/**
+ * Whether the assistant may run, and the owner's decision about it (DDR-0097).
+ *
+ * A pure local read with no result variant to discriminate — `AssistantStatus` *is* the variant,
+ * naming which of the two blockers applies. The setter takes one boolean and echoes the status
+ * that follows, so a caller re-seats on what actually landed rather than assuming.
+ *
+ * `configured` reports **whether** a key exists and never the key, which is the whole reason the
+ * status is a computed shape rather than the environment crossing the bridge.
+ */
+export const assistantConsentRequestSchema = z.object({
+  granted: z.boolean(),
+})
+export type AssistantConsentRequest = z.infer<typeof assistantConsentRequestSchema>
+
+export { assistantStatusSchema }
+export type { AssistantStatus }
+
 // ---- window.api bridge shape ------------------------------------------------
 
 /**
@@ -324,4 +345,8 @@ export interface RendererApi {
   clearInvestorProfile: () => Promise<ClearInvestorProfileResult>
   /** How far the live portfolio sits from the profile's targets (Story #281). */
   getBalanceDrift: (request: BalanceDriftRequest) => Promise<BalanceDriftResult>
+  /** Whether the assistant may run, and which blocker applies if not (Story #283). */
+  getAssistantStatus: () => Promise<AssistantStatus>
+  /** Grant or withdraw consent for portfolio figures to leave the machine (Story #283). */
+  setAssistantConsent: (request: AssistantConsentRequest) => Promise<AssistantStatus>
 }

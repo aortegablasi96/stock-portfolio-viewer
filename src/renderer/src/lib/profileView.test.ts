@@ -42,8 +42,12 @@ describe('the Profile row exists in the one tablist', () => {
     expect(APP).toMatch(/id: 'profile', label: 'Profile', icon: ProfileIcon/)
   })
 
-  /** Last, so the five data views stay contiguous. */
-  it('is the last row', () => {
+  /**
+   * The order is the app's own grammar: five views of the data, then the surface that talks about
+   * it, then the policy the owner sets over it. Story #283 put Assistant between the two
+   * (DDR-0097), so Profile is no longer last — what is pinned is the sequence, not a position.
+   */
+  it('sits after the data views and after the Assistant', () => {
     const ids = [...APP.matchAll(/\{ id: '(\w+)', label:/g)].map((m) => m[1])
     expect(ids).toEqual([
       'portfolio',
@@ -51,6 +55,7 @@ describe('the Profile row exists in the one tablist', () => {
       'allocation',
       'dividends',
       'trades',
+      'assistant',
       'profile',
     ])
   })

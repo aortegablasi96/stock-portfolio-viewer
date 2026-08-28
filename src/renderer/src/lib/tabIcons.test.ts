@@ -48,6 +48,7 @@ const TABS = [
   'Allocation',
   'Dividends',
   'Trades',
+  'Assistant',
   'Profile',
 ] as const
 

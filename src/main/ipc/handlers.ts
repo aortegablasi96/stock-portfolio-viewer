@@ -2,12 +2,14 @@ import { BrowserWindow, dialog, ipcMain } from 'electron'
 import type { ZodError } from 'zod'
 import { IpcChannels } from '@shared/ipc/channels'
 import {
+  assistantConsentRequestSchema,
   balanceDriftRequestSchema,
   pingRequestSchema,
   portfolioOverviewRequestSchema,
   sidebarStateSchema,
   snapshotListRequestSchema,
   validatedInvestorProfileDraftSchema,
+  type AssistantStatus,
   type BalanceDriftResult,
   type CaptureSnapshotResult,
   type ClearHistoryResult,
@@ -34,6 +36,7 @@ import { classificationService } from '@services/classification/classificationSe
 import { sidebarStateService } from '@services/window/sidebarStateService'
 import { investorProfileService } from '@services/profile/investorProfileService'
 import { balanceDriftService } from '@services/profile/balanceDriftService'
+import { assistantService } from '@services/assistant/assistantService'
 import { IbkrNotConnectedError, IbkrTimeoutError, ValidationError } from '@shared/errors'
 
 /**
@@ -272,6 +275,15 @@ export function registerIpcHandlers(): void {
       }
     },
   )
+
+  // The consent gate (M10, Story #283). Two pure local reads of settings — no gateway, no
+  // network, and deliberately **no channel that reaches OpenAI**: one belongs with the view that
+  // asks something (#284), and shipping it now would be an un-consented path in all but name.
+  ipcMain.handle(IpcChannels.assistantGetStatus, (): AssistantStatus => assistantService.getStatus())
+  ipcMain.handle(IpcChannels.assistantSetConsent, (_event, rawInput: unknown): AssistantStatus => {
+    const { granted } = assistantConsentRequestSchema.parse(rawInput)
+    return granted ? assistantService.grantConsent() : assistantService.revokeConsent()
+  })
 }
 
 /**

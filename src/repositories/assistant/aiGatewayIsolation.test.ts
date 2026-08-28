@@ -29,13 +29,22 @@ import { describe, expect, it } from 'vitest'
  */
 const root = fileURLToPath(new URL('../../../', import.meta.url))
 
-/** Every `.ts`/`.tsx` file under a directory, tests included — a leak in a test is still a leak. */
+/**
+ * Every `.ts`/`.tsx` file under a directory, tests included — a leak in a test is still a leak.
+ *
+ * **This file excepted**, and for the reason a text guard always has to strip comments first
+ * (DDR-0042, DDR-0047, DDR-0075): a file that searches for a forbidden string necessarily
+ * contains it. Caught on the first run, by this very assertion reporting itself. The exception is
+ * one named file rather than a pattern, so it cannot quietly widen.
+ */
+const SELF = fileURLToPath(import.meta.url)
+
 function sourceFiles(dir: string): string[] {
   const out: string[] = []
   for (const entry of readdirSync(dir)) {
     const path = join(dir, entry)
     if (statSync(path).isDirectory()) out.push(...sourceFiles(path))
-    else if (/\.tsx?$/.test(entry)) out.push(path)
+    else if (/\.tsx?$/.test(entry) && path !== SELF) out.push(path)
   }
   return out
 }
@@ -44,16 +53,38 @@ const read = (path: string): string => readFileSync(path, 'utf8')
 
 describe('the key never reaches the renderer or the preload bridge', () => {
   /**
-   * The renderer bundle is shipped to disk and the preload bundle runs in the sandbox; neither
-   * has any business naming the variable, let alone reading it. Asserted on the **variable name**
-   * rather than on a key-shaped string, because the name is what a mistaken `RENDERER_VITE_`
-   * prefix or a stray `process.env` read would put there — the value never appears in source at
-   * all, so searching for one would be a test that can never fail.
+   * **Reading it, not naming it.** The first version of this guard forbade the string `OPENAI_`
+   * anywhere in those trees and immediately caught the one place it belongs: the assistant's
+   * "no API key" copy has to say *"add `OPENAI_API_KEY` to the .env file"*, or the state names a
+   * problem without naming its fix (Story #283). Naming a variable in prose the owner reads is
+   * the opposite of leaking it.
+   *
+   * So what is forbidden is an **access**, in either of the two forms that could produce one —
+   * `process.env` for a variable that survived to runtime, `import.meta.env` for one electron-vite
+   * inlined at build time. The value itself never appears in source, so searching for a key-shaped
+   * string would be a test that can never fail.
    */
-  it.each(['src/renderer', 'src/preload'])('%s mentions no OPENAI_ variable', (dir) => {
-    const offenders = sourceFiles(join(root, dir)).filter((path) => /\bOPENAI_/.test(read(path)))
+  const READS_THE_KEY = /(?:process\.env|import\.meta\.env)\s*(?:\.\s*OPENAI_|\[\s*['"`]OPENAI_)/
+
+  it.each(['src/renderer', 'src/preload'])('%s reads no OPENAI_ variable', (dir) => {
+    const offenders = sourceFiles(join(root, dir)).filter((path) => READS_THE_KEY.test(read(path)))
     expect(offenders).toEqual([])
   })
+
+  /**
+   * The other half, and the one a prose exception must not open up: a prefix is what would make
+   * electron-vite inline the secret into a shipped bundle, and no prefixed form of the variable
+   * has any legitimate use anywhere in the repository (ADR-0010).
+   */
+  it.each(['src/renderer', 'src/preload', 'src/main', 'src/services', 'src/repositories'])(
+    '%s carries no build-inlined form of the key',
+    (dir) => {
+      const offenders = sourceFiles(join(root, dir)).filter((path) =>
+        /(?:RENDERER_VITE|PRELOAD_VITE|MAIN_VITE)_OPENAI/.test(read(path)),
+      )
+      expect(offenders).toEqual([])
+    },
+  )
 
   /** The gateway is main-process code. Nothing outside main and the services may import it. */
   it('is imported only from the main process side of the app', () => {

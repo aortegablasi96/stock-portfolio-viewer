@@ -27,6 +27,13 @@ is out of scope — that decision is theirs (ADR-0009).
 - **An investor profile** — the owner's own style tags and target ranges for currency, sector and
   asset-class weight, plus a single-position size band. It is the standard the app measures
   against, and the app never proposes one of its own (Story #280, DDR-0094).
+- **Balance drift against that profile**, computed deterministically by a service — no model does
+  the arithmetic (Story #281, DDR-0095).
+- **A consent gate for the assistant.** Before anything about the portfolio leaves the machine the
+  owner reads exactly what would be sent, at its real granularity, and decides. It is refusable,
+  revocable, and consent is recorded against that specific list — changing what would be sent asks
+  again (Story #283, DDR-0097). Three of the five categories send percentages and text only; only
+  performance carries amounts of money.
 
 ## Future Capabilities
 
