@@ -1,5 +1,6 @@
 import { join } from 'node:path'
 import { app, BrowserWindow, screen, shell } from 'electron'
+import { loadEnvFile } from './env'
 import { registerIpcHandlers } from './ipc/handlers'
 import { IpcChannels } from '@shared/ipc/channels'
 import { runMigrations } from '@db/migrate'
@@ -10,6 +11,27 @@ import {
   WINDOW_MIN_HEIGHT,
   WINDOW_MIN_WIDTH,
 } from '@services/window/windowStateService'
+
+/**
+ * `.env` into `process.env`, before anything can read one (Bug #297).
+ *
+ * **First statement in the file, and above the single-instance lock on purpose.** Every consumer
+ * reads its variable lazily inside a function today — `aiGateway.apiKey()`, `ibkrGateway`'s base
+ * URL — so a later call would work; doing it here means it keeps working when one of them stops
+ * being lazy. It sits above the lock because the lock's rule is that the *losing* process must
+ * quit without migrating, capturing, or opening the database (DDR-0025), and reading one small
+ * text file is none of those.
+ *
+ * `app.getAppPath()` is the project root in development, which is where `.env` lives. A packaged
+ * build has none beside its binary and gets an empty list back: there, an unprefixed variable
+ * comes from the operating system, which is a gap the packaging story still has to close.
+ *
+ * Names only in the log. The values are the reason this file exists.
+ */
+const loadedFromEnvFile = loadEnvFile(app.getAppPath())
+if (loadedFromEnvFile.length > 0) {
+  console.log(`[env] loaded from .env: ${loadedFromEnvFile.join(', ')}`)
+}
 
 const isDev = !app.isPackaged
 

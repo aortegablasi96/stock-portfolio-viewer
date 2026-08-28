@@ -141,17 +141,17 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
   mismatch: `npm install` or `npx electron-rebuild -f -w better-sqlite3`.
 - **Runtime DB vs tooling DB** — the app opens `app.getPath('userData')/portfolio.db` and applies
   migrations on launch; drizzle-kit (`db:*`) runs *outside* Electron against `./local.dev.db`.
-- **A fresh clone needs `.env`** (copy `.env.example`) — but **`.env` supplies the prefixed half
-  only.** electron-vite inlines `MAIN_VITE_*` / `PRELOAD_VITE_*` / `RENDERER_VITE_*` at **build**
-  time; its `loadEnv` reads *those prefixes and no others* and assigns nothing to `process.env`,
-  and nothing else here loads the file (no `dotenv`, no `--env-file`). So an **unprefixed variable
-  reaches the app only from the OS environment** — `OPENAI_API_KEY` in `.env` alone leaves the
-  assistant permanently `not_configured` (Bug #297). Unprefixed still means never bundled, which is
-  ADR-0010's point and is untouched. **Two tests look like they cover this and do not**:
-  `assistant-consent.spec.ts` passes the key through `electron.launch({ env })` and
-  `ibkrGateway.test.ts` writes `process.env` — both exercise *reading* a variable, never *loading*
-  one. `IBKR_GATEWAY_URL` has the same defect, invisible since M1 behind its default. Without
-  `RENDERER_VITE_MAPBOX_TOKEN` the map renders a placeholder; nothing else is affected.
+- **A fresh clone needs `.env`** (copy `.env.example`), and **two mechanisms read it.**
+  electron-vite inlines `MAIN_VITE_*` / `PRELOAD_VITE_*` / `RENDERER_VITE_*` at **build** time —
+  its `loadEnv` reads *those prefixes and no others* and assigns nothing to `process.env`.
+  Everything unprefixed is loaded into `process.env` at **startup** by `src/main/env.ts`, called
+  as `index.ts`'s first statement, above the single-instance lock. That loader is the fix for Bug
+  #297: without it `OPENAI_API_KEY` in `.env` reached nothing and the assistant was permanently
+  `not_configured`. Three rules — **a real environment variable wins** over the file (the e2e suite
+  passes one), a **missing file is a no-op** (a packaged build has none, and there an unprefixed
+  variable must come from the OS), and **only names are logged**. Unprefixed still means never
+  bundled (ADR-0010). Editing it needs a **restart**. Without `RENDERER_VITE_MAPBOX_TOKEN` the map
+  renders a placeholder; nothing else is affected.
 - **Electron security is locked down** — `sandbox: true`, `contextIsolation: true`,
   `nodeIntegration: false`, and `frame: false` with an in-app `TitleBar` (DDR-0011). Keep it.
 - **The renderer's CSP admits exactly one external origin** (`https://api.mapbox.com`);
