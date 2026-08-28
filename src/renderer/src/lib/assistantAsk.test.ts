@@ -13,7 +13,7 @@ import {
   isStale,
   type Turn,
 } from './assistantAsk'
-import type { GroundingInputs } from './assistantContext'
+import type { GroundingReports } from './assistantContext'
 import type { PerformanceReport } from '@shared/domain/performance'
 import { EMPTY_INVESTOR_PROFILE, type InvestorProfile } from '@shared/domain/investorProfileTerms'
 import { aiResultSchema, type AssistantStatus } from '@shared/domain/assistant'
@@ -44,12 +44,11 @@ const status = (over: Partial<AssistantStatus> = {}): AssistantStatus => ({
   ...over,
 })
 
-const grounding = (over: Partial<GroundingInputs> = {}): GroundingInputs => ({
+const grounding = (over: Partial<GroundingReports> = {}): GroundingReports => ({
   allocation: { status: 'needs_import' },
   profile: PROFILE,
   drift: { status: 'no_data' },
   performance: { status: 'needs_import' },
-  period: { range: 'all', custom: null },
   ...over,
 })
 
@@ -216,29 +215,26 @@ describe('groundingNotices', () => {
   })
 
   /**
-   * A period with no data is a state, not an empty explanation (Story #285). A custom window can
-   * land outside the imported history entirely, and `valueAt`'s carry-forward would otherwise
-   * describe it as a calm, flat period — a description of nothing phrased as a description of
-   * something.
+   * #285's `empty_period` notice went with the control it was about (DDR-0102).
+   *
+   * It said "the period selected above holds no day of imported history", and nothing is selected
+   * above any more: the grounding is the whole history, which cannot be empty while the report
+   * resolves at all. Pinned as an **absence** rather than deleted silently, because the underlying
+   * state is not gone — `periodChange` still reports a window with no day in it, and #287 windows
+   * this report again — so a notice for it may come back, and it should come back deliberately.
    */
-  it('reports a chosen period that holds no day of history', () => {
+  it('raises no period notice, the control it belonged to having gone', () => {
     const notices = groundingNotices(
       grounding({
         allocation: { status: 'ok' } as never,
         drift: { status: 'ok' } as never,
         performance: { status: 'ok', report: performanceReport() },
-        period: {
-          range: 'custom',
-          custom: { from: Date.UTC(2020, 0, 1), to: Date.UTC(2020, 0, 2) },
-        },
       }),
     )
-    const empty = notices.find((n) => n.id === 'empty_period')
-    expect(empty?.text).toContain('no day of imported history')
-    expect(empty?.text).toContain('Choose another period')
+    expect(notices.map((n) => n.id)).not.toContain('empty_period')
   })
 
-  it('says nothing about the period when the chosen one holds data', () => {
+  it('says nothing about the period when the history holds data', () => {
     const notices = groundingNotices(
       grounding({
         allocation: { status: 'ok' } as never,

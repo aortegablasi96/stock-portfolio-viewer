@@ -4067,10 +4067,11 @@ html {
    and wraps it. Stacking is the only thing this changes: the label, its colour
    and the control's own box are all untouched.
 
-   The child combinator is load-bearing since Story #285: the `RangeFilter` above
-   the box brings two `DateInput` fields of its own, and those are compact boxes
-   that must look like the ones on the three analytics views. Only the question
-   itself is the block this rule was written for (DDR-0099). */
+   The child combinator was load-bearing while #285's `RangeFilter` sat above the
+   box, bringing two `DateInput` fields that had to stay compact. DDR-0102 removed
+   that control, so the form now holds one `.field` and the combinator scopes
+   nothing it did not already scope. It stays because the rule means "the question
+   itself", not "every field under here" — and #287 may put a nested field back. */
 .assistant-ask > .field {
   flex-direction: column;
   align-items: stretch;

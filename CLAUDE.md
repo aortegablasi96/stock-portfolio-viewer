@@ -73,7 +73,11 @@ Each exists end-to-end and is the reference pattern for its shape.
   offered (DDR-0099). What the app **does not** compute is named **before any figure**: no
   annualised figure at any length (the period's *calendar* span is stated instead), no benchmark,
   and dispersion only from the daily returns that exist — the empty period keeps all three
-  (DDR-0101).
+  (DDR-0101). There is **no period control**: free text already carries a period, so a picker beside
+  it asks twice and the click wins silently. Grounding is `wholeHistory()` (`all`, the *identity*
+  case, not a default), `GroundingInputs` is collapsed back into `GroundingReports`, and the
+  `empty_period` **notice** is gone while the **state** stays — `periodChange`'s empty window is that
+  function's contract, and #287 windows this report again (DDR-0102, superseding half of DDR-0099).
 - **classification** — sector/industry. `classificationRepository` fronts *both* the mutable
   SQLite cache and `ibkrGateway`; `analytics:classifyInstruments` is the only analytics channel
   reaching IBKR. Refreshes are **resumable, not transactional** — a run that dies at 30 of 40 keeps

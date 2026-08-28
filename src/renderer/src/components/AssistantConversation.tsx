@@ -10,18 +10,10 @@ import {
   TRUNCATED_NOTE,
   type Turn,
 } from '../lib/assistantAsk'
-import {
-  buildAssistantContext,
-  type GroundingInputs,
-  type GroundingReports,
-} from '../lib/assistantContext'
+import { buildAssistantContext, type GroundingReports } from '../lib/assistantContext'
 import { flexDataVersion, profileDataVersion } from '../lib/dataVersion'
 import { controlClassName } from '../lib/fieldVariants'
-import { seriesExtent } from '../lib/performanceRange'
-import type { PeriodSelection } from '../lib/periodChange'
 import type { AssistantStatus } from '@shared/domain/assistant'
-import { RangeFilter } from './analytics/RangeFilter'
-import { useRangeSelection } from './analytics/useRangeSelection'
 import { Button } from './ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card'
 import { Field } from './ui/Field'
@@ -61,11 +53,12 @@ import { StatePanel } from './ui/StatePanel'
  * answer. A second, hidden copy of the answer for a screen reader would be two strings for one
  * answer, which is the shape this codebase keeps refusing.
  *
- * **The period is a selection, not a read** (Story #285). It is the same `RangeFilter` the three
- * analytics views carry, over the same vocabulary (DDR-0085), so a period means one window
- * everywhere — and because it is not a read, changing it reframes what the assistant is told
- * without re-issuing four IPC calls. That is why the reports and the period are held apart and
- * only joined when a context is built.
+ * **There is no period control, and that is a decision** (DDR-0102, superseding half of DDR-0099).
+ * #285 put a `RangeFilter` above the box; it was removed because a question already carries its own
+ * period — *how did last year go?* — and a picker makes the owner say it twice, in two vocabularies,
+ * with the control silently winning. The grounding is a **function of the reports alone** now, which
+ * is why `GroundingInputs` collapsed back into `GroundingReports`: there is no selection left to
+ * hold apart.
  *
  * **The newest turn is first.** A conversation usually reads downward, but this one is in a panel
  * that may have been hidden for minutes and has no scroll position to restore, and the answer to
@@ -82,7 +75,6 @@ export function AssistantConversation({
   const version = useSyncExternalStore(flexDataVersion.subscribe, flexDataVersion.get)
   const profileVersion = useSyncExternalStore(profileDataVersion.subscribe, profileDataVersion.get)
   const [reports, setReports] = useState<GroundingReports | null>(null)
-  const { range, setRange, custom, editCustom } = useRangeSelection()
   const [question, setQuestion] = useState('')
   const [turns, setTurns] = useState<readonly Turn[]>([])
   const [pending, setPending] = useState(false)
@@ -106,13 +98,8 @@ export function AssistantConversation({
       live = false
     }
     // Both versions are dependencies, not values read here: each means something underneath this
-    // view changed while it may have been hidden for minutes (DDR-0027). The period is not one:
-    // it reframes reports already in hand and re-reading them for it would be four IPC calls per
-    // click on a preset.
+    // view changed while it may have been hidden for minutes (DDR-0027).
   }, [displayCurrency, profileVersion, version])
-
-  const period: PeriodSelection = { range, custom }
-  const grounding: GroundingInputs | null = reports === null ? null : { ...reports, period }
 
   const ask = useCallback(async (): Promise<void> => {
     if (reports === null || !isAskable(question)) return
@@ -133,7 +120,7 @@ export function AssistantConversation({
       setReports(fresh)
       const result = await window.api.askAssistant({
         question: asked,
-        context: buildAssistantContext({ ...fresh, period: { range, custom } }),
+        context: buildAssistantContext(fresh),
       })
       setTurns((prev) =>
         prev.map((turn) => (turn.id === id ? { ...turn, answer: answerFromResult(result) } : turn)),
@@ -141,9 +128,9 @@ export function AssistantConversation({
     } finally {
       setPending(false)
     }
-  }, [custom, displayCurrency, question, range, reports, version])
+  }, [displayCurrency, question, reports, version])
 
-  const gate = askGate(status, grounding)
+  const gate = askGate(status, reports)
 
   // Loading its grounding: `ready` is false and there is nothing to say about why, which is the
   // one state that is a wait rather than a blocker.
@@ -151,16 +138,7 @@ export function AssistantConversation({
     return <StatePanel variant="loading">Reading what the assistant can see…</StatePanel>
   }
 
-  const notices = grounding === null ? [] : groundingNotices(grounding)
-
-  // The control appears only where there is a history to window. A period selector over nothing is
-  // a control that cannot be wrong and cannot be right, and the `no_import` notice below already
-  // says why there is nothing.
-  const extent =
-    reports?.performance.status === 'ok'
-      ? seriesExtent(reports.performance.report.valueSeries)
-      : null
-  const customBounds = custom ?? extent ?? { from: 0, to: 0 }
+  const notices = reports === null ? [] : groundingNotices(reports)
 
   return (
     <Card>
@@ -182,20 +160,9 @@ export function AssistantConversation({
               void ask()
             }}
           >
-            {/* The same control, the same vocabulary and the same windows as the three analytics
-                views (DDR-0085): a period the owner picks here is the period a chart would draw.
-                It sits above the box because it frames what a question about "the period" means
-                before the question is written. */}
-            {extent !== null && (
-              <RangeFilter
-                label="Period the assistant explains"
-                range={range}
-                onSelect={setRange}
-                extent={extent}
-                custom={customBounds}
-                onEditCustom={(edge, value) => editCustom(edge, value, customBounds)}
-              />
-            )}
+            {/* No period control, deliberately (DDR-0102). A question names its own period, and a
+                picker beside it asks for the same fact twice in two vocabularies — one typed, one
+                clicked — with the click silently winning whenever they disagree. */}
             <Field label="Your question">
               {(id) => (
                 <textarea
