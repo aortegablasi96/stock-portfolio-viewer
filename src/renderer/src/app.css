@@ -4065,8 +4065,13 @@ html {
    each one a compact box with a short label beside it. A prose control is the
    first that is a block, and a row puts a two-word label in a column of its own
    and wraps it. Stacking is the only thing this changes: the label, its colour
-   and the control's own box are all untouched. */
-.assistant-ask .field {
+   and the control's own box are all untouched.
+
+   The child combinator is load-bearing since Story #285: the `RangeFilter` above
+   the box brings two `DateInput` fields of its own, and those are compact boxes
+   that must look like the ones on the three analytics views. Only the question
+   itself is the block this rule was written for (DDR-0099). */
+.assistant-ask > .field {
   flex-direction: column;
   align-items: stretch;
   gap: var(--space-3);

@@ -18,8 +18,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 M0–M9 are delivered: live IBKR holdings/balances/allocation in a display currency, immutable
 snapshots, Flex statement import, and four analytics views over it, behind a vertical sidebar.
-M10 is in progress — the investor profile and the assistant's **surface** (grounded Q&A) have
-landed; the question shapes (#285–#289) have not. Not built: multi-broker, benchmarks, tax.
+M10 is in progress — the investor profile, the assistant's **surface** (grounded Q&A) and the first
+question shape (a period explained) have landed; #286–#289 have not. Not built: multi-broker,
+benchmarks, tax.
 
 **Which Epics are open is deliberately not recorded here** — read the backlog (*Current Priority*).
 The **lifecycle** is the rule: an Epic closes with its stories, and refinement opens a *new*
@@ -58,7 +59,11 @@ Each exists end-to-end and is the reference pattern for its shape.
   **renderer** (`lib/assistantContext.ts`) so figures use the app's own formatters, and the boundary
   drops undisclosed sections. A section is **absent, never empty**; no money goes in one disclosed
   as names or percentages; each names its store *and clock* — composition is Flex, drift live
-  (DDR-0098).
+  (DDR-0098). An **explained period** keeps return and value in separate fields under separate
+  headings, return first — the curve is TWR, so a deposit moves value alone; the period is the
+  shared vocabulary anchored to `extent.to`, an overlapping statement row is summed **whole** and
+  names the span it covered, an empty window is a *state* not a flat period, and no cause is ever
+  offered (DDR-0099).
 - **classification** — sector/industry. `classificationRepository` fronts *both* the mutable
   SQLite cache and `ibkrGateway`; `analytics:classifyInstruments` is the only analytics channel
   reaching IBKR. Refreshes are **resumable, not transactional** — a run that dies at 30 of 40 keeps
@@ -113,9 +118,6 @@ e2e/             Playwright specs launching the built app
 
 - **Minimal slice / test style** — `app:ping` and `metaService.getInstallId()`; see
   `services/meta/metaService.test.ts` for the repository-mocking pattern.
-- **External data source** — `portfolio:getOverview`: Zod at ingress, connection state modelled as
-  data (ADR-0004, DDR-0002). **Local persistence + policy** — `snapshot:*` (DDR-0003).
-  **Read-only analytics** — `analytics:*`. All three are the Domains above.
 - **Fire-and-forget command + state event** — the `window:*` channels. DDR-0011.
 - **Destructive action** — `flex:clear` / `snapshot:clear`: the in-place `ConfirmAction` control —
   no modal, no `window.confirm`. ADR-0006, DDR-0012.
@@ -455,8 +457,7 @@ else). **Avoid adding dependencies without clear long-term value.**
 ## Commands
 
 ```bash
-# The script list is package.json (dev · build · start · package · typecheck · test:watch ·
-# db:generate · db:studio do what their names say). What package.json does NOT tell you:
+# package.json lists the scripts, and they do what their names say. What it does NOT tell you:
 
 npm install            # postinstall: electron-rebuild for better-sqlite3 (native)
 npm run lint           # eslint . — also enforces the layer-boundary import rules
@@ -531,9 +532,9 @@ override an accepted decision.**
 
 ## MCP Servers
 
-`.claude/settings.local.json` enables `context7`, `filesystem`, `playwright`, `interactive-brokers`
-and `shadcn`. The `interactive-brokers` entry in `.mcp.json` still has a **placeholder runtime**
-(`REPLACE_WITH_RUNTIME`), so enabling it does not make it functional. A connected
+Which are enabled is `.claude/settings.local.json`. The `interactive-brokers` entry in `.mcp.json`
+still has a **placeholder runtime** (`REPLACE_WITH_RUNTIME`), so enabling it does not make it
+functional. A connected
 `Interactive_Brokers_IBKR` MCP has read-only account/market tools allowlisted — **no order-placing
 tools**.
 

@@ -34,6 +34,14 @@ is out of scope — that decision is theirs (ADR-0009).
   revocable, and consent is recorded against that specific list — changing what would be sent asks
   again (Story #283, DDR-0097). Three of the five categories send percentages and text only; only
   performance carries amounts of money.
+- **An assistant that answers questions about the portfolio**, behind that gate, grounded in text
+  the app wrote from reports it already computed — the model phrases figures and never produces one
+  (Story #284, DDR-0098).
+- **An explanation of what changed over a period the owner chooses**, in the app's own range
+  presets. It keeps a **return** and a **change in value** apart — the performance curve is
+  time-weighted, so deposits and withdrawals move value and not return — names the flows where they
+  moved value, and never offers a cause it cannot observe: no market events, no news, no
+  fundamentals (Story #285, DDR-0099).
 
 ## Future Capabilities
 

@@ -260,4 +260,34 @@ describe('the system prompt states the boundary the ADR set', () => {
     expect(SYSTEM_PROMPT).toContain('training data')
     expect(SYSTEM_PROMPT).toContain('unverified')
   })
+
+  /**
+   * Story #285's two prompt-level rules, pinned here because the story asks for them to be held by
+   * a test rather than by the model's disposition.
+   *
+   * The first is the trap that defines the story: **a change in value and a return are different
+   * sentences**, and the app's curve only answers the second (DDR-0013). An answer that attributes
+   * a 24% rise in value to performance when a deposit caused it is wrong in the flattering
+   * direction, which is the direction an owner is least likely to check.
+   *
+   * The second is the story's main guardrail. "Energy fell 8% over the period" is grounded;
+   * "energy fell because of the OPEC decision" is invented, and invented in a register that sounds
+   * authoritative. The app holds no news, no fundamentals and no market data beyond the
+   * portfolio's own history, so a cause is never something it can offer.
+   */
+  it('forbids conflating a change in value with a return', () => {
+    expect(SYSTEM_PROMPT).toContain('Keep return and value apart')
+    expect(SYSTEM_PROMPT).toContain('moves value and does not move return')
+    expect(SYSTEM_PROMPT).toContain('never attribute a return to a deposit')
+  })
+
+  it('forbids attributing a cause the app cannot observe', () => {
+    expect(SYSTEM_PROMPT).toContain('Never say why the market, a sector or an instrument moved')
+    expect(SYSTEM_PROMPT).toContain('no news, no fundamentals and no market data')
+    expect(SYSTEM_PROMPT).toContain('not something this app can see')
+  })
+
+  it('forbids forecasting', () => {
+    expect(SYSTEM_PROMPT).toContain('Never forecast')
+  })
 })

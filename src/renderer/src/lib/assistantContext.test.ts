@@ -5,10 +5,14 @@ import {
   hasProfile,
   holdingsSection,
   measuredDrift,
+  performanceSection,
   profileSection,
+  selectedPeriod,
   weightsSection,
   type GroundingInputs,
 } from './assistantContext'
+import type { PeriodChange } from './periodChange'
+import type { PerformanceReport } from '@shared/domain/performance'
 import { DISCLOSURE_CATEGORY_IDS } from '@shared/domain/assistantDisclosure'
 import { EMPTY_INVESTOR_PROFILE, type InvestorProfile } from '@shared/domain/investorProfileTerms'
 import type { AllocationPosition, AllocationReport } from '@shared/domain/allocation'
@@ -95,12 +99,96 @@ const PROFILE: InvestorProfile = {
   updatedAt: Date.UTC(2026, 7, 1),
 }
 
+/**
+ * A history of four days across two statement periods, with a deposit that moves value and not
+ * return (Story #285). Every figure below is chosen so the two can be told apart in an assertion:
+ * value rises 24.5% while the return curve rises 2%.
+ */
+const DAY = [
+  Date.UTC(2026, 4, 29),
+  Date.UTC(2026, 5, 1),
+  Date.UTC(2026, 5, 2),
+  Date.UTC(2026, 5, 3),
+] as const
+
+function performance(over: Partial<PerformanceReport> = {}): PerformanceReport {
+  return {
+    baseCurrency: 'EUR',
+    valueSeries: [
+      { date: DAY[0], value: 100_000 },
+      { date: DAY[1], value: 101_000 },
+      { date: DAY[2], value: 121_000 },
+      { date: DAY[3], value: 124_500 },
+    ],
+    returnSeries: [
+      { date: DAY[0], value: 0 },
+      { date: DAY[1], value: 1 },
+      { date: DAY[2], value: 0.5 },
+      { date: DAY[3], value: 2 },
+    ],
+    compositionSeries: {
+      bands: [
+        { key: 'stock', label: 'Stocks' },
+        { key: 'cash', label: 'Cash' },
+      ],
+      points: [
+        { date: DAY[0], total: 100_000, values: [90_000, 10_000] },
+        { date: DAY[3], total: 124_500, values: [110_000, 14_500] },
+      ],
+    },
+    periods: [
+      {
+        fromDate: Date.UTC(2026, 4, 1),
+        toDate: Date.UTC(2026, 4, 31),
+        startingValue: 95_000,
+        endingValue: 100_000,
+        mtm: 5_000,
+        depositsWithdrawals: 0,
+        dividends: 300,
+        withholdingTax: -45,
+        interest: 5,
+        commissions: 12,
+        twr: 5,
+      },
+      {
+        fromDate: Date.UTC(2026, 5, 1),
+        toDate: Date.UTC(2026, 5, 30),
+        startingValue: 100_000,
+        endingValue: 124_500,
+        mtm: 4_500,
+        depositsWithdrawals: 20_000,
+        dividends: 900,
+        withholdingTax: -135,
+        interest: 5,
+        commissions: 33,
+        twr: 2,
+      },
+    ],
+    startingValue: 100_000,
+    endingValue: 124_500,
+    cumulativeTwr: 2,
+    totalDepositsWithdrawals: 20_000,
+    totalRealizedPnl: 4_300,
+    totalUnrealizedPnl: 12_000,
+    ...over,
+  }
+}
+
 const inputs = (over: Partial<GroundingInputs> = {}): GroundingInputs => ({
   allocation: { status: 'ok', report: report() },
   profile: PROFILE,
   drift: { status: 'ok', report: drift() },
+  performance: { status: 'ok', report: performance() },
+  period: { range: 'all', custom: null },
   ...over,
 })
+
+/** The `PeriodChange` the default fixture resolves to, for the section tests below. */
+const change = (over: Partial<GroundingInputs> = {}): PeriodChange => {
+  const resolved = selectedPeriod(inputs(over))
+  if (resolved === null) throw new Error('fixture resolves to no period')
+  return resolved
+}
 
 describe('buildAssistantContext', () => {
   it('keys every section by a category the owner actually read', () => {
@@ -110,21 +198,24 @@ describe('buildAssistantContext', () => {
     }
   })
 
-  it('assembles the three sections this story grounds an answer in', () => {
+  it('assembles the four sections an answer is grounded in', () => {
     expect(Object.keys(buildAssistantContext(inputs())).sort()).toEqual([
       'holdings',
+      'performance',
       'profile',
       'weights',
     ])
   })
 
   /**
-   * The `performance` category is disclosed but not assembled here — Stories #285–#287 fill it.
-   * The point of the assertion is that the gap is *deliberate*: sending an empty section would
-   * tell the model a heading exists with nothing under it, which is an invitation to fill it in.
+   * Absent, never empty. With nothing imported there is no history to window, so the section is
+   * missing rather than present-and-blank — a heading with nothing under it tells the model one
+   * exists, which is an invitation to fill it in.
    */
-  it('sends no performance section, rather than an empty one', () => {
-    expect(buildAssistantContext(inputs())).not.toHaveProperty('performance')
+  it('sends no performance section when there is no history to window', () => {
+    expect(
+      buildAssistantContext(inputs({ performance: { status: 'needs_import' } })),
+    ).not.toHaveProperty('performance')
   })
 
   /** Absent is absent. A store that has never been imported produces no composition sections. */
@@ -363,6 +454,171 @@ describe('measuredDrift', () => {
     expect(text).toContain('AAPL at 10.00%')
     expect(text).toContain('inside the range')
     expect(text).not.toContain('lower bound')
+  })
+})
+
+/**
+ * The explanation of a period (Story #285).
+ *
+ * **The trap that defines the story is that "my portfolio went up" and "my portfolio returned" are
+ * different sentences.** The fixture is built so they disagree loudly — value rises 24.5% on a
+ * €20,000 deposit while the return curve rises 2% — and what is asserted below is that the section
+ * never lets the two be confused: they sit under headings that name which is which, in that order,
+ * and the text says in words that a flow moves one and not the other.
+ */
+describe('performanceSection', () => {
+  it('names the store, the period, and the anchor the period was resolved against', () => {
+    const text = performanceSection(change())
+    expect(text).toContain('From imported Flex history, in EUR.')
+    expect(text).toContain('Period the owner chose: Full history — 2026-05-29 to 2026-06-03.')
+    // DDR-0085's anchor, stated rather than assumed: a reader dating the period from their own
+    // calendar would be reading a different period.
+    expect(text).toContain('anchored to the last day the imported history holds (2026-06-03)')
+    expect(text).toContain("never to today's date")
+  })
+
+  /** Return first, value second: whichever is met first is what a sentence reaches for. */
+  it('states the return before the value, each labelled as what it is', () => {
+    const text = performanceSection(change())
+    const returnAt = text.indexOf('RETURN over this period (a return, not a change in value)')
+    const valueAt = text.indexOf('VALUE over this period (a change in value, not a return)')
+    expect(returnAt).toBeGreaterThan(-1)
+    expect(valueAt).toBeGreaterThan(returnAt)
+  })
+
+  /**
+   * The story's central figure pair. A 2% return beside a 24.5% rise in value is the case an
+   * explanation gets wrong by flattering, so both must be present, both must be labelled, and the
+   * text must say what separates them.
+   */
+  it('keeps the return and the value change apart as two figures', () => {
+    const text = performanceSection(change())
+    expect(text).toContain('Time-weighted return: +2.00%')
+    expect(text).toContain('Change in value: +€24,500.00 (+24.50%)')
+    expect(text).toContain('Money paid in or taken out does not move this figure')
+    expect(text).toContain('Never call it performance')
+  })
+
+  /** Flows are named where they moved value, and named as not having moved the return. */
+  it('names the deposit that moved the value', () => {
+    const text = performanceSection(change())
+    expect(text).toContain('Net deposits and withdrawals: +€20,000.00')
+    expect(text).toContain('these move value; none of them moves the return above')
+  })
+
+  /**
+   * Statement rows are summed whole, never pro-rated (there is no pro-rated figure in any report),
+   * so a window that cuts one gets the totals of the rows it touched and is told which span those
+   * rows really cover.
+   */
+  it('says which span the flow totals really cover when the statements overrun the period', () => {
+    const text = performanceSection(
+      change({ period: { range: 'custom', custom: { from: DAY[1], to: DAY[3] } } }),
+    )
+    expect(text).toContain('are not cut to the chosen period')
+    expect(text).toContain('2026-06-01 to 2026-06-30')
+  })
+
+  it('reports the daily returns as chain-linked from the return curve', () => {
+    const text = performanceSection(change())
+    expect(text).toContain('chain-linked from the return curve')
+    expect(text).toContain('3 trading day(s)')
+    expect(text).toContain('Best day: +1.49% on 2026-06-03')
+    expect(text).toContain('Worst day: -0.50% on 2026-06-02')
+  })
+
+  it('reports composition as amounts at each end of the period, with net asset value', () => {
+    const text = performanceSection(change())
+    expect(text).toContain('Stocks: €90,000.00 → €110,000.00 (+€20,000.00)')
+    expect(text).toContain('Cash: €10,000.00 → €14,500.00 (+€4,500.00)')
+    expect(text).toContain('Net asset value: €100,000.00 → €124,500.00 (+€24,500.00)')
+  })
+
+  /**
+   * Story #285's "record a finding rather than compute one". Realised and unrealised profit and
+   * loss come off the FIFO summaries as whole-history rollups; there is no windowed figure for
+   * either, so both are put under their own heading and the absence is stated. Left under the
+   * period's heading a model would read them as the period's own.
+   */
+  it('puts the whole-history figures under their own heading and says they are not the period', () => {
+    const text = performanceSection(change())
+    expect(text).toContain('WHOLE IMPORTED HISTORY, not the period above')
+    expect(text).toContain('Realised profit and loss: +€4,300.00')
+    expect(text).toContain('not available for a chosen period')
+  })
+
+  /**
+   * A period with no data is a state, not an empty explanation. `valueAt` carries a value forward,
+   * so this window would otherwise be described as a calm, flat, 0% period that never happened.
+   */
+  it('reports an empty period as empty rather than as flat', () => {
+    const text = performanceSection(
+      change({
+        period: {
+          range: 'custom',
+          custom: { from: Date.UTC(2020, 0, 1), to: Date.UTC(2020, 0, 2) },
+        },
+      }),
+    )
+    expect(text).toContain('No day in the imported history falls inside this period')
+    expect(text).toContain('do not describe it as flat or unchanged')
+    // Nothing else may be there to quote: an empty period has no return and no value change.
+    expect(text).not.toContain('Time-weighted return:')
+    expect(text).not.toContain('Change in value:')
+  })
+
+  /** The optional NAV-in-base Flex section degrades, never fails (DDR-0050). */
+  it('says composition is unavailable rather than drawing a shape out of nothing', () => {
+    const text = performanceSection(
+      change({
+        performance: {
+          status: 'ok',
+          report: performance({ compositionSeries: { bands: [], points: [] } }),
+        },
+      }),
+    )
+    expect(text).toContain('do not include the daily net-asset-value breakdown')
+    expect(text).not.toContain('Net asset value:')
+  })
+
+  /**
+   * Every figure goes through `lib/format`, so a figure in an answer and the same figure on a page
+   * are one number. The formatters group thousands; a raw JavaScript number would not.
+   */
+  it('formats every figure through the app’s own formatters', () => {
+    const text = performanceSection(change())
+    expect(text).not.toContain('124500')
+    expect(text).not.toContain('24500')
+    expect(text).toMatch(/€124,500\.00/)
+  })
+
+  /**
+   * The story's main guardrail, at the level this file can hold it: the context states what
+   * changed and never why. Refusing a cause is the model's job and the system prompt carries that
+   * rule — but it must not be handed one to repeat either.
+   */
+  it('offers no cause for anything it reports', () => {
+    const text = performanceSection(change())
+    expect(text).not.toMatch(/\bbecause\b/i)
+    expect(text).not.toMatch(/\bdue to\b/i)
+    expect(text).not.toMatch(/\bdriven by\b/i)
+  })
+})
+
+describe('selectedPeriod', () => {
+  /**
+   * DDR-0085's anchor is the whole reason a preset is a pure function here: `1M` over a history
+   * that stopped in an earlier month must still resolve to that history's last month. Anchored to
+   * the clock it would be empty, and an empty period reads as a flat one.
+   */
+  it('anchors a preset to the last day of the history, never to today', () => {
+    const resolved = change({ period: { range: '1m', custom: null } })
+    expect(resolved.bounds.to).toBe(DAY[3])
+    expect(resolved.days).toBeGreaterThan(0)
+  })
+
+  it('is null when the history has nothing to window', () => {
+    expect(selectedPeriod(inputs({ performance: { status: 'needs_import' } }))).toBeNull()
   })
 })
 
