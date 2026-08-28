@@ -22,8 +22,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 M0–M9 are delivered: live IBKR holdings/balances/allocation in a display currency, immutable
 snapshots, Flex statement import, and four analytics views over it, behind a vertical sidebar.
 M10 is in progress — the investor profile, the assistant's **surface** (grounded Q&A) and the first
-question shape (a period explained) have landed; #286–#289 have not. Not built: multi-broker,
-benchmarks, tax.
+two question shapes (a period explained, a performance summary) have landed; #287–#289 have not.
+Not built: multi-broker, benchmarks, tax.
 
 **Which Epics are open is deliberately not recorded here** — read the backlog (*Current Priority*).
 The **lifecycle** is the rule: an Epic closes with its stories, and refinement opens a *new*
@@ -66,7 +66,10 @@ Each exists end-to-end and is the reference pattern for its shape.
   headings, return first — the curve is TWR, so a deposit moves value alone; the period is the
   shared vocabulary anchored to `extent.to`, an overlapping statement row is summed **whole** and
   names the span it covered, an empty window is a *state* not a flat period, and no cause is ever
-  offered (DDR-0099).
+  offered (DDR-0099). What the app **does not** compute is named **before any figure**: no
+  annualised figure at any length (the period's *calendar* span is stated instead), no benchmark,
+  and dispersion only from the daily returns that exist — the empty period keeps all three
+  (DDR-0101).
 - **classification** — sector/industry. `classificationRepository` fronts *both* the mutable
   SQLite cache and `ibkrGateway`; `analytics:classifyInstruments` is the only analytics channel
   reaching IBKR. Refreshes are **resumable, not transactional** — a run that dies at 30 of 40 keeps

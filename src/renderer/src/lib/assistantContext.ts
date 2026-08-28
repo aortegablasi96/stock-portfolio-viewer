@@ -59,6 +59,11 @@ import {
  * prevent. Its sharpest case is DDR-0007's: a holding that could not be valued is *unplaced*, and
  * is reported as a count and a currency, never as a weight of zero.
  *
+ * **What the app does not compute is said, not left out.** The three absences a summary reaches
+ * for — an annualised return, a benchmark, a risk statistic — are named in the section itself,
+ * ahead of the figures they would otherwise decorate (Story #286, DDR-0101). Absence is stated for
+ * the same reason it is elsewhere: a gap the model finds is a gap the model fills.
+ *
  * **Every line names its source.** The composition sections read the **imported Flex store** and
  * are as of the latest statement; the drift section reads the **live** portfolio. Two different
  * clocks, and an answer that silently mixed them would be wrong in a way no reader could catch —
@@ -355,6 +360,11 @@ function bandLines(dimension: DimensionDrift): string[] {
  * there is no windowed figure for either, and the honest move is to say so beside the two totals
  * rather than to quietly place them under a period's heading, where a model would read them as its
  * own. That is Story #285's "record a finding rather than compute one" (see DDR-0099).
+ *
+ * **What the app does not compute at all is named before any figure is.** Story #286 asks the same
+ * section to survive being *summarised*, and a summary reaches for annualisation, a benchmark and a
+ * risk statistic — none of which exists here. {@link uncomputedBlock} says so second, ahead of the
+ * numbers, on DDR-0099's own ordering argument (see DDR-0101).
  */
 export function performanceSection(change: PeriodChange): string {
   const c = (value: number): string => formatCurrency(value, change.baseCurrency)
@@ -366,6 +376,10 @@ export function performanceSection(change: PeriodChange): string {
       `Period the owner chose: ${change.label} — ${isoDay(change.bounds.from)} to ${isoDay(change.bounds.to)}.`,
       `Periods are anchored to the last day the imported history holds (${isoDay(change.extent.to)}), never to today's date. The whole history runs ${isoDay(change.extent.from)} to ${isoDay(change.extent.to)}.`,
     ].join('\n'),
+    // Second, ahead of every figure, for the reason RETURN precedes VALUE: whichever is met first
+    // is what a sentence reaches for (DDR-0099). A summary asked for after the numbers have been
+    // read is a summary already phrased.
+    uncomputedBlock(change),
   ]
 
   if (change.days === 0) {
@@ -408,6 +422,47 @@ export function performanceSection(change: PeriodChange): string {
   )
 
   return blocks.join('\n\n')
+}
+
+/**
+ * The three things a summary reaches for that this app does not hold (Story #286).
+ *
+ * A summary is compression, and compression is where a model reaches for the conventional
+ * phrasing of finance. Each of these is a sentence that sounds like a summary and is not grounded
+ * in anything:
+ *
+ * **An annualised figure.** The app computes none — not one report carries a per-year, compounded
+ * or "p.a." number — so producing one is arithmetic, which is already forbidden. What makes it
+ * worth its own line is that it is the one calculation a model does not experience as a
+ * calculation: "roughly 30% a year" reads as a restatement of "+5% over two months" rather than as
+ * a derivation, and it is meaningless besides. So the honest fact is stated instead — how many
+ * calendar days the period really covers — and below a year the section forbids the word outright.
+ *
+ * **A benchmark.** The app has none. Benchmark comparison is Epic #7, a different data source in a
+ * different milestone, and "outperformed the market" is invented wholesale in the register that
+ * sounds most authoritative.
+ *
+ * **A risk statistic.** Daily returns exist ({@link PeriodChange.daily}, DDR-0049), so dispersion
+ * *can* be described — from the counts and the two extremes that are actually in front of the
+ * model, and from nothing else. A Sharpe ratio quoted beside them would be indistinguishable in
+ * tone from the figures that were computed.
+ *
+ * The block carries no figure that is not the app's own: two day counts off the window and the
+ * extent, and otherwise statements of absence. It is emitted for an **empty** period too — a
+ * window with nothing in it is exactly where an ungrounded comparison has the most room.
+ */
+function uncomputedBlock(change: PeriodChange): string {
+  const span = change.span
+
+  return [
+    'WHAT THIS APP DOES NOT COMPUTE — none of it is available, and none of it may be supplied:',
+    `- No annualised, per-year, compounded or "p.a." figure exists anywhere in this context. A return here is the return over the period named above and nothing else. That period covers ${span.periodDays} calendar day(s); the whole imported history covers ${span.historyDays}.`,
+    span.coversAYear
+      ? '- This period covers a year or more, so a return over it may be given as the return over this period — still never scaled, compounded or annualised to any other period.'
+      : '- This period is shorter than a year, so never describe a return over it as annual, annualised, yearly or per year. State the period instead.',
+    '- No benchmark, index, market or peer figure exists. This app holds no market data beyond this portfolio’s own history, so never say the portfolio beat, lagged, tracked, outperformed or underperformed anything.',
+    '- No volatility, standard deviation, Sharpe ratio, beta, drawdown or other risk statistic exists. The daily-return counts and the best and worst day in this section are the only description of dispersion this app has; use those where they are given, and otherwise say a risk figure is not available.',
+  ].join('\n')
 }
 
 /** What moved value without moving return, over the statement rows the window touches. */

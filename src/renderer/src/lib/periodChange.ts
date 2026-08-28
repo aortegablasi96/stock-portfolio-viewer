@@ -45,6 +45,11 @@ import { sliceComposition } from './composition'
  * and report a flat, zero-return period that never happened. {@link PeriodChange.days} counts the
  * real points inside the window, and zero is a state the caller states rather than a period it
  * describes.
+ *
+ * Story #286 adds {@link PeriodSpan}, which is the same refusal aimed at a different overclaim: a
+ * summary is compression, and the conventional compression of finance is an annualised figure. The
+ * app computes none, so what is measured here is **how long the period really is**, in calendar
+ * days — the fact a summary states *instead of* scaling a two-month return to a year.
  */
 
 /** A period the owner chose, in the app's one range vocabulary (DDR-0085). */
@@ -104,6 +109,32 @@ export interface PeriodComposition {
   bands: BandShift[]
 }
 
+/**
+ * How long the window and the whole history really are (Story #286).
+ *
+ * Calendar days rather than trading days, and deliberately so: this measures the *period being
+ * described*, which is what a summary has to name where it would otherwise reach for a per-year
+ * figure. {@link PeriodChange.days} already counts the trading days with data in it, and the two
+ * answer different questions — "how long was this" and "how much of it did we observe".
+ */
+export interface PeriodSpan {
+  /** Calendar days the chosen window covers, both ends included. */
+  periodDays: number
+  /** Calendar days the whole imported history covers, both ends included. */
+  historyDays: number
+  /**
+   * Whether the window is itself a year or longer.
+   *
+   * Never a licence to annualise — the app computes no annualised figure at all, so producing one
+   * would be arithmetic the model is forbidden. It is the narrower fact the summary needs: below a
+   * year, calling the return "annual" is wrong twice over, and the section says so outright.
+   */
+  coversAYear: boolean
+}
+
+/** How long a period has to be before a yearly figure could describe it at all. */
+export const ANNUALISATION_MIN_DAYS = 365
+
 /** Everything the app can say about a chosen period, each figure named for what it is. */
 export interface PeriodChange {
   range: RangeId
@@ -116,6 +147,8 @@ export interface PeriodChange {
   baseCurrency: string
   /** Real value points inside the window. Zero means the period holds no data at all. */
   days: number
+  /** How long the window and the history are in calendar days, and whether either is a year. */
+  span: PeriodSpan
   /** Time-weighted return over the window, chain-linked. Flows do not move it. */
   twr: number
   startValue: number
@@ -180,6 +213,7 @@ export function periodChange(
     extent,
     baseCurrency: report.baseCurrency,
     days,
+    span: periodSpan(bounds, extent),
     twr: stats.twr,
     startValue: valueAt(report.valueSeries, bounds.from),
     endValue: stats.endValue,
@@ -197,6 +231,32 @@ export function periodChange(
       unrealizedPnl: report.totalUnrealizedPnl,
     },
   }
+}
+
+/**
+ * How long the window and the history are, in calendar days (Story #286).
+ *
+ * Both ends are inclusive, so a window opening and closing on the same day is one day rather than
+ * none — an off-by-one nobody would notice in a chart and everybody would notice in a sentence
+ * that says how long the period was.
+ *
+ * `boundsFor` returns midnights taken off the value series, so a plain division is exact; the
+ * rounding is there for the one window that is not (`custom`, whose end `windowFor` runs to the
+ * close of the day — not this function's input, but a caller could reasonably pass one).
+ */
+export function periodSpan(bounds: Bounds, extent: Bounds): PeriodSpan {
+  const periodDays = calendarDays(bounds)
+  return {
+    periodDays,
+    historyDays: calendarDays(extent),
+    coversAYear: periodDays >= ANNUALISATION_MIN_DAYS,
+  }
+}
+
+/** Whole days from one end to the other, both included. Never negative. */
+function calendarDays(bounds: Bounds): number {
+  const MS_PER_DAY = 86_400_000
+  return Math.max(0, Math.round((bounds.to - bounds.from) / MS_PER_DAY)) + 1
 }
 
 /**
