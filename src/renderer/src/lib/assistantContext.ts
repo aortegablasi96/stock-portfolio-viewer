@@ -1,10 +1,14 @@
 import {
+  formatCurrency,
   formatPercentValue,
+  formatSignedCurrency,
   formatSignedPercent,
   instrumentName,
 } from './format'
+import { periodChange, type PeriodChange, type PeriodSelection } from './periodChange'
 import type { AssistantContext } from '@shared/domain/assistantDisclosure'
 import type { AllocationReport, AllocationResult } from '@shared/domain/allocation'
+import type { PerformanceResult } from '@shared/domain/performance'
 import type {
   BalanceDriftReport,
   BalanceDriftResult,
@@ -39,9 +43,15 @@ import {
  * `weights` and `profile` as percentages only — so no amount of money appears in any of the three,
  * however convenient one would be. That is not caution about a leak; it is the disclosure being
  * true. `assistantContext.test.ts` reads every section back and fails on a currency-formatted
- * figure. The `performance` category is the one that may carry money, and this story assembles
- * nothing into it — Stories #285–#287 are what fill it, and until they do an answer about returns
- * correctly says the figure is not available.
+ * figure. The `performance` category is the one that may carry money, and Story #285 is what fills
+ * it: an explanation of a chosen period is the one question whose honest answer needs amounts.
+ *
+ * **Return and value are two sections' worth of care in one.** The app's curve is cumulative
+ * time-weighted return (DDR-0013) and does not move on a deposit; a portfolio can be worth 20%
+ * more and have returned 2%. So the performance section states them apart, each under a heading
+ * that says which it is, and says in the text itself that a flow moves one and not the other —
+ * because conflating them is the failure this Epic is least likely to catch, the wrong answer
+ * being the flattering one.
  *
  * **Absent is absent, never zero.** A report that could not be read produces no section rather
  * than an empty one, and the view says so beside the box in its own words. A heading with nothing
@@ -55,14 +65,27 @@ import {
  * so each section opens by saying which one it is and when it was read.
  */
 
-/** What a view has read, in whatever state each read came back in. */
-export interface GroundingInputs {
+/**
+ * What a view has read, in whatever state each read came back in.
+ *
+ * Split from {@link GroundingInputs} because the period is not a *read*: it is a selection the
+ * owner makes on the view, and changing it must reframe the explanation without re-issuing four
+ * IPC calls — the same relationship the Performance view's `RangeFilter` has with its report.
+ */
+export interface GroundingReports {
   /** Composition from imported Flex history — `needs_import` when the store is empty. */
   allocation: AllocationResult
   /** The owner's own policy. The empty profile when they have never written one. */
   profile: InvestorProfile
   /** How far the live portfolio sits from that policy, or which blocker is in the way. */
   drift: BalanceDriftResult
+  /** The performance history a period is explained out of — `needs_import` with no Flex data. */
+  performance: PerformanceResult
+}
+
+/** Those reads, plus the period the owner chose to have explained (Story #285). */
+export interface GroundingInputs extends GroundingReports {
+  period: PeriodSelection
 }
 
 /**
@@ -93,7 +116,22 @@ export function buildAssistantContext(inputs: GroundingInputs): AssistantContext
   const profile = profileSection(inputs.profile, inputs.drift)
   if (profile !== null) context.profile = profile
 
+  const change = selectedPeriod(inputs)
+  if (change !== null) context.performance = performanceSection(change)
+
   return context
+}
+
+/**
+ * The chosen period resolved against the imported history, or `null` where there is none.
+ *
+ * One function so the view's notice and the section it explains cannot disagree about whether a
+ * period exists: `needs_import` and a history with no dated value are both "nothing to window",
+ * and an empty *window* is not — that one resolves, and the section says the period is empty.
+ */
+export function selectedPeriod(inputs: GroundingInputs): PeriodChange | null {
+  if (inputs.performance.status !== 'ok') return null
+  return periodChange(inputs.performance.report, inputs.period)
 }
 
 /**
@@ -291,6 +329,161 @@ function bandLines(dimension: DimensionDrift): string[] {
   }
 
   return lines
+}
+
+/**
+ * What changed over the period the owner chose (Story #285).
+ *
+ * The one section that may carry amounts of money, and the one whose ordering is an argument:
+ * **return first, value second, flows third**. A reader — or a model — who meets the value change
+ * first will reach for performance to explain it, and by the time the deposit appears the sentence
+ * is already written. Meeting the return first, then the value, then what moved the value and not
+ * the return, is the explanation in the order that makes it hard to get wrong. Each of the three
+ * headings says which of the two it is, in words, rather than relying on the figure's units.
+ *
+ * Every figure below is `periodChange`'s, formatted here and nowhere else. Nothing is derived in
+ * this function — not a difference, not a share, not a total — because a figure this file computed
+ * would be a figure no page shows.
+ *
+ * **The period is stated with its anchor.** A preset ends at the last day the imported history
+ * holds, not today (DDR-0085), and an explanation that did not say so would let a reader date the
+ * period from their own calendar. Where the flows cover more than the window — statement rows are
+ * summed whole, never pro-rated — the span they really cover is named instead of implied.
+ *
+ * **What the app cannot break down by period is put under its own heading**, in as many words.
+ * Realised and unrealised profit and loss come off the FIFO summaries as whole-history rollups;
+ * there is no windowed figure for either, and the honest move is to say so beside the two totals
+ * rather than to quietly place them under a period's heading, where a model would read them as its
+ * own. That is Story #285's "record a finding rather than compute one" (see DDR-0099).
+ */
+export function performanceSection(change: PeriodChange): string {
+  const c = (value: number): string => formatCurrency(value, change.baseCurrency)
+  const s = (value: number): string => formatSignedCurrency(value, change.baseCurrency)
+
+  const blocks: string[] = [
+    [
+      `From imported Flex history, in ${change.baseCurrency}.`,
+      `Period the owner chose: ${change.label} — ${isoDay(change.bounds.from)} to ${isoDay(change.bounds.to)}.`,
+      `Periods are anchored to the last day the imported history holds (${isoDay(change.extent.to)}), never to today's date. The whole history runs ${isoDay(change.extent.from)} to ${isoDay(change.extent.to)}.`,
+    ].join('\n'),
+  ]
+
+  if (change.days === 0) {
+    // A period with no data is a state, not a flat period. `valueAt` would happily carry the
+    // nearest value into both ends of this window and report a calm 0% — which is a description
+    // of nothing, phrased as a description of something.
+    blocks.push(
+      'No day in the imported history falls inside this period, so there is nothing to report about it. Say the period is empty; do not describe it as flat or unchanged.',
+    )
+    return blocks.join('\n\n')
+  }
+
+  blocks.push(
+    [
+      'RETURN over this period (a return, not a change in value):',
+      `- Time-weighted return: ${formatSignedPercent(change.twr)}`,
+      '- Money paid in or taken out does not move this figure. It is chain-linked from the cumulative return curve the app computed.',
+    ].join('\n'),
+    [
+      'VALUE over this period (a change in value, not a return):',
+      `- Value at the start of the period: ${c(change.startValue)}`,
+      `- Value at the end of the period: ${c(change.endValue)}`,
+      `- Change in value: ${s(change.changeAbs)}${
+        change.changePct === null ? '' : ` (${formatSignedPercent(change.changePct)})`
+      }`,
+      '- A change in value includes money paid in or taken out. Never call it performance, and never attribute it to the return above.',
+      `- Days of data inside the period: ${change.days}.`,
+    ].join('\n'),
+    flowsBlock(change, s, c),
+    dailyBlock(change),
+    compositionBlock(change, c, s),
+    [
+      'WHOLE IMPORTED HISTORY, not the period above — quote these only as whole-history figures:',
+      `- Cumulative time-weighted return: ${formatSignedPercent(change.history.cumulativeTwr)}`,
+      `- Net deposits and withdrawals: ${s(change.history.depositsWithdrawals)}`,
+      `- Realised profit and loss: ${s(change.history.realizedPnl)}`,
+      `- Unrealised profit and loss: ${s(change.history.unrealizedPnl)}`,
+      '- Realised and unrealised profit and loss are not available for a chosen period; only these whole-history figures exist. If asked for either over the period, say it is not available.',
+    ].join('\n'),
+  )
+
+  return blocks.join('\n\n')
+}
+
+/** What moved value without moving return, over the statement rows the window touches. */
+function flowsBlock(
+  change: PeriodChange,
+  s: (value: number) => string,
+  c: (value: number) => string,
+): string {
+  const flows = change.flows
+  if (flows.count === 0 || flows.covered === null) {
+    return 'FLOWS AND INCOME: no statement period covers the period above, so deposits, withdrawals, dividend income and costs are not available for it.'
+  }
+
+  const span = `${isoDay(flows.covered.from)} to ${isoDay(flows.covered.to)}`
+  const lines = [
+    `FLOWS AND INCOME, summed over the ${flows.count} statement period(s) covering ${span} (these move value; none of them moves the return above):`,
+    `- Net deposits and withdrawals: ${s(flows.depositsWithdrawals)}`,
+    `- Dividend income: ${c(flows.dividends)}`,
+    `- Withholding tax: ${s(flows.withholdingTax)}`,
+    `- Interest: ${s(flows.interest)}`,
+    `- Commissions: ${s(flows.commissions)}`,
+    `- Mark-to-market profit and loss: ${s(flows.mtm)}`,
+  ]
+
+  if (flows.partial) {
+    // Statement rows are summed whole rather than split, so the totals belong to their own span.
+    // Saying which span that is costs a sentence; letting a model read them as the window's own
+    // would be a wrong figure under a right heading.
+    lines.push(
+      `- These statement periods are not cut to the chosen period: they run ${span}, which extends beyond it. Quote these totals as covering ${span}, not the period above.`,
+    )
+  }
+
+  return lines.join('\n')
+}
+
+/** How the return was travelled, day by day. */
+function dailyBlock(change: PeriodChange): string {
+  const daily = change.daily
+  if (daily.count === 0 || daily.best === null || daily.worst === null) {
+    return 'DAILY RETURNS: the period holds no day with a preceding trading day to measure against, so daily returns are not available for it.'
+  }
+
+  return [
+    `DAILY RETURNS over this period, chain-linked from the return curve — each day measured against the trading day that really preceded it, including the first:`,
+    `- ${daily.count} trading day(s): ${daily.up} up, ${daily.down} down, ${daily.flat} unchanged.`,
+    `- Best day: ${formatSignedPercent(daily.best.value)} on ${isoDay(daily.best.date)}`,
+    `- Worst day: ${formatSignedPercent(daily.worst.value)} on ${isoDay(daily.worst.date)}`,
+  ].join('\n')
+}
+
+/** What was held while the return was earned, at each end of the period. */
+function compositionBlock(
+  change: PeriodChange,
+  c: (value: number) => string,
+  s: (value: number) => string,
+): string {
+  const composition = change.composition
+  if (composition.days === 0 || composition.firstDate === null || composition.lastDate === null) {
+    return 'COMPOSITION: the imported statements do not include the daily net-asset-value breakdown, so how the portfolio was divided over this period is not available.'
+  }
+
+  const ends =
+    composition.firstDate === composition.lastDate
+      ? `on the one day of data in this period (${isoDay(composition.firstDate)})`
+      : `on ${isoDay(composition.firstDate)} and ${isoDay(composition.lastDate)}, the first and last days of data in this period`
+
+  return [
+    `COMPOSITION ${ends}, in ${change.baseCurrency}. Each band is an amount, and the bands sum to net asset value:`,
+    ...composition.bands.map(
+      (shift) => `- ${shift.band.label}: ${c(shift.first)} → ${c(shift.last)} (${s(shift.change)})`,
+    ),
+    `- Net asset value: ${c(composition.firstNav ?? 0)} → ${c(composition.lastNav ?? 0)} (${s(
+      composition.navChange ?? 0,
+    )})`,
+  ].join('\n')
 }
 
 /** How a band reads: inside, or how far out and in which direction. */

@@ -14,6 +14,7 @@ import {
   type Turn,
 } from './assistantAsk'
 import type { GroundingInputs } from './assistantContext'
+import type { PerformanceReport } from '@shared/domain/performance'
 import { EMPTY_INVESTOR_PROFILE, type InvestorProfile } from '@shared/domain/investorProfileTerms'
 import { aiResultSchema, type AssistantStatus } from '@shared/domain/assistant'
 
@@ -47,6 +48,30 @@ const grounding = (over: Partial<GroundingInputs> = {}): GroundingInputs => ({
   allocation: { status: 'needs_import' },
   profile: PROFILE,
   drift: { status: 'no_data' },
+  performance: { status: 'needs_import' },
+  period: { range: 'all', custom: null },
+  ...over,
+})
+
+/** A minimal performance report whose history is one week of two days (Story #285). */
+const performanceReport = (over: Partial<PerformanceReport> = {}): PerformanceReport => ({
+  baseCurrency: 'EUR',
+  valueSeries: [
+    { date: Date.UTC(2026, 0, 5), value: 100_000 },
+    { date: Date.UTC(2026, 0, 6), value: 101_000 },
+  ],
+  compositionSeries: { bands: [], points: [] },
+  returnSeries: [
+    { date: Date.UTC(2026, 0, 5), value: 0 },
+    { date: Date.UTC(2026, 0, 6), value: 1 },
+  ],
+  periods: [],
+  startingValue: 100_000,
+  endingValue: 101_000,
+  cumulativeTwr: 1,
+  totalDepositsWithdrawals: 0,
+  totalRealizedPnl: 0,
+  totalUnrealizedPnl: 0,
   ...over,
 })
 
@@ -123,7 +148,19 @@ describe('hasAnyGrounding', () => {
     ).toBe(true)
   })
 
-  it('is false only when all three are absent', () => {
+  /** An imported history is grounding in its own right: it is what an explanation is made of. */
+  it('counts an imported performance history on its own', () => {
+    expect(
+      hasAnyGrounding(
+        grounding({
+          profile: EMPTY_INVESTOR_PROFILE,
+          performance: { status: 'ok', report: performanceReport() },
+        }),
+      ),
+    ).toBe(true)
+  })
+
+  it('is false only when every source is absent', () => {
     expect(hasAnyGrounding(grounding({ profile: EMPTY_INVESTOR_PROFILE }))).toBe(false)
   })
 })
@@ -176,6 +213,46 @@ describe('groundingNotices', () => {
         grounding({ allocation: { status: 'ok' } as never, drift: { status: 'ok' } as never }),
       ),
     ).toEqual([])
+  })
+
+  /**
+   * A period with no data is a state, not an empty explanation (Story #285). A custom window can
+   * land outside the imported history entirely, and `valueAt`'s carry-forward would otherwise
+   * describe it as a calm, flat period — a description of nothing phrased as a description of
+   * something.
+   */
+  it('reports a chosen period that holds no day of history', () => {
+    const notices = groundingNotices(
+      grounding({
+        allocation: { status: 'ok' } as never,
+        drift: { status: 'ok' } as never,
+        performance: { status: 'ok', report: performanceReport() },
+        period: {
+          range: 'custom',
+          custom: { from: Date.UTC(2020, 0, 1), to: Date.UTC(2020, 0, 2) },
+        },
+      }),
+    )
+    const empty = notices.find((n) => n.id === 'empty_period')
+    expect(empty?.text).toContain('no day of imported history')
+    expect(empty?.text).toContain('Choose another period')
+  })
+
+  it('says nothing about the period when the chosen one holds data', () => {
+    const notices = groundingNotices(
+      grounding({
+        allocation: { status: 'ok' } as never,
+        drift: { status: 'ok' } as never,
+        performance: { status: 'ok', report: performanceReport() },
+      }),
+    )
+    expect(notices).toEqual([])
+  })
+
+  /** One absence, one notice: with nothing imported there is no period to be empty. */
+  it('does not add a period notice on top of the import notice', () => {
+    const notices = groundingNotices(grounding({ profile: EMPTY_INVESTOR_PROFILE }))
+    expect(notices.map((n) => n.id)).toEqual(['no_import', 'no_profile'])
   })
 })
 

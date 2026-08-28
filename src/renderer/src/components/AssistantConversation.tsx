@@ -10,10 +10,18 @@ import {
   TRUNCATED_NOTE,
   type Turn,
 } from '../lib/assistantAsk'
-import { buildAssistantContext, type GroundingInputs } from '../lib/assistantContext'
+import {
+  buildAssistantContext,
+  type GroundingInputs,
+  type GroundingReports,
+} from '../lib/assistantContext'
 import { flexDataVersion, profileDataVersion } from '../lib/dataVersion'
 import { controlClassName } from '../lib/fieldVariants'
+import { seriesExtent } from '../lib/performanceRange'
+import type { PeriodSelection } from '../lib/periodChange'
 import type { AssistantStatus } from '@shared/domain/assistant'
+import { RangeFilter } from './analytics/RangeFilter'
+import { useRangeSelection } from './analytics/useRangeSelection'
 import { Button } from './ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card'
 import { Field } from './ui/Field'
@@ -53,6 +61,12 @@ import { StatePanel } from './ui/StatePanel'
  * answer. A second, hidden copy of the answer for a screen reader would be two strings for one
  * answer, which is the shape this codebase keeps refusing.
  *
+ * **The period is a selection, not a read** (Story #285). It is the same `RangeFilter` the three
+ * analytics views carry, over the same vocabulary (DDR-0085), so a period means one window
+ * everywhere — and because it is not a read, changing it reframes what the assistant is told
+ * without re-issuing four IPC calls. That is why the reports and the period are held apart and
+ * only joined when a context is built.
+ *
  * **The newest turn is first.** A conversation usually reads downward, but this one is in a panel
  * that may have been hidden for minutes and has no scroll position to restore, and the answer to
  * the question just typed is the one that has to be adjacent to the box that typed it.
@@ -67,7 +81,8 @@ export function AssistantConversation({
 }): React.JSX.Element {
   const version = useSyncExternalStore(flexDataVersion.subscribe, flexDataVersion.get)
   const profileVersion = useSyncExternalStore(profileDataVersion.subscribe, profileDataVersion.get)
-  const [grounding, setGrounding] = useState<GroundingInputs | null>(null)
+  const [reports, setReports] = useState<GroundingReports | null>(null)
+  const { range, setRange, custom, editCustom } = useRangeSelection()
   const [question, setQuestion] = useState('')
   const [turns, setTurns] = useState<readonly Turn[]>([])
   const [pending, setPending] = useState(false)
@@ -84,18 +99,23 @@ export function AssistantConversation({
    */
   useEffect(() => {
     let live = true
-    void readGrounding(displayCurrency).then((next) => {
-      if (live) setGrounding(next)
+    void readReports(displayCurrency).then((next) => {
+      if (live) setReports(next)
     })
     return () => {
       live = false
     }
     // Both versions are dependencies, not values read here: each means something underneath this
-    // view changed while it may have been hidden for minutes (DDR-0027).
+    // view changed while it may have been hidden for minutes (DDR-0027). The period is not one:
+    // it reframes reports already in hand and re-reading them for it would be four IPC calls per
+    // click on a preset.
   }, [displayCurrency, profileVersion, version])
 
+  const period: PeriodSelection = { range, custom }
+  const grounding: GroundingInputs | null = reports === null ? null : { ...reports, period }
+
   const ask = useCallback(async (): Promise<void> => {
-    if (grounding === null || !isAskable(question)) return
+    if (reports === null || !isAskable(question)) return
 
     const asked = question.trim()
     const id = nextId.current++
@@ -109,11 +129,11 @@ export function AssistantConversation({
     try {
       // Read again, and send *this* reading. The one in state answered the question of whether the
       // box should be open; it is not necessarily what is true now.
-      const fresh = await readGrounding(displayCurrency)
-      setGrounding(fresh)
+      const fresh = await readReports(displayCurrency)
+      setReports(fresh)
       const result = await window.api.askAssistant({
         question: asked,
-        context: buildAssistantContext(fresh),
+        context: buildAssistantContext({ ...fresh, period: { range, custom } }),
       })
       setTurns((prev) =>
         prev.map((turn) => (turn.id === id ? { ...turn, answer: answerFromResult(result) } : turn)),
@@ -121,7 +141,7 @@ export function AssistantConversation({
     } finally {
       setPending(false)
     }
-  }, [displayCurrency, grounding, question, version])
+  }, [custom, displayCurrency, question, range, reports, version])
 
   const gate = askGate(status, grounding)
 
@@ -132,6 +152,15 @@ export function AssistantConversation({
   }
 
   const notices = grounding === null ? [] : groundingNotices(grounding)
+
+  // The control appears only where there is a history to window. A period selector over nothing is
+  // a control that cannot be wrong and cannot be right, and the `no_import` notice below already
+  // says why there is nothing.
+  const extent =
+    reports?.performance.status === 'ok'
+      ? seriesExtent(reports.performance.report.valueSeries)
+      : null
+  const customBounds = custom ?? extent ?? { from: 0, to: 0 }
 
   return (
     <Card>
@@ -153,6 +182,20 @@ export function AssistantConversation({
               void ask()
             }}
           >
+            {/* The same control, the same vocabulary and the same windows as the three analytics
+                views (DDR-0085): a period the owner picks here is the period a chart would draw.
+                It sits above the box because it frames what a question about "the period" means
+                before the question is written. */}
+            {extent !== null && (
+              <RangeFilter
+                label="Period the assistant explains"
+                range={range}
+                onSelect={setRange}
+                extent={extent}
+                custom={customBounds}
+                onEditCustom={(edge, value) => editCustom(edge, value, customBounds)}
+              />
+            )}
             <Field label="Your question">
               {(id) => (
                 <textarea
@@ -204,18 +247,23 @@ export function AssistantConversation({
 /**
  * Everything an answer may be grounded in, read in one go.
  *
- * All three are issued together rather than in sequence: none depends on another, and the slowest
+ * All four are issued together rather than in sequence: none depends on another, and the slowest
  * is the drift read, which waits on the IBKR gateway's own bounded deadline (DDR-0022). None of
  * them throws — each channel returns its failure as a variant — so there is nothing to catch here
  * and no partial state to invent.
+ *
+ * The period the owner selected is deliberately **not** part of this: it is a selection over the
+ * performance report these calls return, so it reframes an explanation without re-reading anything
+ * (Story #285).
  */
-async function readGrounding(displayCurrency: string): Promise<GroundingInputs> {
-  const [allocation, profile, drift] = await Promise.all([
+async function readReports(displayCurrency: string): Promise<GroundingReports> {
+  const [allocation, profile, drift, performance] = await Promise.all([
     window.api.getAllocation(),
     window.api.getInvestorProfile(),
     window.api.getBalanceDrift({ displayCurrency }),
+    window.api.getPerformance(),
   ])
-  return { allocation, profile, drift }
+  return { allocation, profile, drift, performance }
 }
 
 /** One question and its answer. Nothing about it depends on where in the list it sits. */

@@ -81,10 +81,16 @@ export const DISCLOSURE_CATEGORIES = [
     granularity: 'weights',
   },
   {
+    // Re-worded when Story #285 became the story that actually fills this category, and the
+    // re-wording is the mechanism working rather than a slip in it: the figures are in the base
+    // currency of the imported statements, not in the display currency this said, and they include
+    // the portfolio's own value. A disclosure that named the wrong currency would be a lie about
+    // the one category that carries money. The fingerprint moves, so consent is asked again — the
+    // side this decision is meant to err on (DDR-0097).
     id: 'performance',
     title: 'How your portfolio has performed',
     detail:
-      'Returns over the period you ask about, as percentages, and dividend income and realised gains as amounts in your display currency.',
+      'Returns over the period you choose, as percentages, and your portfolio value, deposits and withdrawals, dividend income, costs and realised gains as amounts in the base currency of your imported statements.',
     granularity: 'figures',
   },
 ] as const satisfies readonly DisclosureCategory[]

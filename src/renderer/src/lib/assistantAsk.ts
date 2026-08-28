@@ -1,5 +1,5 @@
 import { gateKind, type GateKind } from './assistantGate'
-import { hasProfile } from './assistantContext'
+import { hasProfile, selectedPeriod } from './assistantContext'
 import type { AssistantStatus, AssistantAskResult } from '@shared/domain/assistant'
 import type { GroundingInputs } from './assistantContext'
 
@@ -85,6 +85,7 @@ export function askGate(status: AssistantStatus, grounding: GroundingInputs | nu
 export function hasAnyGrounding(grounding: GroundingInputs): boolean {
   return (
     grounding.allocation.status === 'ok' ||
+    grounding.performance.status === 'ok' ||
     grounding.drift.status === 'ok' ||
     hasProfile(grounding.profile)
   )
@@ -92,7 +93,7 @@ export function hasAnyGrounding(grounding: GroundingInputs): boolean {
 
 /** A gap in what an answer can be grounded on. Named, never silently worked around. */
 export interface GroundingNotice {
-  id: 'no_import' | 'no_profile' | 'no_live'
+  id: 'no_import' | 'no_profile' | 'no_live' | 'empty_period'
   text: string
 }
 
@@ -112,8 +113,20 @@ export function groundingNotices(grounding: GroundingInputs): GroundingNotice[] 
   if (grounding.allocation.status !== 'ok') {
     notices.push({
       id: 'no_import',
-      text: 'No Flex statements are imported, so the assistant cannot see what you hold or how it is divided. Import one from the Portfolio view.',
+      text: 'No Flex statements are imported, so the assistant cannot see what you hold, how it is divided, or how it has performed. Import one from the Portfolio view.',
     })
+  } else {
+    // Only where there *is* a history to window: with nothing imported, "your period is empty"
+    // would be the second sentence about the same absence, and the first one already names the
+    // recovery. A period that resolves to no day at all is a different fact and needs saying —
+    // a custom window can land outside the history entirely (Story #285).
+    const period = selectedPeriod(grounding)
+    if (period !== null && period.days === 0) {
+      notices.push({
+        id: 'empty_period',
+        text: 'The period selected above holds no day of imported history, so an explanation of it has nothing to be grounded in. Choose another period.',
+      })
+    }
   }
 
   if (!hasProfile(grounding.profile)) {
