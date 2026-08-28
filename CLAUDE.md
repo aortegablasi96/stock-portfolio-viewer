@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> **Budget: keep this file under 44 KB** (`wc -c CLAUDE.md` ≤ 45056) — it is loaded into every
+> **Budget: keep this file under 50 KB** (`wc -c CLAUDE.md` ≤ 51200) — it is loaded into every
 > session, so its cost is paid before any work starts. **`src/claudeMdBudget.test.ts` enforces it**
 > — unenforced, it was overrun for six commits unnoticed.
 >
@@ -11,8 +11,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > trap* in a sentence with its DDR number — never the argument. If the budget is exceeded, cut a
 > paragraph that argues a case rather than drop a trap.
 >
-> **Raised once from 36 KB, deliberately.** Cut what restates a machine-readable fact before
-> compressing a trap — a dropped trap costs a DDR re-read or a re-shipped bug.
+> **Raised twice, deliberately: 36 KB → 44 KB → 50 KB.** The second raise paid for correcting a
+> bullet that was *wrong* rather than merely absent — a trap stated backwards sends the next
+> session looking in the right file for the wrong reason, which costs more than the paragraph it
+> would have taken to say nothing. Cut what restates a machine-readable fact before compressing a
+> trap; a dropped trap costs a DDR re-read or a re-shipped bug.
 
 ## Current Repository State
 
@@ -138,9 +141,16 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
   mismatch: `npm install` or `npx electron-rebuild -f -w better-sqlite3`.
 - **Runtime DB vs tooling DB** — the app opens `app.getPath('userData')/portfolio.db` and applies
   migrations on launch; drizzle-kit (`db:*`) runs *outside* Electron against `./local.dev.db`.
-- **A fresh clone needs `.env`** (copy `.env.example`). electron-vite splits by prefix:
-  `MAIN_VITE_*` / `PRELOAD_VITE_*` / `RENDERER_VITE_*` are inlined at **build** time; unprefixed
-  (`IBKR_GATEWAY_URL`) stays in `process.env`, main-process only. Without
+- **A fresh clone needs `.env`** (copy `.env.example`) — but **`.env` supplies the prefixed half
+  only.** electron-vite inlines `MAIN_VITE_*` / `PRELOAD_VITE_*` / `RENDERER_VITE_*` at **build**
+  time; its `loadEnv` reads *those prefixes and no others* and assigns nothing to `process.env`,
+  and nothing else here loads the file (no `dotenv`, no `--env-file`). So an **unprefixed variable
+  reaches the app only from the OS environment** — `OPENAI_API_KEY` in `.env` alone leaves the
+  assistant permanently `not_configured` (Bug #297). Unprefixed still means never bundled, which is
+  ADR-0010's point and is untouched. **Two tests look like they cover this and do not**:
+  `assistant-consent.spec.ts` passes the key through `electron.launch({ env })` and
+  `ibkrGateway.test.ts` writes `process.env` — both exercise *reading* a variable, never *loading*
+  one. `IBKR_GATEWAY_URL` has the same defect, invisible since M1 behind its default. Without
   `RENDERER_VITE_MAPBOX_TOKEN` the map renders a placeholder; nothing else is affected.
 - **Electron security is locked down** — `sandbox: true`, `contextIsolation: true`,
   `nodeIntegration: false`, and `frame: false` with an in-app `TitleBar` (DDR-0011). Keep it.
