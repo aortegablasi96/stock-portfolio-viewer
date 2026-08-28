@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
+  ANNUALISATION_MIN_DAYS,
   PERIOD_LABELS,
   periodChange,
   periodComposition,
   periodDays,
   periodFlows,
+  periodSpan,
 } from './periodChange'
 import { RANGE_OPTIONS } from './dateRange'
 import type { NavPeriod, PerformanceReport } from '@shared/domain/performance'
@@ -186,6 +188,26 @@ describe('periodChange', () => {
     expect(change.daily.worst?.date).toBe(DAY[2])
   })
 
+  /**
+   * Story #286's fact, and the one a summary states *instead of* annualising. The fixture's four
+   * days run 29 May to 3 June, which is six calendar days and not four — the count of trading days
+   * with data (`days`) and the length of the period are different questions and the summary asks
+   * the second one.
+   */
+  it('reports how long the period and the history really are, in calendar days', () => {
+    const change = periodChange(report(), { range: 'all', custom: null })!
+    expect(change.days).toBe(4)
+    expect(change.span.periodDays).toBe(6)
+    expect(change.span.historyDays).toBe(6)
+    expect(change.span.coversAYear).toBe(false)
+  })
+
+  it('measures a window shorter than the history against that window', () => {
+    const change = periodChange(report(), { range: 'custom', custom: { from: DAY[2], to: DAY[3] } })!
+    expect(change.span.periodDays).toBe(2)
+    expect(change.span.historyDays).toBe(6)
+  })
+
   it('hands the whole-history rollups through untouched, under their own key', () => {
     const change = periodChange(report(), { range: 'custom', custom: { from: DAY[2], to: DAY[3] } })!
     expect(change.history).toEqual({
@@ -234,6 +256,50 @@ describe('periodFlows', () => {
     expect(flows.count).toBe(0)
     expect(flows.covered).toBeNull()
     expect(flows.partial).toBe(false)
+  })
+})
+
+/**
+ * How long the period is (Story #286).
+ *
+ * The one fact a summary has to have in order to *refuse* to annualise. It is not a licence to —
+ * the app computes no annualised figure at all — but the boundary at a year is what separates a
+ * period a yearly word could describe from one where it is meaningless, and the section says a
+ * different sentence on each side of it.
+ */
+describe('periodSpan', () => {
+  const day = (n: number): number => Date.UTC(2026, 0, 1) + n * 86_400_000
+  const history = { from: day(0), to: day(999) }
+
+  /** Both ends included: a period that opens and closes on one day is one day long, not zero. */
+  it('counts a one-day window as one day', () => {
+    expect(periodSpan({ from: day(5), to: day(5) }, history).periodDays).toBe(1)
+  })
+
+  it('counts both ends of a longer window', () => {
+    expect(periodSpan({ from: day(0), to: day(9) }, history).periodDays).toBe(10)
+  })
+
+  it('measures the history independently of the window', () => {
+    expect(periodSpan({ from: day(5), to: day(6) }, history).historyDays).toBe(1000)
+  })
+
+  /**
+   * The boundary itself, asserted from both sides. One day short of a year is where a summary is
+   * most tempted to round up, and rounding up is the overclaim.
+   */
+  it('turns over at exactly a year, and not before', () => {
+    expect(periodSpan({ from: day(0), to: day(ANNUALISATION_MIN_DAYS - 2) }, history).coversAYear).toBe(
+      false,
+    )
+    expect(periodSpan({ from: day(0), to: day(ANNUALISATION_MIN_DAYS - 1) }, history).coversAYear).toBe(
+      true,
+    )
+  })
+
+  /** A window resolved outside the history collapses rather than going negative. */
+  it('never reports a negative length', () => {
+    expect(periodSpan({ from: day(9), to: day(0) }, history).periodDays).toBeGreaterThan(0)
   })
 })
 

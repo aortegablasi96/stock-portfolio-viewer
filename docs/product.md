@@ -42,6 +42,10 @@ is out of scope — that decision is theirs (ADR-0009).
   time-weighted, so deposits and withdrawals move value and not return — names the flows where they
   moved value, and never offers a cause it cannot observe: no market events, no news, no
   fundamentals (Story #285, DDR-0099).
+- **A summary of how the portfolio has performed**, bounded by what the app actually computes. It
+  states how long the period really is rather than **annualising** a short history, compares against
+  **no benchmark** (the app holds none), and describes the ride only from the daily returns it has —
+  never a volatility, Sharpe ratio, beta or drawdown figure (Story #286, DDR-0101).
 
 ## Future Capabilities
 

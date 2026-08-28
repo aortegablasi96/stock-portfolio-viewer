@@ -290,4 +290,30 @@ describe('the system prompt states the boundary the ADR set', () => {
   it('forbids forecasting', () => {
     expect(SYSTEM_PROMPT).toContain('Never forecast')
   })
+
+  /**
+   * Story #286's three rules, each a special case of "never calculate" written out (DDR-0101).
+   *
+   * They are worth their own lines rather than being left to the general rule because a summary is
+   * where a model reaches for them, and none of the three *feels* like a derivation: "roughly 30%
+   * a year" reads as a restatement of "+5% over two months", "in line with the market" reads as
+   * context, and a Sharpe ratio reads as a figure someone computed. The context names each absence
+   * before it names a figure; these are the second line of defence over the same three claims.
+   */
+  it('forbids annualising a return the app never annualised', () => {
+    expect(SYSTEM_PROMPT).toContain('Never annualise')
+    expect(SYSTEM_PROMPT).toContain('producing one is a calculation')
+    expect(SYSTEM_PROMPT).toContain('name that period')
+  })
+
+  it('forbids a benchmark the app does not hold', () => {
+    expect(SYSTEM_PROMPT).toContain('Never compare to a benchmark, an index, the market or a peer')
+    expect(SYSTEM_PROMPT).toContain('This app holds none')
+  })
+
+  it('forbids a risk statistic the app does not compute', () => {
+    expect(SYSTEM_PROMPT).toContain('Never state a volatility, standard deviation, Sharpe ratio')
+    expect(SYSTEM_PROMPT).toContain('daily-return counts and the best and worst day')
+    expect(SYSTEM_PROMPT).toContain('not available')
+  })
 })

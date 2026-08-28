@@ -605,6 +605,130 @@ describe('performanceSection', () => {
   })
 })
 
+/**
+ * The three overclaims a summary reaches for (Story #286).
+ *
+ * **A summary is compression, and compression is where a model reaches for the conventional
+ * phrasing of finance.** Each of the three below sounds like a summary and is grounded in nothing
+ * this app holds: an annualised return (no report carries one), a benchmark (Epic #7, a different
+ * data source in a different milestone) and a risk statistic (no volatility, no Sharpe, no beta,
+ * no drawdown is computed anywhere).
+ *
+ * They are asserted here rather than left to the system prompt for the same reason every other
+ * property in this file is: the prompt is the second line of defence, and the first is that the
+ * context itself names each absence — ahead of the figures, on DDR-0099's ordering argument.
+ */
+describe('performanceSection: the three overclaims', () => {
+  /**
+   * Ahead of every figure, deliberately. A model that has already read `+2.00%` and a six-day
+   * period has, by the time it reaches a caveat, largely written the sentence the caveat was
+   * meant to prevent.
+   */
+  it('names what the app does not compute before it names a single figure', () => {
+    const text = performanceSection(change())
+    const limitsAt = text.indexOf('WHAT THIS APP DOES NOT COMPUTE')
+    const returnAt = text.indexOf('RETURN over this period')
+    expect(limitsAt).toBeGreaterThan(-1)
+    expect(returnAt).toBeGreaterThan(limitsAt)
+  })
+
+  /**
+   * The most common way a summary becomes misleading: six days of history scaled to a year is a
+   * number with no meaning, and the model does not experience the scaling as a calculation. The
+   * app computes no annualised figure at all, so the section says so and gives the real length of
+   * the period in its place.
+   */
+  it('says no annualised figure exists and gives the real length of the period instead', () => {
+    const text = performanceSection(change())
+    expect(text).toContain('No annualised, per-year, compounded or "p.a." figure exists')
+    expect(text).toContain('That period covers 6 calendar day(s); the whole imported history covers 6.')
+    expect(text).toContain('This period is shorter than a year')
+    expect(text).toContain('never describe a return over it as annual, annualised, yearly or per year')
+  })
+
+  /**
+   * A period a year or longer may be *named* as such — that is not a scaling — but nothing may be
+   * compounded or restated to any other period. The two sentences are exclusive: shipping both
+   * would tell the model contradictory things about one figure.
+   */
+  it('permits naming a year-long period while still refusing to scale it', () => {
+    const long = performanceSection(
+      change({
+        performance: {
+          status: 'ok',
+          report: performance({
+            valueSeries: [
+              { date: Date.UTC(2024, 0, 1), value: 100_000 },
+              { date: Date.UTC(2026, 5, 3), value: 124_500 },
+            ],
+            returnSeries: [
+              { date: Date.UTC(2024, 0, 1), value: 0 },
+              { date: Date.UTC(2026, 5, 3), value: 2 },
+            ],
+          }),
+        },
+      }),
+    )
+    expect(long).toContain('This period covers a year or more')
+    expect(long).toContain('never scaled, compounded or annualised to any other period')
+    expect(long).not.toContain('This period is shorter than a year')
+  })
+
+  /** The app has none. Benchmark comparison is Epic #7, and inventing one is inventing a source. */
+  it('says no benchmark, index or peer figure exists', () => {
+    const text = performanceSection(change())
+    expect(text).toContain('No benchmark, index, market or peer figure exists')
+    expect(text).toContain('no market data beyond this portfolio’s own history')
+    expect(text).toContain('never say the portfolio beat, lagged, tracked, outperformed or underperformed anything')
+  })
+
+  /**
+   * Dispersion *can* be described — from the daily-return counts and the two extremes that are
+   * actually in the section (DDR-0049) — and from nothing else. A Sharpe ratio quoted beside them
+   * would be indistinguishable in tone from the figures that were computed.
+   */
+  it('names the risk statistics that do not exist and the dispersion that does', () => {
+    const text = performanceSection(change())
+    expect(text).toContain(
+      'No volatility, standard deviation, Sharpe ratio, beta, drawdown or other risk statistic exists',
+    )
+    expect(text).toContain('the only description of dispersion this app has')
+    // What it points at has to actually be there, or the section licenses a description of nothing.
+    expect(text).toContain('3 trading day(s)')
+    expect(text).toContain('Best day:')
+  })
+
+  /**
+   * An empty window is where an ungrounded comparison has the most room: there is no figure to
+   * anchor a sentence, so "roughly in line with the market" costs nothing to write.
+   */
+  it('carries the same three refusals over a period holding no data', () => {
+    const text = performanceSection(
+      change({
+        period: {
+          range: 'custom',
+          custom: { from: Date.UTC(2020, 0, 1), to: Date.UTC(2020, 0, 2) },
+        },
+      }),
+    )
+    expect(text).toContain('No annualised, per-year, compounded or "p.a." figure exists')
+    expect(text).toContain('No benchmark, index, market or peer figure exists')
+    expect(text).toContain('No volatility, standard deviation, Sharpe ratio')
+    expect(text).toContain('No day in the imported history falls inside this period')
+  })
+
+  /**
+   * The block is statements of absence and two day counts off the window and the extent — no
+   * figure it computed itself, and DDR-0099's guard still holds over the whole section.
+   */
+  it('adds no cause and no figure of its own', () => {
+    const text = performanceSection(change())
+    expect(text).not.toMatch(/\bbecause\b/i)
+    expect(text).not.toMatch(/\bdue to\b/i)
+    expect(text).not.toMatch(/\bdriven by\b/i)
+  })
+})
+
 describe('selectedPeriod', () => {
   /**
    * DDR-0085's anchor is the whole reason a preset is a pure function here: `1M` over a history
