@@ -53,6 +53,7 @@ const VIEWS = [
   { tab: 'Allocation', title: 'Allocation', source: 'From imported Flex Query data' },
   { tab: 'Dividends', title: 'Dividends', source: 'From imported Flex Query data' },
   { tab: 'Trades', title: 'Trades & realized gains', source: 'From imported Flex Query data' },
+  { tab: 'Assistant', title: 'Assistant', source: 'Set by you' },
   { tab: 'Profile', title: 'Investor profile', source: 'Set by you' },
 ] as const
 

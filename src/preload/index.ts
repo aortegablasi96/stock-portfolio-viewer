@@ -2,6 +2,8 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { IpcChannels } from '@shared/ipc/channels'
 import type {
   AllocationResult,
+  AssistantConsentRequest,
+  AssistantStatus,
   BalanceDriftRequest,
   BalanceDriftResult,
   CaptureSnapshotResult,
@@ -102,6 +104,11 @@ const api: RendererApi = {
   // is a share of a total expressed in it.
   getBalanceDrift: (request: BalanceDriftRequest): Promise<BalanceDriftResult> =>
     ipcRenderer.invoke(IpcChannels.profileGetDrift, request),
+  // The consent gate (Story #283). Note what is absent: no channel here reaches OpenAI.
+  getAssistantStatus: (): Promise<AssistantStatus> =>
+    ipcRenderer.invoke(IpcChannels.assistantGetStatus),
+  setAssistantConsent: (request: AssistantConsentRequest): Promise<AssistantStatus> =>
+    ipcRenderer.invoke(IpcChannels.assistantSetConsent, request),
 }
 
 contextBridge.exposeInMainWorld('api', api)

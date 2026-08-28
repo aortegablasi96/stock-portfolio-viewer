@@ -98,6 +98,21 @@ export function TradesIcon(): React.JSX.Element {
 }
 
 /**
+ * Assistant — a speech bubble: the view is a conversation about the portfolio (Story #283).
+ *
+ * The glyph names what the view *draws*, like the five before it. A sparkle or a star would name
+ * the technology rather than the surface, and this app's assistant is deliberately not presented
+ * as magic — it phrases figures other views computed.
+ */
+export function AssistantIcon(): React.JSX.Element {
+  return (
+    <Glyph>
+      <path d="M13.75 9.25a2 2 0 0 1-2 2H6.5L3 13.75V4.75a2 2 0 0 1 2-2h6.75a2 2 0 0 1 2 2Z" />
+    </Glyph>
+  )
+}
+
+/**
  * Profile — a target with a band around its centre, which is what the view draws (Story #280).
  *
  * The paragraph above says a glyph names what its view *draws* rather than an abstract synonym of

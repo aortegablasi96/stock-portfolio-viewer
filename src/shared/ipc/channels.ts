@@ -57,6 +57,13 @@ export const IpcChannels = {
   // standard rather than reporting the portfolio, and because it reads **live** holdings where
   // every `analytics:*` channel reads the imported Flex store (DDR-0095).
   profileGetDrift: 'profile:getDrift',
+  // Whether the assistant may run, and the owner's decision about it (M10, Story #283). Its own
+  // prefix because consent is not a profile fact: the profile is how the owner intends to invest,
+  // this is whether anything about it may leave the machine (ADR-0010, DDR-0097). There is
+  // deliberately **no `assistant:ask`** yet — a channel that reaches OpenAI belongs with the view
+  // that asks something (#284), and shipping one now would be an un-consented path in all but name.
+  assistantGetStatus: 'assistant:getStatus',
+  assistantSetConsent: 'assistant:setConsent',
 } as const
 
 export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels]

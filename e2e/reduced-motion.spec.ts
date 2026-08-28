@@ -27,7 +27,15 @@ const mainEntry = join(__dirname, '..', 'out', 'main', 'index.js')
 let app: ElectronApplication
 let page: Page
 
-const TABS = ['Portfolio', 'Performance', 'Allocation', 'Dividends', 'Trades', 'Profile'] as const
+const TABS = [
+  'Portfolio',
+  'Performance',
+  'Allocation',
+  'Dividends',
+  'Trades',
+  'Assistant',
+  'Profile',
+] as const
 
 test.beforeAll(async () => {
   app = await electron.launch({

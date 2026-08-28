@@ -55,6 +55,7 @@ const TAB_NAMES = [
   'Allocation',
   'Dividends',
   'Trades',
+  'Assistant',
   'Profile',
 ] as const
 
@@ -102,6 +103,7 @@ test('the tablist is a single stop in the Tab order', async () => {
     { label: 'Allocation', tabIndex: -1 },
     { label: 'Dividends', tabIndex: -1 },
     { label: 'Trades', tabIndex: -1 },
+    { label: 'Assistant', tabIndex: -1 },
     { label: 'Profile', tabIndex: -1 },
   ])
 })

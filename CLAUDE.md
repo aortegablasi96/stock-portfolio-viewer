@@ -43,15 +43,19 @@ Each exists end-to-end and is the reference pattern for its shape.
   (`flexImportService` / `flexStatementsService`). See ADR-0005, DDR-0004, DDR-0026.
 - **analytics / dividends** — read-only over Flex through `flexReadRepository`, converting to base
   (EUR) **in the service**, each returning `ok | needs_import`. See DDR-0005, DDR-0010, DDR-0015.
-- **profile** — the owner's investor profile, and how far the portfolio sits from it.
-  `investorProfileService` → `metaRepository` → **one overwritten `app_meta` value**, because a
-  profile is a *setting*, not history — ADR-0006 governs history and DDR-0009's mutable-table
-  exception is for a *cache of derived reference data*, which this is neither. "Clear" **removes
-  the key**, so "never written" and "cleared" are one state. `metaRepository.remove` is not
-  ADR-0006's refused delete-by-id (DDR-0094). `balanceDriftService` beside it computes drift
-  **deterministically — no model ever does this arithmetic** — over the **live** portfolio, not
-  Flex, which is why it is the one `profile:*` channel with gateway states. Its traps are below
-  (DDR-0095).
+- **profile** — the investor profile, and how far the portfolio sits from it.
+  `investorProfileService` → `metaRepository` → **one overwritten `app_meta` value**: a profile is a
+  *setting*, not history, so ADR-0006 does not reach it and `metaRepository.remove` is not its
+  refused delete-by-id. "Clear" **removes the key**, so "never written" and "cleared" are one state
+  (DDR-0094). `balanceDriftService` computes drift **deterministically — no model ever does this
+  arithmetic** — over the **live** portfolio, not Flex, which is why it is the one `profile:*`
+  channel with gateway states (DDR-0095).
+- **assistant** — `assistantService` is the **only** caller of `aiGateway` and checks consent
+  **before** the key, before a prompt, before a socket. Consent is stored like the profile and is to
+  a **specific list**: `DISCLOSURE_CATEGORIES` renders the panel, *types* `AssistantContext` (an
+  undisclosed section cannot be sent) and is fingerprinted into the stored consent, so changing it
+  re-asks the owner. Revoking **removes the key**; an unreadable value means *no consent*
+  (DDR-0097).
 - **classification** — sector/industry. `classificationRepository` fronts *both* the mutable
   SQLite cache and `ibkrGateway`; `analytics:classifyInstruments` is the only analytics channel
   reaching IBKR. Refreshes are **resumable, not transactional** — a run that dies at 30 of 40 keeps
@@ -293,10 +297,10 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
   disclosed at **the scope of what it acts on** — a row's `title` for its digit (amending
   DDR-0057), the "Views" label's `title` + the tablist's `aria-keyshortcuts` for the rotation. Two
   bindings are still not a table. A drawn digit per row was built and **withdrawn** — don't
-  re-propose it, or a legend. **Profile is the sixth row and the first that is not a data view**
-  (DDR-0094): last, so the five data views stay contiguous; no accelerator changed (both derive
-  from the index and `TABS.length`); it **stays mounted**; and it declares its own `<main>`/`<h1>`
-  because it has no four-branch guard to wear. Adding a row is a **list edit in five e2e specs**.
+  re-propose it, or a legend. **Two rows are not data views**: Assistant (6) then Profile (7), so
+  the order reads data · the surface that talks about it · the policy over it (DDR-0094, DDR-0097).
+  Both **stay mounted** and declare their own `<main>`/`<h1>`, having no four-branch guard to wear;
+  no accelerator counts rows. Adding a row is a **list edit in six e2e specs**.
 - **An analytics tab mounts on first visit and then stays mounted**, hidden rather than unmounted,
   so view-local state survives; unvisited tabs issue no IPC (DDR-0006, DDR-0027). The consequence:
   a mounted view can go stale, so both Flex write paths bump `lib/dataVersion` and every

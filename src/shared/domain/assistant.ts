@@ -84,3 +84,42 @@ export const aiResultSchema = z.discriminatedUnion('status', [
   z.object({ status: z.literal('error'), message: z.string() }),
 ])
 export type AiResult = z.infer<typeof aiResultSchema>
+
+/**
+ * The gateway's states plus the one that comes **before** them (Story #283, DDR-0097).
+ *
+ * `needs_consent` is not a gateway state and must not be: it is decided before the key is read,
+ * before a prompt is built and long before a socket is opened. It sits in the union because that
+ * is where a caller has to handle it, and it is a state rather than an exception in the same
+ * register as everything beside it (DDR-0022).
+ */
+export const assistantAskResultSchema = z.union([
+  aiResultSchema,
+  z.object({ status: z.literal('needs_consent'), message: z.string() }),
+])
+export type AssistantAskResult = z.infer<typeof assistantAskResultSchema>
+
+/**
+ * Whether the assistant can run, and which of the two blockers applies (Story #283).
+ *
+ * The acceptance criterion is that "no API key" and "consent not given" are **distinct states and
+ * the owner is told which applies**. `state` is the one in the way; `consented` and `configured`
+ * are both reported beside it so a view can also say what will be next once the first is cleared,
+ * rather than revealing the second blocker only after the owner clears the first.
+ */
+export const assistantStatusSchema = z.object({
+  state: z.enum(['ready', 'needs_consent', 'not_configured']),
+  consented: z.boolean(),
+  /** When consent was granted — epoch ms, UTC; `null` when there is none. */
+  consentedAt: z.number().int().nullable(),
+  /**
+   * Consent exists but was given against a **different disclosure**, so it no longer holds.
+   *
+   * Distinct from never having consented: the owner is being asked to re-read a list that changed,
+   * not to decide for the first time.
+   */
+  consentStale: z.boolean(),
+  /** Whether an API key is present. Never the key, and never a fragment of it. */
+  configured: z.boolean(),
+})
+export type AssistantStatus = z.infer<typeof assistantStatusSchema>

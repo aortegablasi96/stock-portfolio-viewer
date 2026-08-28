@@ -8,8 +8,10 @@ import { AllocationView } from './components/analytics/AllocationView'
 import { DividendsView } from './components/analytics/DividendsView'
 import { TradeHistoryView } from './components/analytics/TradeHistoryView'
 import { ProfileView } from './components/ProfileView'
+import { AssistantView } from './components/AssistantView'
 import {
   AllocationIcon,
+  AssistantIcon,
   DividendsIcon,
   PerformanceIcon,
   PortfolioIcon,
@@ -97,18 +99,32 @@ import type { GatewayReading } from './lib/gatewayStatus'
  * hangs on the thing that names the whole list — the "Views" label's own `title`, with
  * `aria-keyshortcuts` on the tablist carrying the same fact to a reader who is listening.
  */
-type Tab = 'portfolio' | 'performance' | 'allocation' | 'dividends' | 'trades' | 'profile'
+type Tab =
+  | 'portfolio'
+  | 'performance'
+  | 'allocation'
+  | 'dividends'
+  | 'trades'
+  | 'assistant'
+  | 'profile'
 
 /**
  * **Story #280 adds the sixth row, and the first that is not a data view** (DDR-0094). The
  * investor profile is a page — five sections, a form, an owner-confirmed reset — rather than a
  * preference behind a gear, and the tablist is already a complete, tested way to reach a page, so
- * it goes in the list rather than into a settings surface the app does not have. It takes the
- * **last** row so the five data views stay contiguous, and it needed no change to either
- * accelerator: `viewShortcutIndex` has always covered digits 1–9 and derives a row's binding from
- * its index, and `rotatedTabIndex` wraps over `TABS.length` (DDR-0083, DDR-0090). It is also the
- * second tab excluded from nothing — it stays mounted like the four analytics views, which is
- * what lets a half-finished profile survive a trip to Allocation and back (DDR-0027).
+ * it goes in the list rather than into a settings surface the app does not have. It needed no
+ * change to either accelerator: `viewShortcutIndex` has always covered digits 1–9 and derives a
+ * row's binding from its index, and `rotatedTabIndex` wraps over `TABS.length` (DDR-0083,
+ * DDR-0090). It is also the second tab excluded from nothing — it stays mounted like the four
+ * analytics views, which is what lets a half-finished profile survive a trip to Allocation and
+ * back (DDR-0027).
+ *
+ * **Story #283 inserts Assistant between them** (DDR-0097), which is why Profile is no longer
+ * last. The order is the app's own grammar: five views of the data, then the surface that talks
+ * about it, then the policy the owner sets over it. Assistant takes `Ctrl`/`Cmd`+`6` and Profile
+ * `+7` with no code change, for the reason above — nothing here counts rows. The view opens one
+ * story early carrying only its consent gate: the gate needs a room to stand in, and building a
+ * temporary home elsewhere to move in #284 would be churn.
  */
 const TABS: { id: Tab; label: string; icon: () => React.JSX.Element }[] = [
   { id: 'portfolio', label: 'Portfolio', icon: PortfolioIcon },
@@ -116,6 +132,7 @@ const TABS: { id: Tab; label: string; icon: () => React.JSX.Element }[] = [
   { id: 'allocation', label: 'Allocation', icon: AllocationIcon },
   { id: 'dividends', label: 'Dividends', icon: DividendsIcon },
   { id: 'trades', label: 'Trades', icon: TradesIcon },
+  { id: 'assistant', label: 'Assistant', icon: AssistantIcon },
   { id: 'profile', label: 'Profile', icon: ProfileIcon },
 ]
 
@@ -462,6 +479,7 @@ export function App(): React.JSX.Element {
           {panel('allocation', <AllocationView />)}
           {panel('dividends', <DividendsView />)}
           {panel('trades', <TradeHistoryView />)}
+          {panel('assistant', <AssistantView />)}
           {panel('profile', <ProfileView />)}
         </div>
       </div>

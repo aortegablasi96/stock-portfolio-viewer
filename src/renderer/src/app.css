@@ -3957,3 +3957,80 @@ html {
   font-size: var(--text-xs);
   color: var(--neg-text);
 }
+
+/* ---- Assistant view (M10, Story #283) ------------------------------------ */
+
+/* The consent panel's own prose, at the body step rather than the small one:
+   this is the paragraph the whole feature turns on, and it is read once and
+   carefully rather than skimmed beside a figure. */
+.assistant-lede {
+  margin: 0 0 var(--space-5);
+  max-width: 62ch;
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  color: var(--text);
+}
+
+/* A fact beside the decision — when consent was given, how disclosing the list
+   is. Muted and small, the treatment `.source-note` carries. */
+.assistant-note {
+  margin: 0 0 var(--space-5);
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.assistant-actions {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: var(--space-5);
+}
+
+.assistant-disclosure {
+  list-style: none;
+  margin: 0 0 var(--space-6);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.assistant-disclosure-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* The category's name and how disclosing it is, on one line. The chip sits
+   beside the title rather than after the detail, so a reader scanning only the
+   headings still learns whether money is involved. */
+.assistant-disclosure-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+.assistant-disclosure-title {
+  font-weight: 600;
+}
+
+.assistant-disclosure-detail {
+  margin: 0;
+  max-width: 62ch;
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+  color: var(--muted);
+}
+
+/* Where the data goes, ruled off from the list above it: the list says what,
+   and this says to whom, which is the half a generic warning leaves out. */
+.assistant-destination {
+  margin: 0;
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--border);
+  max-width: 62ch;
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+  color: var(--muted);
+}

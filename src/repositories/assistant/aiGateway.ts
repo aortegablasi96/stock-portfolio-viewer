@@ -246,6 +246,18 @@ function postJson(url: URL, key: string, payload: unknown): Promise<Transport> {
 
 export const aiGateway = {
   /**
+   * Whether a key is present (Story #283).
+   *
+   * A pure environment read — no request, no key material returned, just the boolean the
+   * assistant's status needs to say *which* of its two blockers applies. It lives here because
+   * this file is the only one that reads the variable, and a second reader would be a second
+   * place to forget the trim.
+   */
+  isConfigured(): boolean {
+    return apiKey() !== undefined
+  },
+
+  /**
    * Ask the model one question, once.
    *
    * Every outcome is a value. Nothing here throws, nothing retries, and nothing loops — the
