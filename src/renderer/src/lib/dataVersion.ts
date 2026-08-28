@@ -47,5 +47,21 @@ export function createVersionStore(): VersionStore {
   }
 }
 
-/** The one store the app uses: the imported Flex statement store's version. */
+/** The imported Flex statement store's version — bumped by both Flex write paths. */
 export const flexDataVersion = createVersionStore()
+
+/**
+ * The investor profile's version, bumped when it is saved or cleared (Story #284, DDR-0098).
+ *
+ * A second store rather than a second bump of the first, because they are not the same fact: a
+ * Flex write replaces the *figures* an answer quotes, and a profile write replaces the *standard*
+ * they are judged against. The four analytics views care about the first and nothing else, and
+ * folding the two together would send all four back to the database every time a target was typed.
+ *
+ * It exists for the same reason `flexDataVersion` does. The Assistant mounts on first visit and
+ * then stays mounted (DDR-0027), so an owner who sets a profile and walks back to the Assistant
+ * arrives at a view still holding the reading it took before there was one — which, with nothing
+ * imported and no gateway, means being told there is nothing to ground an answer in while a
+ * profile sits on the next page. Found by `e2e/assistant-ask.spec.ts`, not by reasoning.
+ */
+export const profileDataVersion = createVersionStore()

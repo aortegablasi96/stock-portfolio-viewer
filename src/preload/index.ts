@@ -2,6 +2,8 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { IpcChannels } from '@shared/ipc/channels'
 import type {
   AllocationResult,
+  AssistantAskRequest,
+  AssistantAskResult,
   AssistantConsentRequest,
   AssistantStatus,
   BalanceDriftRequest,
@@ -104,11 +106,16 @@ const api: RendererApi = {
   // is a share of a total expressed in it.
   getBalanceDrift: (request: BalanceDriftRequest): Promise<BalanceDriftResult> =>
     ipcRenderer.invoke(IpcChannels.profileGetDrift, request),
-  // The consent gate (Story #283). Note what is absent: no channel here reaches OpenAI.
+  // The consent gate (Story #283).
   getAssistantStatus: (): Promise<AssistantStatus> =>
     ipcRenderer.invoke(IpcChannels.assistantGetStatus),
   setAssistantConsent: (request: AssistantConsentRequest): Promise<AssistantStatus> =>
     ipcRenderer.invoke(IpcChannels.assistantSetConsent, request),
+  // The question (Story #284). The bridge stays a bridge: it forwards a question and the context
+  // the view assembled, and holds no key, no prompt and no HTTP client of its own — every one of
+  // those lives in main, which is the whole of ADR-0010's mechanism.
+  askAssistant: (request: AssistantAskRequest): Promise<AssistantAskResult> =>
+    ipcRenderer.invoke(IpcChannels.assistantAsk, request),
 }
 
 contextBridge.exposeInMainWorld('api', api)

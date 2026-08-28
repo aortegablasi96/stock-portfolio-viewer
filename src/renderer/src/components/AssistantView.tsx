@@ -15,6 +15,7 @@ import {
   GRANULARITY_LABELS,
 } from '@shared/domain/assistantDisclosure'
 import type { AssistantStatus } from '@shared/domain/assistant'
+import { AssistantConversation } from './AssistantConversation'
 import { Badge } from './ui/Badge'
 import { Button } from './ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card'
@@ -23,15 +24,24 @@ import { PageHeader } from './ui/PageHeader'
 import { StatePanel } from './ui/StatePanel'
 
 /**
- * The Assistant view, which in this story is **only its front door** (Story #283, DDR-0097).
+ * The Assistant view: the consent gate, and the question box behind it (Stories #283 and #284,
+ * DDR-0097 and DDR-0098).
  *
- * The consent gate needs a room to stand in, and the room is the Assistant's. Building a
- * temporary home on another page and moving it when #284 lands would be churn; this is the view
- * that story fills in, opened one story early with exactly the part that must exist before
- * anything can be asked. There is no question box here, and no channel behind one — the app
- * cannot reach OpenAI at all until #284 adds one.
+ * **It is not an `AnalyticsShell` view, and that is a stated decision rather than drift**
+ * (DDR-0098). The shell owns a four-branch guard, a `<main>` and a page header, and holds no
+ * state — which is exactly what keeps DDR-0027 intact for the four analytics views (DDR-0043,
+ * DDR-0058). This page has seven states rather than four, only two of which are about a report
+ * arriving, and it holds a conversation. Bending the shell to fit would change it for four views
+ * to serve one, so this view brings its own `<main>` and `PageHeader` — the shape `ProfileView`
+ * already uses, and the reason its `source` is `OWNER_SOURCE`: a page whose standard is the
+ * owner's names no data source (DDR-0094).
  *
- * What it draws is the disclosure and the decision. Three rules shape it:
+ * The order on the page is the order of the decisions. **The gate comes first**, because what may
+ * be sent is settled before anything is asked; the box comes second, and is unusable until the
+ * gate says otherwise; the disclosure sits at the bottom, where it can be re-read at any time
+ * without standing between the owner and the feature they came for.
+ *
+ * What the gate draws is the disclosure and the decision. Three rules shape it:
  *
  * **The list is rendered from `DISCLOSURE_CATEGORIES`, never written out here.** That constant is
  * also the only set of keys a context may carry and the input to the fingerprint consent is stored
@@ -46,7 +56,7 @@ import { StatePanel } from './ui/StatePanel'
  * although withdrawing is the *safe* direction, so the confirm is there to stop a slip rather than
  * to warn of loss.
  */
-export function AssistantView(): React.JSX.Element {
+export function AssistantView({ displayCurrency }: { displayCurrency: string }): React.JSX.Element {
   const [status, setStatus] = useState<AssistantStatus | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -121,6 +131,10 @@ export function AssistantView(): React.JSX.Element {
             </div>
           </CardContent>
         </Card>
+
+        {/* The question, behind the decision above it. It draws its own blocker where the gate is
+            closed rather than being hidden: a box that is not there says nothing about why. */}
+        <AssistantConversation status={status} displayCurrency={displayCurrency} />
 
         <Card>
           <CardHeader>

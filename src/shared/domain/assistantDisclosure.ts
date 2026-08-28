@@ -137,3 +137,26 @@ export function disclosedGranularities(
 /** Where the data goes, named rather than implied. Rendered beside the categories. */
 export const DISCLOSURE_DESTINATION =
   'OpenAI, in the United States, over the internet. This is the only feature in this app that sends anything about your portfolio off this machine.'
+
+/**
+ * Keep only the sections the disclosure actually declares (Story #284).
+ *
+ * `AssistantContext` already forbids an undisclosed key at compile time, but the context is
+ * assembled in the renderer and crosses IPC, where a type is a comment. This is the runtime half:
+ * the boundary parses an arbitrary string map and this reduces it to the list the owner read, so
+ * "an undisclosed section cannot be sent" holds against a payload the type never reached.
+ *
+ * Empty and whitespace-only sections are dropped too. A heading with nothing under it tells the
+ * model a section exists and is blank, which is an invitation to fill it in.
+ */
+export function pickDisclosedSections(
+  raw: Readonly<Record<string, string | undefined>>,
+  categories: readonly DisclosureCategory[] = DISCLOSURE_CATEGORIES,
+): AssistantContext {
+  const picked: Record<string, string> = {}
+  for (const category of categories) {
+    const body = raw[category.id]
+    if (typeof body === 'string' && body.trim() !== '') picked[category.id] = body
+  }
+  return picked as AssistantContext
+}

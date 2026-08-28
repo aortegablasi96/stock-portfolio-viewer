@@ -15,7 +15,7 @@
  */
 
 /**
- * The four native controls the app has. A `kind` carries **cursor, colour-scheme and measure
+ * The five native controls the app has. A `kind` carries **cursor, colour-scheme and measure
  * only** — the differences that follow from the element rather than from any styling choice: a
  * select is clicked (`pointer`), a text control's content is edited in place (`text`), only the
  * date input has a browser-supplied picker whose calendar glyph needs `color-scheme` to be told
@@ -30,8 +30,17 @@
  * what actually differs is the measure the content implies: a percentage is at most five
  * characters and is set to exactly that, so a column of them lines up; a vocabulary term is a
  * currency code or a sector name and takes whatever the row can spare.
+ *
+ * **`prose` arrives with the Assistant's question box** (Story #284, DDR-0098) and is the first
+ * kind that is not an `<input>`. It fits the axis rather than straining it: a `kind` names the
+ * element and the measure its content implies, and a question is several lines of ordinary
+ * writing, so the measure is the row's whole width and a few lines of height. It is still the
+ * shared `.control` box — same padding, border, radius and hover — which is what keeps a textarea
+ * from reading as a foreign control on a page of them. What it adds beyond a measure is
+ * `resize: vertical`: a textarea is resizable by default in both axes, and horizontal resizing
+ * would let one control break a card's own width.
  */
-export const CONTROL_KINDS = ['select', 'date', 'percent', 'term'] as const
+export const CONTROL_KINDS = ['select', 'date', 'percent', 'term', 'prose'] as const
 
 export type ControlKind = (typeof CONTROL_KINDS)[number]
 

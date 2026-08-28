@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createVersionStore, flexDataVersion } from './dataVersion'
+import { createVersionStore, flexDataVersion, profileDataVersion } from './dataVersion'
 
 describe('createVersionStore', () => {
   it('starts at zero and increments on each bump', () => {
@@ -87,5 +87,31 @@ describe('createVersionStore', () => {
     expect(flexDataVersion.get()).toBe(before + 1)
     expect(listener).toHaveBeenCalledTimes(1)
     unsubscribe()
+  })
+
+  /**
+   * The second store (Story #284, DDR-0098). A Flex write replaces the *figures* an answer quotes;
+   * a profile write replaces the *standard* they are judged against, and only the Assistant cares
+   * about the latter. Folding them into one would send all four analytics views back to the
+   * database every time a target was typed — which is exactly why the separation is asserted here
+   * rather than left to convention.
+   */
+  it('keeps the profile store apart from the flex one, so a saved target re-reads no analytics view', () => {
+    const flexBefore = flexDataVersion.get()
+    const profileBefore = profileDataVersion.get()
+    const onFlex = vi.fn()
+    const onProfile = vi.fn()
+    const unsubscribeFlex = flexDataVersion.subscribe(onFlex)
+    const unsubscribeProfile = profileDataVersion.subscribe(onProfile)
+
+    profileDataVersion.bump()
+
+    expect(profileDataVersion.get()).toBe(profileBefore + 1)
+    expect(flexDataVersion.get()).toBe(flexBefore)
+    expect(onProfile).toHaveBeenCalledTimes(1)
+    expect(onFlex).not.toHaveBeenCalled()
+
+    unsubscribeFlex()
+    unsubscribeProfile()
   })
 })

@@ -11,16 +11,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > trap* in a sentence with its DDR number — never the argument. If the budget is exceeded, cut a
 > paragraph that argues a case rather than drop a trap.
 >
-> **Raised once from 36 KB, deliberately** — nine stories had landed within 30 bytes of it. Cut
-> what restates a machine-readable fact (`package.json`, a directory listing) before compressing a
-> trap: this indexes ~1 MB of records, so a dropped trap costs a DDR re-read or a re-shipped bug.
+> **Raised once from 36 KB, deliberately.** Cut what restates a machine-readable fact before
+> compressing a trap — a dropped trap costs a DDR re-read or a re-shipped bug.
 
 ## Current Repository State
 
 M0–M9 are delivered: live IBKR holdings/balances/allocation in a display currency, immutable
 snapshots, Flex statement import, and four analytics views over it, behind a vertical sidebar.
-M10 is in progress — the investor profile (**profile** domain) has landed; the assistant itself
-has not. Not built: the model, multi-broker, benchmarks, tax reporting.
+M10 is in progress — the investor profile and the assistant's **surface** (grounded Q&A) have
+landed; the question shapes (#285–#289) have not. Not built: multi-broker, benchmarks, tax.
 
 **Which Epics are open is deliberately not recorded here** — read the backlog (*Current Priority*).
 The **lifecycle** is the rule: an Epic closes with its stories, and refinement opens a *new*
@@ -55,7 +54,11 @@ Each exists end-to-end and is the reference pattern for its shape.
   a **specific list**: `DISCLOSURE_CATEGORIES` renders the panel, *types* `AssistantContext` (an
   undisclosed section cannot be sent) and is fingerprinted into the stored consent, so changing it
   re-asks the owner. Revoking **removes the key**; an unreadable value means *no consent*
-  (DDR-0097).
+  (DDR-0097). `assistant:ask` is the **one outbound channel**; context is assembled in the
+  **renderer** (`lib/assistantContext.ts`) so figures use the app's own formatters, and the boundary
+  drops undisclosed sections. A section is **absent, never empty**; no money goes in one disclosed
+  as names or percentages; each names its store *and clock* — composition is Flex, drift live
+  (DDR-0098).
 - **classification** — sector/industry. `classificationRepository` fronts *both* the mutable
   SQLite cache and `ibkrGateway`; `analytics:classifyInstruments` is the only analytics channel
   reaching IBKR. Refreshes are **resumable, not transactional** — a run that dies at 30 of 40 keeps
@@ -304,7 +307,8 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
 - **An analytics tab mounts on first visit and then stays mounted**, hidden rather than unmounted,
   so view-local state survives; unvisited tabs issue no IPC (DDR-0006, DDR-0027). The consequence:
   a mounted view can go stale, so both Flex write paths bump `lib/dataVersion` and every
-  `useAnalytics` re-reads. **`loading` means the first load only**; a reload reports through
+  `useAnalytics` re-reads. A **profile** write bumps `profileDataVersion`, a *second* store only
+  the Assistant reads (DDR-0098). **`loading` means the first load only**; a reload reports through
   `refreshing`. **Portfolio is deliberately excluded** and re-reads on every visit — it shows live
   data that changes with no event to signal it.
 - **The page header's `source` has three values, not two** — `LIVE_SOURCE`, `IMPORTED_SOURCE` and
@@ -433,7 +437,7 @@ alternatives this table can only name.
 | `Button` (DDR-0032) | `variant` × `size` (`icon` is a *shape*) | `ghost` changed meaning — the old `.ghost-button` is now `secondary`. `type` defaults to `"button"`. `className` is for **placement, not colour**. |
 | `Card` (DDR-0033, DDR-0059, DDR-0084) | `variant` (surface colour) × `size` (`--surface-pad-*`) | `CardContent` is a **scope** — descendant rules hang off it, keeping a state panel's prose out of reach. The ruled header strip bleeds to the edges by negating `--card-pad`, which each size **restates beside its `padding`** (change one, change both). `.card-header:last-child` gives it back; so does `.card-header.chart-card-header`, **compound or it ties** (DDR-0084). Its third host is `.data-table-scroll-card`, which has no `--card-pad`: that rule **restates** `margin`/`padding` (inherited, the bleed `calc()` is invalid and drops) and is `sticky` (DDR-0087). |
 | `StatTile` / `StatRow` (DDR-0034, DDR-0060) | `tone` only | A tile **is** a `Card`, so it declares no surface. **Neutral is the absence of a rule.** Its label is the app's *one* micro-label — the same four declarations as `.data-table thead th`; don't grow a second. |
-| `Field` + `Select` + `DateInput` + `PercentInput` + `TermInput` (DDR-0035, DDR-0094) | `kind` only — **four**, and still no size axis | **`Field` generates its id with `useId()` and takes no `id` prop** — tabs stay mounted, so all three `RangeFilter`s can be in the document at once and a fixed id would name only the first; `TermInput`'s `<datalist>` id is generated for the same reason. A `kind` carries cursor, colour-scheme and **measure**: `percent` is 5ch so a column lines up, `term` takes the row's slack. `percent` is `type="text"` + `inputMode="decimal"` **on purpose** — a number input alters its value on a passing scroll wheel and drops a comma decimal, which `parsePercent` accepts. |
+| `Field` + `Select` + `DateInput` + `PercentInput` + `TermInput` + the Assistant's textarea (DDR-0035, DDR-0094, DDR-0098) | `kind` only — **five**, and still no size axis | **`Field` generates its id with `useId()` and takes no `id` prop** — tabs stay mounted, so all three `RangeFilter`s can be in the document at once and a fixed id would name only the first; `TermInput`'s `<datalist>` id is generated for the same reason. A `kind` carries cursor, colour-scheme and **measure**: `percent` is 5ch so a column lines up, `term` takes the row's slack. `percent` is `type="text"` + `inputMode="decimal"` **on purpose** — a number input alters its value on a passing scroll wheel and drops a comma decimal, which `parsePercent` accepts. `prose` is a `<textarea>` and caps `resize` to `vertical`. |
 | `ToggleGroup` (DDR-0036) | `mode`, which is **worn** (`--radius-md` vs `--radius-pill`) | **Never a tablist**: `aria-pressed`, not `role="tab"`. Only `.app-tab` is a real tablist. |
 | `Badge` (DDR-0037, DDR-0064, DDR-0065) | `variant` × `size` | **Never a pill** (that corner means multi-select) and **never a background** — the toned pair keeps both: `--pos` / `--neg-text` ink, the *borders* take the fill tokens. `BADGE_VARIANTS` ⊇ `STAT_TONES`, so `toneOf()` names a variant. `sm` carries no vertical padding — with it, every holdings row grows ~7px; alone in a cell it also needs `BADGE_CELL_CLASS`, because CSS cannot see that an inline chip follows a *text node*. Trades' side badge **is** toned (DDR-0086 reverses DDR-0065): the *box*, not the hue, separates it from the figure. |
 | `StatePanel` (DDR-0038) | `variant` (the state) × `surface` | Only `error` paints; the axis exists because the copy and the *announcement* differ. `role` is derived. No heading → the panel **is** a `<p>`. |
@@ -553,8 +557,7 @@ tools and no data access. A trim is grounded; an instrument the owner doesn't ho
 training data — unverified, not price-checked — and the two are **marked apart** in the answer.
 
 **Portfolio data leaves the machine** for that one feature (ADR-0010): `gpt-4.1-mini`, from **main
-only**, gated on consent. `OPENAI_API_KEY` is unprefixed on purpose — a `RENDERER_VITE_` prefix
-ships the secret in the bundle.
+only**, gated on consent.
 
 ## Current Priority
 
