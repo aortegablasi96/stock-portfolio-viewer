@@ -12,6 +12,12 @@ import {
   type GateKind,
 } from './assistantGate'
 import {
+  ASK_BLOCKERS,
+  FAILURE_HEADINGS,
+  STALE_NOTE,
+  TRUNCATED_NOTE,
+} from './assistantAsk'
+import {
   DISCLOSURE_CATEGORIES,
   DISCLOSURE_CATEGORY_IDS,
   DISCLOSURE_DESTINATION,
@@ -247,6 +253,9 @@ describe('the view renders the disclosure rather than restating it', () => {
   const VIEW = strip(
     readFileSync(new URL('../components/AssistantView.tsx', import.meta.url), 'utf8'),
   )
+  const CONVERSATION = strip(
+    readFileSync(new URL('../components/AssistantConversation.tsx', import.meta.url), 'utf8'),
+  )
 
   it('maps over the declared categories', () => {
     expect(VIEW).toContain('disclosureRows().map')
@@ -266,12 +275,50 @@ describe('the view renders the disclosure rather than restating it', () => {
     for (const heading of Object.values(GATE_HEADINGS)) expect(VIEW).not.toContain(heading)
   })
 
-  /** No question box, and nothing that could reach OpenAI: that is #284's story, not this one. */
-  it('offers no way to ask anything yet', () => {
+  /**
+   * Story #284 filled the room this gate opened, and this assertion is what that cost.
+   *
+   * It used to read "offers no way to ask anything yet" — no `<textarea>`, no `window.api.ask` —
+   * and it would still pass today, because the question box went into a **sibling component**. A
+   * guard that keeps passing for a reason that has stopped being true is worse than no guard, so
+   * it is replaced rather than deleted: the view **composes** the conversation instead of growing
+   * one, which is what keeps the gate's own file about the gate (DDR-0098).
+   */
+  it('composes the question box rather than growing one', () => {
+    expect(VIEW).toContain('<AssistantConversation')
     expect(VIEW).not.toMatch(/<textarea/i)
-    expect(VIEW).not.toContain('window.api.ask')
-    expect(VIEW).not.toMatch(/\bfetch\(/)
-    expect(VIEW.toLowerCase()).not.toContain('api.openai.com')
+    expect(VIEW).not.toContain('window.api.askAssistant')
+  })
+
+  /**
+   * The standing claim, which #284 did **not** change: the renderer holds no HTTP client and names
+   * no OpenAI origin. Every model call is made from main, behind an IPC channel, and the CSP still
+   * admits one external origin (ADR-0007, ADR-0010). Asserted over both files, because the one
+   * that gained a channel is the one worth checking.
+   */
+  it.each([
+    ['the gate', () => VIEW],
+    ['the conversation', () => CONVERSATION],
+  ])('%s reaches OpenAI only over the bridge', (_name, source) => {
+    expect(source()).not.toMatch(/\bfetch\(/)
+    expect(source().toLowerCase()).not.toContain('api.openai.com')
+    expect(source()).not.toContain('OPENAI_API_KEY')
+  })
+
+  /**
+   * The same rule as the gate's copy, one story on: the ask states' wording lives in
+   * `lib/assistantAsk` so a Node-only test can hold it, and a component that restated a sentence
+   * would be a second copy free to drift (DDR-0029, DDR-0098).
+   */
+  it('quotes none of the ask copy', () => {
+    for (const blocker of Object.values(ASK_BLOCKERS)) {
+      if (blocker !== null) expect(CONVERSATION).not.toContain(blocker)
+    }
+    for (const heading of Object.values(FAILURE_HEADINGS)) {
+      expect(CONVERSATION).not.toContain(heading)
+    }
+    expect(CONVERSATION).not.toContain(STALE_NOTE)
+    expect(CONVERSATION).not.toContain(TRUNCATED_NOTE)
   })
 
   /** Withdrawing is the in-place confirm — no modal, no `window.confirm` (DDR-0012). */

@@ -9,6 +9,7 @@ import {
   type ProfileFormState,
   type TargetRowDraft,
 } from '../lib/investorProfile'
+import { profileDataVersion } from '../lib/dataVersion'
 import { vocabularyFrom } from '../lib/profileVocabulary'
 import { OWNER_SOURCE } from '../lib/pageHeader'
 import {
@@ -99,10 +100,18 @@ export function ProfileView(): React.JSX.Element {
     }
   }, [])
 
+  /**
+   * Take the profile the write returned as the new truth, and tell the rest of the app.
+   *
+   * The bump is the same mechanism the Flex write paths use (DDR-0027): a view that stays mounted
+   * is a view holding a reading it took earlier, and the Assistant's whole grounding turns on
+   * whether a profile exists (DDR-0098). Nothing here knows which views are listening.
+   */
   const seat = useCallback((profile: InvestorProfile, message: string): void => {
     setStored(profile)
     setForm(formFromProfile(profile))
     setNotice({ tone: 'ok', message })
+    profileDataVersion.bump()
   }, [])
 
   const save = async (): Promise<void> => {

@@ -1054,6 +1054,20 @@ html {
   min-inline-size: 0;
 }
 
+/* The fifth (Story #284, DDR-0098), and the first that is not an `<input>`. A
+   question runs to several lines of ordinary writing, so the measure is the
+   row's whole width and a few lines of height. `resize` is capped to the
+   vertical axis: a textarea is resizable in both by default, and the horizontal
+   one would let a control drag itself past the card holding it. */
+.control-prose {
+  cursor: text;
+  inline-size: 100%;
+  min-inline-size: 0;
+  min-block-size: 5.5rem;
+  resize: vertical;
+  line-height: var(--leading-normal);
+}
+
 /* ---- Dashboard layout ---------------------------------------------------- */
 
 .dashboard {
@@ -4033,4 +4047,154 @@ html {
   font-size: var(--text-xs);
   line-height: var(--leading-normal);
   color: var(--muted);
+}
+
+/* ---- Assistant: the question and what came back (M10, Story #284) --------- */
+
+/* The box and its action, stacked. A question is prose, so the control takes
+   the card's full width rather than sitting in a row beside its button — the
+   shape `.profile-target-key` uses for a term, one measure up (DDR-0098). */
+.assistant-ask {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+/* Placement, never restyling (DDR-0032's rule, applied to a `Field`). `.field`
+   is a row, which is right for every control the app had when it was written —
+   each one a compact box with a short label beside it. A prose control is the
+   first that is a block, and a row puts a two-word label in a column of its own
+   and wraps it. Stacking is the only thing this changes: the label, its colour
+   and the control's own box are all untouched. */
+.assistant-ask .field {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-3);
+}
+
+.assistant-ask-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-5);
+}
+
+/* What the assistant cannot see, said before the answer rather than after it.
+   Not toned as errors: a missing import and an unset profile are gaps in the
+   grounding, not failures, and the panel above already carries the blockers. */
+.assistant-notices {
+  list-style: none;
+  margin: var(--space-5) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.assistant-notice {
+  margin: 0;
+  max-width: 62ch;
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+  color: var(--muted);
+}
+
+/* The transcript, newest first — the answer to the question just typed is the
+   one adjacent to the box that typed it, and a hidden-but-mounted panel has no
+   scroll position to manage (DDR-0027, DDR-0098). */
+.assistant-turns {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+/* Ruled off from the box above it, and only once there is something to rule
+   off. The list is in the document from mount so that its `aria-live` is there
+   before the first answer, which means an empty rule would otherwise sit under
+   every unused assistant. `:empty` is exact here: React renders no whitespace
+   into a list with no turns. */
+.assistant-turns:not(:empty) {
+  margin-top: var(--space-6);
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--border);
+}
+
+.assistant-turn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* The question as it was asked, quoted back. A reader scanning a transcript
+   needs to know which question an answer belongs to, and the rule down its
+   leading edge is the same device the active sidebar row uses at a smaller
+   scale — a marker, never a surface. */
+.assistant-question {
+  margin: 0;
+  padding-left: var(--space-5);
+  border-left: 2px solid var(--border);
+  max-width: 62ch;
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  color: var(--muted);
+  white-space: pre-wrap;
+}
+
+/* The answer. `pre-wrap` because the model writes in paragraphs and lists, and
+   collapsing its newlines turns a structured answer into one block of text.
+   Deliberately NOT in the figure role: a figure quoted inside prose is prose,
+   and a second rule applying `--font-figure` is what `figureRole.ts` throws on
+   (DDR-0053). */
+.assistant-answer {
+  margin: 0;
+  max-width: 68ch;
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  color: var(--text);
+  white-space: pre-wrap;
+}
+
+/* A fact about the answer rather than part of it: that it was cut off, or that
+   an import has since replaced the figures under it. */
+.assistant-turn-note {
+  margin: 0;
+  max-width: 62ch;
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+  color: var(--muted);
+}
+
+/* The wait, made perceivable without watching for a reader who can see. The
+   announcement is the live region's job; this is its counterpart on screen. */
+.assistant-thinking {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+.assistant-thinking::before {
+  content: '';
+  inline-size: 8px;
+  block-size: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  animation: assistant-thinking-pulse var(--duration-base) var(--ease-out) infinite alternate;
+}
+
+/* One of the app's five animations, and inside the reduced-motion rule's reach
+   by construction: the duration is a token, and the `prefers-reduced-motion`
+   block zeroes the tokens rather than naming what moves (DDR-0044). */
+@keyframes assistant-thinking-pulse {
+  from {
+    opacity: 0.35;
+  }
+  to {
+    opacity: 1;
+  }
 }

@@ -59,11 +59,16 @@ export const IpcChannels = {
   profileGetDrift: 'profile:getDrift',
   // Whether the assistant may run, and the owner's decision about it (M10, Story #283). Its own
   // prefix because consent is not a profile fact: the profile is how the owner intends to invest,
-  // this is whether anything about it may leave the machine (ADR-0010, DDR-0097). There is
-  // deliberately **no `assistant:ask`** yet — a channel that reaches OpenAI belongs with the view
-  // that asks something (#284), and shipping one now would be an un-consented path in all but name.
+  // this is whether anything about it may leave the machine (ADR-0010, DDR-0097).
   assistantGetStatus: 'assistant:getStatus',
   assistantSetConsent: 'assistant:setConsent',
+  // The one channel in this app that reaches the internet with something about the portfolio on
+  // it (M10, Story #284, DDR-0098). It arrives here rather than in #283 because a channel that
+  // could send is an un-consented path in all but name until there is a view asking the owner's
+  // question through it. Everything behind it is already decided: `assistantService` checks
+  // consent before the key, and the request's own schema drops any section the disclosure does
+  // not declare, so what crosses this line is bounded by what the owner read.
+  assistantAsk: 'assistant:ask',
 } as const
 
 export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels]

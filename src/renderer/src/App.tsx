@@ -479,7 +479,7 @@ export function App(): React.JSX.Element {
           {panel('allocation', <AllocationView />)}
           {panel('dividends', <DividendsView />)}
           {panel('trades', <TradeHistoryView />)}
-          {panel('assistant', <AssistantView />)}
+          {panel('assistant', <AssistantView displayCurrency={displayCurrency} />)}
           {panel('profile', <ProfileView />)}
         </div>
       </div>

@@ -26,7 +26,16 @@ import {
   type BalanceDriftReport,
   type BalanceDriftResult,
 } from '@shared/domain/balanceDrift'
-import { assistantStatusSchema, type AssistantStatus } from '@shared/domain/assistant'
+import {
+  assistantAskResultSchema,
+  assistantStatusSchema,
+  type AssistantAskResult,
+  type AssistantStatus,
+} from '@shared/domain/assistant'
+import {
+  pickDisclosedSections,
+  type AssistantContext,
+} from '@shared/domain/assistantDisclosure'
 
 /**
  * The typed contract for every IPC channel: the Zod schema used by the main
@@ -282,6 +291,50 @@ export type AssistantConsentRequest = z.infer<typeof assistantConsentRequestSche
 export { assistantStatusSchema }
 export type { AssistantStatus }
 
+// ---- assistant:ask (M10, Story #284) ----------------------------------------
+
+/**
+ * A question and the grounding it is asked against (DDR-0098).
+ *
+ * **The context is assembled in the renderer, and that is a decision rather than a convenience.**
+ * Every figure the assistant may quote is already on a dashboard, and the formatters that put it
+ * there — `renderer/src/lib/format.ts` — are renderer code. Assembling in main would mean a second
+ * set of formatters, and the criterion this story is held to is that a number in prose and the
+ * same number on a dashboard agree to the digit. The renderer is not therefore trusted: consent is
+ * still checked in main before anything is read, and the schema below is what bounds *what* may
+ * cross.
+ *
+ * `context` is parsed as an arbitrary string map and then **reduced to the disclosed categories**.
+ * A section the owner never read is dropped here, at the boundary, rather than being relied on to
+ * be absent — which is the runtime half of the promise `AssistantContext`'s key type makes at
+ * compile time (DDR-0097).
+ */
+
+/** The longest question the box accepts. The prompt as a whole is bounded again by the gateway. */
+export const MAX_QUESTION_CHARS = 2_000
+
+/**
+ * The longest a single context section may be.
+ *
+ * A ceiling per section rather than one over the whole context: the gateway already holds the
+ * total (`MAX_PROMPT_CHARS`), and what this stops is a single runaway section — a thousand-position
+ * account's holdings list — consuming the whole budget and silently starving every other section
+ * of its place in the prompt.
+ */
+export const MAX_CONTEXT_SECTION_CHARS = 8_000
+
+export const assistantAskRequestSchema = z.object({
+  question: z.string().trim().min(1).max(MAX_QUESTION_CHARS),
+  context: z
+    .record(z.string(), z.string().max(MAX_CONTEXT_SECTION_CHARS))
+    .default({})
+    .transform((raw): AssistantContext => pickDisclosedSections(raw)),
+})
+export type AssistantAskRequest = z.input<typeof assistantAskRequestSchema>
+
+export { assistantAskResultSchema }
+export type { AssistantAskResult, AssistantContext }
+
 // ---- window.api bridge shape ------------------------------------------------
 
 /**
@@ -349,4 +402,12 @@ export interface RendererApi {
   getAssistantStatus: () => Promise<AssistantStatus>
   /** Grant or withdraw consent for portfolio figures to leave the machine (Story #283). */
   setAssistantConsent: (request: AssistantConsentRequest) => Promise<AssistantStatus>
+  /**
+   * Ask the assistant a question, grounded in context the view assembled (Story #284).
+   *
+   * The one call in this app that reaches the internet with portfolio figures on it. Its result
+   * carries every way the exchange can end — `needs_consent` included, which is decided before
+   * the key is read and long before a socket is opened (DDR-0022, DDR-0097).
+   */
+  askAssistant: (request: AssistantAskRequest) => Promise<AssistantAskResult>
 }
