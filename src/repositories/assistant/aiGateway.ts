@@ -63,10 +63,22 @@ export const DEFAULT_TIMEOUT_MS = 60_000
  *
  * Characters rather than tokens because counting tokens needs a tokenizer, and a tokenizer is a
  * dependency taken to price a request exactly when the job here is only to stop runaway growth.
- * ~24k characters is roughly 6k tokens of English prose and figures — several times the largest
- * context this Epic assembles, and far below anything that would surprise the owner on a bill.
+ * ~40k characters is roughly 10k tokens of English prose and figures — two orders of magnitude
+ * below the model's own context window, and far below anything that would surprise the owner on a
+ * bill.
+ *
+ * **Raised once, from 24,000, and the reason is the sentence this paragraph used to end on**
+ * (Story #287, DDR-0103, amending DDR-0096). It read "several times the largest context this Epic
+ * assembles", which was true when nothing filled the context and stopped being true when something
+ * did: #287 puts every standard period and every drift-closing move in front of the model, and the
+ * worst case the grounding's own caps allow came to ~30k. The ceiling's job is to stop **runaway
+ * growth** — a bug, a loop, a thousand-position book — not to ration grounding, which is the
+ * feature. Rationing it here would have meant a portfolio of sixty positions and thirty targets
+ * getting `too_large` on every question, which is the failure the constant exists to make legible,
+ * not one it should cause. `promptBudget.test.ts` measures the worst case against this number, so
+ * the next story that grows a section finds out here rather than in an owner's transcript.
  */
-export const MAX_PROMPT_CHARS = 24_000
+export const MAX_PROMPT_CHARS = 40_000
 
 /** The default ceiling on the **answer**, in tokens; a caller may ask for less, never more. */
 export const MAX_OUTPUT_TOKENS = 1_200

@@ -2,6 +2,7 @@ import { classificationRepository } from '@repositories/classification/classific
 import { flexReadRepository } from '@repositories/flex/flexReadRepository'
 import { portfolioService, type CashPosition } from '@services/portfolio/portfolioService'
 import { investorProfileService } from '@services/profile/investorProfileService'
+import { driftMove, type BandPosition } from '@services/profile/driftMoves'
 import { assetClassLabel, CASH_ASSET_KEY, CASH_ASSET_LABEL } from '@shared/domain/assetClass'
 import {
   countTargets,
@@ -303,6 +304,10 @@ function driftFor(
   // so nothing can land in two places and nothing can be dropped.
   const buckets = new Map<string, { label: string; value: number }>()
   const residuals = new Map<DriftResidual['kind'], { label: string; value: number }>()
+  // Which instruments carry each bucket's weight, summed per conid — the input a move is sized
+  // from (Story #287). Cash lands in a bucket without landing here on purpose: a currency band's
+  // weight can be part cash, and cash is not a position anyone trims.
+  const carriers = new Map<string, Map<number, { holding: Holding; value: number }>>()
 
   for (const item of placed) {
     const bucket = bucketFor(dimension, item, sectorOf, classOf)
@@ -315,9 +320,18 @@ function driftFor(
       residuals.set(bucket.residual.kind, existing)
       continue
     }
-    const existing = buckets.get(bucket.key.toUpperCase()) ?? { label: bucket.label, value: 0 }
+    const id = bucket.key.toUpperCase()
+    const existing = buckets.get(id) ?? { label: bucket.label, value: 0 }
     existing.value += item.value
-    buckets.set(bucket.key.toUpperCase(), existing)
+    buckets.set(id, existing)
+
+    if (item.holding !== null) {
+      const byConid = carriers.get(id) ?? new Map()
+      const held = byConid.get(item.holding.conid)
+      if (held) held.value += item.value
+      else byConid.set(item.holding.conid, { holding: item.holding, value: item.value })
+      carriers.set(id, byConid)
+    }
   }
 
   // Matched case-insensitively, because the vocabularies are not case-sensitive and a target the
@@ -329,7 +343,13 @@ function driftFor(
     const bucket = buckets.get(id)
     // A target the portfolio does not hold is a real drift at 0%, not an absent band: "I want 10%
     // in utilities and hold none" is exactly the answer being asked for.
-    return bandFor(target, bucket ? weightOf(bucket.value) : 0, bucket?.label ?? target.key)
+    return bandFor(
+      target,
+      bucket ? weightOf(bucket.value) : 0,
+      bucket?.label ?? target.key,
+      bandPositions(carriers.get(id), weightOf),
+      profile.positionSize?.high ?? null,
+    )
   })
 
   const untargeted = [...buckets.entries()]
@@ -346,16 +366,51 @@ function driftFor(
   }
 }
 
-/** The verdict on one target: where the actual sits, and how far outside it is. */
-function bandFor(target: CategoryTarget, actual: number, label: string): DriftBand {
+/**
+ * The verdict on one target: where the actual sits, how far outside it is, and how to close it.
+ *
+ * The move is computed from the verdict rather than beside it, so a band cannot be out of range
+ * and carry no move — the one place the two could disagree is this expression, and there is only
+ * one of it (Story #287).
+ */
+function bandFor(
+  target: CategoryTarget,
+  actual: number,
+  label: string,
+  positions: readonly BandPosition[],
+  ceiling: number | null,
+): DriftBand {
+  const measured = verdict(actual, target.low, target.high)
   return {
     key: target.key,
     label,
     actual,
     low: target.low,
     high: target.high,
-    ...verdict(actual, target.low, target.high),
+    ...measured,
+    move: driftMove(measured.status, measured.distance, positions, ceiling),
   }
+}
+
+/**
+ * A bucket's instruments as weights, largest first — the input a move is sized from.
+ *
+ * The name is the live reading's `companyName`, which is `null` where nothing local knows the
+ * instrument (DDR-0088). A move naming a bare ticker is still a move; a move naming `Cad` would be
+ * a renamed company (DDR-0066).
+ */
+function bandPositions(
+  carriers: Map<number, { holding: Holding; value: number }> | undefined,
+  weightOf: (value: number) => number,
+): BandPosition[] {
+  if (carriers === undefined) return []
+  return [...carriers.values()]
+    .map((entry) => ({
+      symbol: entry.holding.symbol,
+      name: entry.holding.companyName,
+      weight: weightOf(entry.value),
+    }))
+    .sort((a, b) => b.weight - a.weight)
 }
 
 /**

@@ -123,6 +123,41 @@ export function formatSignedPercent(value: number): string {
 }
 
 /**
+ * A **difference between two percentages**, in the unit that difference is actually in (Story
+ * #287).
+ *
+ * "Ten percent above a 50% target" is two different quantities and one of them is wrong: 60% is ten
+ * *points* above 50%, and twenty *percent* above it. The distinction is invisible in a chart and
+ * decisive in a sentence, which is why the unit is spelled out in words rather than left to a `%`
+ * sign the reader has to interpret. Everything Story #287 computes — a drift-closing move, a year
+ * against the previous year — is a difference, so everything it writes uses this.
+ *
+ * The words are always plural. "1.00 percentage point" would be the grammatical form and is not
+ * worth a branch: the figure is fixed at two decimals, so an exact 1.00 is a coincidence rather
+ * than a case.
+ */
+export function formatPoints(value: number): string {
+  return `${new Intl.NumberFormat(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value)} percentage points`
+}
+
+/**
+ * The same, with an explicit leading sign — for a difference whose direction is the point.
+ *
+ * A value that rounds to zero at the two decimals shown carries **no** sign. These figures are
+ * differences of chain-linked returns, so an exact tie arrives as `-1.4e-14` and would otherwise
+ * read as `-0.00 percentage points` — a direction the figure does not have, in a sentence a model
+ * is being asked to quote verbatim.
+ */
+export function formatSignedPoints(value: number): string {
+  const base = formatPoints(Math.abs(value))
+  if (Math.abs(value) < 0.005) return base
+  return value < 0 ? `-${base}` : `+${base}`
+}
+
+/**
  * A token with no vowel is not a word, so it is an acronym and keeps its capitals (Story #214).
  *
  * IBKR exports every name in capitals, so nothing in the input distinguishes `LVMH` from `GOLD`:

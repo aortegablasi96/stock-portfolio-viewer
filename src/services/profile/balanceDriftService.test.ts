@@ -465,6 +465,114 @@ describe('the verdict on a band', () => {
   })
 })
 
+/**
+ * The move that closes a band (Story #287, DDR-0103).
+ *
+ * `driftMoves.test.ts` has the arithmetic; what these assert is the **wiring**, which is the half
+ * that can be silently wrong: that the positions handed to it are the ones actually in the band,
+ * that cash is not one of them, that the owner's ceiling reaches it, and that a band inside its
+ * range gets no move at all. A move sized over the wrong positions is a suggestion to sell
+ * something the owner does not hold in the exposure being closed.
+ */
+describe('the move attached to a band', () => {
+  it('is absent for a band already inside its range', async () => {
+    given({ profile: profile({ currencyTargets: [{ key: 'GBP', low: 5, high: 15 }] }) })
+    expect(dimension(await report(), 'currency').bands[0]!.move).toBeNull()
+  })
+
+  /**
+   * USD is 57% of the fixture: AAA at 40, CCC at 15, and 2 of cash. Trimming seven points must
+   * fall on the two instruments in proportion, and **not** on the cash — a currency band's weight
+   * can be part cash, and cash is not a position anyone trims.
+   */
+  it('spreads a trim across the instruments in the band, never across its cash', async () => {
+    given({ profile: profile({ currencyTargets: [{ key: 'USD', low: 40, high: 50 }] }) })
+    const move = dimension(await report(), 'currency').bands[0]!.move
+
+    expect(move).toMatchObject({ direction: 'trim', candidates: 2 })
+    expect(move?.points).toBeCloseTo(7, 9)
+    expect(move?.contributors.map((c) => c.symbol)).toEqual(['AAA', 'CCC'])
+    expect(move?.contributors[0]?.points).toBeCloseTo((40 / 55) * 7, 9)
+    expect(move?.contributors[1]?.points).toBeCloseTo((15 / 55) * 7, 9)
+    expect(move?.uncovered).toBe(0)
+  })
+
+  it('buckets a move by the same dimension the band was measured in', async () => {
+    given({ profile: profile({ sectorTargets: [{ key: 'Technology', low: 20, high: 30 }] }) })
+    const move = dimension(await report(), 'sector').bands[0]!.move
+
+    // Technology is AAA (40) and CCC (15); BBB is Financial and DDD has no sector at all.
+    expect(move?.contributors.map((c) => c.symbol)).toEqual(['AAA', 'CCC'])
+    expect(move?.candidates).toBe(2)
+  })
+
+  /**
+   * The one interaction between two targets this app models: closing a sector or currency gap must
+   * not push a position through the owner's own concentration ceiling.
+   */
+  it('never proposes an add that would breach the concentration ceiling', async () => {
+    given({
+      profile: profile({
+        currencyTargets: [{ key: 'GBP', low: 40, high: 50 }],
+        positionSize: { low: 0, high: 12 },
+      }),
+    })
+    const move = dimension(await report(), 'currency').bands[0]!.move
+
+    // GBP is DDD alone at 10%, and the ceiling leaves it two points of room against thirty needed.
+    expect(move).toMatchObject({ direction: 'add', points: 30, ceilingLimited: true })
+    expect(move?.contributors[0]).toMatchObject({ symbol: 'DDD', resultingWeight: 12 })
+    expect(move?.uncovered).toBeCloseTo(28, 9)
+  })
+
+  it('has nothing to carry a target the owner holds none of', async () => {
+    given({ profile: profile({ currencyTargets: [{ key: 'CHF', low: 5, high: 10 }] }) })
+    const move = dimension(await report(), 'currency').bands[0]!.move
+
+    expect(move).toMatchObject({ direction: 'add', points: 5, candidates: 0, uncovered: 5 })
+    expect(move?.contributors).toEqual([])
+  })
+
+  /** A position the gateway could not value is in no weight, so it carries no move either. */
+  it('leaves an unconvertible holding out of the positions a move names', async () => {
+    given({
+      profile: profile({ currencyTargets: [{ key: 'USD', low: 5, high: 10 }] }),
+      holdings: HOLDINGS.map((h) => (h.symbol === 'CCC' ? { ...h, displayValue: null } : h)),
+    })
+    const move = dimension(await report(), 'currency').bands[0]!.move
+
+    expect(move?.contributors.map((c) => c.symbol)).toEqual(['AAA'])
+    expect(move?.candidates).toBe(1)
+  })
+
+  /** Percentage points only: the `profile` disclosure carries no money (DDR-0097). */
+  it('carries no amount of money in any move on the report', async () => {
+    given({
+      profile: profile({
+        currencyTargets: [{ key: 'USD', low: 10, high: 20 }],
+        sectorTargets: [{ key: 'Technology', low: 5, high: 10 }],
+      }),
+    })
+    const moves = (await report()).dimensions.flatMap((d) => d.bands.map((b) => b.move))
+
+    expect(moves.filter((move) => move !== null).length).toBeGreaterThan(0)
+    for (const move of moves) {
+      for (const contributor of move?.contributors ?? []) {
+        // Every figure is a share or a difference of shares. Nothing here is in the display
+        // currency, and the fixture's values (40, 25, 15, 10) are also its weights, so the check
+        // that would be ambiguous elsewhere is a check on the *shape*: no field but these exist.
+        expect(Object.keys(contributor).sort()).toEqual([
+          'name',
+          'points',
+          'resultingWeight',
+          'symbol',
+          'weight',
+        ])
+      }
+    }
+  })
+})
+
 describe('a dimension the profile says nothing about', () => {
   /**
    * Absent, never present-and-empty and never a drift of zero. A profile stating nothing about
