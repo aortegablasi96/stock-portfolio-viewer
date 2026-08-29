@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { IpcChannels } from '@shared/ipc/channels'
 import type {
   AllocationResult,
+  AssistantApiKeyRequest,
   AssistantAskRequest,
   AssistantAskResult,
   AssistantConsentRequest,
@@ -11,6 +12,7 @@ import type {
   CaptureSnapshotResult,
   ClassificationProgress,
   ClassifyInstrumentsResult,
+  ClearApiKeyResult,
   ClearHistoryResult,
   ClearInvestorProfileResult,
   ClearStatementsResult,
@@ -26,6 +28,7 @@ import type {
   PortfolioOverviewResult,
   RealizedGainsResult,
   RendererApi,
+  SaveApiKeyResult,
   SaveInvestorProfileResult,
   SidebarState,
   SnapshotList,
@@ -111,6 +114,14 @@ const api: RendererApi = {
     ipcRenderer.invoke(IpcChannels.assistantGetStatus),
   setAssistantConsent: (request: AssistantConsentRequest): Promise<AssistantStatus> =>
     ipcRenderer.invoke(IpcChannels.assistantSetConsent, request),
+  // The owner's own key (Story #300). It crosses here once, inbound, and never comes back: the
+  // bridge forwards a secret in exactly the way it forwards everything else, and the fact that it
+  // holds nothing — no key, no default, no memory of one — is what keeps ADR-0010 true of the
+  // preload bundle as well as the renderer's.
+  setAssistantApiKey: (request: AssistantApiKeyRequest): Promise<SaveApiKeyResult> =>
+    ipcRenderer.invoke(IpcChannels.assistantSetApiKey, request),
+  clearAssistantApiKey: (): Promise<ClearApiKeyResult> =>
+    ipcRenderer.invoke(IpcChannels.assistantClearApiKey),
   // The question (Story #284). The bridge stays a bridge: it forwards a question and the context
   // the view assembled, and holds no key, no prompt and no HTTP client of its own — every one of
   // those lives in main, which is the whole of ADR-0010's mechanism.

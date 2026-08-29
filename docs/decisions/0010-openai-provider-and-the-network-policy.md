@@ -53,6 +53,15 @@ the main process only. A `RENDERER_VITE_` prefix would inline the secret into th
 bundle — and, because the CSP would still block the call, the result would be a leaked key attached
 to a feature that does not work. `.env.example` carries this reasoning at the variable.
 
+**Amended by DDR-0105 (Story #300): there is a second source, and it does not change this rule.**
+A packaged build has no `.env` beside its binary, so the owner can set a key from inside the app; it
+is stored as one overwritten `app_meta` value and read by `aiGateway`, which is still the only
+module that holds key material. The environment continues to win over it, so nothing above is
+reversed — what is added is that the *value* now crosses IPC once, inbound, on save. Nothing ever
+sends it back: `assistant:getStatus` reports which source is in force and never a fragment, which is
+the same line `redactKeys` draws inside the gateway. `aiGatewayIsolation.test.ts` is unchanged in
+what it forbids and gains one assertion — that the storage row's name appears in exactly one file.
+
 ### Consent gates the first send, and revocation bites
 
 Nothing leaves the machine until the owner has seen what would be sent — at its real granularity,

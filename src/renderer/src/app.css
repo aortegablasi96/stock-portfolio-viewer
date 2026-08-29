@@ -1047,7 +1047,13 @@ html {
 /* The fourth (Story #280, DDR-0094). A vocabulary term — a currency code or a
    sector name — with a `<datalist>` behind it, so the app's own terms drop down
    while anything else can still be typed. Unlike `.control-percent` its content
-   has no bound, so it takes whatever the row can spare. */
+   has no bound, so it takes whatever the row can spare.
+
+   It names the **measure**, not the vocabulary (Story #300, DDR-0105): the
+   assistant's API key field is a `type="password"` input wanting this exact box,
+   and a `secret` kind would be an axis value whose rule copied this one
+   declaration for declaration. The `<datalist>` belongs to the profile's call
+   site rather than to the kind. */
 .control-term {
   cursor: text;
   inline-size: 100%;
@@ -4047,6 +4053,25 @@ html {
   font-size: var(--text-xs);
   line-height: var(--leading-normal);
   color: var(--muted);
+}
+
+/* ---- Assistant: the owner's API key (M10, Story #300, DDR-0105) ----------- */
+
+/* Where the key is kept, under the field that takes it. Last in its card, so it
+   gives back `.assistant-note`'s trailing space and takes a rule off the top
+   instead — the same treatment `.assistant-destination` carries above, and for
+   the same reason: this is a fact *about* the control above it rather than one
+   more line of the body copy.
+
+   The card's own form is `.assistant-ask`'s, reused rather than copied: a stacked
+   label over a full-width control with an action row beneath is the same shape
+   the question box has, and a second rule declaring those three properties is
+   exactly the duplication Epic #125 exists to retire. */
+.assistant-key-note {
+  margin-block: var(--space-5) 0;
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--border);
+  max-width: 62ch;
 }
 
 /* ---- Assistant: the question and what came back (M10, Story #284) --------- */

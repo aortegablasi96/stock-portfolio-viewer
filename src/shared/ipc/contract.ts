@@ -29,13 +29,18 @@ import {
 import {
   assistantAskResultSchema,
   assistantStatusSchema,
+  clearApiKeyResultSchema,
+  saveApiKeyResultSchema,
   type AssistantAskResult,
   type AssistantStatus,
+  type ClearApiKeyResult,
+  type SaveApiKeyResult,
 } from '@shared/domain/assistant'
 import {
   pickDisclosedSections,
   type AssistantContext,
 } from '@shared/domain/assistantDisclosure'
+import { MAX_API_KEY_CHARS } from '@shared/domain/assistantKey'
 
 /**
  * The typed contract for every IPC channel: the Zod schema used by the main
@@ -291,6 +296,31 @@ export type AssistantConsentRequest = z.infer<typeof assistantConsentRequestSche
 export { assistantStatusSchema }
 export type { AssistantStatus }
 
+// ---- assistant:setApiKey | clearApiKey (M10, Story #300) --------------------
+
+/**
+ * The owner's own OpenAI key, crossing the bridge (DDR-0105).
+ *
+ * **The one request in this app whose payload is a secret**, and the boundary is shaped around
+ * that. It travels in one direction only: the renderer sends a key and is never sent one back, so
+ * `MAX_API_KEY_CHARS` is the only thing this schema has to say about it — no format, no prefix, no
+ * provider-specific shape, because a key is opaque and `OPENAI_BASE_URL` can point the gateway at
+ * a compatible endpoint whose credentials look like something else. What *is* wrong with a paste
+ * is `apiKeyService.describeKeyProblem`'s business, and comes back as an `invalid` variant rather
+ * than a Zod throw, so the owner is told what to fix.
+ *
+ * The renderer holds the value only for as long as it takes to type it: the field is cleared on
+ * save and nothing repopulates it, which is what makes "never displayed back in full" a property
+ * of the wire rather than of the component.
+ */
+export const assistantApiKeyRequestSchema = z.object({
+  key: z.string().max(MAX_API_KEY_CHARS),
+})
+export type AssistantApiKeyRequest = z.infer<typeof assistantApiKeyRequestSchema>
+
+export { clearApiKeyResultSchema, saveApiKeyResultSchema }
+export type { ClearApiKeyResult, SaveApiKeyResult }
+
 // ---- assistant:ask (M10, Story #284) ----------------------------------------
 
 /**
@@ -402,6 +432,15 @@ export interface RendererApi {
   getAssistantStatus: () => Promise<AssistantStatus>
   /** Grant or withdraw consent for portfolio figures to leave the machine (Story #283). */
   setAssistantConsent: (request: AssistantConsentRequest) => Promise<AssistantStatus>
+  /**
+   * Store the owner's own OpenAI key, so a packaged build can use the assistant (Story #300).
+   *
+   * The one call in this app that carries a secret, and it carries it inbound only. Nothing ever
+   * returns a key or a fragment of one; the status that comes back says which source is in force.
+   */
+  setAssistantApiKey: (request: AssistantApiKeyRequest) => Promise<SaveApiKeyResult>
+  /** Remove the stored key, returning the assistant to `not_configured` where it was the only one. */
+  clearAssistantApiKey: () => Promise<ClearApiKeyResult>
   /**
    * Ask the assistant a question, grounded in context the view assembled (Story #284).
    *

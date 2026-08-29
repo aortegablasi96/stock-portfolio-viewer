@@ -100,12 +100,41 @@ export const assistantAskResultSchema = z.union([
 export type AssistantAskResult = z.infer<typeof assistantAskResultSchema>
 
 /**
+ * Where the key now in force came from (Story #300, DDR-0105).
+ *
+ * Three sources collapse to two names. `environment` covers both an operating-system variable and
+ * a line in `.env`, because by the time anything reads the key those are one thing: `src/main/env.ts`
+ * merges the file into `process.env` at startup with the real environment winning, so nothing
+ * downstream can tell them apart and inventing a third name here would be a distinction the app
+ * cannot actually make (DDR-0100). `stored` is the key the owner typed into the app itself, which
+ * is the source a packaged build has and the other two do not.
+ *
+ * It is reported so the precedence is **said out loud**. An owner who saves a key while an
+ * environment variable is set would otherwise watch their key be silently ignored, which is the
+ * failure a stated order exists to prevent.
+ */
+export const apiKeySourceSchema = z.enum(['environment', 'stored', 'none'])
+export type ApiKeySource = z.infer<typeof apiKeySourceSchema>
+
+/**
+ * `MAX_API_KEY_CHARS` deliberately does **not** live here (Story #300, DDR-0105). The renderer
+ * needs it at runtime to cap the key field, and one runtime import from this module would pull
+ * Zod into that bundle — see `@shared/domain/assistantKey`.
+ */
+
+/**
  * Whether the assistant can run, and which of the two blockers applies (Story #283).
  *
  * The acceptance criterion is that "no API key" and "consent not given" are **distinct states and
  * the owner is told which applies**. `state` is the one in the way; `consented` and `configured`
  * are both reported beside it so a view can also say what will be next once the first is cleared,
  * rather than revealing the second blocker only after the owner clears the first.
+ *
+ * **Nothing here is derived from the key's value** (Story #300). `configured`, `keySource` and
+ * `keyStored` are three booleans-in-effect about a secret, and not one of them is a fragment of
+ * it: the gateway already redacts even the masked fragment OpenAI quotes back in a refusal, so a
+ * "last four characters" hint here would be the one place the key's material crossed IPC after
+ * that trouble was taken (ADR-0010, DDR-0105).
  */
 export const assistantStatusSchema = z.object({
   state: z.enum(['ready', 'needs_consent', 'not_configured']),
@@ -121,5 +150,46 @@ export const assistantStatusSchema = z.object({
   consentStale: z.boolean(),
   /** Whether an API key is present. Never the key, and never a fragment of it. */
   configured: z.boolean(),
+  /** Which source supplies the key now in force; `none` when there is none (Story #300). */
+  keySource: apiKeySourceSchema,
+  /**
+   * Whether a key is saved **in the app**, whether or not it is the one being used.
+   *
+   * Separate from `keySource` on purpose: a saved key that the environment is shadowing still has
+   * to be removable, and the panel has to be able to say that it is there and unused rather than
+   * quietly dropping it from the screen.
+   */
+  keyStored: z.boolean(),
 })
 export type AssistantStatus = z.infer<typeof assistantStatusSchema>
+
+/**
+ * Saving the owner's own key (Story #300, DDR-0105).
+ *
+ * Success is `saved`, not `ok` — the app's convention for a write that is not a read
+ * (`captured`, `imported`, `cleared`). Both variants carry the status that follows, so a view
+ * re-seats on what actually landed rather than assuming: saving a key while the environment
+ * supplies one leaves `keySource` at `environment`, and the panel has to be able to say so.
+ *
+ * `invalid` is the profile save's variant, for the same reason: a key with a space in it is the
+ * owner's paste to fix, not an error the app failed at.
+ */
+export const saveApiKeyResultSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('saved'), assistant: assistantStatusSchema }),
+  z.object({
+    status: z.literal('invalid'),
+    message: z.string(),
+    assistant: assistantStatusSchema,
+  }),
+])
+export type SaveApiKeyResult = z.infer<typeof saveApiKeyResultSchema>
+
+/**
+ * Removing it. One variant, because removing a key that is not there is not a failure — the
+ * shape every `clear` in this app has (ADR-0006's whole-store resets, and the profile's).
+ */
+export const clearApiKeyResultSchema = z.object({
+  status: z.literal('cleared'),
+  assistant: assistantStatusSchema,
+})
+export type ClearApiKeyResult = z.infer<typeof clearApiKeyResultSchema>

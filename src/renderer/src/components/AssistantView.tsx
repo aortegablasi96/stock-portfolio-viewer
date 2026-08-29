@@ -16,6 +16,7 @@ import {
 } from '@shared/domain/assistantDisclosure'
 import type { AssistantStatus } from '@shared/domain/assistant'
 import { AssistantConversation } from './AssistantConversation'
+import { AssistantKeyCard } from './AssistantKeyCard'
 import { Badge } from './ui/Badge'
 import { Button } from './ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card'
@@ -37,9 +38,11 @@ import { StatePanel } from './ui/StatePanel'
  * owner's names no data source (DDR-0094).
  *
  * The order on the page is the order of the decisions. **The gate comes first**, because what may
- * be sent is settled before anything is asked; the box comes second, and is unusable until the
- * gate says otherwise; the disclosure sits at the bottom, where it can be re-read at any time
- * without standing between the owner and the feature they came for.
+ * be sent is settled before anything is asked; the **key** comes second, because it is what a
+ * question is sent *with* and is where the gate's `not_configured` state points (Story #300,
+ * DDR-0105); the box comes third, and is unusable until both say otherwise; the disclosure sits at
+ * the bottom, where it can be re-read at any time without standing between the owner and the
+ * feature they came for.
  *
  * What the gate draws is the disclosure and the decision. Three rules shape it:
  *
@@ -131,6 +134,11 @@ export function AssistantView({ displayCurrency }: { displayCurrency: string }):
             </div>
           </CardContent>
         </Card>
+
+        {/* What a question is sent with. Always drawn, in every gate state: the key is a setup
+            fact rather than a consequence of consent, and an owner who has not decided yet may
+            reasonably want to get the setup out of the way first. */}
+        <AssistantKeyCard status={status} onStatus={setStatus} />
 
         {/* The question, behind the decision above it. It draws its own blocker where the gate is
             closed rather than being hidden: a box that is not there says nothing about why. */}

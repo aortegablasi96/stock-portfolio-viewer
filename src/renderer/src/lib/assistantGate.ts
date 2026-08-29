@@ -56,7 +56,7 @@ export const GATE_BODIES: Record<GateKind, string> = {
   re_consent:
     'You allowed the assistant to send a specific list of things. That list has changed, so your earlier answer no longer covers it. Read what is on it now and decide again. Nothing is being sent in the meantime.',
   not_configured:
-    'You have allowed the assistant to send these figures, but there is no API key for it to send them with. Add OPENAI_API_KEY to the .env file in the project root and restart the app.',
+    'You have allowed the assistant to send these figures, but there is no API key for it to send them with. Add one in the panel below. Setting OPENAI_API_KEY in your environment or your .env file works too, and takes precedence over a key saved here.',
   ready:
     'The assistant may send the figures below to OpenAI when you ask it something. Withdraw this at any time and it stops.',
 }

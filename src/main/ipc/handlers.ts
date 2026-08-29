@@ -2,6 +2,7 @@ import { BrowserWindow, dialog, ipcMain } from 'electron'
 import type { ZodError } from 'zod'
 import { IpcChannels } from '@shared/ipc/channels'
 import {
+  assistantApiKeyRequestSchema,
   assistantAskRequestSchema,
   assistantConsentRequestSchema,
   balanceDriftRequestSchema,
@@ -14,6 +15,7 @@ import {
   type AssistantStatus,
   type BalanceDriftResult,
   type CaptureSnapshotResult,
+  type ClearApiKeyResult,
   type ClearHistoryResult,
   type ClearInvestorProfileResult,
   type ClearStatementsResult,
@@ -21,6 +23,7 @@ import {
   type FlexStatementStore,
   type InvestorProfile,
   type PortfolioOverviewResult,
+  type SaveApiKeyResult,
   type SaveInvestorProfileResult,
   type SidebarState,
   type SnapshotList,
@@ -285,6 +288,29 @@ export function registerIpcHandlers(): void {
     const { granted } = assistantConsentRequestSchema.parse(rawInput)
     return granted ? assistantService.grantConsent() : assistantService.revokeConsent()
   })
+
+  // The owner's own key (M10, Story #300, DDR-0105). Also local — a key is stored, not spent, and
+  // nothing here opens a socket.
+  //
+  // The `safeParse` is the shape `assistant:ask` uses rather than the bare `.parse` beside it:
+  // this payload is a secret, and a Zod throw crosses IPC carrying the value that failed. What is
+  // wrong with a key comes back as the schema's own `invalid` variant, built from a status read
+  // rather than from the input, so nothing that was typed is echoed anywhere.
+  ipcMain.handle(IpcChannels.assistantSetApiKey, (_event, rawInput: unknown): SaveApiKeyResult => {
+    const parsed = assistantApiKeyRequestSchema.safeParse(rawInput)
+    if (!parsed.success) {
+      return {
+        status: 'invalid',
+        message: 'That key could not be read. Paste the key on its own, with nothing around it.',
+        assistant: assistantService.getStatus(),
+      }
+    }
+    return assistantService.setApiKey(parsed.data.key)
+  })
+  ipcMain.handle(
+    IpcChannels.assistantClearApiKey,
+    (): ClearApiKeyResult => assistantService.clearApiKey(),
+  )
 
   // The question (M10, Story #284, DDR-0098). The only handler in the app that reaches the
   // internet, and the one place three separate bounds meet.
