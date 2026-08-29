@@ -8,9 +8,11 @@ import {
   formatPercent,
   formatPercentValue,
   formatPerShare,
+  formatPoints,
   formatQuantity,
   formatSignedCurrency,
   formatSignedPercent,
+  formatSignedPoints,
   formatUpdatedAt,
   holdingName,
   instrumentName,
@@ -103,6 +105,36 @@ describe('formatPercentValue / formatSignedPercent', () => {
     expect(formatSignedPercent(7.12)).toMatch(/^\+7\.12\s?%/)
     expect(formatSignedPercent(-3.5)).toMatch(/^-3\.50\s?%/)
     expect(formatSignedPercent(0)).not.toMatch(/^[+-]/)
+  })
+})
+
+/**
+ * A difference between two percentages is in **percentage points**, and the words say so (Story
+ * #287). "Ten percent above a 50% target" is two different quantities and one of them is wrong: 60%
+ * is ten points above 50% and twenty percent above it. The distinction is invisible in a chart and
+ * decisive in a sentence a model is asked to quote verbatim.
+ */
+describe('formatPoints / formatSignedPoints', () => {
+  it('names the unit rather than leaving a % sign to be interpreted', () => {
+    expect(formatPoints(10)).toBe('10.00 percentage points')
+    expect(formatPoints(1.5)).toBe('1.50 percentage points')
+  })
+
+  it('adds an explicit sign only where the figure has a direction', () => {
+    expect(formatSignedPoints(3.21)).toBe('+3.21 percentage points')
+    expect(formatSignedPoints(-3.21)).toBe('-3.21 percentage points')
+    expect(formatSignedPoints(0)).toBe('0.00 percentage points')
+  })
+
+  /**
+   * These are differences of chain-linked returns, so an exact tie arrives as `-1.4e-14`. Signed,
+   * it would read as "-0.00 percentage points" — a direction the figure does not have, in text
+   * quoted verbatim.
+   */
+  it('carries no sign on a value that rounds to zero at the precision shown', () => {
+    expect(formatSignedPoints(-1.4e-14)).toBe('0.00 percentage points')
+    expect(formatSignedPoints(0.004)).toBe('0.00 percentage points')
+    expect(formatSignedPoints(-0.006)).toBe('-0.01 percentage points')
   })
 })
 

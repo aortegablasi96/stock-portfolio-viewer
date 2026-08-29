@@ -34,6 +34,62 @@ import { TARGET_DIMENSIONS } from './investorProfileTerms'
 export const DRIFT_STATUSES = ['inside', 'below', 'above'] as const
 export type DriftStatus = (typeof DRIFT_STATUSES)[number]
 
+/** Which way a band has to move to get back inside its range. */
+export const MOVE_DIRECTIONS = ['trim', 'add'] as const
+export type MoveDirection = (typeof MOVE_DIRECTIONS)[number]
+
+/**
+ * One held position, and the share of a move it would carry.
+ *
+ * **Percentage points, never money** (Story #287). The `profile` category is disclosed as
+ * percentages only, and a euro figure inside a proposal would change `disclosureFingerprint` and
+ * put the owner back through the consent panel (DDR-0097). It would also be the wrong unit: the
+ * profile is written in percentages, so a move that closes it is written in the difference between
+ * two of them.
+ */
+export const moveContributorSchema = z.object({
+  symbol: z.string(),
+  /** The instrument's name where the live reading carries one. */
+  name: z.string().nullable(),
+  /** The position's share of the placed portfolio now, in percent. */
+  weight: z.number(),
+  /** Percentage points this position gives up (`trim`) or takes on (`add`). */
+  points: z.number(),
+  /** Where the position sits once it has, in percent. */
+  resultingWeight: z.number(),
+})
+export type MoveContributor = z.infer<typeof moveContributorSchema>
+
+/**
+ * The arithmetic that closes one band's gap (Story #287).
+ *
+ * **It is computed here so that a proposal narrates arithmetic rather than generating it.** #281
+ * already gave the model the gap; what it did not give was the *move*, and a model asked to close a
+ * gap will size one — spreading points across positions is exactly the kind of calculation that
+ * reads as prose. Computing it first also retires the check #289 wanted on the model's answer:
+ * verifying a proposed end state means parsing free text, which fights the free-text surface, and
+ * there is nothing to verify once the end state is the app's own.
+ *
+ * `uncovered` is the honest half. A band the owner targets and holds nothing in has no position to
+ * carry the points at all, and a ceiling can stop the ones that do — in both cases the remainder is
+ * *stated*, never spread over the positions that had no room for it (DDR-0052's rule, applied to a
+ * proposal instead of a weight).
+ */
+export const driftMoveSchema = z.object({
+  direction: z.enum(MOVE_DIRECTIONS),
+  /** Percentage points that must shift for the band to reach the nearer edge of its range. */
+  points: z.number(),
+  /** The held positions that carry it, largest share first. */
+  contributors: z.array(moveContributorSchema),
+  /** Points the listed positions cannot carry — no holding, no room, or beyond the listed few. */
+  uncovered: z.number(),
+  /** Whether the owner's own concentration ceiling is what stopped them carrying it. */
+  ceilingLimited: z.boolean(),
+  /** How many held positions sit in this band, so a capped list can say how many of how many. */
+  candidates: z.number().int().nonnegative(),
+})
+export type DriftMove = z.infer<typeof driftMoveSchema>
+
 /**
  * One target, and the verdict on it.
  *
@@ -41,6 +97,10 @@ export type DriftStatus = (typeof DRIFT_STATUSES)[number]
  * positive above it, exactly `0` inside. That signed number is what makes a suggestion sizeable
  * later ("trim 4 points of USD"), and what makes "balanced" something the app can state rather
  * than a mood.
+ *
+ * `move` is that suggestion, sized (Story #287). It is non-`null` exactly when `status` is not
+ * `inside`, which is what makes "every out-of-range band carries its move" a property of the shape
+ * rather than of a caller remembering to compute one.
  */
 export const driftBandSchema = z.object({
   /** The stored target key: a currency code, a sector name, an asset-class code. */
@@ -53,6 +113,8 @@ export const driftBandSchema = z.object({
   high: z.number(),
   status: z.enum(DRIFT_STATUSES),
   distance: z.number(),
+  /** How to close it, or `null` because there is nothing to close. */
+  move: driftMoveSchema.nullable(),
 })
 export type DriftBand = z.infer<typeof driftBandSchema>
 

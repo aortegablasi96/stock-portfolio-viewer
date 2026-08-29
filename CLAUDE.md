@@ -22,12 +22,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 M0–M9 are delivered: live IBKR holdings/balances/allocation in a display currency, immutable
 snapshots, Flex statement import, and four analytics views over it, behind a vertical sidebar.
 M10 is in progress — the investor profile, the assistant's **surface** (grounded Q&A), a period
-explained and a performance summary have landed. What remains was **reshaped after #286**: the box
-is free-text and always was, so the rest is not question shapes but **grounding** (#287: every
-standard period precomputed, so a question names its own; the drift-closing move computed, so a
-proposal narrates arithmetic instead of generating it) and **phrasing** (#288, prompt rules only).
-#289 is closed as superseded — read its closing comment before re-proposing an end-state check on
-model output. Not built: multi-broker, benchmarks, tax.
+explained, a performance summary and the **widened grounding** (#287) have landed. What remains was
+**reshaped after #286**: the box is free-text and always was, so the rest was never question shapes
+but grounding and **phrasing** — and only #288 (prompt rules only) is left. #289 is closed as
+superseded by #287's computed moves — read its closing comment before re-proposing an end-state
+check on model output. Not built: multi-broker, benchmarks, tax.
 
 **Which Epics are open is deliberately not recorded here** — read the backlog (*Current Priority*).
 The **lifecycle** is the rule: an Epic closes with its stories, and refinement opens a *new*
@@ -78,6 +77,18 @@ Each exists end-to-end and is the reference pattern for its shape.
   case, not a default), `GroundingInputs` is collapsed back into `GroundingReports`, and the
   `empty_period` **notice** is gone while the **state** stays — `periodChange`'s empty window is that
   function's contract, and #287 windows this report again (DDR-0102, superseding half of DDR-0099).
+  The grounding is now **every standard period, precomputed** (`lib/periodSet.ts`): a question about
+  a window the set does not hold is a **named state with alternatives**, not the adjacent row. A
+  trailing year is **"Last 12 months"**, a second vocabulary on purpose — `PERIOD_LABELS`' "Last
+  year" beside a row named `2025` is the ambiguity. Only **consecutive same-kind** differences are
+  computed (year vs previous year, quarter vs previous quarter); every other combination is
+  forbidden in the text. A drift-closing **move** is `services/profile/driftMoves.ts` and hangs off
+  `DriftBand.move`, non-`null` **exactly** when the band is outside its range: **proportional, not
+  greedy**, capacity-capped by the owner's concentration ceiling, the shortfall **`uncovered` and
+  never redistributed, and percentage points never money** — a euro figure there re-asks consent.
+  Cash sits in a band and **never in a move**. An **untargeted dimension is said out loud**; absent
+  from the report reads as balanced. `MAX_PROMPT_CHARS` moved **24,000 → 40,000** and
+  `services/assistant/promptBudget.test.ts` measures the worst case the caps allow (DDR-0103).
 - **classification** — sector/industry. `classificationRepository` fronts *both* the mutable
   SQLite cache and `ibkrGateway`; `analytics:classifyInstruments` is the only analytics channel
   reaching IBKR. Refreshes are **resumable, not transactional** — a run that dies at 30 of 40 keeps
@@ -227,7 +238,8 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
   `not_responding` absorbs stall, unreachable host **and 5xx**, because DDR-0022 divides by
   *recovery*; a `200` with no answer is `invalid`, never an empty `ok`. `MAX_PROMPT_CHARS` is a
   **constant, not an env var**, and counts characters — a tokenizer is a dependency for a ceiling
-  that only has to stop runaway growth. A refusal is **redacted** before it leaves the file: a wrong
+  that only has to stop runaway growth. It is **40,000**, raised from 24,000 once when #287's
+  grounding outgrew it; the ceiling rations a *bug*, never the grounding (DDR-0103 amends DDR-0096). A refusal is **redacted** before it leaves the file: a wrong
   key comes back quoting a masked fragment of itself.
 - **The key is read in one place and never bundled.** `OPENAI_API_KEY` is unprefixed on purpose;
   `aiGatewayIsolation.test.ts` fails if `src/renderer` or `src/preload` so much as names an

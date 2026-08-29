@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  MAX_LISTED_MOVES,
   MAX_LISTED_POSITIONS,
   buildAssistantContext,
   hasProfile,
@@ -16,7 +17,7 @@ import type { PerformanceReport } from '@shared/domain/performance'
 import { DISCLOSURE_CATEGORY_IDS } from '@shared/domain/assistantDisclosure'
 import { EMPTY_INVESTOR_PROFILE, type InvestorProfile } from '@shared/domain/investorProfileTerms'
 import type { AllocationPosition, AllocationReport } from '@shared/domain/allocation'
-import type { BalanceDriftReport } from '@shared/domain/balanceDrift'
+import type { BalanceDriftReport, DriftBand, DriftMove } from '@shared/domain/balanceDrift'
 
 /**
  * The grounding (Story #284, DDR-0098).
@@ -77,7 +78,34 @@ function drift(over: Partial<BalanceDriftReport> = {}): BalanceDriftReport {
       {
         dimension: 'currency',
         bands: [
-          { key: 'USD', label: 'USD', actual: 60, low: 30, high: 50, status: 'above', distance: 10 },
+          {
+            key: 'USD',
+            label: 'USD',
+            actual: 60,
+            low: 30,
+            high: 50,
+            status: 'above',
+            distance: 10,
+            // Sized by `driftMoves` in the service; here it is the shape the section renders
+            // (Story #287). Ten points out of two positions, and the band lands on its edge.
+            move: {
+              direction: 'trim',
+              points: 10,
+              contributors: [
+                {
+                  symbol: 'AAPL',
+                  name: 'Apple Inc',
+                  weight: 40,
+                  points: 8,
+                  resultingWeight: 32,
+                },
+                { symbol: 'MSFT', name: null, weight: 10, points: 2, resultingWeight: 8 },
+              ],
+              uncovered: 0,
+              ceilingLimited: false,
+              candidates: 4,
+            },
+          },
         ],
         residuals: [{ kind: 'cash', label: 'Cash', weight: 5 }],
         untargeted: 35,
@@ -88,6 +116,32 @@ function drift(over: Partial<BalanceDriftReport> = {}): BalanceDriftReport {
     balanced: false,
     ...over,
   }
+}
+
+/** One currency band and its move, for the cases that are about the move alone. */
+function bandOf(band: Partial<DriftBand>, move: DriftMove | null): BalanceDriftReport {
+  return drift({
+    dimensions: [
+      {
+        dimension: 'currency',
+        bands: [
+          {
+            key: 'USD',
+            label: 'USD',
+            actual: 60,
+            low: 30,
+            high: 50,
+            status: 'above',
+            distance: 10,
+            ...band,
+            move,
+          },
+        ],
+        residuals: [],
+        untargeted: 0,
+      },
+    ],
+  })
 }
 
 const PROFILE: InvestorProfile = {
@@ -333,6 +387,19 @@ describe('weightsSection', () => {
     expect(text).not.toContain('By issuer country:')
     expect(text).toContain('By currency:')
   })
+
+  /**
+   * A currency weight has two readings and this app computes one (Story #287). Beside the
+   * breakdown rather than once at the top of the section: a breakdown gets quoted on its own, and a
+   * qualification three headings away is one that will not travel with it.
+   */
+  it('says which kind of currency exposure the weights are, beside the weights', () => {
+    const text = weightsSection(report())
+    const noteAt = text.indexOf('currency each position is held and priced in')
+    const currencyAt = text.indexOf('By currency:')
+    expect(noteAt).toBeGreaterThan(currencyAt)
+    expect(text).toContain('not the currency the underlying business earns its revenue in')
+  })
 })
 
 describe('profileSection', () => {
@@ -369,6 +436,39 @@ describe('profileSection', () => {
     const text = profileSection({ ...PROFILE, styleTags: [] }, { status: 'no_profile' }) ?? ''
     expect(text.startsWith('\n')).toBe(false)
     expect(text.startsWith('Targets the owner set:')).toBe(true)
+  })
+
+  /**
+   * A dimension with no target is absent from the drift report on purpose — a profile stating
+   * nothing about sectors is not a profile stating that sectors do not matter. That absence is
+   * right in the report and wrong in front of a model, which reads a missing heading as a question
+   * that came back clean (Story #287).
+   */
+  describe('an untargeted dimension is named as untargeted, never as balanced', () => {
+    it('names the dimensions the owner set no target in', () => {
+      const text = profileSection(PROFILE, { status: 'no_data' }) ?? ''
+      expect(text).toContain('the owner has set no target for sector and asset class')
+      expect(text).toContain('neither balanced nor unbalanced')
+      expect(text).toContain('never as balanced')
+    })
+
+    it('says so about a missing concentration ceiling too', () => {
+      const text = profileSection({ ...PROFILE, positionSize: null }, { status: 'no_data' }) ?? ''
+      expect(text).toContain('no single-position concentration ceiling')
+    })
+
+    it('says nothing about untargeted dimensions once all three carry a target', () => {
+      const text =
+        profileSection(
+          {
+            ...PROFILE,
+            sectorTargets: [{ key: 'Technology', low: 10, high: 30 }],
+            assetClassTargets: [{ key: 'STK', low: 50, high: 90 }],
+          },
+          { status: 'no_data' },
+        ) ?? ''
+      expect(text).not.toContain('Untargeted: the owner has set no target for')
+    })
   })
 })
 
@@ -446,6 +546,151 @@ describe('measuredDrift', () => {
     )
     expect(text).toContain('Largest single position: AAPL (Apple Inc) at 24.50%')
     expect(text).toContain('This is a lower bound')
+  })
+
+  /**
+   * The arithmetic that closes a drift (Story #287, DDR-0103).
+   *
+   * **Sized by the app so that a proposal narrates arithmetic rather than generating one.** #281
+   * gave the model the gap; a model asked to close a gap will size the move itself, and spreading
+   * percentage points across positions is exactly the calculation that reads as prose. Computing it
+   * first is also what retires #289's post-hoc check on the model's answer: there is nothing
+   * produced by the model to verify.
+   */
+  describe('the move that closes a band', () => {
+    it('states the size of the move, its direction and the edge it reaches', () => {
+      const text = measuredDrift(drift())
+      expect(text).toContain('Move: trim 10.00 percentage points out of USD to reach 50.00%')
+      expect(text).toContain('the nearer edge of its range')
+    })
+
+    it('names the positions that carry it, and how many of how many they are', () => {
+      const text = measuredDrift(drift())
+      expect(text).toContain('Positions carrying it (the 2 largest of 4 held in USD)')
+      expect(text).toContain(
+        '· AAPL (Apple Inc): 40.00% of the portfolio now, giving up 8.00 percentage points, leaving it at 32.00%',
+      )
+      // A position the live reading has no name for is still nameable by its ticker (DDR-0088).
+      expect(text).toContain('· MSFT: 10.00% of the portfolio now')
+    })
+
+    it('states the end state, which is why nothing has to check the answer afterwards', () => {
+      expect(measuredDrift(drift())).toContain('After this move USD sits at 50.00%, inside its range')
+    })
+
+    it('says the moves are the app’s own and assume the portfolio keeps its total', () => {
+      const text = measuredDrift(drift())
+      expect(text).toContain('never size a move of your own')
+      expect(text).toContain('assumes the portfolio keeps its current total')
+      expect(text).toContain('No amount of money is available for any of them')
+    })
+
+    it('offers no move for a band already inside its range', () => {
+      const text = measuredDrift(
+        drift({
+          balanced: true,
+          dimensions: [
+            {
+              dimension: 'currency',
+              bands: [
+                {
+                  key: 'USD',
+                  label: 'USD',
+                  actual: 40,
+                  low: 30,
+                  high: 50,
+                  status: 'inside',
+                  distance: 0,
+                  move: null,
+                },
+              ],
+              residuals: [],
+              untargeted: 60,
+            },
+          ],
+        }),
+      )
+      expect(text).not.toContain('Move:')
+      expect(text).not.toContain('HOW TO CLOSE THE GAPS')
+    })
+
+    /**
+     * "I want 10% in utilities and hold none" is not a smaller move; it is a different action, and
+     * one only the owner can take. The section says so rather than naming a position from the list
+     * above, which is exactly what a model with a gap in front of it will do.
+     */
+    it('says a band the owner holds nothing in cannot be closed by anything held', () => {
+      const text = measuredDrift(bandOf({ actual: 0, status: 'below', distance: -10 }, {
+        direction: 'add',
+        points: 10,
+        contributors: [],
+        uncovered: 10,
+        ceilingLimited: false,
+        candidates: 0,
+      }))
+      expect(text).toContain('No position currently held sits in USD')
+      expect(text).toContain('buying an instrument the owner does not hold')
+      expect(text).toContain('do not name one from the positions above')
+    })
+
+    /**
+     * The one interaction between two targets this app models: closing a sector gap must not push
+     * a position through the owner's own concentration ceiling. The remainder is surfaced, never
+     * spread over the positions that had no room for it (DDR-0052).
+     */
+    it('names the ceiling as what stopped a move, and leaves the rest uncovered', () => {
+      const text = measuredDrift(bandOf({ actual: 20, status: 'below', distance: -15 }, {
+        direction: 'add',
+        points: 15,
+        contributors: [{ symbol: 'AAPL', name: null, weight: 12, points: 3, resultingWeight: 15 }],
+        uncovered: 12,
+        ceilingLimited: true,
+        candidates: 1,
+      }))
+      expect(text).toContain('12.00 percentage points of this move is still not carried')
+      expect(text).toContain('single-position ceiling is what stops it')
+      expect(text).toContain('do not place it on a position yourself')
+      expect(text).toContain('still outside its range')
+    })
+
+    /** The cap states itself, so a target whose move is not sized still carries its verdict. */
+    it('sizes the largest gaps and says how many bands went without one', () => {
+      const bands = Array.from({ length: MAX_LISTED_MOVES + 3 }, (_, index) => ({
+        key: `C${index}`,
+        label: `C${index}`,
+        actual: 10 + index,
+        low: 0,
+        high: 5,
+        status: 'above' as const,
+        distance: 5 + index,
+        move: {
+          direction: 'trim' as const,
+          points: 5 + index,
+          contributors: [
+            { symbol: `S${index}`, name: null, weight: 20, points: 5 + index, resultingWeight: 15 },
+          ],
+          uncovered: 0,
+          ceilingLimited: false,
+          candidates: 1,
+        },
+      }))
+      const text = measuredDrift(
+        drift({ dimensions: [{ dimension: 'currency', bands, residuals: [], untargeted: 0 }] }),
+      )
+
+      expect(text).toContain(`${bands.length} band(s) are outside their range; the ${MAX_LISTED_MOVES} with the largest gaps`)
+      // Every band still has its verdict; only the smallest gaps go without a sized move.
+      expect(text).toContain('- C0: 10.00% against')
+      expect(text).toContain('- C8: 18.00% against')
+      expect(text.match(/ {2}Move: /g)).toHaveLength(MAX_LISTED_MOVES)
+      expect(text).toContain('trim 13.00 percentage points out of C8')
+      expect(text).not.toContain('out of C0 ')
+    })
+  })
+
+  /** The same qualification the weights section carries, beside the same kind of breakdown. */
+  it('says which kind of currency exposure the drift measured', () => {
+    expect(measuredDrift(drift())).toContain('currency each position is held and priced in')
   })
 
   it('says nothing about a lower bound when everything could be valued', () => {
@@ -730,6 +975,136 @@ describe('performanceSection: the three overclaims', () => {
     expect(text).not.toMatch(/\bbecause\b/i)
     expect(text).not.toMatch(/\bdue to\b/i)
     expect(text).not.toMatch(/\bdriven by\b/i)
+  })
+})
+
+/**
+ * Every standard period, in front of the model before a question is asked (Story #287, DDR-0103).
+ *
+ * **The set is what the removed picker was replaced with, and it is not the same shape.** A control
+ * resolved one window; with the control gone (DDR-0102) there is no selection to resolve, so the
+ * context carries every standard window and the question names its own. What these assert is the
+ * property that only a *precomputed* set can have: a question about a window the app does not hold
+ * is answerable — as a named state, with the alternatives listed — where a per-question resolution
+ * would have nothing to say about its own miss.
+ */
+describe('the standard period set', () => {
+  it('rides in the performance category, beside the explained history', () => {
+    const context = buildAssistantContext(inputs())
+    expect(context.performance).toContain('STANDARD PERIODS')
+    expect(context.performance).toContain('RETURN over this period')
+  })
+
+  it('states that these are the only periods, and what to do about any other', () => {
+    const text = buildAssistantContext(inputs()).performance ?? ''
+    expect(text).toContain('These are the only periods available.')
+    expect(text).toContain('say it is not available and name the periods that are')
+    expect(text).toContain('Never answer about a neighbouring period as though it were the one asked for')
+    expect(text).toContain('never combine two of these rows into a third')
+  })
+
+  it('anchors the set to the imported history rather than to the clock', () => {
+    const text = buildAssistantContext(inputs()).performance ?? ''
+    expect(text).toContain('anchored to the last day the imported history holds (2026-06-03)')
+    expect(text).toContain('The whole history runs 2026-05-29 to 2026-06-03')
+  })
+
+  /** Two returns rebased to different starts are not points on one scale (DDR-0072). */
+  it('states the rebasing, and forbids deriving a difference it did not compute', () => {
+    const text = buildAssistantContext(inputs()).performance ?? ''
+    expect(text).toContain("Each return is rebased to its own period's start")
+    expect(text).toContain('Never add, subtract, chain or average two of these returns')
+    expect(text).toContain('it is written on the row itself')
+  })
+
+  it('names each period in the words an owner would use, with its own window', () => {
+    const text = buildAssistantContext(inputs()).performance ?? ''
+    expect(text).toContain('- Full history (the whole imported history, 2026-05-29 to 2026-06-03, 6 calendar day(s))')
+    expect(text).toContain('- Last 12 months (trailing window,')
+    expect(text).toContain('- 2026 (calendar year,')
+    expect(text).toContain('- Q2 2026 (calendar quarter,')
+  })
+
+  /** Return and value stay two figures on every row, not only in the explained history. */
+  it('keeps each row’s return and value apart, both through the app’s own formatters', () => {
+    const text = buildAssistantContext(inputs()).performance ?? ''
+    expect(text).toContain('return +2.00%; value €100,000.00 → €124,500.00, change +€24,500.00 (+24.50%)')
+    expect(text).toContain('4 day(s) of data')
+  })
+
+  it('states how many years and quarters it holds, of how many there are', () => {
+    const text = buildAssistantContext(inputs()).performance ?? ''
+    expect(text).toContain('Calendar years: the 1 most recent of 1 the history covers')
+    expect(text).toContain('Calendar quarters: the 1 most recent of 1')
+  })
+
+  /**
+   * A window with no day of history in it is a state, not a flat period — the same refusal the
+   * explained history makes, applied to a row (DDR-0099). `valueAt` carries forward and would
+   * otherwise report a calm 0% over a gap.
+   */
+  it('reports an empty row as empty rather than as unchanged', () => {
+    const text =
+      buildAssistantContext(
+        inputs({
+          performance: {
+            status: 'ok',
+            report: performance({
+              valueSeries: [
+                { date: Date.UTC(2025, 0, 15), value: 100_000 },
+                { date: Date.UTC(2025, 9, 15), value: 120_000 },
+              ],
+              returnSeries: [
+                { date: Date.UTC(2025, 0, 15), value: 0 },
+                { date: Date.UTC(2025, 9, 15), value: 8 },
+              ],
+            }),
+          },
+        }),
+      ).performance ?? ''
+
+    expect(text).toContain('- Q2 2025 (calendar quarter, 2025-04-01 to 2025-06-30, 91 calendar day(s)): no day of the imported history falls inside this period')
+    expect(text).toContain('It is an empty period, not a flat one')
+    expect(text).toContain('say it holds no data, never that it was unchanged')
+  })
+
+  /** The comparison an owner actually makes, computed rather than left to be derived. */
+  it('carries each year against the previous year in percentage points', () => {
+    const text =
+      buildAssistantContext(
+        inputs({
+          performance: {
+            status: 'ok',
+            report: performance({
+              valueSeries: [
+                { date: Date.UTC(2024, 0, 1), value: 100_000 },
+                { date: Date.UTC(2024, 11, 1), value: 110_000 },
+                { date: Date.UTC(2025, 0, 2), value: 111_000 },
+                { date: Date.UTC(2025, 11, 1), value: 130_000 },
+              ],
+              returnSeries: [
+                { date: Date.UTC(2024, 0, 1), value: 0 },
+                { date: Date.UTC(2024, 11, 1), value: 10 },
+                { date: Date.UTC(2025, 0, 2), value: 11 },
+                // Deliberately not the value that makes the two years chain-link to the same
+                // return: a difference asserted on a tie asserts nothing about the sign.
+                { date: Date.UTC(2025, 11, 1), value: 25 },
+              ],
+            }),
+          },
+        }),
+      ).performance ?? ''
+
+    expect(text).toMatch(/- 2025 \(calendar year,[^\n]*return against 2024: [-+]\d/)
+    expect(text).toContain('percentage points')
+    // The oldest year in the set has nothing before it, and none is invented.
+    expect(text).not.toMatch(/- 2024 \(calendar year,[^\n]*return against/)
+  })
+
+  it('is absent along with the rest of the category when nothing has been imported', () => {
+    expect(
+      buildAssistantContext(inputs({ performance: { status: 'needs_import' } })),
+    ).not.toHaveProperty('performance')
   })
 })
 

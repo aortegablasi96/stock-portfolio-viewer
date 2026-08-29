@@ -1,11 +1,14 @@
 import {
   formatCurrency,
   formatPercentValue,
+  formatPoints,
   formatSignedCurrency,
   formatSignedPercent,
+  formatSignedPoints,
   instrumentName,
 } from './format'
 import { periodChange, type PeriodChange } from './periodChange'
+import { standardPeriods, type PeriodSet, type StandardPeriod } from './periodSet'
 import type { AssistantContext } from '@shared/domain/assistantDisclosure'
 import type { AllocationReport, AllocationResult } from '@shared/domain/allocation'
 import type { PerformanceResult } from '@shared/domain/performance'
@@ -13,6 +16,8 @@ import type {
   BalanceDriftReport,
   BalanceDriftResult,
   DimensionDrift,
+  DriftBand,
+  DriftMove,
 } from '@shared/domain/balanceDrift'
 import {
   STYLE_TAG_LABELS,
@@ -102,6 +107,29 @@ export interface GroundingReports {
 export const MAX_LISTED_POSITIONS = 40
 
 /**
+ * How many drift-closing moves the profile section sizes.
+ *
+ * The same ceiling for the same reason, applied to the section that grows with the *profile* rather
+ * than with the portfolio: an owner may state thirty targets, and every one of them may be out of
+ * range. The moves are taken **largest gap first** — what is cut is what matters least — and the
+ * bands themselves are all still listed, so a target whose move is not sized still has its verdict.
+ * The section says how many of how many it sized.
+ */
+export const MAX_LISTED_MOVES = 6
+
+/**
+ * What a currency weight in this app is a weight *of*, said wherever one appears.
+ *
+ * A currency exposure has two readings and the app only computes one: this is the currency each
+ * position is held and priced in, which is not where the underlying business earns its revenue. An
+ * owner holding a US-listed miner in dollars has dollar *pricing* and commodity revenue, and a
+ * sentence about "currency exposure" that does not say which it means is wrong for whichever
+ * reading the reader had (Story #287).
+ */
+export const CURRENCY_EXPOSURE_NOTE =
+  'Currency here is the currency each position is held and priced in — not the currency the underlying business earns its revenue in, which this app does not know.'
+
+/**
  * Assemble the context, keyed by the categories the owner read (DDR-0097).
  *
  * The keys are the disclosure's own ids and nothing else can be added here — `AssistantContext`
@@ -119,7 +147,16 @@ export function buildAssistantContext(reports: GroundingReports): AssistantConte
   if (profile !== null) context.profile = profile
 
   const change = wholeHistory(reports)
-  if (change !== null) context.performance = performanceSection(change)
+  if (change !== null) {
+    // One category, two sections. The whole history explained, then every standard window as a row
+    // the question may name (Story #287) — both are returns and values out of the imported Flex
+    // store, which is what the `performance` category already discloses, so the set widens what is
+    // grounded without widening what is *sent* and `disclosureFingerprint` does not move.
+    const set = reports.performance.status === 'ok' ? standardPeriods(reports.performance.report) : null
+    context.performance = [performanceSection(change), set && periodsSection(set)]
+      .filter((block): block is string => typeof block === 'string')
+      .join('\n\n')
+  }
 
   return context
 }
@@ -142,6 +179,75 @@ export function buildAssistantContext(reports: GroundingReports): AssistantConte
 export function wholeHistory(reports: GroundingReports): PeriodChange | null {
   if (reports.performance.status !== 'ok') return null
   return periodChange(reports.performance.report, { range: 'all', custom: null })
+}
+
+/**
+ * Every standard period, as rows a question can name (Story #287, DDR-0103).
+ *
+ * **The set is the answer to a question about a period it does not hold.** A free-text box takes
+ * any window — *how did I do between March and July?* — and the app holds figures for a fixed set
+ * of them. The failure mode is not that the model refuses; it is that it reaches for the nearest
+ * row and answers about that instead, which is a right-looking figure under the wrong heading. So
+ * the section opens by saying these are the only periods available and that the unavailable ones
+ * are to be *named as unavailable*, with the alternatives listed underneath. DDR-0022's discipline
+ * — an unavailable thing is a state, not a silence — in prose.
+ *
+ * **Each row keeps return and value apart** (DDR-0013, DDR-0099), for the reason the whole-history
+ * section does: a deposit moves one and not the other, and the conflation is the flattering error.
+ *
+ * **Rebasing is stated once, for all of them.** Every return here is chain-linked onto its own
+ * period's start, so each opens at zero and no two are points on one scale (DDR-0072). That makes
+ * subtracting two of them meaningless as often as not — which is why the differences that *are*
+ * meaningful are computed into the rows themselves and the model is told not to produce any other.
+ *
+ * **An empty period is a state.** A window with no day of imported history in it gets the state
+ * instead of figures, never a calm 0% (DDR-0099).
+ */
+export function periodsSection(set: PeriodSet): string {
+  const rows = set.periods.map((period) => periodRow(period, set.baseCurrency))
+
+  return [
+    [
+      'STANDARD PERIODS — every period this app has computed. These are the only periods available.',
+      'If the question names a window that is not one of these, say it is not available and name the periods that are, listed below. Never answer about a neighbouring period as though it were the one asked for, and never combine two of these rows into a third.',
+      `Every window below is anchored to the last day the imported history holds (${isoDay(set.extent.to)}), never to today's date. The whole history runs ${isoDay(set.extent.from)} to ${isoDay(set.extent.to)}.`,
+      `Each return is rebased to its own period's start, so every period opens at 0% and two of them are not points on one scale. Never add, subtract, chain or average two of these returns. Where a difference between two periods was computed, it is written on the row itself.`,
+      'For every row, the return and the change in value are different figures about the same period: money paid in or taken out moves the value and does not move the return.',
+      `Calendar years: the ${set.yearsListed} most recent of ${set.yearsTotal} the history covers. Calendar quarters: the ${set.quartersListed} most recent of ${set.quartersTotal}. Older ones are not in front of you.`,
+    ].join('\n'),
+    rows.join('\n'),
+  ].join('\n\n')
+}
+
+/** One period's row: what it is, how long it is, what it returned, and what it was worth. */
+function periodRow(period: StandardPeriod, baseCurrency: string): string {
+  const head = `- ${period.label} (${period.descriptor}, ${isoDay(period.bounds.from)} to ${isoDay(
+    period.bounds.to,
+  )}, ${period.calendarDays} calendar day(s))`
+
+  // A window `valueAt` would happily carry a value into both ends of, reporting a flat period that
+  // never happened. The state, instead of the figures (DDR-0099).
+  if (period.days === 0) {
+    return `${head}: no day of the imported history falls inside this period. It is an empty period, not a flat one — say it holds no data, never that it was unchanged.`
+  }
+
+  const c = (value: number): string => formatCurrency(value, baseCurrency)
+  const parts = [
+    `${period.days} day(s) of data`,
+    `return ${formatSignedPercent(period.twr)}`,
+    `value ${c(period.startValue)} → ${c(period.endValue)}, change ${formatSignedCurrency(
+      period.changeAbs,
+      baseCurrency,
+    )}${period.changePct === null ? '' : ` (${formatSignedPercent(period.changePct)})`}`,
+  ]
+
+  if (period.previous !== null) {
+    parts.push(
+      `return against ${period.previous.label}: ${formatSignedPoints(period.previous.points)}`,
+    )
+  }
+
+  return `${head}: ${parts.join('; ')}`
 }
 
 /**
@@ -205,6 +311,9 @@ export function weightsSection(report: AllocationReport): string {
   ] as const) {
     if (slices.length === 0) continue
     blocks.push('', heading)
+    // Beside the breakdown rather than once at the top, because a breakdown is quoted on its own
+    // and a qualification three headings away is a qualification that will not travel with it.
+    if (heading === 'By currency:') blocks.push(CURRENCY_EXPOSURE_NOTE)
     for (const slice of slices) {
       blocks.push(`- ${slice.label}: ${formatPercentValue(slice.percentOfNav)}`)
     }
@@ -238,6 +347,14 @@ export function profileSection(
 
   const targets = targetLines(profile)
   if (targets.length > 0) blocks.push('', 'Targets the owner set:', ...targets)
+
+  // Only where the owner has stated *something*. "Untargeted" is a fact about a policy, and an
+  // owner who has written no policy has not left three dimensions untargeted — they have no
+  // profile, which the view says beside the box in its own words. Emitting these would also make
+  // the section non-empty for an owner with nothing in it, which is the absence this file's whole
+  // "absent is absent" rule turns on.
+  const untargeted = isProfileEmpty(profile) ? [] : untargetedLines(profile)
+  if (untargeted.length > 0) blocks.push('', ...untargeted)
 
   const measured = driftBlock(drift)
   if (measured !== null) blocks.push('', measured)
@@ -274,6 +391,48 @@ function targetLines(profile: InvestorProfile): string[] {
 }
 
 /**
+ * The dimensions the owner set no target in, named as **untargeted** (Story #287).
+ *
+ * A dimension with no target is absent from the drift report entirely — `balanceDriftService`
+ * returns `null` for it, deliberately, because a profile stating nothing about sectors is not a
+ * profile stating that sectors do not matter. That absence is right in the report and wrong in
+ * front of a model: a heading that is not there reads as a question that came back clean, and
+ * "your sectors are balanced" is the sentence that follows. So the absence is said out loud, with
+ * the reason it is not a verdict.
+ */
+function untargetedLines(profile: InvestorProfile): string[] {
+  const byDimension: Record<TargetDimension, readonly CategoryTarget[]> = {
+    currency: profile.currencyTargets,
+    sector: profile.sectorTargets,
+    assetClass: profile.assetClassTargets,
+  }
+  const missing = (['currency', 'sector', 'assetClass'] as const).filter(
+    (dimension) => byDimension[dimension].length === 0,
+  )
+
+  const lines: string[] = []
+  if (missing.length > 0) {
+    const named = missing.map((dimension) => TARGET_DIMENSION_LABELS[dimension].toLowerCase())
+    lines.push(
+      `Untargeted: the owner has set no target for ${list(named)}. There is no standard of theirs to measure ${missing.length === 1 ? 'it' : 'them'} against, so ${missing.length === 1 ? 'it is' : 'they are'} neither balanced nor unbalanced. Report ${missing.length === 1 ? 'it' : 'them'} as untargeted; never as balanced, and never against a standard of your own.`,
+    )
+  }
+  if (profile.positionSize === null) {
+    lines.push(
+      'Untargeted: the owner has set no single-position concentration ceiling, so no position is too large or too small by any standard of theirs.',
+    )
+  }
+
+  return lines
+}
+
+/** A short list in prose: "a", "a and b", "a, b and c". */
+function list(items: readonly string[]): string {
+  if (items.length <= 1) return items[0] ?? ''
+  return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`
+}
+
+/**
  * The measured half, or `null` where there is nothing measured to report.
  *
  * The six non-`ok` variants are not all the same absence, and none of them becomes a figure here:
@@ -287,6 +446,8 @@ function driftBlock(drift: BalanceDriftResult): string | null {
 
 /** The drift report as prose the model may quote, in percentage points throughout. */
 export function measuredDrift(report: BalanceDriftReport): string {
+  const sized = sizedMoves(report)
+
   const lines: string[] = [
     `Measured against the live portfolio, read ${isoMinute(report.readAt)}, weights as a share of what could be valued in ${report.displayCurrency}.`,
     report.balanced
@@ -294,8 +455,13 @@ export function measuredDrift(report: BalanceDriftReport): string {
       : 'At least one target is currently outside its range.',
   ]
 
+  if (!report.balanced) lines.push('', ...movesPreamble(report, sized))
+
   for (const dimension of report.dimensions) {
-    lines.push('', `${TARGET_DIMENSION_LABELS[dimension.dimension]} targets:`, ...bandLines(dimension))
+    lines.push('', `${TARGET_DIMENSION_LABELS[dimension.dimension]} targets:`)
+    // Beside the breakdown it qualifies, for the reason the weights section puts it there.
+    if (dimension.dimension === 'currency') lines.push(CURRENCY_EXPOSURE_NOTE)
+    lines.push(...bandLines(dimension, sized))
   }
 
   if (report.position !== null) {
@@ -322,12 +488,65 @@ export function measuredDrift(report: BalanceDriftReport): string {
   return lines.join('\n')
 }
 
-/** One dimension's bands, its residuals, and whatever carries no target at all. */
-function bandLines(dimension: DimensionDrift): string[] {
-  const lines = dimension.bands.map(
-    (band) =>
-      `- ${band.label}: ${formatPercentValue(band.actual)} against ${range(band.low, band.high)} — ${verdict(band.status, band.distance)}`,
+/**
+ * Which out-of-range bands get their move written out, largest gap first.
+ *
+ * A budget shared across the three dimensions rather than one per dimension: a profile carrying
+ * thirty currency targets and one sector target should not spend the section on currencies because
+ * they were declared first. Keyed by dimension and key together, because a currency and a sector
+ * may both be called `USD` in principle and would otherwise collide silently.
+ */
+function sizedMoves(report: BalanceDriftReport): Set<string> {
+  const out: { id: string; distance: number }[] = []
+  for (const dimension of report.dimensions) {
+    for (const band of dimension.bands) {
+      if (band.move === null) continue
+      out.push({ id: `${dimension.dimension}|${band.key}`, distance: Math.abs(band.distance) })
+    }
+  }
+  return new Set(
+    out
+      .sort((a, b) => b.distance - a.distance)
+      .slice(0, MAX_LISTED_MOVES)
+      .map((entry) => entry.id),
   )
+}
+
+/**
+ * How to read the moves below, said once before any of them (Story #287).
+ *
+ * Two qualifications that a proposal is wrong without. **The moves are the app's arithmetic**, not
+ * the model's — which is the sentence that makes them quotable at all (ADR-0009, DDR-0095). And
+ * they are expressed **against the portfolio as it stands**: shifting weight between positions,
+ * with nothing paid in and nothing taken out. A move read as "buy this much more" would change the
+ * denominator every other percentage in this section is a share of.
+ */
+function movesPreamble(report: BalanceDriftReport, sized: Set<string>): string[] {
+  const total = report.dimensions.reduce(
+    (count, dimension) => count + dimension.bands.filter((band) => band.move !== null).length,
+    0,
+  )
+
+  const lines = [
+    'HOW TO CLOSE THE GAPS. Each out-of-range band below carries a move this app computed: how many percentage points must shift, and which held positions carry that weight. Quote these; never size a move of your own, and never total two of them.',
+    'Every move is in percentage points and assumes the portfolio keeps its current total — weight shifts between positions, with nothing paid in and nothing taken out. No amount of money is available for any of them.',
+  ]
+  if (total > sized.size) {
+    lines.push(
+      `${total} band(s) are outside their range; the ${sized.size} with the largest gaps have a move sized below. The rest carry their verdict without one — say a move for them is not available rather than sizing it.`,
+    )
+  }
+  return lines
+}
+
+/** One dimension's bands, its residuals, and whatever carries no target at all. */
+function bandLines(dimension: DimensionDrift, sized: Set<string>): string[] {
+  const lines = dimension.bands.flatMap((band) => [
+    `- ${band.label}: ${formatPercentValue(band.actual)} against ${range(band.low, band.high)} — ${verdict(band.status, band.distance)}`,
+    ...(band.move !== null && sized.has(`${dimension.dimension}|${band.key}`)
+      ? moveLines(band, band.move)
+      : []),
+  ])
 
   // Surfaced, never redistributed (DDR-0095). A dimension whose bands sum to 80% has to say what
   // the other fifth is, or the model reads the gap as a rounding error and explains it away.
@@ -544,6 +763,76 @@ function compositionBlock(
       composition.navChange ?? 0,
     )})`,
   ].join('\n')
+}
+
+/**
+ * One band's move, written out (Story #287, DDR-0103).
+ *
+ * **The end state is computed, which is what makes verifying the model's answer unnecessary.**
+ * #289 wanted a check that a proposed allocation actually lands inside the ranges; verifying free
+ * text means asking the model to emit a parseable structure, which fights the free-text surface
+ * this Epic settled on. Computing the end state first makes the check pointless rather than merely
+ * cheaper — there is nothing the model produced to verify, because the arithmetic arrived done.
+ *
+ * **Percentage points, never money.** The `profile` category is disclosed as percentages only, and
+ * a euro figure here would change `disclosureFingerprint` and put the owner back through the
+ * consent panel for a unit the profile is not even written in (DDR-0097).
+ *
+ * **What the move cannot carry is stated, not spread.** A band the owner targets and holds nothing
+ * in has no position to trim; a ceiling can stop the positions that exist from taking the rest. In
+ * both cases the remainder is named, with what would actually close it — which is a different
+ * sentence from the move, and one only the owner can act on (DDR-0052's rule, applied to a
+ * proposal).
+ */
+function moveLines(band: DriftBand, move: DriftMove): string[] {
+  const covered = move.points - move.uncovered
+  const landing = band.status === 'above' ? band.actual - covered : band.actual + covered
+  const edge = band.status === 'above' ? band.high : band.low
+  const instruction =
+    move.direction === 'trim'
+      ? `trim ${formatPoints(move.points)} out of`
+      : `add ${formatPoints(move.points)} to`
+
+  const lines = [
+    `  Move: ${instruction} ${band.label} to reach ${formatPercentValue(edge)}, the nearer edge of its range.`,
+  ]
+
+  if (move.contributors.length === 0) {
+    lines.push(
+      move.candidates === 0
+        ? `  No position currently held sits in ${band.label}, so nothing held carries this weight. Closing it means buying an instrument the owner does not hold — say so; do not name one from the positions above.`
+        : `  No position currently held has room to carry this move.`,
+    )
+  } else {
+    lines.push(
+      `  Positions carrying it (the ${move.contributors.length} largest of ${move.candidates} held in ${band.label}):`,
+    )
+    for (const contributor of move.contributors) {
+      const name = contributor.name === null ? contributor.symbol : `${contributor.symbol} (${contributor.name})`
+      lines.push(
+        `    · ${name}: ${formatPercentValue(contributor.weight)} of the portfolio now, ${
+          move.direction === 'trim' ? 'giving up' : 'taking on'
+        } ${formatPoints(contributor.points)}, leaving it at ${formatPercentValue(contributor.resultingWeight)}`,
+      )
+    }
+    lines.push(
+      `  After this move ${band.label} sits at ${formatPercentValue(landing)}${
+        move.uncovered > 0 ? ', still outside its range' : ', inside its range'
+      }.`,
+    )
+  }
+
+  if (move.uncovered > 0) {
+    lines.push(
+      `  ${formatPoints(move.uncovered)} of this move ${move.contributors.length === 0 ? 'is' : 'is still'} not carried by anything listed above.${
+        move.ceilingLimited
+          ? ' The owner’s own single-position ceiling is what stops it: no computed move takes a position above that ceiling to close another target.'
+          : ''
+      } Say the remainder is uncovered; do not place it on a position yourself.`,
+    )
+  }
+
+  return lines
 }
 
 /** How a band reads: inside, or how far out and in which direction. */
