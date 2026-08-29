@@ -20,7 +20,13 @@ import {
  */
 
 vi.mock('@repositories/assistant/aiGateway', () => ({
-  aiGateway: { complete: vi.fn(), isConfigured: vi.fn() },
+  aiGateway: {
+    complete: vi.fn(),
+    keySource: vi.fn(),
+    hasStoredKey: vi.fn(),
+    storeKey: vi.fn(),
+    clearStoredKey: vi.fn(),
+  },
 }))
 vi.mock('./consentService', () => ({
   consentService: { get: vi.fn(), grant: vi.fn(), revoke: vi.fn() },
@@ -40,7 +46,8 @@ const ANSWERED = {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mockGateway.isConfigured.mockReturnValue(true)
+  mockGateway.keySource.mockReturnValue('environment')
+  mockGateway.hasStoredKey.mockReturnValue(false)
   mockGateway.complete.mockResolvedValue(ANSWERED)
 })
 
@@ -77,7 +84,7 @@ describe('nothing leaves the machine before consent', () => {
    */
   it('checks consent before configuration, so an unconfigured app still reports the decision', async () => {
     mockConsent.get.mockReturnValue(NONE)
-    mockGateway.isConfigured.mockReturnValue(false)
+    mockGateway.keySource.mockReturnValue('none')
 
     expect((await assistantService.ask('x')).status).toBe('needs_consent')
     expect(mockGateway.complete).not.toHaveBeenCalled()
@@ -126,7 +133,7 @@ describe('the blocking state is named specifically', () => {
     ['consent given and a key present', GRANTED, true, 'ready'],
   ])('reports %s as %s', (_case, consent, configured, expected) => {
     mockConsent.get.mockReturnValue(consent)
-    mockGateway.isConfigured.mockReturnValue(configured)
+    mockGateway.keySource.mockReturnValue(configured ? 'environment' : 'none')
 
     expect(assistantService.getStatus().state).toBe(expected)
   })
@@ -137,7 +144,7 @@ describe('the blocking state is named specifically', () => {
    */
   it('reports both facts, not only the one in the way', () => {
     mockConsent.get.mockReturnValue(NONE)
-    mockGateway.isConfigured.mockReturnValue(true)
+    mockGateway.keySource.mockReturnValue('environment')
 
     expect(assistantService.getStatus()).toEqual({
       state: 'needs_consent',
@@ -145,6 +152,8 @@ describe('the blocking state is named specifically', () => {
       consentedAt: null,
       consentStale: false,
       configured: true,
+      keySource: 'environment',
+      keyStored: false,
     })
   })
 
@@ -157,6 +166,28 @@ describe('the blocking state is named specifically', () => {
     expect(JSON.stringify(status)).not.toMatch(/sk-/)
   })
 
+  /**
+   * Which of the two sources is in force, and whether a key is saved in the app, are separate
+   * facts (Story #300). A stored key the environment is shadowing has to stay visible: it is
+   * still there, still removable, and still not the one being used.
+   */
+  it.each([
+    ['no key anywhere', 'none', false, false],
+    ['a key only in the environment', 'environment', false, true],
+    ['a key only in the app', 'stored', true, true],
+    ['a stored key the environment shadows', 'environment', true, true],
+  ] as const)('reports %s', (_case, source, stored, configured) => {
+    mockConsent.get.mockReturnValue(GRANTED)
+    mockGateway.keySource.mockReturnValue(source)
+    mockGateway.hasStoredKey.mockReturnValue(stored)
+
+    expect(assistantService.getStatus()).toMatchObject({
+      keySource: source,
+      keyStored: stored,
+      configured,
+    })
+  })
+
   it('carries staleness through, so the view can say the list changed', () => {
     mockConsent.get.mockReturnValue(STALE)
     expect(assistantService.getStatus()).toMatchObject({
@@ -165,6 +196,99 @@ describe('the blocking state is named specifically', () => {
       consentStale: true,
       consentedAt: STALE.grantedAt,
     })
+  })
+})
+
+// ---- the owner's own key (Story #300) ---------------------------------------
+
+describe('setting and removing the owner’s key', () => {
+  beforeEach(() => {
+    mockConsent.get.mockReturnValue(GRANTED)
+  })
+
+  it('stores the key and reports the status that follows', () => {
+    mockGateway.keySource.mockReturnValue('stored')
+    mockGateway.hasStoredKey.mockReturnValue(true)
+
+    const result = assistantService.setApiKey('  sk-a-key-the-owner-pasted  ')
+
+    expect(mockGateway.storeKey).toHaveBeenCalledWith('sk-a-key-the-owner-pasted')
+    expect(result).toEqual({
+      status: 'saved',
+      assistant: expect.objectContaining({ state: 'ready', keySource: 'stored', keyStored: true }),
+    })
+  })
+
+  /**
+   * The precedence rule, seen from the service: saving while the environment supplies a key
+   * **stores it and does not use it**, and the status says so in the same round trip. A view that
+   * had to assume would report the owner's key as in force when it is not.
+   */
+  it('stores a key the environment is shadowing, and says the environment still wins', () => {
+    mockGateway.keySource.mockReturnValue('environment')
+    mockGateway.hasStoredKey.mockReturnValue(true)
+
+    const result = assistantService.setApiKey('sk-mine')
+
+    expect(result.status).toBe('saved')
+    expect(result.assistant).toMatchObject({ keySource: 'environment', keyStored: true })
+  })
+
+  /** A bad paste is the owner's to fix, so nothing is stored and nothing throws. */
+  it('refuses a blank key without storing anything', () => {
+    mockGateway.keySource.mockReturnValue('none')
+    mockGateway.hasStoredKey.mockReturnValue(false)
+
+    const result = assistantService.setApiKey('   ')
+
+    expect(result.status).toBe('invalid')
+    expect(mockGateway.storeKey).not.toHaveBeenCalled()
+  })
+
+  /** Nothing about the value comes back — not the key, not its length, not a fragment. */
+  it('echoes nothing of the key it was given, in either outcome', () => {
+    mockGateway.keySource.mockReturnValue('stored')
+    mockGateway.hasStoredKey.mockReturnValue(true)
+    const saved = JSON.stringify(assistantService.setApiKey('sk-secret-value'))
+
+    mockGateway.keySource.mockReturnValue('none')
+    mockGateway.hasStoredKey.mockReturnValue(false)
+    const refused = JSON.stringify(assistantService.setApiKey('sk secret value'))
+
+    expect(saved).not.toContain('secret')
+    expect(refused).not.toContain('secret')
+  })
+
+  /** Removing the only key returns the assistant to `not_configured`, consent untouched. */
+  it('returns to not_configured when the removed key was the only one', () => {
+    mockGateway.keySource.mockReturnValue('none')
+    mockGateway.hasStoredKey.mockReturnValue(false)
+
+    const result = assistantService.clearApiKey()
+
+    expect(mockGateway.clearStoredKey).toHaveBeenCalled()
+    expect(result).toEqual({
+      status: 'cleared',
+      assistant: expect.objectContaining({
+        state: 'not_configured',
+        consented: true,
+        keySource: 'none',
+        keyStored: false,
+      }),
+    })
+  })
+
+  /**
+   * Setting a key sends nothing, so it is not gated on consent. The gate stays exactly where it
+   * was — `ask` — and this is the assertion that says so rather than leaving it to be inferred.
+   */
+  it('does not require consent, and reaches the model either way', () => {
+    mockConsent.get.mockReturnValue(NONE)
+    mockGateway.keySource.mockReturnValue('stored')
+    mockGateway.hasStoredKey.mockReturnValue(true)
+
+    expect(assistantService.setApiKey('sk-mine').status).toBe('saved')
+    expect(mockGateway.complete).not.toHaveBeenCalled()
   })
 })
 

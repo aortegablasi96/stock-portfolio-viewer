@@ -45,6 +45,8 @@ const status = (over: Partial<AssistantStatus> = {}): AssistantStatus => ({
   consentedAt: null,
   consentStale: false,
   configured: false,
+  keySource: 'none',
+  keyStored: false,
   ...over,
 })
 

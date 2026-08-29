@@ -51,6 +51,26 @@ function sourceFiles(dir: string): string[] {
 
 const read = (path: string): string => readFileSync(path, 'utf8')
 
+/**
+ * The same file with its comments removed — **the trap this repository has now walked into six
+ * times** (DDR-0042, DDR-0047, DDR-0048, DDR-0058, DDR-0070, DDR-0075), and a seventh here: the
+ * import guard below reads for the string `aiGateway`, and Story #300's key panel *explains in
+ * prose* that the gateway redacts key fragments. A renderer component that names the module in a
+ * sentence is the opposite of one that imports it, and the unstripped read could not tell the two
+ * apart.
+ *
+ * Conservative on purpose. Block comments go wholesale; a line comment is dropped only where the
+ * line **begins** with `//`, so a `https://` inside a string literal cannot take the rest of its
+ * line — and an import, which is what is actually being hunted, always sits on a line of its own.
+ */
+function code(path: string): string {
+  return read(path)
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split(/\r?\n/)
+    .filter((line) => !line.trimStart().startsWith('//'))
+    .join('\n')
+}
+
 describe('the key never reaches the renderer or the preload bridge', () => {
   /**
    * **Reading it, not naming it.** The first version of this guard forbade the string `OPENAI_`
@@ -86,10 +106,31 @@ describe('the key never reaches the renderer or the preload bridge', () => {
     },
   )
 
+  /**
+   * The store the owner's own key lives in, spelled in exactly one place (Story #300, DDR-0105).
+   *
+   * The story adds a second source for the key, and with it a second way for the value to spread:
+   * any module that knows the `app_meta` row can read it straight out of the database, and a
+   * renderer module cannot, but a *service* could — and would then be a second place holding key
+   * material, a second place to forget the trim, and a second place a fragment could escape from.
+   *
+   * So the row name is the guard. `aiGateway` exports it and is the only file that spells it;
+   * everything else asks the gateway. Phrased as "which files contain this string" rather than as
+   * an import rule, because reading `metaRepository.get('openai_api_key')` needs no import of the
+   * gateway at all — which is exactly how this would be worked around by accident.
+   */
+  it('names the key’s storage row in exactly one file', () => {
+    const holders = sourceFiles(join(root, 'src'))
+      .filter((path) => /'openai_api_key'/.test(code(path)))
+      .map((path) => path.slice(root.length).replace(/\\/g, '/'))
+
+    expect(holders).toEqual(['src/repositories/assistant/aiGateway.ts'])
+  })
+
   /** The gateway is main-process code. Nothing outside main and the services may import it. */
   it('is imported only from the main process side of the app', () => {
     const importers = sourceFiles(join(root, 'src'))
-      .filter((path) => /aiGateway/.test(read(path)))
+      .filter((path) => /aiGateway/.test(code(path)))
       .map((path) => path.slice(root.length).replace(/\\/g, '/'))
       .filter((path) => !path.startsWith('src/repositories/assistant/'))
 

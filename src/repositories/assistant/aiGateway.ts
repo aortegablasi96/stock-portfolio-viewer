@@ -2,7 +2,8 @@ import { request as httpsRequest } from 'node:https'
 import { request as httpRequest } from 'node:http'
 import type { IncomingMessage } from 'node:http'
 import { z } from 'zod'
-import type { AiRequest, AiResult, AiUsage } from '@shared/domain/assistant'
+import { metaRepository } from '@repositories/meta/metaRepository'
+import type { AiRequest, AiResult, AiUsage, ApiKeySource } from '@shared/domain/assistant'
 
 /**
  * The one place in the app that reaches OpenAI (Milestone M10, Story #282, DDR-0096).
@@ -37,6 +38,22 @@ import type { AiRequest, AiResult, AiUsage } from '@shared/domain/assistant'
  * than inlining it (ADR-0010). This file is imported only by main-process code; the renderer's
  * CSP admits `api.mapbox.com` and nothing else, so the renderer could not make this call even if
  * it held the key — the platform enforcing the design rather than a convention asking for it.
+ *
+ * ### It owns the key end to end, including the owner's own (Story #300, DDR-0105)
+ *
+ * A packaged build has no `.env` beside its binary, so before #300 an installed copy found a key
+ * only if the operating system already carried one. The owner can now paste one into the app, and
+ * it is stored the way consent and the investor profile are — one overwritten `app_meta` value
+ * (DDR-0094, DDR-0097).
+ *
+ * The store is read **and written here** rather than in a service, which makes this file a
+ * repository over two sources. That is the shape `classificationRepository` already has (a SQLite
+ * cache in front of `ibkrGateway`), and it buys the invariant this whole story is about: the key
+ * exists in exactly one module. Split the read from the write and there are two places to forget
+ * the trim, two places a fragment could be returned, and nothing left for a test to point at.
+ *
+ * **Precedence is stated, never discovered.** The environment wins over the stored key — see
+ * {@link keySource}.
  */
 
 const DEFAULT_BASE_URL = 'https://api.openai.com'
@@ -109,10 +126,61 @@ function timeoutMs(): number {
   return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_TIMEOUT_MS
 }
 
-/** The key, or `undefined` when the owner has not pasted one. Read at call time, never cached. */
-function apiKey(): string | undefined {
+// ---- the key, and the two places it can come from ---------------------------
+
+/**
+ * Where the owner's own key is stored: one overwritten `app_meta` value (Story #300, DDR-0105).
+ *
+ * Exported so a test can name the row without copying the string, and so nothing else in the app
+ * has a reason to spell it. **The value is stored unencrypted**, like every other row in this
+ * database — that is a property of the store rather than a decision this file makes, and it is
+ * written down in DDR-0105 and said on screen rather than left to be assumed.
+ */
+export const OPENAI_API_KEY_META_KEY = 'openai_api_key'
+
+/**
+ * The key from the process environment — an OS variable, or a line in `.env` that
+ * `src/main/env.ts` merged into it at startup with the OS winning (DDR-0100).
+ *
+ * A blank value is **no key**, not an empty one. That rule predates the story and is what makes
+ * `e2e/assistant-consent.spec.ts`'s `OPENAI_API_KEY: ''` mean "this run has no environment key"
+ * rather than "this run has an unusable one that shadows the store".
+ */
+function environmentKey(): string | undefined {
   const key = process.env['OPENAI_API_KEY']?.trim()
   return key ? key : undefined
+}
+
+/** The key the owner saved inside the app, or `undefined`. Read at call time, never cached. */
+function storedKey(): string | undefined {
+  const key = metaRepository.get(OPENAI_API_KEY_META_KEY)?.trim()
+  return key ? key : undefined
+}
+
+/** The key actually used, resolved in the order {@link keySource} names. */
+function apiKey(): string | undefined {
+  return environmentKey() ?? storedKey()
+}
+
+/**
+ * Which source supplies the key now in force.
+ *
+ * **The environment wins over the stored key**, which is the same direction DDR-0100 chose for the
+ * environment over `.env`, and for the same two reasons. An environment variable is the deliberate,
+ * per-session act of whoever launched the process, while a stored key is a default sitting in an
+ * installation — so the more specific act should win. And the e2e suite supplies a key through
+ * `electron.launch({ env })`: the opposite order would let whatever a run happened to have stored
+ * replace the value a test is asserting about, which is a passing test that passes for the wrong
+ * reason.
+ *
+ * The order is only defensible because it is **reported**. An owner who saves a key while the
+ * environment carries one is told that theirs is stored and not in use; silently preferring one of
+ * two keys the owner supplied is the failure this function exists to make impossible.
+ */
+function keySource(): ApiKeySource {
+  if (environmentKey() !== undefined) return 'environment'
+  if (storedKey() !== undefined) return 'stored'
+  return 'none'
 }
 
 // ---- the response, validated at ingress -------------------------------------
@@ -258,15 +326,40 @@ function postJson(url: URL, key: string, payload: unknown): Promise<Transport> {
 
 export const aiGateway = {
   /**
-   * Whether a key is present (Story #283).
+   * Which of the two sources supplies the key, or `none` (Stories #283, #300).
    *
-   * A pure environment read — no request, no key material returned, just the boolean the
-   * assistant's status needs to say *which* of its two blockers applies. It lives here because
-   * this file is the only one that reads the variable, and a second reader would be a second
-   * place to forget the trim.
+   * No request, and **no key material returned** — just the name of a source, which is what the
+   * assistant's status needs to say which of its two blockers applies and, when neither does,
+   * which key it is about to spend. It replaces the story-#283 `isConfigured()` rather than
+   * sitting beside it: two ways to ask one question is how the two drift apart.
    */
-  isConfigured(): boolean {
-    return apiKey() !== undefined
+  keySource(): ApiKeySource {
+    return keySource()
+  },
+
+  /** Whether a key is saved **in the app**, whether or not the environment is shadowing it. */
+  hasStoredKey(): boolean {
+    return storedKey() !== undefined
+  },
+
+  /**
+   * Save the owner's own key, replacing any previously saved one.
+   *
+   * Trimmed here as well as at the service that validates it, because this is the value that
+   * reaches the `Authorization` header and the trim is the gateway's own invariant — every other
+   * read in this file trims, and a store that did not would be the one asymmetry.
+   */
+  storeKey(key: string): void {
+    metaRepository.set(OPENAI_API_KEY_META_KEY, key.trim())
+  },
+
+  /**
+   * Remove it, reporting whether there was one. The key is **removed, not blanked** — the rule
+   * consent follows, so "never set" and "removed" are one state rather than two that behave alike
+   * (DDR-0097).
+   */
+  clearStoredKey(): boolean {
+    return metaRepository.remove(OPENAI_API_KEY_META_KEY)
   },
 
   /**
@@ -281,7 +374,7 @@ export const aiGateway = {
       return {
         status: 'not_configured',
         message:
-          'No OpenAI API key is set. Add OPENAI_API_KEY to your .env file to use the assistant.',
+          'No OpenAI API key is set. Add one on the Assistant view, or set OPENAI_API_KEY in your environment.',
       }
     }
 

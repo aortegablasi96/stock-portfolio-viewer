@@ -1,11 +1,17 @@
 import { aiGateway } from '@repositories/assistant/aiGateway'
+import { apiKeyService } from '@services/assistant/apiKeyService'
 import { consentService } from '@services/assistant/consentService'
 import {
   DISCLOSURE_CATEGORIES,
   type AssistantContext,
   type DisclosureCategoryId,
 } from '@shared/domain/assistantDisclosure'
-import type { AssistantAskResult, AssistantStatus } from '@shared/domain/assistant'
+import type {
+  AssistantAskResult,
+  AssistantStatus,
+  ClearApiKeyResult,
+  SaveApiKeyResult,
+} from '@shared/domain/assistant'
 
 /**
  * The gate every model request passes through (Story #283, DDR-0097).
@@ -86,12 +92,16 @@ export const assistantService = {
    */
   getStatus(): AssistantStatus {
     const consent = consentService.get()
+    const keySource = aiGateway.keySource()
+    const configured = keySource !== 'none'
     return {
-      state: !consent.granted ? 'needs_consent' : aiGateway.isConfigured() ? 'ready' : 'not_configured',
+      state: !consent.granted ? 'needs_consent' : configured ? 'ready' : 'not_configured',
       consented: consent.granted,
       consentedAt: consent.grantedAt,
       consentStale: consent.stale,
-      configured: aiGateway.isConfigured(),
+      configured,
+      keySource,
+      keyStored: aiGateway.hasStoredKey(),
     }
   },
 
@@ -105,6 +115,34 @@ export const assistantService = {
   revokeConsent(): AssistantStatus {
     consentService.revoke()
     return assistantService.getStatus()
+  },
+
+  /**
+   * Store the owner's own API key (Story #300, DDR-0105).
+   *
+   * **Consent is not checked here, and that is deliberate.** Setting a key sends nothing; it is
+   * the same class of act as pasting one into `.env`, and requiring consent first would make the
+   * setup step depend on a decision the owner may reasonably want to take second. The gate stays
+   * exactly where it was — {@link ask} — which is the only place that can send.
+   *
+   * The status comes back with the result rather than being fetched afterwards, so a view learns
+   * in one round trip that the key was saved *and* whether it is the one now in force.
+   */
+  setApiKey(key: string): SaveApiKeyResult {
+    const outcome = apiKeyService.save(key)
+    const assistant = assistantService.getStatus()
+    return outcome.status === 'saved'
+      ? { status: 'saved', assistant }
+      : { status: 'invalid', message: outcome.message, assistant }
+  },
+
+  /**
+   * Remove the stored key. Where it was the only source, this returns the assistant to
+   * `not_configured` — the same shape revoking consent has, and the state a fresh clone rests in.
+   */
+  clearApiKey(): ClearApiKeyResult {
+    apiKeyService.clear()
+    return { status: 'cleared', assistant: assistantService.getStatus() }
   },
 
   /**

@@ -21,9 +21,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 M0–M9 are delivered: live IBKR holdings/balances/allocation in a display currency, immutable
 snapshots, Flex statement import, and four analytics views over it, behind a vertical sidebar.
-M10 is in progress — the investor profile, the assistant's **surface** (grounded Q&A), a period
-explained, a performance summary, the **widened grounding** (#287) and the **prompt's phrasing
-rules** (#288) have landed; #300 (an in-app OpenAI key) is what remains. The milestone was
+M10 is delivered — the investor profile, the assistant's **surface** (grounded Q&A), a period
+explained, a performance summary, the **widened grounding** (#287), the **prompt's phrasing
+rules** (#288) and the **in-app OpenAI key** (#300). The milestone was
 **reshaped after #286**: the box is free-text and always was, so the rest was never question shapes
 but grounding and **phrasing**. #289 is closed as superseded by #287's computed moves — read its
 closing comment before re-proposing an end-state check on model output. Not built: multi-broker,
@@ -179,8 +179,8 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
   as `index.ts`'s first statement, above the single-instance lock. That loader is the fix for Bug
   #297: without it `OPENAI_API_KEY` in `.env` reached nothing and the assistant was permanently
   `not_configured`. Three rules — **a real environment variable wins** over the file (the e2e suite
-  passes one), a **missing file is a no-op** (a packaged build has none, and there an unprefixed
-  variable must come from the OS), and **only names are logged**. Unprefixed still means never
+  passes one), a **missing file is a no-op** (a packaged build has none — the in-app key field is
+  that build's source, DDR-0105), and **only names are logged**. Unprefixed still means never
   bundled (ADR-0010). Editing it needs a **restart**. Without `RENDERER_VITE_MAPBOX_TOKEN` the map
   renders a placeholder; nothing else is affected.
 - **Electron security is locked down** — `sandbox: true`, `contextIsolation: true`,
@@ -206,7 +206,10 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
   `shared/ipc/contract.ts` (Zod schema + `RendererApi` method) → `preload/index.ts` →
   `main/ipc/handlers.ts`. `contract.ts` is the single source of truth for the wire shape; renderer
   and preload import **types only**, so Zod never lands in those bundles. Domain result schemas go
-  in `shared/domain/*.ts` and `contract.ts` composes them — not inline.
+  in `shared/domain/*.ts` and `contract.ts` composes them — not inline. **A constant the renderer needs at
+  *runtime* must not live in a module that imports Zod** — one value import pulls the whole
+  package into that bundle and lint, typecheck, tests, build and e2e all still pass
+  (`@shared/domain/assistantKey` is the fix's shape). `zodIsolation.test.ts` fails on it (DDR-0105).
 - **Failures cross IPC as result variants, not exceptions** (`not_connected`, `not_responding`,
   `needs_import`, `canceled`, `invalid`, `error`). `not_connected` (gateway isn't running) and
   `not_responding` (accepted, then stalled) are **not interchangeable** — `IbkrTimeoutError` is
@@ -253,7 +256,14 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
 - **The key is read in one place and never bundled.** `OPENAI_API_KEY` is unprefixed on purpose;
   `aiGatewayIsolation.test.ts` fails if `src/renderer` or `src/preload` so much as names an
   `OPENAI_` variable, if anything outside main imports the gateway, or if the CSP's `connect-src`
-  gains an origin.
+  gains an origin. **Two sources, one stated order** (DDR-0105): the environment beats the key the
+  owner saves in the app, one overwritten `app_meta` value the gateway itself reads *and* writes —
+  so key material lives in one module, and that test also fails if `'openai_api_key'` is spelled
+  outside it. The order is **reported**, never silent: `keySource`/`keyStored` give the panel a
+  state for a saved key the environment shadows. Nothing comes back — no last-four hint, the field
+  is `password` and cleared on save. Validation refuses anything outside printable ASCII (a control
+  character makes `node:http` **throw** on the header), and checks **no format**: `OPENAI_BASE_URL`
+  can point elsewhere. Setting a key is **not** gated on consent; it sends nothing.
 
 ### The IBKR gateway
 
@@ -481,7 +491,7 @@ alternatives this table can only name.
 | `Button` (DDR-0032) | `variant` × `size` (`icon` is a *shape*) | `ghost` changed meaning — the old `.ghost-button` is now `secondary`. `type` defaults to `"button"`. `className` is for **placement, not colour**. |
 | `Card` (DDR-0033, DDR-0059, DDR-0084) | `variant` (surface colour) × `size` (`--surface-pad-*`) | `CardContent` is a **scope** — descendant rules hang off it, keeping a state panel's prose out of reach. The ruled header strip bleeds to the edges by negating `--card-pad`, which each size **restates beside its `padding`** (change one, change both). `.card-header:last-child` gives it back; so does `.card-header.chart-card-header`, **compound or it ties** (DDR-0084). Its third host is `.data-table-scroll-card`, which has no `--card-pad`: that rule **restates** `margin`/`padding` (inherited, the bleed `calc()` is invalid and drops) and is `sticky` (DDR-0087). |
 | `StatTile` / `StatRow` (DDR-0034, DDR-0060) | `tone` only | A tile **is** a `Card`, so it declares no surface. **Neutral is the absence of a rule.** Its label is the app's *one* micro-label — the same four declarations as `.data-table thead th`; don't grow a second. |
-| `Field` + `Select` + `DateInput` + `PercentInput` + `TermInput` + the Assistant's textarea (DDR-0035, DDR-0094, DDR-0098) | `kind` only — **five**, and still no size axis | **`Field` generates its id with `useId()` and takes no `id` prop** — tabs stay mounted, so all three `RangeFilter`s can be in the document at once and a fixed id would name only the first; `TermInput`'s `<datalist>` id is generated for the same reason. A `kind` carries cursor, colour-scheme and **measure**: `percent` is 5ch so a column lines up, `term` takes the row's slack. `percent` is `type="text"` + `inputMode="decimal"` **on purpose** — a number input alters its value on a passing scroll wheel and drops a comma decimal, which `parsePercent` accepts. `prose` is a `<textarea>` and caps `resize` to `vertical`. |
+| `Field` + `Select` + `DateInput` + `PercentInput` + `TermInput` + the Assistant's textarea (DDR-0035, DDR-0094, DDR-0098) | `kind` only — **five**, and still no size axis | **`Field` generates its id with `useId()` and takes no `id` prop** — tabs stay mounted, so all three `RangeFilter`s can be in the document at once and a fixed id would name only the first; `TermInput`'s `<datalist>` id is generated for the same reason. A `kind` carries cursor, colour-scheme and **measure**: `percent` is 5ch so a column lines up, `term` takes the row's slack. `percent` is `type="text"` + `inputMode="decimal"` **on purpose** — a number input alters its value on a passing scroll wheel and drops a comma decimal, which `parsePercent` accepts. `prose` is a `<textarea>` and caps `resize` to `vertical`. `term` names a **measure**, not a vocabulary (DDR-0105) — the assistant's key field reuses it, and a `secret` kind would be a rule copying `.control-term` line for line, the duplicate the guard test cannot see. |
 | `ToggleGroup` (DDR-0036) | `mode`, which is **worn** (`--radius-md` vs `--radius-pill`) | **Never a tablist**: `aria-pressed`, not `role="tab"`. Only `.app-tab` is a real tablist. |
 | `Badge` (DDR-0037, DDR-0064, DDR-0065) | `variant` × `size` | **Never a pill** (that corner means multi-select) and **never a background** — the toned pair keeps both: `--pos` / `--neg-text` ink, the *borders* take the fill tokens. `BADGE_VARIANTS` ⊇ `STAT_TONES`, so `toneOf()` names a variant. `sm` carries no vertical padding — with it, every holdings row grows ~7px; alone in a cell it also needs `BADGE_CELL_CLASS`, because CSS cannot see that an inline chip follows a *text node*. Trades' side badge **is** toned (DDR-0086 reverses DDR-0065): the *box*, not the hue, separates it from the figure. |
 | `StatePanel` (DDR-0038) | `variant` (the state) × `surface` | Only `error` paints; the axis exists because the copy and the *announcement* differ. `role` is derived. No heading → the panel **is** a `<p>`. |

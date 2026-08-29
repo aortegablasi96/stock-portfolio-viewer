@@ -1,11 +1,13 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   aiGateway,
   DEFAULT_MODEL,
   MAX_OUTPUT_TOKENS,
   MAX_PROMPT_CHARS,
+  OPENAI_API_KEY_META_KEY,
 } from './aiGateway'
+import { metaRepository } from '@repositories/meta/metaRepository'
 import type { AiRequest, AiResult } from '@shared/domain/assistant'
 
 /**
@@ -24,6 +26,20 @@ import type { AiRequest, AiResult } from '@shared/domain/assistant'
  * wire. And every state is enumerated, because the whole design is that a slow, missing or
  * misbehaving model is a state the app *reports* rather than a hang or a crash.
  */
+
+/**
+ * The store the owner's own key lives in (Story #300, DDR-0105).
+ *
+ * Mocked, for the reason every repository test mocks its store: `better-sqlite3` is a native
+ * module built for Electron and cannot be loaded by Vitest at all. What is being tested here is
+ * the **precedence** between two sources, which is arithmetic over two reads and needs no database
+ * to be true — the round trip through SQLite is `e2e/assistant-api-key.spec.ts`'s to prove.
+ */
+vi.mock('@repositories/meta/metaRepository', () => ({
+  metaRepository: { get: vi.fn(), set: vi.fn(), remove: vi.fn() },
+}))
+
+const mockStore = vi.mocked(metaRepository)
 
 let server: Server | undefined
 /** Every request the stand-in received, so a retry loop cannot hide. */
@@ -69,6 +85,10 @@ const ask = (over: Partial<AiRequest> = {}): Promise<AiResult> =>
 
 beforeEach(() => {
   received = []
+  vi.clearAllMocks()
+  // No stored key by default, so every test written before Story #300 still describes exactly the
+  // environment it sets.
+  mockStore.get.mockReturnValue(undefined)
   process.env['OPENAI_API_KEY'] = 'sk-test-key'
   delete process.env['OPENAI_MODEL']
 })
@@ -214,6 +234,9 @@ describe('no API key', () => {
   /**
    * The resting state of a fresh clone, and the OpenAI analogue of the IBKR gateway's
    * `not_connected`: the one failure the owner can fix directly. It is a calm, actionable fact.
+   *
+   * It now names **both** fixes, in precedence order (Story #300): the in-app field is the one a
+   * packaged build has, and the environment variable is the one that wins.
    */
   it('reports not_configured, naming what to do about it', async () => {
     delete process.env['OPENAI_API_KEY']
@@ -221,6 +244,7 @@ describe('no API key', () => {
 
     const result = await ask()
     expect(result.status).toBe('not_configured')
+    expect(result.status === 'not_configured' && result.message).toContain('Assistant view')
     expect(result.status === 'not_configured' && result.message).toContain('OPENAI_API_KEY')
   })
 
@@ -238,6 +262,108 @@ describe('no API key', () => {
     await ask()
 
     expect(received).toHaveLength(0)
+  })
+})
+
+// ---- two sources, one stated order (Story #300, DDR-0105) -------------------
+
+describe('where the key comes from', () => {
+  /**
+   * The precedence rule, at the wire rather than in the abstract: the request that goes out
+   * carries the environment's key while both are present.
+   *
+   * This is the assertion the story asks for. `keySource` reporting `'environment'` would be
+   * satisfied by a gateway that reported one source and spent the other, and the failure that
+   * causes — an owner's key silently charged when they thought the environment's was in use — is
+   * invisible until a bill arrives.
+   */
+  it('spends the environment’s key when both are present', async () => {
+    process.env['OPENAI_API_KEY'] = 'sk-from-the-environment'
+    mockStore.get.mockReturnValue('sk-from-the-app')
+    await startProvider(answering('ok'))
+
+    await ask()
+
+    expect(received[0]!.headers.authorization).toBe('Bearer sk-from-the-environment')
+    expect(aiGateway.keySource()).toBe('environment')
+  })
+
+  /** The packaged build's case: nothing in the environment, so the owner's own key is spent. */
+  it('spends the stored key when the environment has none', async () => {
+    delete process.env['OPENAI_API_KEY']
+    mockStore.get.mockReturnValue('sk-from-the-app')
+    await startProvider(answering('ok'))
+
+    const result = await ask()
+
+    expect(result.status).toBe('ok')
+    expect(received[0]!.headers.authorization).toBe('Bearer sk-from-the-app')
+    expect(mockStore.get).toHaveBeenCalledWith(OPENAI_API_KEY_META_KEY)
+  })
+
+  /**
+   * A blank environment variable is *not* a key, and must not shadow a stored one.
+   *
+   * `e2e/assistant-consent.spec.ts` launches the app with `OPENAI_API_KEY: ''` to mean "this run
+   * has no key". Were an empty string to count as set, that would silently become "this run has an
+   * unusable key that hides the owner's", and the suite would be asserting something else.
+   */
+  it('treats a blank environment variable as absent, not as a shadow', async () => {
+    process.env['OPENAI_API_KEY'] = '   '
+    mockStore.get.mockReturnValue('sk-from-the-app')
+    await startProvider(answering('ok'))
+
+    await ask()
+
+    expect(aiGateway.keySource()).toBe('stored')
+    expect(received[0]!.headers.authorization).toBe('Bearer sk-from-the-app')
+  })
+
+  it('reports none when neither source has one', () => {
+    delete process.env['OPENAI_API_KEY']
+    mockStore.get.mockReturnValue(undefined)
+
+    expect(aiGateway.keySource()).toBe('none')
+    expect(aiGateway.hasStoredKey()).toBe(false)
+  })
+
+  /** A stored key the environment is shadowing is still stored — and still removable. */
+  it('reports a stored key even while the environment outranks it', () => {
+    process.env['OPENAI_API_KEY'] = 'sk-from-the-environment'
+    mockStore.get.mockReturnValue('sk-from-the-app')
+
+    expect(aiGateway.keySource()).toBe('environment')
+    expect(aiGateway.hasStoredKey()).toBe(true)
+  })
+
+  /** A blank row is no key: the store cannot produce a state the environment could not. */
+  it('treats a blank stored value as no stored key', () => {
+    delete process.env['OPENAI_API_KEY']
+    mockStore.get.mockReturnValue('  ')
+
+    expect(aiGateway.keySource()).toBe('none')
+    expect(aiGateway.hasStoredKey()).toBe(false)
+  })
+
+  it('writes the key trimmed, under the one key the app spells in one place', () => {
+    aiGateway.storeKey('  sk-pasted-with-a-stray-space  ')
+
+    expect(mockStore.set).toHaveBeenCalledWith(
+      OPENAI_API_KEY_META_KEY,
+      'sk-pasted-with-a-stray-space',
+    )
+  })
+
+  /**
+   * Removed, never blanked — the rule consent follows, so "never set" and "removed" are one state
+   * rather than two that behave alike (DDR-0097).
+   */
+  it('removes the row rather than storing an empty one', () => {
+    mockStore.remove.mockReturnValue(true)
+
+    expect(aiGateway.clearStoredKey()).toBe(true)
+    expect(mockStore.remove).toHaveBeenCalledWith(OPENAI_API_KEY_META_KEY)
+    expect(mockStore.set).not.toHaveBeenCalled()
   })
 })
 

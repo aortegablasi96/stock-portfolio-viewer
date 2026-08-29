@@ -31,6 +31,13 @@
  * characters and is set to exactly that, so a column of them lines up; a vocabulary term is a
  * currency code or a sector name and takes whatever the row can spare.
  *
+ * **`term` names the measure, not the vocabulary** — an amendment Story #300 makes rather than
+ * adding a sixth kind (DDR-0105). The assistant's API key field is a `type="password"` input that
+ * wants exactly `term`'s box and nothing else, so a `secret` kind would be an axis value whose
+ * rule duplicated another's declaration for declaration. That is the same abstraction DDR-0034 and
+ * this record already refuse for a size scale, and the guard test would not catch it: a duplicate
+ * rule *is* a rule. The `<datalist>` is the profile call site's, never the kind's.
+ *
  * **`prose` arrives with the Assistant's question box** (Story #284, DDR-0098) and is the first
  * kind that is not an `<input>`. It fits the axis rather than straining it: a `kind` names the
  * element and the measure its content implies, and a question is several lines of ordinary

@@ -62,6 +62,15 @@ export const IpcChannels = {
   // this is whether anything about it may leave the machine (ADR-0010, DDR-0097).
   assistantGetStatus: 'assistant:getStatus',
   assistantSetConsent: 'assistant:setConsent',
+  // The owner's own OpenAI key, set from inside the app so a packaged build can use the assistant
+  // (M10, Story #300, DDR-0105). Beside consent because it is the same shape of owner-owned
+  // setting, stored as one overwritten `app_meta` value (DDR-0094, DDR-0097).
+  //
+  // These two are the only channels in the app that carry a **secret**, and it moves in one
+  // direction only: inbound, once, on save. Nothing sends it back — `assistant:getStatus` reports
+  // which source is in force and never the value or a fragment of it (ADR-0010).
+  assistantSetApiKey: 'assistant:setApiKey',
+  assistantClearApiKey: 'assistant:clearApiKey',
   // The one channel in this app that reaches the internet with something about the portfolio on
   // it (M10, Story #284, DDR-0098). It arrives here rather than in #283 because a channel that
   // could send is an un-consented path in all but name until there is a view asking the owner's
