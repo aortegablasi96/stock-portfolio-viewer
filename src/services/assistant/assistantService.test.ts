@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { assistantService, buildPrompt, SYSTEM_PROMPT } from './assistantService'
+import { assistantService, buildPrompt, SYSTEM_PROMPT, SYSTEM_PROMPT_RULES } from './assistantService'
 import { consentService } from './consentService'
 import { aiGateway } from '@repositories/assistant/aiGateway'
 import {
@@ -315,5 +315,113 @@ describe('the system prompt states the boundary the ADR set', () => {
     expect(SYSTEM_PROMPT).toContain('Never state a volatility, standard deviation, Sharpe ratio')
     expect(SYSTEM_PROMPT).toContain('daily-return counts and the best and worst day')
     expect(SYSTEM_PROMPT).toContain('not available')
+  })
+})
+
+/**
+ * Story #288's rules, and the seam they sit on (DDR-0104).
+ *
+ * **Every assertion below is a presence-of-rule assertion, and that is the whole guarantee.** A
+ * figure is guarded twice — computed by a service, then asserted in the assembled text — but a
+ * *sentence* built around a correct figure is guarded here and nowhere else. A test can hold that a
+ * rule is in front of the model; it cannot hold that the model obeyed it. That is why the arithmetic
+ * these rules talk about lives in #287's `periodSet` and `driftMoves` rather than in a rule, and why
+ * this block is deliberately thin: it pins what is *said*, which is the only thing it can pin.
+ *
+ * Each rule is obeyable from the context #287 assembles. Where one is not, the fault is in the
+ * grounding rather than in a missing sentence here — the story's own division.
+ */
+describe('the system prompt bounds the sentences around the figures', () => {
+  /**
+   * Rebasing, both lengths, and the line between an ordering and a subtraction — one rule, because
+   * they are one act. `periodSet` computes each consecutive same-kind difference precisely so that
+   * "by how much" has somewhere to come from; every other pairing has none (DDR-0103).
+   */
+  it('bounds a comparison of two periods', () => {
+    expect(SYSTEM_PROMPT).toContain('rebased to its own period’s start')
+    expect(SYSTEM_PROMPT).toContain('not points on one scale')
+    expect(SYSTEM_PROMPT).toContain('Give both periods’ lengths')
+    expect(SYSTEM_PROMPT).toContain('which is an ordering')
+    expect(SYSTEM_PROMPT).toContain('never add, subtract, chain or average two returns')
+  })
+
+  /**
+   * The failure this is against is not a refusal — it is the adjacent row answered as though it were
+   * the one asked for, which is a right-looking figure under the wrong heading (DDR-0103).
+   */
+  it('makes an unavailable period a named state with alternatives', () => {
+    expect(SYSTEM_PROMPT).toContain('names a period the context does not hold')
+    expect(SYSTEM_PROMPT).toContain('name the periods that are')
+    expect(SYSTEM_PROMPT).toContain('neighbouring period')
+  })
+
+  /** Held-and-priced-in, which is the only currency exposure this app computes. */
+  it('names which currency exposure the app holds, and which it does not', () => {
+    expect(SYSTEM_PROMPT).toContain('the currency each position is held and priced in')
+    expect(SYSTEM_PROMPT).toContain('never economic, geographic or revenue exposure')
+  })
+
+  /**
+   * Tax is Epic #8 and costs are modelled nowhere. This is the one rule with no context half: there
+   * is no section to name the absence in, because tax is not a section — it is a category of claim
+   * about every one of them (DDR-0104).
+   */
+  it('forbids a tax claim and requires costs to be disclaimed beside a move', () => {
+    expect(SYSTEM_PROMPT).toContain('Never claim a tax effect, a tax outcome, or that anything is tax-efficient')
+    expect(SYSTEM_PROMPT).toContain('no tax treatment, no jurisdiction and no holding period')
+    expect(SYSTEM_PROMPT).toContain('trading costs and spreads are outside what this app models')
+  })
+
+  /**
+   * Two states in one rule because both are the same refusal: with nothing out of range there is no
+   * move, and with no profile there is no standard. A model that invents either is answering a
+   * question the owner did not ask.
+   */
+  it('makes nothing-to-propose and no-profile answers rather than gaps', () => {
+    expect(SYSTEM_PROMPT).toContain('Nothing to propose is an answer')
+    expect(SYSTEM_PROMPT).toContain('never manufacture one')
+    expect(SYSTEM_PROMPT).toContain('carries no profile section at all')
+    expect(SYSTEM_PROMPT).toContain('set one on the Profile view')
+    expect(SYSTEM_PROMPT).toContain('Do not supply a standard of your own')
+  })
+
+  /**
+   * The largest risk in the Epic, sharpened rather than duplicated. ADR-0009's own words: a trim is
+   * grounded end to end and an add is not, so the two may not be delivered in one voice — and the
+   * marking goes **beside** each claim, because a blanket caveat at the end is the decoration the
+   * ADR names as the way this mitigation fails.
+   */
+  it('sharpens the marking rule for a proposal, and puts it beside the claim', () => {
+    expect(SYSTEM_PROMPT).toContain('Mark what the app computed apart from what you are repeating')
+    expect(SYSTEM_PROMPT).toContain('beside each claim and never once at the end')
+    expect(SYSTEM_PROMPT).toContain('the size of a move are computed from their own data')
+    expect(SYSTEM_PROMPT).toContain('is not checked to exist or to be available at the owner’s broker')
+    expect(SYSTEM_PROMPT).toContain('subject to your knowledge cutoff')
+    expect(SYSTEM_PROMPT).toContain('Never give the two in the same voice')
+  })
+
+  /**
+   * The count, stated here and in DDR-0104 and CLAUDE.md.
+   *
+   * **A long list is a list a model weights less**, so growing it is a decision rather than an edit.
+   * The literal is what makes an eighteenth rule visible: a story that adds one has to come here,
+   * find this number, and choose to change it — which is the whole mechanism, and the reason the
+   * rules are a declared array instead of a string literal.
+   *
+   * Both halves are counted. The array is the declaration; the bullets are what actually reaches the
+   * model, and a rule appended to `SYSTEM_PROMPT` around the array would otherwise be invisible.
+   */
+  it('is seventeen rules, in the array and in the text the model reads', () => {
+    expect(SYSTEM_PROMPT_RULES).toHaveLength(17)
+    expect(SYSTEM_PROMPT.split('\n').filter((line) => line.startsWith('- '))).toHaveLength(17)
+  })
+
+  /** No rule is empty, and none carries the bullet the renderer adds — a `- - ` would be visible. */
+  it('renders every declared rule as exactly one bullet', () => {
+    for (const rule of SYSTEM_PROMPT_RULES) {
+      expect(rule.trim()).not.toBe('')
+      expect(rule.startsWith('- ')).toBe(false)
+      expect(SYSTEM_PROMPT).toContain(`\n- ${rule}`)
+    }
   })
 })
