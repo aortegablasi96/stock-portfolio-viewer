@@ -22,11 +22,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 M0–M9 are delivered: live IBKR holdings/balances/allocation in a display currency, immutable
 snapshots, Flex statement import, and four analytics views over it, behind a vertical sidebar.
 M10 is in progress — the investor profile, the assistant's **surface** (grounded Q&A), a period
-explained, a performance summary and the **widened grounding** (#287) have landed. What remains was
+explained, a performance summary, the **widened grounding** (#287) and the **prompt's phrasing
+rules** (#288) have landed; #300 (an in-app OpenAI key) is what remains. The milestone was
 **reshaped after #286**: the box is free-text and always was, so the rest was never question shapes
-but grounding and **phrasing** — and only #288 (prompt rules only) is left. #289 is closed as
-superseded by #287's computed moves — read its closing comment before re-proposing an end-state
-check on model output. Not built: multi-broker, benchmarks, tax.
+but grounding and **phrasing**. #289 is closed as superseded by #287's computed moves — read its
+closing comment before re-proposing an end-state check on model output. Not built: multi-broker,
+benchmarks, tax.
 
 **Which Epics are open is deliberately not recorded here** — read the backlog (*Current Priority*).
 The **lifecycle** is the rule: an Epic closes with its stories, and refinement opens a *new*
@@ -88,7 +89,15 @@ Each exists end-to-end and is the reference pattern for its shape.
   never redistributed, and percentage points never money** — a euro figure there re-asks consent.
   Cash sits in a band and **never in a move**. An **untargeted dimension is said out loud**; absent
   from the report reads as balanced. `MAX_PROMPT_CHARS` moved **24,000 → 40,000** and
-  `services/assistant/promptBudget.test.ts` measures the worst case the caps allow (DDR-0103).
+  `services/assistant/promptBudget.test.ts` measures the worst case the caps allow (DDR-0103) — the
+  worst case is now **81%** of it, so the test's **85% gate, not the ceiling, is the binding
+  constraint**; measure before growing either half. `SYSTEM_PROMPT_RULES` is a **declared array of
+  seventeen** rules and the count is asserted twice (array *and* rendered bullets), because a long
+  list is one a model weights less: sharpen a rule rather than add an eighteenth. **For phrasing the
+  prompt is the *only* line of defence** — a test asserts a rule is present and can never assert it
+  was obeyed, which is why arithmetic is #287's and wording is #288's; a rule that needs a number to
+  be obeyable is a gap in the *grounding*. The tax/costs rule deliberately has **no context half**:
+  tax is not a section but a claim about every one of them (DDR-0104).
 - **classification** — sector/industry. `classificationRepository` fronts *both* the mutable
   SQLite cache and `ibkrGateway`; `analytics:classifyInstruments` is the only analytics channel
   reaching IBKR. Refreshes are **resumable, not transactional** — a run that dies at 30 of 40 keeps
