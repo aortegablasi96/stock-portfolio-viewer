@@ -2,6 +2,11 @@
 
 - **Status:** Accepted
 - **Date:** 2026-08-27
+- **Amended by:** [[0011-the-key-is-the-authorization]] (2026-08-30) — *Consent gates the first send,
+  and revocation bites* below is **no longer in force**: no consent is asked for, stored or checked,
+  and supplying a key is now the act that authorizes sending. Every other **decision** here stands
+  as written, including *What leaves the machine, and what does not*; only the phrase *gated on
+  consent*, wherever it appears below, now reads *when a key is present*.
 
 ## Context
 
@@ -64,6 +69,11 @@ what it forbids and gains one assertion — that the storage row's name appears 
 
 ### Consent gates the first send, and revocation bites
 
+**Reversed by ADR-0011 (2026-08-30, Story #307). This section records what was decided on
+2026-08-27 and is no longer in force** — the app asks for, stores and checks no consent, and the
+key is the authorization. The rest of this record is unaffected; read ADR-0011 for what still
+enforces the boundary.
+
 Nothing leaves the machine until the owner has seen what would be sent — at its real granularity,
 generated from or pinned against the code that assembles it, so the disclosure cannot drift from the
 payload. Consent is refusable, leaving every other part of the app fully functional, and revocable,
@@ -99,7 +109,8 @@ does not imply anything, **it discloses them**.
 ### The guarantees, restated honestly
 
 - **Local-first is now qualified**, not abandoned. All storage, all computation and all broker access
-  remain local. One feature, gated on consent, sends derived figures to a third party.
+  remain local. One feature, gated on consent, sends derived figures to a third party. *(ADR-0011:
+  when a key is present.)*
 - **ADR-0007 narrowed the offline guarantee. This ADR narrows the data-privacy guarantee**, for the
   Assistant view alone. Every other view still renders with the network unavailable.
 

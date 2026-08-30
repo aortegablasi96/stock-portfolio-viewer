@@ -46,3 +46,4 @@ Trade-offs, follow-ups, and what becomes easier or harder.
 - `0008` — An in-house design system for the renderer; shadcn/ui declined, its component API adopted
 - `0009` — The AI assistant's grounding and advisory boundary: it may propose, it never acts
 - `0010` — OpenAI as the assistant's model provider, and portfolio data leaving the machine
+- `0011` — Supplying a key is the authorization: the assistant's consent gate is removed (amends `0010`)

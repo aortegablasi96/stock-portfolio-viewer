@@ -7,6 +7,9 @@
   application data off the machine. It is no longer true of the application as a whole: the AI
   assistant sends portfolio-derived figures to OpenAI **from the main process**, gated on the owner's
   consent. The CSP, and the deliberate omission of `events.mapbox.com`, are unchanged.
+- **Amended by:** [[0011-the-key-is-the-authorization]] (2026-08-30) — the gate named in the line
+  above is gone; the assistant sends whenever a key is present. Everything the line says about the
+  **renderer** is unchanged, and so is the CSP.
 
 ## Context
 

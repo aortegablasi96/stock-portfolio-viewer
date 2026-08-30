@@ -26,8 +26,9 @@ explained, a performance summary, the **widened grounding** (#287), the **prompt
 rules** (#288) and the **in-app OpenAI key** (#300). The milestone was
 **reshaped after #286**: the box is free-text and always was, so the rest was never question shapes
 but grounding and **phrasing**. #289 is closed as superseded by #287's computed moves — read its
-closing comment before re-proposing an end-state check on model output. Not built: multi-broker,
-benchmarks, tax.
+closing comment before re-proposing an end-state check on model output. **M11 reshapes that surface
+into one view**: ADR-0011 (#307) has removed the consent gate *on the record*; the code follows in
+#309/#310. Not built: multi-broker, benchmarks, tax.
 
 **Which Epics are open is deliberately not recorded here** — read the backlog (*Current Priority*).
 The **lifecycle** is the rule: an Epic closes with its stories, and refinement opens a *new*
@@ -57,12 +58,12 @@ Each exists end-to-end and is the reference pattern for its shape.
   (DDR-0094). `balanceDriftService` computes drift **deterministically — no model ever does this
   arithmetic** — over the **live** portfolio, not Flex, which is why it is the one `profile:*`
   channel with gateway states (DDR-0095).
-- **assistant** — `assistantService` is the **only** caller of `aiGateway` and checks consent
-  **before** the key, before a prompt, before a socket. Consent is stored like the profile and is to
-  a **specific list**: `DISCLOSURE_CATEGORIES` renders the panel, *types* `AssistantContext` (an
-  undisclosed section cannot be sent) and is fingerprinted into the stored consent, so changing it
-  re-asks the owner. Revoking **removes the key**; an unreadable value means *no consent*
-  (DDR-0097). `assistant:ask` is the **one outbound channel**; context is assembled in the
+- **assistant** — `assistantService` is the **only** caller of `aiGateway`. **The key is the
+  authorization** — with one present a question is sent with nothing in front of it, and deleting it
+  is the only "no" (ADR-0011 amends ADR-0010: no consent is asked for, stored or checked; DDR-0097's
+  gate is still in the tree until #309 removes it). `DISCLOSURE_CATEGORIES` outlives the panel it
+  drew — it *types* `AssistantContext`, so an undisclosed section cannot be sent.
+  `assistant:ask` is the **one outbound channel**; context is assembled in the
   **renderer** (`lib/assistantContext.ts`) so figures use the app's own formatters, and the boundary
   drops undisclosed sections. A section is **absent, never empty**; no money goes in one disclosed
   as names or percentages; each names its store *and clock* — composition is Flex, drift live
@@ -86,7 +87,7 @@ Each exists end-to-end and is the reference pattern for its shape.
   forbidden in the text. A drift-closing **move** is `services/profile/driftMoves.ts` and hangs off
   `DriftBand.move`, non-`null` **exactly** when the band is outside its range: **proportional, not
   greedy**, capacity-capped by the owner's concentration ceiling, the shortfall **`uncovered` and
-  never redistributed, and percentage points never money** — a euro figure there re-asks consent.
+  never redistributed, and percentage points never money** — the profile is not written in money.
   Cash sits in a band and **never in a move**. An **untargeted dimension is said out loud**; absent
   from the report reads as balanced. `MAX_PROMPT_CHARS` moved **24,000 → 40,000** and
   `services/assistant/promptBudget.test.ts` measures the worst case the caps allow (DDR-0103) — the
@@ -263,7 +264,7 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
   state for a saved key the environment shadows. Nothing comes back — no last-four hint, the field
   is `password` and cleared on save. Validation refuses anything outside printable ASCII (a control
   character makes `node:http` **throw** on the header), and checks **no format**: `OPENAI_BASE_URL`
-  can point elsewhere. Setting a key is **not** gated on consent; it sends nothing.
+  can point elsewhere. Saving a key sends nothing — but it is the whole of the setup (ADR-0011).
 
 ### The IBKR gateway
 
@@ -610,7 +611,8 @@ tools and no data access. A trim is grounded; an instrument the owner doesn't ho
 training data — unverified, not price-checked — and the two are **marked apart** in the answer.
 
 **Portfolio data leaves the machine** for that one feature (ADR-0010): `gpt-4.1-mini`, from **main
-only**, gated on consent.
+only**, whenever a key is present and a question is asked — supplying the key is the authorization
+and removing it is what stops the sending (ADR-0011).
 
 ## Current Priority
 
