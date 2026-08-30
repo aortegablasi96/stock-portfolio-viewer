@@ -1,6 +1,13 @@
 # 0094. The profile is a setting, and a range is a policy
 
-- **Status:** Accepted
+- **Status:** Superseded **in its placement half only** by
+  [[0108-the-profile-is-a-section-of-the-assistant]] (Story #310) — the profile is no longer a
+  sidebar row and brings no page box, `<main>`, `<h1>` or `PageHeader` of its own; it is a
+  collapsed section of the Assistant view. **Everything else below stands and is unchanged**: the
+  profile is a *setting* in one overwritten `app_meta` value rather than history (so ADR-0006 does
+  not reach it), "clear" removes the key so *never written* and *cleared* are one state, a target
+  key is suggested and never constrained, a range is the policy, and `OWNER_SOURCE` is the
+  provenance that names no data source — carried now by the view the profile sits in.
 - **Date:** 2026-08-27
 - **Amends:** [[0035-field-and-form-control-primitives]], [[0028-window-state-persistence]]
 - **Extends:** [[0029-tab-shell-aria-pattern-and-keyboard-navigation]],

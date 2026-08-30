@@ -44,10 +44,11 @@ const focusedId = (): Promise<string | undefined> => page.evaluate(() => documen
 /**
  * The views, in order, by the name a reader hears.
  *
- * Six since Story #280: the investor profile is the first row that is not a data view, and it
- * takes the last position so the five data views stay contiguous (DDR-0094). Every assertion
- * below that names "the last tab" therefore names Profile, and that is the point — the pattern
- * derives from the list rather than from a written-down count.
+ * Six since Story #310, which folded the investor profile into the Assistant rather than leaving
+ * it a row of its own (DDR-0108). The Assistant is the one row that is not a data view, and it
+ * takes the last position so the five data views stay contiguous. Every assertion below that names
+ * "the last tab" therefore names Assistant, and that is the point — the pattern derives from the
+ * list rather than from a written-down count.
  */
 const TAB_NAMES = [
   'Portfolio',
@@ -56,7 +57,6 @@ const TAB_NAMES = [
   'Dividends',
   'Trades',
   'Assistant',
-  'Profile',
 ] as const
 
 test('the tablist is named, vertical, and every tab is a tab', async () => {
@@ -104,7 +104,6 @@ test('the tablist is a single stop in the Tab order', async () => {
     { label: 'Dividends', tabIndex: -1 },
     { label: 'Trades', tabIndex: -1 },
     { label: 'Assistant', tabIndex: -1 },
-    { label: 'Profile', tabIndex: -1 },
   ])
 })
 
@@ -176,7 +175,7 @@ test('arrow keys wrap at both ends of the tablist', async () => {
 
   // Up from the first tab lands on the last.
   await page.keyboard.press('ArrowUp')
-  expect(await focusedId()).toBe('tab-profile')
+  expect(await focusedId()).toBe('tab-assistant')
 
   // Down from the last tab comes back round to the first.
   await page.keyboard.press('ArrowDown')
@@ -199,8 +198,8 @@ test('Home and End jump to the first and last tabs', async () => {
   await page.getByRole('tab', { name: 'Portfolio' }).focus()
 
   await page.keyboard.press('End')
-  expect(await focusedId()).toBe('tab-profile')
-  await expect(page.getByRole('tab', { selected: true })).toHaveAccessibleName('Profile')
+  expect(await focusedId()).toBe('tab-assistant')
+  await expect(page.getByRole('tab', { selected: true })).toHaveAccessibleName('Assistant')
 
   await page.keyboard.press('Home')
   expect(await focusedId()).toBe('tab-portfolio')

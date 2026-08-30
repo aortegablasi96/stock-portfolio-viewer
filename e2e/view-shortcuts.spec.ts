@@ -78,7 +78,7 @@ test('focus lands on the destination row, not on whatever the DOM was left holdi
   const reachable = await page.evaluate(() =>
     [...document.querySelectorAll('[role="tab"]')].map((tab) => (tab as HTMLElement).tabIndex),
   )
-  expect(reachable).toEqual([-1, 0, -1, -1, -1, -1, -1])
+  expect(reachable).toEqual([-1, 0, -1, -1, -1, -1])
 })
 
 test('the key belongs to the control while text is being entered', async () => {
@@ -111,8 +111,9 @@ test('the tablist keeps its own keys, and does not answer to the accelerator’s
 })
 
 test('a digit past the last view selects nothing', async () => {
-  // Seven rows since Story #283 (DDR-0097), so Ctrl+9 is still past the end — and still declines
-  // rather than clamping onto the nearest row, which would be a guess at what was meant.
+  // Six rows since Story #310 (DDR-0108), so Ctrl+9 is further past the end than it was — and
+  // still declines rather than clamping onto the nearest row, which would be a guess at what was
+  // meant. Ctrl+7 is now past the end too, which the rotation test below relies on being so.
   await page.getByRole('tab', { name: 'Portfolio', exact: true }).click()
   await page.keyboard.press('Control+9')
   await expect(page.getByRole('tab', { selected: true })).toHaveAttribute('id', 'tab-portfolio')
@@ -136,7 +137,6 @@ test('the binding is on screen and in the accessibility tree, and is neither the
     'Dividends (Ctrl+4)',
     'Trades (Ctrl+5)',
     'Assistant (Ctrl+6)',
-    'Profile (Ctrl+7)',
   ])
   expect(rows.map((r) => r.shortcut)).toEqual([
     'Control+1 Meta+1',
@@ -145,7 +145,6 @@ test('the binding is on screen and in the accessibility tree, and is neither the
     'Control+4 Meta+4',
     'Control+5 Meta+5',
     'Control+6 Meta+6',
-    'Control+7 Meta+7',
   ])
   await expect(page.locator('.app-tab-key')).toHaveCount(0)
 
@@ -205,13 +204,13 @@ test('steps to the next view and back to the previous', async () => {
 test('wraps at both ends of the list', async () => {
   // Down off the bottom lands on the first view, up off the top on the last — the tablist's own
   // wrapping rule, reached through the same `stepIndex`.
-  await page.keyboard.press('Control+7')
-  await expect(page.getByRole('tab', { selected: true })).toHaveAttribute('id', 'tab-profile')
+  await page.keyboard.press('Control+6')
+  await expect(page.getByRole('tab', { selected: true })).toHaveAttribute('id', 'tab-assistant')
   await page.keyboard.press('Control+Tab')
   await expect(page.getByRole('tab', { selected: true })).toHaveAttribute('id', 'tab-portfolio')
 
   await page.keyboard.press('Control+Shift+Tab')
-  await expect(page.getByRole('tab', { selected: true })).toHaveAttribute('id', 'tab-profile')
+  await expect(page.getByRole('tab', { selected: true })).toHaveAttribute('id', 'tab-assistant')
 })
 
 test('rotates without moving focus as a side effect, and leaves plain Tab alone', async () => {

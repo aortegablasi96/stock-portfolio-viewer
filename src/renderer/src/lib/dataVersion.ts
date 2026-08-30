@@ -51,17 +51,15 @@ export function createVersionStore(): VersionStore {
 export const flexDataVersion = createVersionStore()
 
 /**
- * The investor profile's version, bumped when it is saved or cleared (Story #284, DDR-0098).
+ * There is **no second store for the investor profile** (Story #310, DDR-0108).
  *
- * A second store rather than a second bump of the first, because they are not the same fact: a
- * Flex write replaces the *figures* an answer quotes, and a profile write replaces the *standard*
- * they are judged against. The four analytics views care about the first and nothing else, and
- * folding the two together would send all four back to the database every time a target was typed.
+ * There was one, and it existed for this module's own reason: the profile was written on one view
+ * and read on another, two siblings of the shell with nothing between them, so the write had to
+ * reach a mounted view that had already taken its reading (DDR-0098, DDR-0027). Story #310 merged
+ * those two views, and the writer is now a sibling of the reader inside `AssistantView` — which
+ * makes a plain counter in that component the smaller mechanism and the honest one, the same call
+ * `App` makes for every fact the sidebar and a view share (DDR-0056).
  *
- * It exists for the same reason `flexDataVersion` does. The Assistant mounts on first visit and
- * then stays mounted (DDR-0027), so an owner who sets a profile and walks back to the Assistant
- * arrives at a view still holding the reading it took before there was one — which, with nothing
- * imported and no gateway, means being told there is nothing to ground an answer in while a
- * profile sits on the next page. Found by `e2e/assistant-ask.spec.ts`, not by reasoning.
+ * `flexDataVersion` stays, because nothing about it changed: the Flex store is written on the
+ * Portfolio view and read by four others that are not its descendants.
  */
-export const profileDataVersion = createVersionStore()

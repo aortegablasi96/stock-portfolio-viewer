@@ -15,7 +15,7 @@ const electronPath = electronBinary as unknown as string
 const mainEntry = join(__dirname, '..', 'out', 'main', 'index.js')
 
 /**
- * The investor profile (M10, Story #280, DDR-0094).
+ * The investor profile (M10, Story #280, DDR-0094; M11, Story #310, DDR-0108).
  *
  * `lib/investorProfile.test.ts` pins the form's rules and
  * `services/profile/investorProfileService.test.ts` pins storage over a mocked repository. What
@@ -23,6 +23,11 @@ const mainEntry = join(__dirname, '..', 'out', 'main', 'index.js')
  * **survives the process ending** — the acceptance criterion, and one no mock can evidence — and
  * that a form the owner is typing into behaves like one, Save enabling and disabling as the rules
  * say it should.
+ *
+ * Since Story #310 it drives the **merged view**: the profile is a disclosure folded above the
+ * conversation on the Assistant page rather than a row of its own, so every test here reaches it
+ * by opening that disclosure. Nothing else about the form moved, which is the point — the story
+ * changed where the five sections are drawn and not one thing about what they store.
  *
  * Its own user-data directory, both because these tests need a store that starts empty and
  * because the single-instance lock is scoped to that directory (DDR-0025).
@@ -39,8 +44,12 @@ async function launch(userDataDir: string): Promise<{ app: ElectronApplication; 
   })
   const page = await app.firstWindow()
   await page.waitForLoadState('domcontentloaded')
-  await page.getByRole('tab', { name: 'Profile' }).click()
-  await expect(page.getByRole('heading', { level: 1, name: 'Investor profile' })).toBeVisible()
+  await page.getByRole('tab', { name: 'Assistant' }).click()
+  await expect(page.getByRole('heading', { level: 1, name: 'Assistant' })).toBeVisible()
+  // Closed on arrival, and closed again on every launch: the disclosure is uncontrolled and holds
+  // its state for the life of the component, not in `app_meta` (DDR-0106). Opening it is how a
+  // reader reaches the form, so it is how these tests do.
+  await page.getByRole('button', { name: 'Your investor profile' }).click()
   return { app, page }
 }
 
@@ -67,11 +76,15 @@ test.describe('within one launch', () => {
 
   /**
    * The page states what it is and where its content comes from. The provenance line is the one
-   * that matters: it names no data source, because the profile has none — it is the owner's own
-   * policy statement (ADR-0009).
+   * that matters: it names no data source, because neither half of this page has one — the profile
+   * is the owner's own policy statement, and the conversation below it talks about that statement
+   * (ADR-0009, DDR-0108).
    */
-  test('opens as a page of its own, sourced to the owner rather than to a reading', async () => {
+  test('sits on a page sourced to the owner rather than to a reading', async () => {
     await expect(view(page).locator('.page-header .source-note')).toHaveText('Set by you')
+    // One header for the merged view, not two: the profile brought neither a `<main>` nor an
+    // `<h1>` with it.
+    await expect(view(page).locator('.page-header')).toHaveCount(1)
     await expect(view(page).getByText('No profile set')).toBeVisible()
   })
 

@@ -84,7 +84,7 @@ describe('the three provenance sentences', () => {
     'components/analytics/AllocationView.tsx',
     'components/analytics/DividendsView.tsx',
     'components/analytics/TradeHistoryView.tsx',
-    'components/ProfileView.tsx',
+    'components/AssistantView.tsx',
   ])('%s quotes none of the three sentences', (path) => {
     const code = source(path)
     expect(code).not.toContain(LIVE_SOURCE)

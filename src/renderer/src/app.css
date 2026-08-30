@@ -3963,11 +3963,26 @@ html {
   border-radius: var(--radius-pill);
 }
 
-/* ---- Profile view (M10, Story #280) --------------------------------------- */
+/* ---- Investor profile (M10, Story #280; folded in by M11, Story #310) -----
+   Since Story #310 the profile is a collapsed section of the Assistant view
+   rather than a page of its own (DDR-0108). Nothing here needed to change for
+   that — the rules describe a stack of cards and their prose, and a stack of
+   cards is what a `.collapsible-panel` encloses — except the one below, which
+   gives the group back the page's own rhythm. */
 
-/* What the page is, what it says, and how the last write went — three lines
-   about the profile as a whole, tighter than the `--space-7` that separates the
-   cards below, because they are one statement rather than three sections. */
+/* The profile's five cards sit on the page ground, so they keep the page's
+   spacing rather than the panel's. `.collapsible-panel` gaps its contents at
+   `--space-5`, which is the measure between one card's head and its body; a
+   stack of five cards is `.analytics-view`'s own `--space-7`, and taking the
+   default here would tighten the profile alone. */
+.profile-group > .collapsible-panel {
+  gap: var(--space-7);
+}
+
+/* What the section is, what it offers to do, and how the last write went —
+   three lines about the profile as a whole, tighter than the `--space-7` that
+   separates the cards below, because they are one statement rather than three
+   sections. */
 .profile-intro-block {
   display: flex;
   flex-direction: column;
@@ -4021,17 +4036,22 @@ html {
   color: var(--neg-text);
 }
 
-/* What the stored profile currently says, counted rather than listed — the lists
-   are on screen directly below it. It was in the first card's header for one
-   round and read as a fact about *investing style*; it is a fact about the
-   page. */
+/* What the stored profile currently says, counted rather than listed. It was in
+   the first card's header for one round and read as a fact about *investing
+   style*; it is a fact about the profile as a whole. Since Story #310 it is
+   what the head row keeps saying while the section is folded away, which is why
+   it sits beside the trigger rather than under it. */
 .profile-summary {
   margin: 0;
   font-size: var(--text-xs);
   color: var(--muted);
 }
 
-/* Discard beside Save in the page header's action slot. */
+/* Discard beside Save. They sit *inside* the panel, with the form they act on,
+   rather than in the head row beside the trigger: a `role="status"` live region
+   inside a `hidden` subtree announces nothing, so a Save that could be pressed
+   while the section was closed would be a press whose answer could not be read
+   (Story #310, DDR-0108). */
 .profile-actions {
   display: flex;
   align-items: center;

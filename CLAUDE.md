@@ -23,12 +23,11 @@ M0–M9 are delivered: live IBKR holdings/balances/allocation in a display curre
 snapshots, Flex statement import, and four analytics views over it, behind a vertical sidebar.
 M10 is delivered — the investor profile, the assistant's **surface** (grounded Q&A), a period
 explained, a performance summary, the **widened grounding** (#287), the **prompt's phrasing
-rules** (#288) and the **in-app OpenAI key** (#300). The milestone was
-**reshaped after #286**: the box is free-text and always was, so the rest was never question shapes
-but grounding and **phrasing**. #289 is closed as superseded by #287's computed moves — read its
-closing comment before re-proposing an end-state check on model output. **M11 reshapes that surface
-into one view**: ADR-0011 (#307) and #309 removed the consent gate, on the record and from the
-code; #310 merges the profile in. Not built: multi-broker, benchmarks, tax.
+rules** (#288) and the **in-app OpenAI key** (#300). #289 is closed as superseded by #287's
+computed moves — read its closing comment before re-proposing an end-state check on model output.
+**M11 is delivered — the assistant is one view**: ADR-0011 (#307) and #309 removed the consent
+gate, on the record and from the code, and #310 folded the profile in, taking the seventh sidebar
+row with it (DDR-0108). Not built: multi-broker, benchmarks, tax.
 
 **Which Epics are open is deliberately not recorded here** — read the backlog (*Current Priority*).
 The **lifecycle** is the rule: an Epic closes with its stories, and refinement opens a *new*
@@ -51,7 +50,8 @@ Each exists end-to-end and is the reference pattern for its shape.
   (`flexImportService` / `flexStatementsService`). See ADR-0005, DDR-0004, DDR-0026.
 - **analytics / dividends** — read-only over Flex through `flexReadRepository`, converting to base
   (EUR) **in the service**, each returning `ok | needs_import`. See DDR-0005, DDR-0010, DDR-0015.
-- **profile** — the investor profile, and how far the portfolio sits from it.
+- **profile** — the investor profile (a **section of the Assistant view**, DDR-0108), and how far
+  the portfolio sits from it.
   `investorProfileService` → `metaRepository` → **one overwritten `app_meta` value**: a profile is a
   *setting*, not history, so ADR-0006 does not reach it and `metaRepository.remove` is not its
   refused delete-by-id. "Clear" **removes the key**, so "never written" and "cleared" are one state
@@ -78,9 +78,8 @@ Each exists end-to-end and is the reference pattern for its shape.
   and dispersion only from the daily returns that exist — the empty period keeps all three
   (DDR-0101). There is **no period control**: free text already carries a period, so a picker beside
   it asks twice and the click wins silently. Grounding is `wholeHistory()` (`all`, the *identity*
-  case, not a default), `GroundingInputs` is collapsed back into `GroundingReports`, and the
-  `empty_period` **notice** is gone while the **state** stays — `periodChange`'s empty window is that
-  function's contract, and #287 windows this report again (DDR-0102, superseding half of DDR-0099).
+  case, not a default), and the `empty_period` **notice** is gone while the **state** stays — that
+  empty window is `periodChange`'s contract (DDR-0102, superseding half of DDR-0099).
   The grounding is now **every standard period, precomputed** (`lib/periodSet.ts`): a question about
   a window the set does not hold is a **named state with alternatives**, not the adjacent row. A
   trailing year is **"Last 12 months"**, a second vocabulary on purpose — `PERIOD_LABELS`' "Last
@@ -91,10 +90,10 @@ Each exists end-to-end and is the reference pattern for its shape.
   greedy**, capacity-capped by the owner's concentration ceiling, the shortfall **`uncovered` and
   never redistributed, and percentage points never money** — the profile is not written in money.
   Cash sits in a band and **never in a move**. An **untargeted dimension is said out loud**; absent
-  from the report reads as balanced. `MAX_PROMPT_CHARS` moved **24,000 → 40,000** and
-  `services/assistant/promptBudget.test.ts` measures the worst case the caps allow (DDR-0103) — the
-  worst case is now **81%** of it, so the test's **85% gate, not the ceiling, is the binding
-  constraint**; measure before growing either half. `SYSTEM_PROMPT_RULES` is a **declared array of
+  from the report reads as balanced. `services/assistant/promptBudget.test.ts` measures the worst
+  case the caps allow (DDR-0103) — now **81%** of `MAX_PROMPT_CHARS`, so the test's **85% gate, not
+  the ceiling, is the binding constraint**; measure before growing either half.
+  `SYSTEM_PROMPT_RULES` is a **declared array of
   seventeen** rules and the count is asserted twice (array *and* rendered bullets), because a long
   list is one a model weights less: sharpen a rule rather than add an eighteenth. **For phrasing the
   prompt is the *only* line of defence** — a test asserts a rule is present and can never assert it
@@ -356,19 +355,20 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
   disclosed at **the scope of what it acts on** — a row's `title` for its digit (amending
   DDR-0057), the "Views" label's `title` + the tablist's `aria-keyshortcuts` for the rotation. Two
   bindings are still not a table. A drawn digit per row was built and **withdrawn** — don't
-  re-propose it, or a legend. **Two rows are not data views**: Assistant (6) then Profile (7), so
-  the order reads data · the surface that talks about it · the policy over it (DDR-0094, DDR-0107).
-  Both **stay mounted** and declare their own `<main>`/`<h1>`, having no four-branch guard to wear;
-  no accelerator counts rows. Adding a row is a **list edit in six e2e specs**.
+  re-propose it, or a legend. **One row is not a data view**: Assistant (6), last, holding the chat
+  *and* the profile — data, then the surface that talks about it (DDR-0107, DDR-0108). It **stays
+  mounted** and declares its own `<main>`/`<h1>`, having no four-branch guard to wear; no
+  accelerator counts rows. Changing the list is a **list edit in six e2e specs**.
 - **An analytics tab mounts on first visit and then stays mounted**, hidden rather than unmounted,
   so view-local state survives; unvisited tabs issue no IPC (DDR-0006, DDR-0027). The consequence:
   a mounted view can go stale, so both Flex write paths bump `lib/dataVersion` and every
-  `useAnalytics` re-reads. A **profile** write bumps `profileDataVersion`, a *second* store only
-  the Assistant reads (DDR-0098). **`loading` means the first load only**; a reload reports through
+  `useAnalytics` re-reads. There is **no second store for the profile** — writer and reader are
+  siblings now, so the counter is `AssistantView`'s state (DDR-0108 halves DDR-0098).
+  **`loading` means the first load only**; a reload reports through
   `refreshing`. **Portfolio is deliberately excluded** and re-reads on every visit — it shows live
   data that changes with no event to signal it.
 - **The page header's `source` has three values, not two** — `LIVE_SOURCE`, `IMPORTED_SOURCE` and
-  `OWNER_SOURCE` ("Set by you"), the last naming **no** data source because the Profile page has
+  `OWNER_SOURCE` ("Set by you"), the last naming **no** data source because the Assistant has
   none. That slot is where a page says whether its standard is the owner's or the app's (DDR-0094).
 - **`AnalyticsShell` owns the four-branch guard, the `<main>`, and the page header** (DDR-0043,
   DDR-0058). Children are a **function of the report, not elements**, and **the shell holds no
@@ -495,7 +495,7 @@ alternatives this table can only name.
 | `StatTile` / `StatRow` (DDR-0034, DDR-0060) | `tone` only | A tile **is** a `Card`, so it declares no surface. **Neutral is the absence of a rule.** Its label is the app's *one* micro-label — the same four declarations as `.data-table thead th`; don't grow a second. |
 | `Field` + `Select` + `DateInput` + `PercentInput` + `TermInput` + the Assistant's textarea (DDR-0035, DDR-0094, DDR-0098) | `kind` only — **five**, and still no size axis | **`Field` generates its id with `useId()` and takes no `id` prop** — tabs stay mounted, so all three `RangeFilter`s can be in the document at once and a fixed id would name only the first; `TermInput`'s `<datalist>` id is generated for the same reason. A `kind` carries cursor, colour-scheme and **measure**: `percent` is 5ch so a column lines up, `term` takes the row's slack. `percent` is `type="text"` + `inputMode="decimal"` **on purpose** — a number input alters its value on a passing scroll wheel and drops a comma decimal, which `parsePercent` accepts. `prose` is a `<textarea>` and caps `resize` to `vertical`. `term` names a **measure**, not a vocabulary (DDR-0105) — the assistant's key field reuses it, and a `secret` kind would be a rule copying `.control-term` line for line, the duplicate the guard test cannot see. |
 | `ToggleGroup` (DDR-0036) | `mode`, which is **worn** (`--radius-md` vs `--radius-pill`) | **Never a tablist**: `aria-pressed`, not `role="tab"`. Only `.app-tab` is a real tablist. |
-| `Collapsible` (DDR-0106) | `level` only (`group`/`section`) | A **disclosure**, not an accordion; no `role="region"`. Paints nothing, and `level` carries the heading element (`h2`/`h3`). Closed is `hidden`, never unmounted — `.collapsible-panel[hidden]` is load-bearing: the panel's own `display` defeats the attribute without it. |
+| `Collapsible` (DDR-0106) | `level` only (`group`/`section`) | A **disclosure**, not an accordion; no `role="region"`. Paints nothing, and `level` carries the heading element (`h2`/`h3`). Closed is `hidden`, never unmounted — `.collapsible-panel[hidden]` is load-bearing: the panel's own `display` defeats the attribute without it. Its call site is the profile; a `section` head replaces `CardHeader` **strip and all**, a closed panel being DDR-0059's own case for withholding it. |
 | `Badge` (DDR-0037, DDR-0064, DDR-0065) | `variant` × `size` | **Never a pill** (that corner means multi-select) and **never a background** — the toned pair keeps both: `--pos` / `--neg-text` ink, the *borders* take the fill tokens. `BADGE_VARIANTS` ⊇ `STAT_TONES`, so `toneOf()` names a variant. `sm` carries no vertical padding — with it, every holdings row grows ~7px; alone in a cell it also needs `BADGE_CELL_CLASS`, because CSS cannot see that an inline chip follows a *text node*. Trades' side badge **is** toned (DDR-0086 reverses DDR-0065): the *box*, not the hue, separates it from the figure. |
 | `StatePanel` (DDR-0038) | `variant` (the state) × `surface` | Only `error` paints; the axis exists because the copy and the *announcement* differ. `role` is derived. No heading → the panel **is** a `<p>`. |
 | `DataTable` (DDR-0039, DDR-0059, DDR-0065, DDR-0087) | the *container's* `surface` × `height` | Sorting is **opt-in per column**; a **missing value sorts last in both directions**. `.data-table-dim` is the absent-value cell — a *neutral* tone is the **absence** of a class, so an untoned cell keeps `--text`. The 11px column head and its `0.06em` tracking are a **pair**. The linked row's lift is scoped to match the hover's specificity and win on source order — unscoped, `tr:hover > th` silently out-specifies it. `title` is a **slot, not a third axis** — it puts the card's strip on `surface="card"` (see `Card`). |

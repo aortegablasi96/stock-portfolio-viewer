@@ -7,7 +7,6 @@ import { PerformanceView } from './components/analytics/PerformanceView'
 import { AllocationView } from './components/analytics/AllocationView'
 import { DividendsView } from './components/analytics/DividendsView'
 import { TradeHistoryView } from './components/analytics/TradeHistoryView'
-import { ProfileView } from './components/ProfileView'
 import { AssistantView } from './components/AssistantView'
 import {
   AllocationIcon,
@@ -15,7 +14,6 @@ import {
   DividendsIcon,
   PerformanceIcon,
   PortfolioIcon,
-  ProfileIcon,
   TradesIcon,
 } from './components/TabIcons'
 import { nextTabIndex } from './lib/tabKeyboard'
@@ -106,24 +104,24 @@ type Tab =
   | 'dividends'
   | 'trades'
   | 'assistant'
-  | 'profile'
 
 /**
- * **Story #280 adds the sixth row, and the first that is not a data view** (DDR-0094). The
- * investor profile is a page — five sections, a form, an owner-confirmed reset — rather than a
- * preference behind a gear, and the tablist is already a complete, tested way to reach a page, so
- * it goes in the list rather than into a settings surface the app does not have. It needed no
- * change to either accelerator: `viewShortcutIndex` has always covered digits 1–9 and derives a
- * row's binding from its index, and `rotatedTabIndex` wraps over `TABS.length` (DDR-0083,
- * DDR-0090). It is also the second tab excluded from nothing — it stays mounted like the four
- * analytics views, which is what lets a half-finished profile survive a trip to Allocation and
- * back (DDR-0027).
+ * **Six rows, and the sixth is the one that is not a data view** (Story #310, DDR-0108).
  *
- * **Story #283 inserts Assistant between them**, which is why Profile is no longer last. The
- * order is the app's own grammar: five views of the data, then the surface that talks about it,
- * then the policy the owner sets over it. Assistant takes `Ctrl`/`Cmd`+`6` and Profile `+7` with
- * no code change, for the reason above — nothing here counts rows. Story #310 merges the two into
- * one row; #309 deliberately leaves the list at seven.
+ * Story #280 added the investor profile as a row of its own and #283 put the Assistant in front
+ * of it, so the order read *five views of the data, then the surface that talks about it, then
+ * the policy the owner sets over it*. #310 finishes that argument rather than departing from it:
+ * the last two rows were the same page twice — neither an `AnalyticsShell` view, both declaring
+ * their own `<main>` and `<h1>`, both carrying `OWNER_SOURCE` because their standard is the
+ * owner's rather than a data source (DDR-0094, DDR-0098) — so the profile is now a collapsed
+ * section *inside* the Assistant view and the row it used to own is gone.
+ *
+ * Nothing here counts rows, which is why removing one needed no change to either accelerator:
+ * `viewShortcutIndex` has always covered digits 1–9 and derives a row's binding from its index,
+ * and `rotatedTabIndex` wraps over `TABS.length` (DDR-0083, DDR-0090). The Assistant is the
+ * second tab excluded from nothing — it stays mounted like the four analytics views, which is
+ * what lets a half-finished profile *and* a transcript survive a trip to Allocation and back
+ * (DDR-0027).
  */
 const TABS: { id: Tab; label: string; icon: () => React.JSX.Element }[] = [
   { id: 'portfolio', label: 'Portfolio', icon: PortfolioIcon },
@@ -132,7 +130,6 @@ const TABS: { id: Tab; label: string; icon: () => React.JSX.Element }[] = [
   { id: 'dividends', label: 'Dividends', icon: DividendsIcon },
   { id: 'trades', label: 'Trades', icon: TradesIcon },
   { id: 'assistant', label: 'Assistant', icon: AssistantIcon },
-  { id: 'profile', label: 'Profile', icon: ProfileIcon },
 ]
 
 /** Display currency on first launch: the account's base currency (Story #28). */
@@ -479,7 +476,6 @@ export function App(): React.JSX.Element {
           {panel('dividends', <DividendsView />)}
           {panel('trades', <TradeHistoryView />)}
           {panel('assistant', <AssistantView displayCurrency={displayCurrency} />)}
-          {panel('profile', <ProfileView />)}
         </div>
       </div>
     </div>

@@ -34,7 +34,6 @@ const TABS = [
   'Dividends',
   'Trades',
   'Assistant',
-  'Profile',
 ] as const
 
 test.beforeAll(async () => {

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createVersionStore, flexDataVersion, profileDataVersion } from './dataVersion'
+import * as dataVersion from './dataVersion'
+import { createVersionStore, flexDataVersion } from './dataVersion'
 
 describe('createVersionStore', () => {
   it('starts at zero and increments on each bump', () => {
@@ -90,28 +91,16 @@ describe('createVersionStore', () => {
   })
 
   /**
-   * The second store (Story #284, DDR-0098). A Flex write replaces the *figures* an answer quotes;
-   * a profile write replaces the *standard* they are judged against, and only the Assistant cares
-   * about the latter. Folding them into one would send all four analytics views back to the
-   * database every time a target was typed — which is exactly why the separation is asserted here
-   * rather than left to convention.
+   * The store that is **no longer here** (Story #310, DDR-0108, superseding half of DDR-0098).
+   *
+   * A second store existed while the profile was written on one view and read on another: two
+   * siblings of the shell, with nothing between them to hold a counter. #310 merged those views,
+   * so the writer is now a sibling of the reader inside `AssistantView` and the counter is that
+   * component's own state — the call `App` already makes for every fact the sidebar and a view
+   * share (DDR-0056). What is asserted is the *absence*, because a module-level store nothing
+   * imports is invisible to every other gate in the toolchain.
    */
-  it('keeps the profile store apart from the flex one, so a saved target re-reads no analytics view', () => {
-    const flexBefore = flexDataVersion.get()
-    const profileBefore = profileDataVersion.get()
-    const onFlex = vi.fn()
-    const onProfile = vi.fn()
-    const unsubscribeFlex = flexDataVersion.subscribe(onFlex)
-    const unsubscribeProfile = profileDataVersion.subscribe(onProfile)
-
-    profileDataVersion.bump()
-
-    expect(profileDataVersion.get()).toBe(profileBefore + 1)
-    expect(flexDataVersion.get()).toBe(flexBefore)
-    expect(onProfile).toHaveBeenCalledTimes(1)
-    expect(onFlex).not.toHaveBeenCalled()
-
-    unsubscribeFlex()
-    unsubscribeProfile()
+  it('keeps the flex store as the only one, the profile having no view to cross', () => {
+    expect(Object.keys(dataVersion)).toEqual(['createVersionStore', 'flexDataVersion'])
   })
 })
