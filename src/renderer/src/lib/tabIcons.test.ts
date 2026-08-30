@@ -37,10 +37,10 @@ const CSS = strip(read('../app.css'))
 /**
  * The tabs, in the order `App.tsx` declares them and `tab-navigation.spec.ts` asserts.
  *
- * Six since Story #280: the investor profile is the first row that is not a data view, and it
- * arrives here rather than in a settings surface the app does not have (DDR-0094). Its glyph
- * follows the same rule as the other five — it names what the view *draws*, a target with a band
- * around its centre, rather than the gear or the person a "settings" reading would have picked.
+ * Six since Story #310, and six again rather than still: Story #280 added the investor profile as
+ * a seventh row and #310 folded it into the Assistant view, taking its glyph with it (DDR-0108).
+ * A `ProfileIcon` left behind would be a row waiting to be restored, which is why
+ * `profileSection.test.ts` asserts its absence beside the absent row.
  */
 const TABS = [
   'Portfolio',
@@ -49,7 +49,6 @@ const TABS = [
   'Dividends',
   'Trades',
   'Assistant',
-  'Profile',
 ] as const
 
 describe('every icon renders through the shared frame', () => {

@@ -11,7 +11,7 @@ import {
   type Turn,
 } from '../lib/assistantAsk'
 import { buildAssistantContext, type GroundingReports } from '../lib/assistantContext'
-import { flexDataVersion, profileDataVersion } from '../lib/dataVersion'
+import { flexDataVersion } from '../lib/dataVersion'
 import { controlClassName } from '../lib/fieldVariants'
 import type { AssistantStatus } from '@shared/domain/assistant'
 import { Button } from './ui/Button'
@@ -37,12 +37,14 @@ import { StatePanel } from './ui/StatePanel'
  *
  * Three behaviours are worth reading before changing anything:
  *
- * **Grounding is re-read when either version store moves** (DDR-0027). The view stays mounted, so
- * a transcript outlives the import that invalidates it. The answers are not withdrawn — each was
+ * **Grounding is re-read when either version moves** (DDR-0027). The view stays mounted, so a
+ * transcript outlives the import that invalidates it. The answers are not withdrawn — each was
  * true when given — but each records the Flex version it was grounded at, and one the store has
- * moved past says so beside itself. The profile store is watched for a different reason: it
+ * moved past says so beside itself. The profile's version is watched for a different reason: it
  * changes what may be *asked* rather than what an answer said, because a profile can be the only
- * thing there is to ground on.
+ * thing there is to ground on. Since Story #310 it arrives as a **prop** rather than from a
+ * module-level store: the profile is written by a sibling on this very page, so `AssistantView` is
+ * the common ancestor the counter belongs in (DDR-0108).
  *
  * **It is read again at the moment of asking**, and that read is what the question actually goes
  * with. The mounted reading drives the gate and the notices; it can be minutes old by the time a
@@ -69,13 +71,15 @@ import { StatePanel } from './ui/StatePanel'
 export function AssistantConversation({
   status,
   displayCurrency,
+  profileVersion,
 }: {
   status: AssistantStatus
   /** The app's own currency selection, which every drift weight is a share of a total in. */
   displayCurrency: string
+  /** How many times the profile beside this conversation has been written (DDR-0108). */
+  profileVersion: number
 }): React.JSX.Element {
   const version = useSyncExternalStore(flexDataVersion.subscribe, flexDataVersion.get)
-  const profileVersion = useSyncExternalStore(profileDataVersion.subscribe, profileDataVersion.get)
   const [reports, setReports] = useState<GroundingReports | null>(null)
   const [question, setQuestion] = useState('')
   const [turns, setTurns] = useState<readonly Turn[]>([])
@@ -100,7 +104,8 @@ export function AssistantConversation({
       live = false
     }
     // Both versions are dependencies, not values read here: each means something underneath this
-    // view changed while it may have been hidden for minutes (DDR-0027).
+    // view changed — while it may have been hidden for minutes, or in the section directly above
+    // it (DDR-0027, DDR-0108).
   }, [displayCurrency, profileVersion, version])
 
   const ask = useCallback(async (): Promise<void> => {

@@ -11,7 +11,8 @@ import {
   type TargetDimension,
 } from '@shared/domain/investorProfileTerms'
 import { Button } from './ui/Button'
-import { Card, CardContent, CardHeader, CardTitle } from './ui/Card'
+import { Card, CardContent } from './ui/Card'
+import { Collapsible } from './ui/Collapsible'
 import { Field } from './ui/Field'
 import { PercentInput } from './ui/PercentInput'
 import { TermInput } from './ui/TermInput'
@@ -41,6 +42,11 @@ import { TermInput } from './ui/TermInput'
  * **A row reports its own fault, under itself.** The IPC boundary rejects a bad profile whole
  * (ADR-0002), but a sentence about the document is not what tells an owner which of eight rows to
  * look at.
+ *
+ * Since Story #310 the card's head is a `Collapsible` at `section` level rather than a
+ * `CardHeader`, so each of the three dimensions can be folded away independently while the others
+ * stay open (DDR-0106, DDR-0108). "Add target" goes in the disclosure's `action` slot, which is
+ * what that slot exists for: inside the trigger it would be a button within a button.
  */
 export function ProfileTargets({
   dimension,
@@ -62,41 +68,44 @@ export function ProfileTargets({
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>{TARGET_DIMENSION_HEADINGS[dimension]}</CardTitle>
-        <Button size="sm" onClick={() => onChange([...rows, newTargetRow()])}>
-          Add target
-        </Button>
-      </CardHeader>
-      <CardContent>
-        <p className="profile-lede">{lede}</p>
+      <Collapsible
+        label={TARGET_DIMENSION_HEADINGS[dimension]}
+        action={
+          <Button size="sm" onClick={() => onChange([...rows, newTargetRow()])}>
+            Add target
+          </Button>
+        }
+      >
+        <CardContent>
+          <p className="profile-lede">{lede}</p>
 
-        {rows.length === 0 ? (
-          /* Not a `StatePanel`: nothing failed and nothing is missing. An unset dimension is a
-             valid profile, so the line says what it means rather than prompting a fix. */
-          <p className="profile-empty">No {noun.toLowerCase()} targets — no policy stated here.</p>
-        ) : (
-          <ul className="profile-targets">
-            {rows.map((row) => (
-              <TargetRow
-                key={row.id}
-                row={row}
-                dimension={dimension}
-                message={rowMessage(row, dimension, duplicates)}
-                /* Terms another row already claims are not offered to this one, which is how a
-                   duplicate becomes hard to reach through the control rather than merely reported
-                   after the fact. It stays *reported* too, because the list is only a suggestion
-                   and a term can always be typed. */
-                terms={availableTerms(terms, rows, row.id)}
-                onEdit={(patch) =>
-                  onChange(rows.map((r) => (r.id === row.id ? { ...r, ...patch } : r)))
-                }
-                onRemove={() => onChange(rows.filter((r) => r.id !== row.id))}
-              />
-            ))}
-          </ul>
-        )}
-      </CardContent>
+          {rows.length === 0 ? (
+            /* Not a `StatePanel`: nothing failed and nothing is missing. An unset dimension is a
+               valid profile, so the line says what it means rather than prompting a fix. */
+            <p className="profile-empty">No {noun.toLowerCase()} targets — no policy stated here.</p>
+          ) : (
+            <ul className="profile-targets">
+              {rows.map((row) => (
+                <TargetRow
+                  key={row.id}
+                  row={row}
+                  dimension={dimension}
+                  message={rowMessage(row, dimension, duplicates)}
+                  /* Terms another row already claims are not offered to this one, which is how a
+                     duplicate becomes hard to reach through the control rather than merely reported
+                     after the fact. It stays *reported* too, because the list is only a suggestion
+                     and a term can always be typed. */
+                  terms={availableTerms(terms, rows, row.id)}
+                  onEdit={(patch) =>
+                    onChange(rows.map((r) => (r.id === row.id ? { ...r, ...patch } : r)))
+                  }
+                  onRemove={() => onChange(rows.filter((r) => r.id !== row.id))}
+                />
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Collapsible>
     </Card>
   )
 }

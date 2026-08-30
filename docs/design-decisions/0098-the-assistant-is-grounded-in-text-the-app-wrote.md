@@ -1,6 +1,13 @@
 # 0098. The assistant is grounded in text the app wrote
 
-- **Status:** Accepted
+- **Status:** Superseded **in its `profileDataVersion` half only** by
+  [[0108-the-profile-is-a-section-of-the-assistant]] (Story #310) — the second module-level version
+  store is gone, because the profile is now written by a *sibling* of the conversation inside
+  `AssistantView`, which is the common ancestor the counter belongs in. What it did is still done:
+  a write bumps a counter and the grounding is re-read. **Everything else below stands**: the
+  context is assembled in the renderer, `DISCLOSURE_CATEGORIES` types it and bounds it at the
+  boundary, a section is absent rather than empty, each names its store and its clock, and neither
+  the Assistant nor the profile is an `AnalyticsShell` view.
 - **Date:** 2026-08-28
 - **Extends:** [[0097-consent-is-to-a-list-and-the-list-is-the-code]],
   [[0096-the-model-gateway-inherits-a-discipline-and-adds-two-states]],

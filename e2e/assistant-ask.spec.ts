@@ -15,7 +15,8 @@ const electronPath = electronBinary as unknown as string
 const mainEntry = join(__dirname, '..', 'out', 'main', 'index.js')
 
 /**
- * The Assistant's question box (M10, Story #284, DDR-0098; M11, Story #309, ADR-0011).
+ * The Assistant's question box (M10, Story #284, DDR-0098; M11, Stories #309 and #310,
+ * ADR-0011, DDR-0108).
  *
  * `lib/assistantAsk.test.ts` holds every state's wording and `lib/assistantContext.test.ts` holds
  * the grounding. What neither can reach is what this file is for: a real keystroke arriving at a
@@ -58,6 +59,9 @@ const focusedId = (): Promise<string | undefined> => page.evaluate(() => documen
 
 const questionBox = () => view().getByLabel('Your question')
 
+/** The disclosure that holds the investor profile, folded above the conversation (Story #310). */
+const profileTrigger = () => view().getByRole('button', { name: 'Your investor profile' })
+
 test('Ctrl+6 reaches the Assistant from a focus outside the sidebar', async () => {
   await page.locator('#panel-portfolio').focus()
   await page.keyboard.press('Control+6')
@@ -74,7 +78,7 @@ test('the row is a full member of the tabs pattern, not a styled button', async 
   await expect(tab).toHaveAttribute('aria-controls', 'panel-assistant')
   await expect(tab).toHaveAttribute('aria-selected', 'true')
   // `aria-controls` on the selected tab only — an unvisited tab has no panel to name.
-  await expect(page.getByRole('tab', { name: /^Profile/ })).not.toHaveAttribute(
+  await expect(page.getByRole('tab', { name: /^Trades/ })).not.toHaveAttribute(
     'aria-controls',
     /.*/,
   )
@@ -96,6 +100,17 @@ test('puts nothing in front of the chat once there is a key', async () => {
 })
 
 /**
+ * The profile is on this page and folded shut (Story #310, DDR-0108). What the head row keeps
+ * saying while it is shut is what the profile currently holds — nothing, on a fresh store — and
+ * the form itself is `hidden`, which is what keeps its controls out of the tab order.
+ */
+test('carries the investor profile above the chat, collapsed', async () => {
+  await expect(profileTrigger()).toHaveAttribute('aria-expanded', 'false')
+  await expect(view().getByText(/^No profile set/)).toBeVisible()
+  await expect(view().getByRole('button', { name: 'Dividend income' })).toBeHidden()
+})
+
+/**
  * With the key in place the *next* fact is the grounding, and on a fresh store nothing has been
  * imported, no gateway is running and no profile is set — so there is no context at all, and a
  * question would be answered from training data alone, which is the one thing ADR-0009 says an
@@ -113,12 +128,14 @@ test('with nothing to ground an answer in, says so instead of offering the box',
  * than left for the owner to infer from an answer shaped by it.
  */
 test('opens the box once there is something to ground an answer in', async () => {
-  await page.getByRole('tab', { name: /^Profile/ }).click()
+  // Stated and saved without leaving the view, which is the merge's own criterion: a profile
+  // written here reaches the grounding beside it with no restart and no trip through a second row.
+  await profileTrigger().click()
+  await expect(profileTrigger()).toHaveAttribute('aria-expanded', 'true')
   await view().getByRole('button', { name: 'Dividend income' }).click()
   await view().getByRole('button', { name: 'Save profile' }).click()
   await expect(view().getByText(/^Profile saved/)).toBeVisible()
 
-  await page.getByRole('tab', { name: /^Assistant/ }).click()
   await expect(questionBox()).toBeVisible()
   await expect(view().getByText(/No Flex statements are imported/)).toBeVisible()
   await expect(view().getByText(/nothing for an answer to be grounded in/)).toHaveCount(0)
@@ -132,7 +149,6 @@ test('opens the box once there is something to ground an answer in', async () =>
 test.describe('the question box does not swallow the accelerators', () => {
   test.beforeEach(async () => {
     // A profile is what makes the box usable; it was set by the previous test.
-    await page.getByRole('tab', { name: /^Profile/ }).click()
     await page.getByRole('tab', { name: /^Assistant/ }).click()
   })
 
@@ -153,14 +169,15 @@ test.describe('the question box does not swallow the accelerators', () => {
 })
 
 /**
- * Six views, then seven rows: the rotation wraps over the list's length and nothing counts rows
- * (DDR-0090). Run from the tablist rather than from the box, which is the previous test's subject.
+ * Seven rows, then six: the rotation wraps over the list's length and nothing counts rows
+ * (DDR-0090, DDR-0108). Run from the tablist rather than from the box, which is the previous
+ * test's subject.
  */
 test('Ctrl+Tab rotates through every row, wrapping at the end', async () => {
   await page.getByRole('tab', { name: 'Portfolio', exact: true }).click()
 
   const ids = ['portfolio']
-  for (let step = 0; step < 7; step++) {
+  for (let step = 0; step < 6; step++) {
     await page.keyboard.press('Control+Tab')
     ids.push((await focusedId())?.replace('tab-', '') ?? '')
   }
@@ -172,13 +189,12 @@ test('Ctrl+Tab rotates through every row, wrapping at the end', async () => {
     'dividends',
     'trades',
     'assistant',
-    'profile',
     'portfolio',
   ])
 })
 
-test('Ctrl+Shift+Tab rotates the other way, into the Assistant from Profile', async () => {
-  await page.getByRole('tab', { name: /^Profile/ }).click()
+test('Ctrl+Shift+Tab rotates the other way, into the Assistant off the top of the list', async () => {
+  await page.getByRole('tab', { name: 'Portfolio', exact: true }).click()
   await page.keyboard.press('Control+Shift+Tab')
   expect(await focusedId()).toBe('tab-assistant')
 })
@@ -206,6 +222,54 @@ test('will not send an empty question', async () => {
 
   await questionBox().fill('Am I balanced?')
   await expect(view().getByRole('button', { name: 'Ask' })).toBeEnabled()
+})
+
+/**
+ * The merge's own criteria, and the half no text guard can reach (Story #310, DDR-0108): five
+ * disclosures that do not coordinate, and a form that is hidden rather than unmounted — so what
+ * has been typed into a section survives folding it away, and survives leaving the view, exactly
+ * as the transcript above does (DDR-0027, DDR-0106).
+ */
+test('each profile section opens and closes on its own', async () => {
+  await page.getByRole('tab', { name: /^Assistant/ }).click()
+  const style = view().getByRole('button', { name: 'Investing style' })
+  const limit = view().getByRole('button', { name: 'Single position size' })
+
+  await expect(style).toHaveAttribute('aria-expanded', 'true')
+  await expect(limit).toHaveAttribute('aria-expanded', 'true')
+
+  await style.click()
+  await expect(style).toHaveAttribute('aria-expanded', 'false')
+  // Opening or closing one says nothing about its siblings: this is the disclosure pattern, not
+  // an accordion.
+  await expect(limit).toHaveAttribute('aria-expanded', 'true')
+  await expect(view().getByRole('button', { name: 'Dividend income' })).toBeHidden()
+
+  await style.click()
+  await expect(view().getByRole('button', { name: 'Dividend income' })).toBeVisible()
+})
+
+test('an unsaved edit survives folding the section away, and leaving the view', async () => {
+  const limit = view().getByRole('button', { name: 'Single position size' })
+  await view().getByRole('button', { name: 'Add a limit' }).click()
+  // A band, so a half-typed one is not a policy and Save stays unavailable until both ends are
+  // stated — the rule `investor-profile.spec.ts` owns, relied on here to make the form dirty.
+  await view().getByLabel('At least %').fill('0')
+  await view().getByLabel('At most %').fill('12')
+  await expect(view().getByRole('button', { name: 'Save profile' })).toBeEnabled()
+
+  // Folded away and back: `hidden`, never unmounted, so nothing is discarded.
+  await limit.click()
+  await limit.click()
+  await expect(view().getByLabel('At most %')).toHaveValue('12')
+
+  await page.getByRole('tab', { name: 'Allocation' }).click()
+  await page.getByRole('tab', { name: /^Assistant/ }).click()
+  await expect(view().getByLabel('At most %')).toHaveValue('12')
+  await expect(view().getByRole('button', { name: 'Save profile' })).toBeEnabled()
+
+  // And the question typed into the box two tests ago is still there beside it.
+  await expect(questionBox()).toHaveValue('Am I balanced?')
 })
 
 /**

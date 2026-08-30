@@ -219,7 +219,6 @@ test.describe('within one launch', () => {
       'Dividends',
       'Trades',
       'Assistant',
-      'Profile',
     ]) {
       await expect(page.getByRole('tab', { name, exact: true })).toBeVisible()
     }
@@ -274,7 +273,7 @@ test.describe('within one launch', () => {
       const roving = await page.evaluate(() =>
         [...document.querySelectorAll('[role="tab"]')].map((tab) => (tab as HTMLElement).tabIndex),
       )
-      expect(roving).toEqual([0, -1, -1, -1, -1, -1, -1])
+      expect(roving).toEqual([0, -1, -1, -1, -1, -1])
 
       await page.getByRole('tab', { name: 'Portfolio' }).focus()
       await page.keyboard.press('ArrowDown')
@@ -282,7 +281,7 @@ test.describe('within one launch', () => {
       await expect(page.getByRole('tabpanel')).toHaveAttribute('id', 'panel-performance')
 
       await page.keyboard.press('End')
-      expect(await page.evaluate(() => document.activeElement?.id)).toBe('tab-profile')
+      expect(await page.evaluate(() => document.activeElement?.id)).toBe('tab-assistant')
       await page.keyboard.press('Home')
       expect(await page.evaluate(() => document.activeElement?.id)).toBe('tab-portfolio')
     }
