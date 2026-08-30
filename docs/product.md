@@ -3,8 +3,9 @@
 Stock Portfolio Viewer is a personal, single-user **desktop application** focused on
 understanding and analyzing investment portfolios. It is **local-first** (runs on the owner's
 machine, stores data locally, not hosted or shared), with **one qualification**: the AI
-assistant sends portfolio-derived figures to OpenAI, gated on the owner's consent
-(ADR-0010). Every other data path stays on the machine.
+assistant sends portfolio-derived figures to OpenAI whenever the owner has supplied a key and
+asks a question (ADR-0010, ADR-0011). Supplying the key is what authorizes it; removing the key
+is what stops it. Every other data path stays on the machine.
 
 ## Vision
 
@@ -29,14 +30,15 @@ is out of scope — that decision is theirs (ADR-0009).
   against, and the app never proposes one of its own (Story #280, DDR-0094).
 - **Balance drift against that profile**, computed deterministically by a service — no model does
   the arithmetic (Story #281, DDR-0095).
-- **A consent gate for the assistant.** Before anything about the portfolio leaves the machine the
-  owner reads exactly what would be sent, at its real granularity, and decides. It is refusable,
-  revocable, and consent is recorded against that specific list — changing what would be sent asks
-  again (Story #283, DDR-0097). Three of the five categories send percentages and text only; only
+- **An OpenAI key the owner sets, from inside the app or the environment**, the environment winning
+  and the order reported rather than silent (Story #300, DDR-0105). It is the app's one control over
+  whether portfolio-derived figures leave the machine: with a key present a question is sent with
+  nothing in front of it, and without one nothing is (ADR-0011). What may be sent is bounded by
+  `DISCLOSURE_CATEGORIES` — three of its five sections carry percentages and text only; only
   performance carries amounts of money.
-- **An assistant that answers questions about the portfolio**, behind that gate, grounded in text
-  the app wrote from reports it already computed — the model phrases figures and never produces one
-  (Story #284, DDR-0098).
+- **An assistant that answers questions about the portfolio**, grounded in text the app wrote from
+  reports it already computed — the model phrases figures and never produces one (Story #284,
+  DDR-0098).
 - **An explanation of what changed over a period the owner chooses**, in the app's own range
   presets. It keeps a **return** and a **change in value** apart — the performance curve is
   time-weighted, so deposits and withdrawals move value and not return — names the flows where they

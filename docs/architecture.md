@@ -112,7 +112,9 @@ owner does not hold comes from the model's training data — unverified, not pri
 must be marked apart from computed claims.
 
 The provider is `gpt-4.1-mini` on the OpenAI API, reached from the **main process** through a
-repository-layer gateway and gated on the owner's consent (ADR-0010). The renderer's CSP is
-unchanged and the renderer never reaches it.
+repository-layer gateway. **Supplying a key is the authorization** — with one present a question is
+sent with nothing in front of it, and removing the key is what stops it; no consent is asked for,
+stored or checked (ADR-0010, amended by ADR-0011). The renderer's CSP is unchanged and the renderer
+never reaches it.
 
 > Architecture Reviews (see the `architect` skill) produce the input to this document.
