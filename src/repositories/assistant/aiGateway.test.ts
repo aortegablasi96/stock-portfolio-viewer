@@ -304,7 +304,7 @@ describe('where the key comes from', () => {
   /**
    * A blank environment variable is *not* a key, and must not shadow a stored one.
    *
-   * `e2e/assistant-consent.spec.ts` launches the app with `OPENAI_API_KEY: ''` to mean "this run
+   * `e2e/assistant-api-key.spec.ts` launches the app with `OPENAI_API_KEY: ''` to mean "this run
    * has no key". Were an empty string to count as set, that would silently become "this run has an
    * unusable key that hides the owner's", and the suite would be asserting something else.
    */
@@ -355,7 +355,7 @@ describe('where the key comes from', () => {
   })
 
   /**
-   * Removed, never blanked — the rule consent follows, so "never set" and "removed" are one state
+   * Removed, never blanked, so "never set" and "removed" are one state
    * rather than two that behave alike (DDR-0097).
    */
   it('removes the row rather than storing an empty one', () => {

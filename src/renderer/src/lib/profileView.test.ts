@@ -195,8 +195,9 @@ describe('every dimension and tag the domain declares reaches the page', () => {
 
 /**
  * The story's own boundary: *nothing about the profile reaches the model here.* It is stored and
- * shown; who reads it is a later story's concern, and until #282 and #283 land there is no
- * consent and no gateway to reach through.
+ * shown; who reads it is the Assistant view's concern, and this view has no gateway to reach
+ * through. Still true after ADR-0011, which changed what stands in front of a send and not which
+ * module may make one.
  */
 describe('nothing about the profile leaves the machine', () => {
   it.each([VIEW, TARGETS])('makes no network call of any kind', (source) => {

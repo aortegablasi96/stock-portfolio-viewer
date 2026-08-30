@@ -41,9 +41,9 @@ export type MoveDirection = (typeof MOVE_DIRECTIONS)[number]
 /**
  * One held position, and the share of a move it would carry.
  *
- * **Percentage points, never money** (Story #287). The `profile` category is disclosed as
- * percentages only, and a euro figure inside a proposal would change `disclosureFingerprint` and
- * put the owner back through the consent panel (DDR-0097). It would also be the wrong unit: the
+ * **Percentage points, never money** (Story #287). The `profile` category is declared as
+ * percentages only, and a euro figure inside a proposal would exceed what that category may carry
+ * (DDR-0098). It would also be the wrong unit: the
  * profile is written in percentages, so a move that closes it is written in the difference between
  * two of them.
  */

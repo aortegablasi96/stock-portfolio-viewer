@@ -43,8 +43,9 @@ import type { AiRequest, AiResult, AiUsage, ApiKeySource } from '@shared/domain/
  *
  * A packaged build has no `.env` beside its binary, so before #300 an installed copy found a key
  * only if the operating system already carried one. The owner can now paste one into the app, and
- * it is stored the way consent and the investor profile are — one overwritten `app_meta` value
- * (DDR-0094, DDR-0097).
+ * it is stored the way the investor profile is — one overwritten `app_meta` value (DDR-0094).
+ * Since ADR-0011 pasting that key is also the whole of the authorization: there is no consent
+ * decision in front of a question any more, so this module's `keySource` *is* the gate.
  *
  * The store is read **and written here** rather than in a service, which makes this file a
  * repository over two sources. That is the shape `classificationRepository` already has (a SQLite
@@ -143,7 +144,7 @@ export const OPENAI_API_KEY_META_KEY = 'openai_api_key'
  * `src/main/env.ts` merged into it at startup with the OS winning (DDR-0100).
  *
  * A blank value is **no key**, not an empty one. That rule predates the story and is what makes
- * `e2e/assistant-consent.spec.ts`'s `OPENAI_API_KEY: ''` mean "this run has no environment key"
+ * `e2e/assistant-api-key.spec.ts`'s `OPENAI_API_KEY: ''` mean "this run has no environment key"
  * rather than "this run has an unusable one that shadows the store".
  */
 function environmentKey(): string | undefined {
@@ -354,9 +355,15 @@ export const aiGateway = {
   },
 
   /**
-   * Remove it, reporting whether there was one. The key is **removed, not blanked** — the rule
-   * consent follows, so "never set" and "removed" are one state rather than two that behave alike
-   * (DDR-0097).
+   * Remove it, reporting whether there was one. The key is **removed, not blanked**, so "never set"
+   * and "removed" are one state rather than two that behave alike — the rule the investor profile's
+   * clear follows (DDR-0094).
+   *
+   * **Nothing calls this from inside the app** (Story #309, ADR-0011). The field is shown when
+   * there is no working key and not shown once there is one, so there is no activate, deactivate or
+   * rotate, and neither `apiKeyService` nor any IPC channel offers a way here. It stays because the
+   * store's lifecycle belongs with the module that owns the key end to end, and because a future
+   * rotate would build on it rather than re-derive it.
    */
   clearStoredKey(): boolean {
     return metaRepository.remove(OPENAI_API_KEY_META_KEY)

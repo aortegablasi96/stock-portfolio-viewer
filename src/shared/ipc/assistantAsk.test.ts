@@ -17,10 +17,11 @@ import {
  * time; a payload arriving over IPC has been through no compiler at all, and this is what holds
  * there.
  *
- * The pairing with the consent fingerprint is what makes it worth testing rather than reading:
- * adding a category changes {@link disclosureFingerprint} and re-asks the owner (DDR-0097), so a
- * section that reaches the model **without** being added would be sent under a consent that never
- * covered it. Two mechanisms, one promise.
+ * **It is the whole of the bound now** (Story #309, ADR-0011). It used to be one of two: adding a
+ * category also moved the consent fingerprint and re-asked the owner, so a section reaching the
+ * model without being added would have been sent under a consent that never covered it (DDR-0097).
+ * The fingerprint is gone with the decision it protected, and what is left is stronger than the
+ * half that went — it fails a build rather than informing a reader.
  */
 
 const parse = (input: unknown) => assistantAskRequestSchema.safeParse(input)

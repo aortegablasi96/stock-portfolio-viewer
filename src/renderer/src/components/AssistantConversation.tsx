@@ -22,10 +22,12 @@ import { StatePanel } from './ui/StatePanel'
 /**
  * The question box and what came back (Story #284, DDR-0098).
  *
- * Below the consent gate rather than instead of it: the gate is the front door #283 opened, and
- * this is the room behind it. Nothing here can fire while the gate is closed — `askGate` reads the
- * same status the panel above draws, and `assistantService` checks consent again in main before a
- * key is read (DDR-0097). Two checks for one fact, because one of them is in the renderer.
+ * **It is the view now** (Story #309, ADR-0011). The consent gate it used to sit behind is gone as
+ * a concept, and the key card above draws nothing once a key is in force, so on every run after the
+ * first this component *is* the Assistant page. What stands in front of a question is the key and
+ * nothing else: `askGate` reads it from the same status the card above draws, and where there is
+ * none the gateway's own `not_configured` is what comes back from main — the renderer's check saves
+ * a round trip, it does not enforce anything (DDR-0096).
  *
  * **The component holds state and does no reasoning.** Which gate applies, what the assistant
  * cannot see, what a result becomes on screen and what a screen reader is told are all in

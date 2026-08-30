@@ -1,6 +1,5 @@
 import { aiGateway } from '@repositories/assistant/aiGateway'
 import { apiKeyService } from '@services/assistant/apiKeyService'
-import { consentService } from '@services/assistant/consentService'
 import {
   DISCLOSURE_CATEGORIES,
   type AssistantContext,
@@ -9,25 +8,24 @@ import {
 import type {
   AssistantAskResult,
   AssistantStatus,
-  ClearApiKeyResult,
   SaveApiKeyResult,
 } from '@shared/domain/assistant'
 
 /**
- * The gate every model request passes through (Story #283, DDR-0097).
+ * The only caller of `aiGateway`, and what it puts in front of one (Story #309, ADR-0011).
  *
- * **It exists so that "nothing is sent without consent" is a property of the code rather than a
- * promise in a document.** `aiGateway` is the only module that can reach OpenAI; this is the only
- * module that calls it, and the first thing it does is ask whether the owner said yes. A test
- * asserts the gateway is never reached while consent is absent — demonstrated, not asserted, as
- * the story puts it.
+ * **There is nothing in front of it any more, and that is the decision.** This module used to check
+ * consent before the key, before a prompt and before a socket, so that "nothing is sent without
+ * consent" was a property of the code rather than a promise in a document (DDR-0097). ADR-0011
+ * removes consent as a concept: **the key is the authorization**. With one present a question goes
+ * with nothing before it; without one the gateway's own `not_configured` is the answer, and no
+ * socket is opened. Deleting the key is the only "no".
  *
- * It also **serialises the context**, and that is the second half of keeping the disclosure
- * honest. A context is keyed by the disclosure's own category ids, so a later story cannot send a
- * section that is not on the list the owner read: the type says so at compile time, and
- * {@link buildPrompt} drops anything unknown at runtime, in declaration order, under the same
- * headings the disclosure uses. What goes *inside* each section is #285–#289's concern; that each
- * one is disclosed is this story's.
+ * What did **not** move is the second half of the boundary: this module **serialises the context**,
+ * keyed by the disclosure's own category ids, so a later story cannot send a section that is not on
+ * the list — the type says so at compile time, and {@link buildPrompt} drops anything unknown at
+ * runtime, in declaration order. `DISCLOSURE_CATEGORIES` stopped being *rendered* and did not stop
+ * being the bound (DDR-0098).
  */
 
 /**
@@ -83,47 +81,29 @@ export const SYSTEM_PROMPT = [
 
 export const assistantService = {
   /**
-   * Whether the assistant can run, and if not, **which** of the two blockers applies.
+   * Whether the assistant can run, which after ADR-0011 is one question: is there a key.
    *
-   * Consent is checked before configuration on purpose. "No API key" is a setup detail; "you have
-   * not agreed to send anything" is a decision, and telling an owner to paste a key when they have
-   * not agreed to use the feature answers a question they did not ask. Both facts are reported
-   * together anyway, so the view can say what is in the way and what will be next.
+   * `keySource` and `keyStored` come back beside it because the *order* between the two sources is
+   * reported rather than silent (DDR-0105): a key the owner saved while the environment supplies
+   * one is kept and unused, and the view has to be able to say so even though it no longer offers
+   * anything to do about it from in here.
    */
   getStatus(): AssistantStatus {
-    const consent = consentService.get()
     const keySource = aiGateway.keySource()
-    const configured = keySource !== 'none'
     return {
-      state: !consent.granted ? 'needs_consent' : configured ? 'ready' : 'not_configured',
-      consented: consent.granted,
-      consentedAt: consent.grantedAt,
-      consentStale: consent.stale,
-      configured,
+      state: keySource === 'none' ? 'not_configured' : 'ready',
       keySource,
       keyStored: aiGateway.hasStoredKey(),
     }
   },
 
-  /** Record consent against the disclosure now in force, and report the state that follows. */
-  grantConsent(now: number = Date.now()): AssistantStatus {
-    consentService.grant(now)
-    return assistantService.getStatus()
-  },
-
-  /** Withdraw consent. After this, {@link ask} reaches nothing. */
-  revokeConsent(): AssistantStatus {
-    consentService.revoke()
-    return assistantService.getStatus()
-  },
-
   /**
    * Store the owner's own API key (Story #300, DDR-0105).
    *
-   * **Consent is not checked here, and that is deliberate.** Setting a key sends nothing; it is
-   * the same class of act as pasting one into `.env`, and requiring consent first would make the
-   * setup step depend on a decision the owner may reasonably want to take second. The gate stays
-   * exactly where it was — {@link ask} — which is the only place that can send.
+   * **This is now the whole of the setup** (ADR-0011). It was already ungated under #283 — saving a
+   * key sends nothing, so requiring consent first would have made the setup step wait on a decision
+   * the owner may reasonably take second — and with the gate gone it is the single act that
+   * authorizes sending at all.
    *
    * The status comes back with the result rather than being fetched afterwards, so a view learns
    * in one round trip that the key was saved *and* whether it is the one now in force.
@@ -137,32 +117,13 @@ export const assistantService = {
   },
 
   /**
-   * Remove the stored key. Where it was the only source, this returns the assistant to
-   * `not_configured` — the same shape revoking consent has, and the state a fresh clone rests in.
-   */
-  clearApiKey(): ClearApiKeyResult {
-    apiKeyService.clear()
-    return { status: 'cleared', assistant: assistantService.getStatus() }
-  },
-
-  /**
    * Ask the model a question, with context the caller has already assembled.
    *
-   * **The consent check comes before anything else** — before the key is read, before a prompt is
-   * built, and long before a socket is opened. `needs_consent` is a state in the same register as
-   * the gateway's own, never an exception (DDR-0022).
+   * Nothing is checked before the gateway, because there is nothing left to check: the key **is**
+   * the authorization, and a missing one is the gateway's own `not_configured` — a state in the
+   * same register as everything beside it, never an exception (DDR-0022, DDR-0096).
    */
   async ask(question: string, context: AssistantContext = {}): Promise<AssistantAskResult> {
-    const consent = consentService.get()
-    if (!consent.granted) {
-      return {
-        status: 'needs_consent',
-        message: consent.stale
-          ? 'What the assistant would send has changed since you agreed to it. Read the list again to continue.'
-          : 'The assistant has not been allowed to send anything from this machine yet.',
-      }
-    }
-
     return aiGateway.complete({
       system: SYSTEM_PROMPT,
       user: buildPrompt(question, context),

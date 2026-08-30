@@ -86,18 +86,17 @@ export const aiResultSchema = z.discriminatedUnion('status', [
 export type AiResult = z.infer<typeof aiResultSchema>
 
 /**
- * The gateway's states plus the one that comes **before** them (Story #283, DDR-0097).
+ * Every way an ask can end — **exactly the gateway's own states** (Story #309, ADR-0011, DDR-0107).
  *
- * `needs_consent` is not a gateway state and must not be: it is decided before the key is read,
- * before a prompt is built and long before a socket is opened. It sits in the union because that
- * is where a caller has to handle it, and it is a state rather than an exception in the same
- * register as everything beside it (DDR-0022).
+ * It was a union of one more: `needs_consent`, decided before the key was read and long before a
+ * socket was opened (DDR-0097). ADR-0011 removes consent as a concept, so there is nothing in front
+ * of the gateway left to report and the union collapses onto `aiResultSchema`. The alias is kept
+ * rather than the callers being repointed at `AiResult`: what a caller handles is *the assistant's*
+ * answer, and a later story putting something back in front of the gateway should widen this name
+ * rather than re-open every call site.
  */
-export const assistantAskResultSchema = z.union([
-  aiResultSchema,
-  z.object({ status: z.literal('needs_consent'), message: z.string() }),
-])
-export type AssistantAskResult = z.infer<typeof assistantAskResultSchema>
+export const assistantAskResultSchema = aiResultSchema
+export type AssistantAskResult = AiResult
 
 /**
  * Where the key now in force came from (Story #300, DDR-0105).
@@ -123,41 +122,34 @@ export type ApiKeySource = z.infer<typeof apiKeySourceSchema>
  */
 
 /**
- * Whether the assistant can run, and which of the two blockers applies (Story #283).
+ * Whether the assistant can run — **one fact, because there is only one blocker left** (Story #309,
+ * ADR-0011, DDR-0107).
  *
- * The acceptance criterion is that "no API key" and "consent not given" are **distinct states and
- * the owner is told which applies**. `state` is the one in the way; `consented` and `configured`
- * are both reported beside it so a view can also say what will be next once the first is cleared,
- * rather than revealing the second blocker only after the owner clears the first.
+ * It carried five fields for two blockers: consent (given, when, and whether the list had moved
+ * under it) and the key. ADR-0011 removes the first, so `state` is now a restatement of *is there a
+ * key*, and `configured` went with the pair it was one half of — two fields for one fact is what
+ * this codebase keeps refusing. `state` is the field the view branches on and is named rather than
+ * inferred from `keySource !== 'none'`, which is the shape of a fact the view would have to
+ * re-derive.
  *
- * **Nothing here is derived from the key's value** (Story #300). `configured`, `keySource` and
- * `keyStored` are three booleans-in-effect about a secret, and not one of them is a fragment of
- * it: the gateway already redacts even the masked fragment OpenAI quotes back in a refusal, so a
- * "last four characters" hint here would be the one place the key's material crossed IPC after
- * that trouble was taken (ADR-0010, DDR-0105).
+ * **Nothing here is derived from the key's value** (Story #300). `state`, `keySource` and
+ * `keyStored` are three facts about a secret, and not one of them is a fragment of it: the gateway
+ * already redacts even the masked fragment OpenAI quotes back in a refusal, so a "last four
+ * characters" hint here would be the one place the key's material crossed IPC after that trouble
+ * was taken (ADR-0010, DDR-0105).
  */
 export const assistantStatusSchema = z.object({
-  state: z.enum(['ready', 'needs_consent', 'not_configured']),
-  consented: z.boolean(),
-  /** When consent was granted — epoch ms, UTC; `null` when there is none. */
-  consentedAt: z.number().int().nullable(),
-  /**
-   * Consent exists but was given against a **different disclosure**, so it no longer holds.
-   *
-   * Distinct from never having consented: the owner is being asked to re-read a list that changed,
-   * not to decide for the first time.
-   */
-  consentStale: z.boolean(),
-  /** Whether an API key is present. Never the key, and never a fragment of it. */
-  configured: z.boolean(),
+  /** `ready` exactly when a key is in force. Never the key, and never a fragment of it. */
+  state: z.enum(['ready', 'not_configured']),
   /** Which source supplies the key now in force; `none` when there is none (Story #300). */
   keySource: apiKeySourceSchema,
   /**
    * Whether a key is saved **in the app**, whether or not it is the one being used.
    *
-   * Separate from `keySource` on purpose: a saved key that the environment is shadowing still has
-   * to be removable, and the panel has to be able to say that it is there and unused rather than
-   * quietly dropping it from the screen.
+   * Separate from `keySource` on purpose, and still earning its place after #309 removed the key
+   * card's Remove control: a saved key the environment shadows is reported as kept and unused,
+   * which is DDR-0105's "the order is reported, never silent" and the one thing the view says
+   * about a key it is not offering to change (ADR-0011).
    */
   keyStored: z.boolean(),
 })
@@ -185,11 +177,11 @@ export const saveApiKeyResultSchema = z.discriminatedUnion('status', [
 export type SaveApiKeyResult = z.infer<typeof saveApiKeyResultSchema>
 
 /**
- * Removing it. One variant, because removing a key that is not there is not a failure — the
- * shape every `clear` in this app has (ADR-0006's whole-store resets, and the profile's).
+ * There is no `clearApiKeyResultSchema`, and its absence is the decision (Story #309, ADR-0011).
+ *
+ * #300 shipped a Remove control beside the field, and #309 took it out: the field is shown when
+ * there is no working key and not shown once there is one, so there is no activate, deactivate or
+ * rotate. A channel that removed the key would be exactly the control the story says the app does
+ * not have, reachable from `window.api` whether or not anything drew a button for it — so the shape
+ * goes with the button rather than being left behind as an unused variant.
  */
-export const clearApiKeyResultSchema = z.object({
-  status: z.literal('cleared'),
-  assistant: assistantStatusSchema,
-})
-export type ClearApiKeyResult = z.infer<typeof clearApiKeyResultSchema>

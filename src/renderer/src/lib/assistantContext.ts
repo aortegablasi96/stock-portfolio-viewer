@@ -150,8 +150,8 @@ export function buildAssistantContext(reports: GroundingReports): AssistantConte
   if (change !== null) {
     // One category, two sections. The whole history explained, then every standard window as a row
     // the question may name (Story #287) — both are returns and values out of the imported Flex
-    // store, which is what the `performance` category already discloses, so the set widens what is
-    // grounded without widening what is *sent* and `disclosureFingerprint` does not move.
+    // store, which is what the `performance` category already declares, so the set widens what is
+    // grounded without widening what is *sent*.
     const set = reports.performance.status === 'ok' ? standardPeriods(reports.performance.report) : null
     context.performance = [performanceSection(change), set && periodsSection(set)]
       .filter((block): block is string => typeof block === 'string')
@@ -774,9 +774,10 @@ function compositionBlock(
  * this Epic settled on. Computing the end state first makes the check pointless rather than merely
  * cheaper — there is nothing the model produced to verify, because the arithmetic arrived done.
  *
- * **Percentage points, never money.** The `profile` category is disclosed as percentages only, and
- * a euro figure here would change `disclosureFingerprint` and put the owner back through the
- * consent panel for a unit the profile is not even written in (DDR-0097).
+ * **Percentage points, never money.** The `profile` category is declared as percentages only, and
+ * a euro figure here would exceed what that category may carry — in a unit the profile is not even
+ * written in (DDR-0098). The declaration is the bound; the panel that used to read it out is gone
+ * (ADR-0011).
  *
  * **What the move cannot carry is stated, not spread.** A band the owner targets and holds nothing
  * in has no position to trim; a ceiling can stop the positions that exist from taking the rest. In

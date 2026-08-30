@@ -5,14 +5,12 @@ import type {
   AssistantApiKeyRequest,
   AssistantAskRequest,
   AssistantAskResult,
-  AssistantConsentRequest,
   AssistantStatus,
   BalanceDriftRequest,
   BalanceDriftResult,
   CaptureSnapshotResult,
   ClassificationProgress,
   ClassifyInstrumentsResult,
-  ClearApiKeyResult,
   ClearHistoryResult,
   ClearInvestorProfileResult,
   ClearStatementsResult,
@@ -109,19 +107,17 @@ const api: RendererApi = {
   // is a share of a total expressed in it.
   getBalanceDrift: (request: BalanceDriftRequest): Promise<BalanceDriftResult> =>
     ipcRenderer.invoke(IpcChannels.profileGetDrift, request),
-  // The consent gate (Story #283).
+  // Whether there is a key (Story #309). No `setAssistantConsent` beside it: ADR-0011 removed
+  // consent as a concept, and the key is the authorization.
   getAssistantStatus: (): Promise<AssistantStatus> =>
     ipcRenderer.invoke(IpcChannels.assistantGetStatus),
-  setAssistantConsent: (request: AssistantConsentRequest): Promise<AssistantStatus> =>
-    ipcRenderer.invoke(IpcChannels.assistantSetConsent, request),
   // The owner's own key (Story #300). It crosses here once, inbound, and never comes back: the
   // bridge forwards a secret in exactly the way it forwards everything else, and the fact that it
   // holds nothing — no key, no default, no memory of one — is what keeps ADR-0010 true of the
-  // preload bundle as well as the renderer's.
+  // preload bundle as well as the renderer's. There is no `clearAssistantApiKey`, because there is
+  // no control to remove a key from inside the app (Story #309).
   setAssistantApiKey: (request: AssistantApiKeyRequest): Promise<SaveApiKeyResult> =>
     ipcRenderer.invoke(IpcChannels.assistantSetApiKey, request),
-  clearAssistantApiKey: (): Promise<ClearApiKeyResult> =>
-    ipcRenderer.invoke(IpcChannels.assistantClearApiKey),
   // The question (Story #284). The bridge stays a bridge: it forwards a question and the context
   // the view assembled, and holds no key, no prompt and no HTTP client of its own — every one of
   // those lives in main, which is the whole of ADR-0010's mechanism.

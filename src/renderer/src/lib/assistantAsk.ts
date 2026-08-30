@@ -1,29 +1,28 @@
-import { gateKind, type GateKind } from './assistantGate'
 import { hasProfile } from './assistantContext'
 import type { AssistantStatus, AssistantAskResult } from '@shared/domain/assistant'
 import type { GroundingReports } from './assistantContext'
 
 /**
  * What the question box may do, what it must say instead, and what came back (Story #284,
- * DDR-0098).
+ * DDR-0098; narrowed by Story #309, ADR-0011).
  *
  * The story's rule is that **every blocking state is named specifically and calmly, and none is
- * presented as an error**. There are more of them here than an analytics view has: consent absent,
- * consent stale, no key, nothing to read, and then five ways one bounded request can end. That
- * count is the reason this view sits beside `AnalyticsShell` rather than inside it — the shell's
- * whole shape is four branches and no state (DDR-0043, DDR-0058), and a fifth, sixth and seventh
- * branch would not extend it so much as replace it.
+ * presented as an error**. There used to be four of them — consent absent, consent stale, no key,
+ * nothing to read — plus five ways one bounded request can end. ADR-0011 removes the first two:
+ * the key is the authorization, so what blocks a question is a missing key or a missing grounding,
+ * and nothing else. `assistantGate.ts` went with them, and `AskGateKind` is now this module's own
+ * union rather than an extension of that file's.
  *
  * A Node-only test suite is why the states live here rather than in the component (DDR-0029). What
  * they mostly are is *wording*, and wording is the part of a state that goes wrong.
  *
  * ## Blocking and not blocking are different things
  *
- * Consent and the key **block**: without either, nothing may be asked, and the panel above the box
- * already says so in the gate's own words. A missing profile and an empty Flex store do **not** —
- * they are gaps in what an answer can be grounded on, and a question the remaining sections can
- * answer is still worth asking. They are named beside the box as notices, so the owner learns what
- * the assistant cannot see *before* reading an answer shaped by its absence rather than after.
+ * The key **blocks**: without one nothing may be asked, and the card above the box is the field
+ * that fixes it. A missing profile and an empty Flex store do **not** — they are gaps in what an
+ * answer can be grounded on, and a question the remaining sections can answer is still worth
+ * asking. They are named beside the box as notices, so the owner learns what the assistant cannot
+ * see *before* reading an answer shaped by its absence rather than after.
  *
  * The one case where a gap does block is when **every** gap is present at once: nothing imported,
  * no live reading, no profile. There is then no context at all, and a question would be answered
@@ -32,7 +31,7 @@ import type { GroundingReports } from './assistantContext'
  */
 
 /** Why the box is unusable, or that it is not. */
-export type AskGateKind = GateKind | 'no_grounding'
+export type AskGateKind = 'not_configured' | 'ready' | 'no_grounding'
 
 /** What the box is allowed to do right now, and what to say where it is not. */
 export interface AskGate {
@@ -46,30 +45,29 @@ export interface AskGate {
 /**
  * The one sentence each blocker says.
  *
- * Consent and the key defer to the panel above rather than restating it — two statements of the
- * same fact on one page is how they drift — so what they say here is where the answer is, not
- * what it is.
+ * The key defers to the card above rather than restating what it is for — two statements of the
+ * same fact on one page is how they drift — so what it says here is where the answer is, not what
+ * it is.
  */
 export const ASK_BLOCKERS: Record<AskGateKind, string | null> = {
-  first_consent: 'Allow the assistant above before asking it anything.',
-  re_consent: 'What would be sent has changed. Read the list above and decide again before asking.',
-  not_configured: 'There is no API key for the assistant to send with, so a question cannot go anywhere yet.',
+  not_configured: 'There is no API key for the assistant to send with, so a question cannot go anywhere yet. Set one above.',
   ready: null,
   no_grounding:
     'There is nothing for an answer to be grounded in yet: no Flex statements imported, no live reading from the gateway, and no investor profile. Import a statement, start the IBKR gateway, or set a profile.',
 }
 
 /**
- * Whether a question may be asked, and if not, which of the four facts is why.
+ * Whether a question may be asked, and if not, which of the two facts is why.
  *
- * Order matters and is the same order the gate panel uses: a decision the owner has not made comes
- * before a key they have not pasted, which comes before data they have not imported. Telling
- * someone to import a statement while they have not agreed to the feature answers a question they
- * did not ask (DDR-0097).
+ * Order matters: a key the owner has not pasted comes before data they have not imported, because
+ * telling someone to import a statement while the assistant cannot send anything at all answers a
+ * question they did not ask. The consent decision that used to come before both is gone
+ * (ADR-0011).
  */
 export function askGate(status: AssistantStatus, grounding: GroundingReports | null): AskGate {
-  const kind = gateKind(status)
-  if (kind !== 'ready') return { kind, ready: false, blocker: ASK_BLOCKERS[kind] }
+  if (status.state === 'not_configured') {
+    return { kind: 'not_configured', ready: false, blocker: ASK_BLOCKERS.not_configured }
+  }
 
   // Still loading its grounding: not a blocker, and not yet askable either. Reported as `ready`
   // being false with nothing to say, because "we are reading" is the view's spinner, not a state.
@@ -163,7 +161,6 @@ export type TurnAnswer =
  * machine — the one distinction ADR-0010 exists to keep clear.
  */
 export const FAILURE_HEADINGS: Record<FailureStatus, string> = {
-  needs_consent: 'Nothing was sent',
   not_configured: 'No API key',
   too_large: 'Too large to send — nothing left this machine',
   refused: 'OpenAI declined the request',
@@ -172,7 +169,13 @@ export const FAILURE_HEADINGS: Record<FailureStatus, string> = {
   error: 'Something went wrong',
 }
 
-/** Every status that is not an answer. */
+/**
+ * Every status that is not an answer — now exactly the gateway's own six (ADR-0011).
+ *
+ * `needs_consent` was a seventh, decided before a socket was opened. It is gone with the concept,
+ * and the union is derived rather than written out so that a status added to the gateway without a
+ * heading here is a compile error rather than an answer rendered under `undefined`.
+ */
 export type FailureStatus = Exclude<AssistantAskResult['status'], 'ok'>
 
 /**

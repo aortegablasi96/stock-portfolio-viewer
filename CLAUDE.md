@@ -27,8 +27,8 @@ rules** (#288) and the **in-app OpenAI key** (#300). The milestone was
 **reshaped after #286**: the box is free-text and always was, so the rest was never question shapes
 but grounding and **phrasing**. #289 is closed as superseded by #287's computed moves — read its
 closing comment before re-proposing an end-state check on model output. **M11 reshapes that surface
-into one view**: ADR-0011 (#307) has removed the consent gate *on the record*; the code follows in
-#309/#310. Not built: multi-broker, benchmarks, tax.
+into one view**: ADR-0011 (#307) and #309 removed the consent gate, on the record and from the
+code; #310 merges the profile in. Not built: multi-broker, benchmarks, tax.
 
 **Which Epics are open is deliberately not recorded here** — read the backlog (*Current Priority*).
 The **lifecycle** is the rule: an Epic closes with its stories, and refinement opens a *new*
@@ -59,13 +59,15 @@ Each exists end-to-end and is the reference pattern for its shape.
   arithmetic** — over the **live** portfolio, not Flex, which is why it is the one `profile:*`
   channel with gateway states (DDR-0095).
 - **assistant** — `assistantService` is the **only** caller of `aiGateway`. **The key is the
-  authorization** — with one present a question is sent with nothing in front of it, and deleting it
-  is the only "no" (ADR-0011 amends ADR-0010: no consent is asked for, stored or checked; DDR-0097's
-  gate is still in the tree until #309 removes it). `DISCLOSURE_CATEGORIES` outlives the panel it
-  drew — it *types* `AssistantContext`, so an undisclosed section cannot be sent.
-  `assistant:ask` is the **one outbound channel**; context is assembled in the
+  authorization**: a question goes with nothing in front of it, and the *gateway* owns the refusal.
+  No consent is asked for, stored or checked anywhere; `consentService`, the fingerprint and
+  `needs_consent` are gone (ADR-0011; DDR-0107 supersedes DDR-0097).
+  `DISCLOSURE_CATEGORIES` outlives the panel it drew — it *types* `AssistantContext`, so an
+  undeclared section cannot be sent. The key field shows **only with no working key**; there is
+  **no remove, replace or rotate, not even a channel**. `assistant:ask` is the **one outbound
+  channel**; context is assembled in the
   **renderer** (`lib/assistantContext.ts`) so figures use the app's own formatters, and the boundary
-  drops undisclosed sections. A section is **absent, never empty**; no money goes in one disclosed
+  drops undeclared sections. A section is **absent, never empty**; no money goes in one declared
   as names or percentages; each names its store *and clock* — composition is Flex, drift live
   (DDR-0098). An **explained period** keeps return and value in separate fields under separate
   headings, return first — the curve is TWR, so a deposit moves value alone; the period is the
@@ -260,9 +262,8 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
   gains an origin. **Two sources, one stated order** (DDR-0105): the environment beats the key the
   owner saves in the app, one overwritten `app_meta` value the gateway itself reads *and* writes —
   so key material lives in one module, and that test also fails if `'openai_api_key'` is spelled
-  outside it. The order is **reported**, never silent: `keySource`/`keyStored` give the panel a
-  state for a saved key the environment shadows. Nothing comes back — no last-four hint, the field
-  is `password` and cleared on save. Validation refuses anything outside printable ASCII (a control
+  outside it. The order is **reported**, never silent: a shadowed saved key gets a sentence
+  (`keyStored`). Nothing comes back — no last-four hint, the field is `password`, cleared on save. Validation refuses anything outside printable ASCII (a control
   character makes `node:http` **throw** on the header), and checks **no format**: `OPENAI_BASE_URL`
   can point elsewhere. Saving a key sends nothing — but it is the whole of the setup (ADR-0011).
 
@@ -356,7 +357,7 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
   DDR-0057), the "Views" label's `title` + the tablist's `aria-keyshortcuts` for the rotation. Two
   bindings are still not a table. A drawn digit per row was built and **withdrawn** — don't
   re-propose it, or a legend. **Two rows are not data views**: Assistant (6) then Profile (7), so
-  the order reads data · the surface that talks about it · the policy over it (DDR-0094, DDR-0097).
+  the order reads data · the surface that talks about it · the policy over it (DDR-0094, DDR-0107).
   Both **stay mounted** and declare their own `<main>`/`<h1>`, having no four-branch guard to wear;
   no accelerator counts rows. Adding a row is a **list edit in six e2e specs**.
 - **An analytics tab mounts on first visit and then stays mounted**, hidden rather than unmounted,

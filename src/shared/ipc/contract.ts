@@ -29,11 +29,9 @@ import {
 import {
   assistantAskResultSchema,
   assistantStatusSchema,
-  clearApiKeyResultSchema,
   saveApiKeyResultSchema,
   type AssistantAskResult,
   type AssistantStatus,
-  type ClearApiKeyResult,
   type SaveApiKeyResult,
 } from '@shared/domain/assistant'
 import {
@@ -276,27 +274,23 @@ export type BalanceDriftRequest = z.infer<typeof balanceDriftRequestSchema>
 export { balanceDriftResultSchema }
 export type { BalanceDriftReport, BalanceDriftResult }
 
-// ---- assistant:* (M10, Story #283) ------------------------------------------
+// ---- assistant:getStatus (M11, Story #309) ----------------------------------
 
 /**
- * Whether the assistant may run, and the owner's decision about it (DDR-0097).
+ * Whether the assistant can run (ADR-0011).
  *
  * A pure local read with no result variant to discriminate — `AssistantStatus` *is* the variant,
- * naming which of the two blockers applies. The setter takes one boolean and echoes the status
- * that follows, so a caller re-seats on what actually landed rather than assuming.
+ * and after ADR-0011 it names one fact: whether a key is in force. There is no setter beside it any
+ * more; `assistant:setConsent` went with the concept it carried, and the status the key channel
+ * echoes back is how a caller re-seats on what actually landed.
  *
- * `configured` reports **whether** a key exists and never the key, which is the whole reason the
- * status is a computed shape rather than the environment crossing the bridge.
+ * It reports **whether** a key exists and never the key, which is the whole reason the status is a
+ * computed shape rather than the environment crossing the bridge.
  */
-export const assistantConsentRequestSchema = z.object({
-  granted: z.boolean(),
-})
-export type AssistantConsentRequest = z.infer<typeof assistantConsentRequestSchema>
-
 export { assistantStatusSchema }
 export type { AssistantStatus }
 
-// ---- assistant:setApiKey | clearApiKey (M10, Story #300) --------------------
+// ---- assistant:setApiKey (M10, Story #300; M11, Story #309) -----------------
 
 /**
  * The owner's own OpenAI key, crossing the bridge (DDR-0105).
@@ -312,14 +306,18 @@ export type { AssistantStatus }
  * The renderer holds the value only for as long as it takes to type it: the field is cleared on
  * save and nothing repopulates it, which is what makes "never displayed back in full" a property
  * of the wire rather than of the component.
+ *
+ * **Inbound only, and there is no companion that removes it** (Story #309). The field is shown when
+ * there is no working key and not shown once there is one, so `assistant:clearApiKey` and its
+ * result shape are gone with the Remove control they served.
  */
 export const assistantApiKeyRequestSchema = z.object({
   key: z.string().max(MAX_API_KEY_CHARS),
 })
 export type AssistantApiKeyRequest = z.infer<typeof assistantApiKeyRequestSchema>
 
-export { clearApiKeyResultSchema, saveApiKeyResultSchema }
-export type { ClearApiKeyResult, SaveApiKeyResult }
+export { saveApiKeyResultSchema }
+export type { SaveApiKeyResult }
 
 // ---- assistant:ask (M10, Story #284) ----------------------------------------
 
@@ -330,14 +328,13 @@ export type { ClearApiKeyResult, SaveApiKeyResult }
  * Every figure the assistant may quote is already on a dashboard, and the formatters that put it
  * there — `renderer/src/lib/format.ts` — are renderer code. Assembling in main would mean a second
  * set of formatters, and the criterion this story is held to is that a number in prose and the
- * same number on a dashboard agree to the digit. The renderer is not therefore trusted: consent is
- * still checked in main before anything is read, and the schema below is what bounds *what* may
- * cross.
+ * same number on a dashboard agree to the digit. The renderer is not therefore trusted: the schema
+ * below is what bounds *what* may cross.
  *
- * `context` is parsed as an arbitrary string map and then **reduced to the disclosed categories**.
- * A section the owner never read is dropped here, at the boundary, rather than being relied on to
- * be absent — which is the runtime half of the promise `AssistantContext`'s key type makes at
- * compile time (DDR-0097).
+ * `context` is parsed as an arbitrary string map and then **reduced to the declared categories**.
+ * An undeclared section is dropped here, at the boundary, rather than being relied on to be absent
+ * — the runtime half of the promise `AssistantContext`'s key type makes at compile time. ADR-0011
+ * stopped `DISCLOSURE_CATEGORIES` being *rendered*; this bound is the job of it that stayed.
  */
 
 /** The longest question the box accepts. The prompt as a whole is bounded again by the gateway. */
@@ -428,25 +425,23 @@ export interface RendererApi {
   clearInvestorProfile: () => Promise<ClearInvestorProfileResult>
   /** How far the live portfolio sits from the profile's targets (Story #281). */
   getBalanceDrift: (request: BalanceDriftRequest) => Promise<BalanceDriftResult>
-  /** Whether the assistant may run, and which blocker applies if not (Story #283). */
+  /** Whether the assistant can run — after ADR-0011, whether there is a key (Story #309). */
   getAssistantStatus: () => Promise<AssistantStatus>
-  /** Grant or withdraw consent for portfolio figures to leave the machine (Story #283). */
-  setAssistantConsent: (request: AssistantConsentRequest) => Promise<AssistantStatus>
   /**
-   * Store the owner's own OpenAI key, so a packaged build can use the assistant (Story #300).
+   * Store the owner's own OpenAI key, so a packaged build can use the assistant (Story #300) — and,
+   * since ADR-0011, the single act that authorizes sending.
    *
    * The one call in this app that carries a secret, and it carries it inbound only. Nothing ever
    * returns a key or a fragment of one; the status that comes back says which source is in force.
+   * There is no companion that removes it (Story #309).
    */
   setAssistantApiKey: (request: AssistantApiKeyRequest) => Promise<SaveApiKeyResult>
-  /** Remove the stored key, returning the assistant to `not_configured` where it was the only one. */
-  clearAssistantApiKey: () => Promise<ClearApiKeyResult>
   /**
    * Ask the assistant a question, grounded in context the view assembled (Story #284).
    *
    * The one call in this app that reaches the internet with portfolio figures on it. Its result
-   * carries every way the exchange can end — `needs_consent` included, which is decided before
-   * the key is read and long before a socket is opened (DDR-0022, DDR-0097).
+   * carries every way the exchange can end, all of them the gateway's own: nothing stands in front
+   * of it any more (ADR-0011, DDR-0022, DDR-0096).
    */
   askAssistant: (request: AssistantAskRequest) => Promise<AssistantAskResult>
 }

@@ -152,8 +152,8 @@ describe('driftMove', () => {
   })
 
   it('carries no amount of money anywhere in what it produces', () => {
-    // The `profile` category is disclosed as percentages only. A figure in another unit here would
-    // change `disclosureFingerprint` and put the owner back through the consent panel (DDR-0097).
+    // The `profile` category is declared as percentages only, so a figure in another unit here
+    // would exceed what that category may carry (DDR-0098).
     const move = driftMove('above', 10, [position('AAA', 40), position('BBB', 15)], 25)
 
     expect(JSON.stringify(move)).not.toMatch(/€|\$|£/)
