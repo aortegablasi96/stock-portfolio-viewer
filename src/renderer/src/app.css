@@ -750,6 +750,118 @@ html {
   line-height: var(--leading-normal);
 }
 
+/* ---- Collapsible primitive (Story #308, DDR-0106) ------------------------
+   The app's one show-and-hide surface, and the first primitive that paints
+   nothing at all: no background, no border, no radius. The surface behind a
+   collapsible is the card's (DDR-0033), exactly as a stat tile's is — what
+   this owns is the head row, the trigger's affordance and the panel's
+   visibility, which is what lets a section become collapsible without
+   changing shape.
+
+   One axis, `level`, carried by the wrapper alone: a `group` is a band over a
+   stack of cards, a `section` is one card's own head. The two differ in the
+   head's type step and in the heading element the trigger sits in (see
+   `lib/collapsibleVariants`), and in nothing else.
+
+   No rule here declares a focus ring or a `:disabled` state. The trigger is a
+   `<button>` and falls through to the base rule at the top of this file. */
+
+.collapsible {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.collapsible-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-5);
+  flex-wrap: wrap;
+}
+
+/* The heading is structure rather than decoration: it carries the document
+   outline, and giving it the row's slack is what lets the trigger inside it be
+   clicked anywhere along the row. Its type comes from the level below, so the
+   element never implies a size here. */
+.collapsible-heading {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* A band over a stack of cards — one step above the card titles beneath it. */
+.collapsible-group .collapsible-heading {
+  font-size: var(--text-md);
+}
+
+/* One card's own head, in exactly `.card-title`'s treatment (DDR-0033), so a
+   card that gained a collapsible reads as the card it already was. */
+.collapsible-section .collapsible-heading {
+  font-size: var(--text-sm);
+}
+
+/* The button reset. The trigger inherits its type and ink from the heading, so
+   it is invisible *as a control* and the heading itself is the affordance —
+   the marker beside it is what says the row does something. */
+.collapsible-trigger {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: 0;
+  background: none;
+  border: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.collapsible-trigger:hover {
+  color: var(--accent);
+}
+
+/* Sized from the type it sits in rather than from the scale, so one glyph
+   tracks the head it belongs to at both levels. */
+.collapsible-marker {
+  flex: none;
+  width: 1em;
+  height: 1em;
+  color: var(--muted);
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+.collapsible-trigger:hover .collapsible-marker {
+  color: inherit;
+}
+
+/* Open turns the arrow down. The rotation is on the modifier rather than on
+   the resting state, so a page of collapsed sections carries no transform
+   saying nothing — and the turn draws its duration from the scale, which is
+   the only thing that puts it inside the reduced-motion block (DDR-0044). */
+.collapsible-marker-open {
+  transform: rotate(90deg);
+}
+
+.collapsible-action {
+  flex: none;
+}
+
+.collapsible-panel {
+  display: grid;
+  gap: var(--space-5);
+}
+
+/* `hidden` is the mechanism, and the `display` above would silently defeat the
+   attribute without this. Closed means hidden and never unmounted, so an
+   unsaved edit survives being folded away (DDR-0027) — and `hidden` is also
+   what keeps a closed panel's controls out of the tab order. */
+.collapsible-panel[hidden] {
+  display: none;
+}
+
 /* ---- StatTile primitive (Story #129, DDR-0034) ---------------------------
    One headline figure, replacing the two the audit found: the dashboard's
    `.balance-tile` and the analytics views' `.stat-tile`. They were the same
