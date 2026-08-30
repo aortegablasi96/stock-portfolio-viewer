@@ -19,15 +19,16 @@ import { EMPTY_INVESTOR_PROFILE, type InvestorProfile } from '@shared/domain/inv
 import { aiResultSchema, type AssistantStatus } from '@shared/domain/assistant'
 
 /**
- * The question box's states (Story #284, DDR-0098).
+ * The question box's states (Story #284, DDR-0098; narrowed by Story #309, ADR-0011).
  *
  * The story's criterion is that **every blocking state is named specifically and calmly, and none
  * is presented as an error**. That is wording, and wording is what drifts, so this is where it is
  * pinned — the component it is rendered in is unreachable from Vitest (DDR-0029).
  *
- * The distinction the file exists to hold is *blocking* versus *missing*. Consent and the key stop
- * a question; an empty Flex store and an unset profile do not — they narrow what an answer can be
- * grounded in, and the owner is told which before reading an answer shaped by the gap.
+ * The distinction the file exists to hold is *blocking* versus *missing*. The key stops a question;
+ * an empty Flex store and an unset profile do not — they narrow what an answer can be grounded in,
+ * and the owner is told which before reading an answer shaped by the gap. The two consent blockers
+ * that used to come before the key are gone with the concept.
  */
 
 const PROFILE: InvestorProfile = {
@@ -37,10 +38,6 @@ const PROFILE: InvestorProfile = {
 
 const status = (over: Partial<AssistantStatus> = {}): AssistantStatus => ({
   state: 'ready',
-  consented: true,
-  consentedAt: 1,
-  consentStale: false,
-  configured: true,
   keySource: 'environment',
   keyStored: false,
   ...over,
@@ -77,37 +74,34 @@ const performanceReport = (over: Partial<PerformanceReport> = {}): PerformanceRe
 })
 
 describe('askGate', () => {
-  it('sends the owner to the panel above when consent has never been given', () => {
-    const gate = askGate(status({ consented: false, consentedAt: null }), grounding())
-    expect(gate.kind).toBe('first_consent')
-    expect(gate.ready).toBe(false)
-    expect(gate.blocker).toBe(ASK_BLOCKERS.first_consent)
-  })
-
   /**
-   * The pair DDR-0097 keeps apart, reaching the box. Telling someone to *decide* when they already
-   * did is the failure the two states exist to avoid, so the two blockers say different things.
+   * The one blocker left in front of a question (ADR-0011). The two consent states that used to
+   * precede it are gone, and the key is what a question cannot go without.
    */
-  it('distinguishes a changed disclosure from a decision never made', () => {
-    const stale = askGate(status({ consentStale: true }), grounding())
-    expect(stale.kind).toBe('re_consent')
-    expect(stale.blocker).not.toBe(ASK_BLOCKERS.first_consent)
-  })
-
-  it('names the missing key once consent is in place, and only then', () => {
-    const gate = askGate(status({ configured: false }), grounding())
+  it('names the missing key, and points at the field above', () => {
+    const gate = askGate(status({ state: 'not_configured', keySource: 'none' }), grounding())
     expect(gate.kind).toBe('not_configured')
+    expect(gate.ready).toBe(false)
+    expect(gate.blocker).toBe(ASK_BLOCKERS.not_configured)
     expect(gate.blocker).toContain('no API key')
   })
 
   /**
-   * Order is the criterion. A decision the owner has not made comes before a key they have not
-   * pasted, which comes before data they have not imported — telling someone to import a statement
-   * while they have not agreed to the feature answers a question they did not ask.
+   * Order is the criterion, over the two facts that are left: a key the owner has not pasted comes
+   * before data they have not imported, because telling someone to import a statement while nothing
+   * can be sent at all answers a question they did not ask.
    */
-  it('reports the consent blocker first, even when the key is missing too', () => {
-    const gate = askGate(status({ consented: false, consentedAt: null, configured: false }), grounding())
-    expect(gate.kind).toBe('first_consent')
+  it('reports the missing key before the missing grounding', () => {
+    const gate = askGate(
+      status({ state: 'not_configured', keySource: 'none' }),
+      grounding({ profile: EMPTY_INVESTOR_PROFILE }),
+    )
+    expect(gate.kind).toBe('not_configured')
+  })
+
+  /** No consent state survives — asserted as an absence so one cannot quietly return. */
+  it('has a blocker sentence for every kind it can report, and only those kinds', () => {
+    expect(Object.keys(ASK_BLOCKERS).sort()).toEqual(['no_grounding', 'not_configured', 'ready'])
   })
 
   it('is a wait, not a blocker, while the grounding is still being read', () => {
@@ -305,24 +299,22 @@ describe('answerFromResult', () => {
   })
 
   /**
-   * The failure headings and the gateway's own variants are one list. A status added to the
-   * gateway without a heading here would render an answer under `undefined`.
+   * The failure headings and the gateway's own variants are one list — and after ADR-0011 they are
+   * the *same* list, with nothing decided in front of the gateway. A status added to the gateway
+   * without a heading here would render an answer under `undefined`; a heading left behind for a
+   * status the gateway cannot produce is the other half, and `needs_consent` is the one this story
+   * removed.
    */
-  it('has a heading for every way the exchange can end', () => {
+  it('has exactly one heading per way the exchange can end', () => {
     const statuses = aiResultSchema.options
       .map((option) => option.shape.status.value)
       .filter((value) => value !== 'ok')
-    for (const value of statuses) {
-      expect(Object.keys(FAILURE_HEADINGS), value).toContain(value)
-    }
-    // Plus the one that is decided before the gateway is reached at all (DDR-0097).
-    expect(FAILURE_HEADINGS.needs_consent).toBeTruthy()
+    expect(Object.keys(FAILURE_HEADINGS).sort()).toEqual([...statuses].sort())
   })
 
   it('names no failure as an error except the one that is one', () => {
     expect(FAILURE_HEADINGS.not_configured).toBe('No API key')
     expect(FAILURE_HEADINGS.not_configured.toLowerCase()).not.toContain('error')
-    expect(FAILURE_HEADINGS.needs_consent.toLowerCase()).not.toContain('error')
   })
 })
 

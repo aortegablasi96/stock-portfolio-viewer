@@ -4090,11 +4090,15 @@ html {
   color: var(--neg-text);
 }
 
-/* ---- Assistant view (M10, Story #283) ------------------------------------ */
+/* ---- Assistant view (M10, Story #283; M11, Story #309) ------------------- */
 
-/* The consent panel's own prose, at the body step rather than the small one:
-   this is the paragraph the whole feature turns on, and it is read once and
-   carefully rather than skimmed beside a figure. */
+/* The key card's own prose, at the body step rather than the small one: on the
+   one run where it is drawn it is the paragraph the whole feature turns on, and
+   it is read once and carefully rather than skimmed beside a figure.
+
+   The consent panel's rules stood here and went with it (ADR-0011, DDR-0107):
+   `.assistant-disclosure`, its four descendants and `.assistant-destination`
+   drew the "What would be sent" list, which is rendered nowhere now. */
 .assistant-lede {
   margin: 0 0 var(--space-5);
   max-width: 62ch;
@@ -4103,67 +4107,11 @@ html {
   color: var(--text);
 }
 
-/* A fact beside the decision — when consent was given, how disclosing the list
-   is. Muted and small, the treatment `.source-note` carries. */
+/* A fact beside the control rather than one more line of the body copy. Muted
+   and small, the treatment `.source-note` carries. */
 .assistant-note {
   margin: 0 0 var(--space-5);
   font-size: var(--text-xs);
-  color: var(--muted);
-}
-
-.assistant-actions {
-  display: flex;
-  align-items: flex-start;
-  flex-wrap: wrap;
-  gap: var(--space-5);
-}
-
-.assistant-disclosure {
-  list-style: none;
-  margin: 0 0 var(--space-6);
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-5);
-}
-
-.assistant-disclosure-row {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-/* The category's name and how disclosing it is, on one line. The chip sits
-   beside the title rather than after the detail, so a reader scanning only the
-   headings still learns whether money is involved. */
-.assistant-disclosure-head {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-4);
-}
-
-.assistant-disclosure-title {
-  font-weight: 600;
-}
-
-.assistant-disclosure-detail {
-  margin: 0;
-  max-width: 62ch;
-  font-size: var(--text-xs);
-  line-height: var(--leading-normal);
-  color: var(--muted);
-}
-
-/* Where the data goes, ruled off from the list above it: the list says what,
-   and this says to whom, which is the half a generic warning leaves out. */
-.assistant-destination {
-  margin: 0;
-  padding-top: var(--space-5);
-  border-top: 1px solid var(--border);
-  max-width: 62ch;
-  font-size: var(--text-xs);
-  line-height: var(--leading-normal);
   color: var(--muted);
 }
 
@@ -4171,9 +4119,8 @@ html {
 
 /* Where the key is kept, under the field that takes it. Last in its card, so it
    gives back `.assistant-note`'s trailing space and takes a rule off the top
-   instead — the same treatment `.assistant-destination` carries above, and for
-   the same reason: this is a fact *about* the control above it rather than one
-   more line of the body copy.
+   instead: this is a fact *about* the control above it rather than one more line
+   of the body copy.
 
    The card's own form is `.assistant-ask`'s, reused rather than copied: a stacked
    label over a full-width control with an action row beneath is the same shape

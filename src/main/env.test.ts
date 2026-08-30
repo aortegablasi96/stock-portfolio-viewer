@@ -8,7 +8,7 @@ import { loadEnvFile, parseEnvFile } from './env'
  * `.env` reaching `process.env` (Bug #297).
  *
  * **This suite exists because two tests already looked like they covered this and did not.**
- * `e2e/assistant-consent.spec.ts` passes the key through `electron.launch({ env })` and
+ * `e2e/assistant-api-key.spec.ts` passes the key through `electron.launch({ env })` and
  * `ibkrGateway.test.ts` writes `process.env` directly — both exercise a variable being *read*,
  * neither exercises one being *loaded*. The gap let an unprefixed variable be documented in
  * `.env.example`, chosen deliberately in ADR-0010, described in `CLAUDE.md`, and never actually
@@ -90,7 +90,7 @@ describe('loadEnvFile', () => {
   })
 
   /**
-   * The precedence rule, and the one with teeth. `e2e/assistant-consent.spec.ts` passes a key
+   * The precedence rule, and the one with teeth. `e2e/assistant-api-key.spec.ts` passes a key
    * through `electron.launch({ env })`; a developer's own `.env` overriding it would make that
    * suite assert against a value it never chose. It is also the right order for a human: an OS
    * variable is a deliberate act, the file is a default sitting in a working copy.

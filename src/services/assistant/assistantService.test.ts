@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { assistantService, buildPrompt, SYSTEM_PROMPT, SYSTEM_PROMPT_RULES } from './assistantService'
-import { consentService } from './consentService'
 import { aiGateway } from '@repositories/assistant/aiGateway'
 import {
   DISCLOSURE_CATEGORIES,
@@ -8,15 +7,18 @@ import {
 } from '@shared/domain/assistantDisclosure'
 
 /**
- * The consent gate (Story #283, DDR-0097).
+ * The assistant's one outbound path (Story #284; reshaped by Story #309, ADR-0011).
  *
- * The story's sharpest criterion is that **nothing is sent before consent — demonstrated, not
- * asserted**, and that is what the first block does: the gateway is mocked, and the assertion is
- * that it was never called. Every other guarantee in this Epic is downstream of that one holding.
+ * The first block used to be this file's sharpest: **nothing is sent before consent — demonstrated,
+ * not asserted**, with the gateway mocked and the assertion that it was never called. ADR-0011
+ * removes consent as a concept, so what replaces it is the claim that now carries the boundary:
+ * **the key is the authorization**, a question with one present goes with nothing in front of it,
+ * and the service adds no check of its own to a gateway whose own `not_configured` is what a
+ * missing key produces.
  *
- * The second block covers the other half of keeping the disclosure honest: a context may carry
- * only sections the disclosure names, and the prompt is built from the declaration rather than
- * from whatever order a caller assembled its object in.
+ * The second block covers the half that did not move: a context may carry only sections
+ * `DISCLOSURE_CATEGORIES` names, and the prompt is built from the declaration rather than from
+ * whatever order a caller assembled its object in.
  */
 
 vi.mock('@repositories/assistant/aiGateway', () => ({
@@ -25,19 +27,10 @@ vi.mock('@repositories/assistant/aiGateway', () => ({
     keySource: vi.fn(),
     hasStoredKey: vi.fn(),
     storeKey: vi.fn(),
-    clearStoredKey: vi.fn(),
   },
-}))
-vi.mock('./consentService', () => ({
-  consentService: { get: vi.fn(), grant: vi.fn(), revoke: vi.fn() },
 }))
 
 const mockGateway = vi.mocked(aiGateway)
-const mockConsent = vi.mocked(consentService)
-
-const GRANTED = { granted: true, grantedAt: 1_756_000_000_000, stale: false }
-const NONE = { granted: false, grantedAt: null, stale: false }
-const STALE = { granted: false, grantedAt: 1_700_000_000_000, stale: true }
 
 const ANSWERED = {
   status: 'ok',
@@ -51,161 +44,95 @@ beforeEach(() => {
   mockGateway.complete.mockResolvedValue(ANSWERED)
 })
 
-// ---- nothing is sent before consent -----------------------------------------
+// ---- the key is the authorization -------------------------------------------
 
-describe('nothing leaves the machine before consent', () => {
+describe('a question goes with nothing in front of it', () => {
   /**
-   * The criterion the whole story turns on. Not "the service returns needs_consent" — that could
-   * be true of a service that also fired the request — but that the one module able to reach
-   * OpenAI was **never called**.
+   * ADR-0011's decision, as the assertion that used to say the opposite. One question, one call,
+   * no decision consulted: there is no stored flag, no fingerprint and no check between the caller
+   * and the gateway.
    */
-  it('never reaches the gateway when consent was never given', async () => {
-    mockConsent.get.mockReturnValue(NONE)
-
-    const result = await assistantService.ask('How am I doing?', { weights: '...' })
-
-    expect(result.status).toBe('needs_consent')
-    expect(mockGateway.complete).not.toHaveBeenCalled()
-  })
-
-  it('never reaches the gateway when consent has gone stale', async () => {
-    mockConsent.get.mockReturnValue(STALE)
-
-    const result = await assistantService.ask('How am I doing?')
-
-    expect(result.status).toBe('needs_consent')
-    expect(mockGateway.complete).not.toHaveBeenCalled()
-  })
-
-  /**
-   * Consent is checked **before** the key. "No API key" is a setup detail; "you have not agreed to
-   * send anything" is a decision, and telling an owner to paste a key when they have not agreed to
-   * use the feature answers a question they did not ask.
-   */
-  it('checks consent before configuration, so an unconfigured app still reports the decision', async () => {
-    mockConsent.get.mockReturnValue(NONE)
-    mockGateway.keySource.mockReturnValue('none')
-
-    expect((await assistantService.ask('x')).status).toBe('needs_consent')
-    expect(mockGateway.complete).not.toHaveBeenCalled()
-  })
-
-  /** Two blockers, two messages — the owner is told which one, and re-consent is not first-consent. */
-  it('says the list changed when consent is stale, and not otherwise', async () => {
-    mockConsent.get.mockReturnValue(STALE)
-    const stale = await assistantService.ask('x')
-    expect(stale.status === 'needs_consent' && stale.message).toContain('has changed')
-
-    mockConsent.get.mockReturnValue(NONE)
-    const never = await assistantService.ask('x')
-    expect(never.status === 'needs_consent' && never.message).not.toContain('has changed')
-  })
-
-  it('reaches the gateway exactly once when consent is in force', async () => {
-    mockConsent.get.mockReturnValue(GRANTED)
-
+  it('reaches the gateway exactly once, with no prior decision', async () => {
     expect((await assistantService.ask('How am I doing?')).status).toBe('ok')
     expect(mockGateway.complete).toHaveBeenCalledTimes(1)
   })
 
-  /** After revocation no request is made — the criterion, exercised through the real sequence. */
-  it('stops sending after consent is revoked', async () => {
-    mockConsent.get.mockReturnValue(GRANTED)
-    await assistantService.ask('first')
+  /**
+   * The gate is the key, and it is the *gateway's* gate rather than one this service keeps. A
+   * missing key is `not_configured` — the resting state of a fresh clone (DDR-0096) — and it is the
+   * gateway that says so, which is what makes "no socket is opened" a property of the module that
+   * would have opened it.
+   */
+  it('does not second-guess a missing key: the gateway owns that state', async () => {
+    mockGateway.keySource.mockReturnValue('none')
+    mockGateway.complete.mockResolvedValue({ status: 'not_configured', message: 'No key.' })
+
+    const result = await assistantService.ask('How am I doing?')
+
+    expect(result.status).toBe('not_configured')
     expect(mockGateway.complete).toHaveBeenCalledTimes(1)
-
-    mockConsent.revoke.mockReturnValue(NONE)
-    mockConsent.get.mockReturnValue(NONE)
-    assistantService.revokeConsent()
-
-    expect((await assistantService.ask('second')).status).toBe('needs_consent')
-    expect(mockGateway.complete).toHaveBeenCalledTimes(1)
-  })
-})
-
-// ---- which blocker is in the way --------------------------------------------
-
-describe('the blocking state is named specifically', () => {
-  it.each([
-    ['consent missing and no key', NONE, false, 'needs_consent'],
-    ['consent missing but a key present', NONE, true, 'needs_consent'],
-    ['consent given but no key', GRANTED, false, 'not_configured'],
-    ['consent given and a key present', GRANTED, true, 'ready'],
-  ])('reports %s as %s', (_case, consent, configured, expected) => {
-    mockConsent.get.mockReturnValue(consent)
-    mockGateway.keySource.mockReturnValue(configured ? 'environment' : 'none')
-
-    expect(assistantService.getStatus().state).toBe(expected)
   })
 
   /**
-   * Both facts are reported beside the blocker, so a view can say what will be next rather than
-   * revealing the second obstacle only after the owner clears the first.
+   * Pinned as an **absence**, because it is the whole of what this story removed: `needs_consent`
+   * is not a status the assistant can report any more, in either direction.
    */
-  it('reports both facts, not only the one in the way', () => {
-    mockConsent.get.mockReturnValue(NONE)
+  it('can no longer report a consent state', async () => {
+    const result = await assistantService.ask('x', { weights: '...' })
+    expect(result.status).not.toBe('needs_consent')
+  })
+})
+
+// ---- whether the assistant can run ------------------------------------------
+
+describe('the blocking state is named specifically', () => {
+  it.each([
+    ['no key anywhere', 'none', 'not_configured'],
+    ['a key in the environment', 'environment', 'ready'],
+    ['a key saved in the app', 'stored', 'ready'],
+  ] as const)('reports %s as %s', (_case, source, expected) => {
+    mockGateway.keySource.mockReturnValue(source)
+    expect(assistantService.getStatus().state).toBe(expected)
+  })
+
+  /** Three fields, one blocker: the shape shrank with the concept (ADR-0011). */
+  it('reports the key and nothing else', () => {
     mockGateway.keySource.mockReturnValue('environment')
 
     expect(assistantService.getStatus()).toEqual({
-      state: 'needs_consent',
-      consented: false,
-      consentedAt: null,
-      consentStale: false,
-      configured: true,
+      state: 'ready',
       keySource: 'environment',
       keyStored: false,
     })
   })
 
   /** Whether a key exists, never the key — and never a fragment of one. */
-  it('reports configuration as a boolean and nothing more', () => {
-    mockConsent.get.mockReturnValue(GRANTED)
-    const status = assistantService.getStatus()
-
-    expect(typeof status.configured).toBe('boolean')
-    expect(JSON.stringify(status)).not.toMatch(/sk-/)
+  it('reports configuration as a state and nothing more', () => {
+    expect(JSON.stringify(assistantService.getStatus())).not.toMatch(/sk-/)
   })
 
   /**
    * Which of the two sources is in force, and whether a key is saved in the app, are separate
    * facts (Story #300). A stored key the environment is shadowing has to stay visible: it is
-   * still there, still removable, and still not the one being used.
+   * still there and still not the one being used, and DDR-0105 requires that order to be reported
+   * rather than silent — which is the one thing the view still says about a key that is present.
    */
   it.each([
-    ['no key anywhere', 'none', false, false],
-    ['a key only in the environment', 'environment', false, true],
-    ['a key only in the app', 'stored', true, true],
-    ['a stored key the environment shadows', 'environment', true, true],
-  ] as const)('reports %s', (_case, source, stored, configured) => {
-    mockConsent.get.mockReturnValue(GRANTED)
+    ['no key anywhere', 'none', false, 'not_configured'],
+    ['a key only in the environment', 'environment', false, 'ready'],
+    ['a key only in the app', 'stored', true, 'ready'],
+    ['a stored key the environment shadows', 'environment', true, 'ready'],
+  ] as const)('reports %s', (_case, source, stored, state) => {
     mockGateway.keySource.mockReturnValue(source)
     mockGateway.hasStoredKey.mockReturnValue(stored)
 
-    expect(assistantService.getStatus()).toMatchObject({
-      keySource: source,
-      keyStored: stored,
-      configured,
-    })
-  })
-
-  it('carries staleness through, so the view can say the list changed', () => {
-    mockConsent.get.mockReturnValue(STALE)
-    expect(assistantService.getStatus()).toMatchObject({
-      state: 'needs_consent',
-      consented: false,
-      consentStale: true,
-      consentedAt: STALE.grantedAt,
-    })
+    expect(assistantService.getStatus()).toEqual({ state, keySource: source, keyStored: stored })
   })
 })
 
 // ---- the owner's own key (Story #300) ---------------------------------------
 
-describe('setting and removing the owner’s key', () => {
-  beforeEach(() => {
-    mockConsent.get.mockReturnValue(GRANTED)
-  })
-
+describe('setting the owner’s key', () => {
   it('stores the key and reports the status that follows', () => {
     mockGateway.keySource.mockReturnValue('stored')
     mockGateway.hasStoredKey.mockReturnValue(true)
@@ -215,7 +142,7 @@ describe('setting and removing the owner’s key', () => {
     expect(mockGateway.storeKey).toHaveBeenCalledWith('sk-a-key-the-owner-pasted')
     expect(result).toEqual({
       status: 'saved',
-      assistant: expect.objectContaining({ state: 'ready', keySource: 'stored', keyStored: true }),
+      assistant: { state: 'ready', keySource: 'stored', keyStored: true },
     })
   })
 
@@ -237,7 +164,6 @@ describe('setting and removing the owner’s key', () => {
   /** A bad paste is the owner's to fix, so nothing is stored and nothing throws. */
   it('refuses a blank key without storing anything', () => {
     mockGateway.keySource.mockReturnValue('none')
-    mockGateway.hasStoredKey.mockReturnValue(false)
 
     const result = assistantService.setApiKey('   ')
 
@@ -259,36 +185,22 @@ describe('setting and removing the owner’s key', () => {
     expect(refused).not.toContain('secret')
   })
 
-  /** Removing the only key returns the assistant to `not_configured`, consent untouched. */
-  it('returns to not_configured when the removed key was the only one', () => {
-    mockGateway.keySource.mockReturnValue('none')
-    mockGateway.hasStoredKey.mockReturnValue(false)
-
-    const result = assistantService.clearApiKey()
-
-    expect(mockGateway.clearStoredKey).toHaveBeenCalled()
-    expect(result).toEqual({
-      status: 'cleared',
-      assistant: expect.objectContaining({
-        state: 'not_configured',
-        consented: true,
-        keySource: 'none',
-        keyStored: false,
-      }),
-    })
-  })
-
-  /**
-   * Setting a key sends nothing, so it is not gated on consent. The gate stays exactly where it
-   * was — `ask` — and this is the assertion that says so rather than leaving it to be inferred.
-   */
-  it('does not require consent, and reaches the model either way', () => {
-    mockConsent.get.mockReturnValue(NONE)
+  /** Saving a key sends nothing. It is the setup, and it is the whole of it (ADR-0011). */
+  it('opens no socket of its own', () => {
     mockGateway.keySource.mockReturnValue('stored')
-    mockGateway.hasStoredKey.mockReturnValue(true)
 
     expect(assistantService.setApiKey('sk-mine').status).toBe('saved')
     expect(mockGateway.complete).not.toHaveBeenCalled()
+  })
+
+  /**
+   * There is no `clearApiKey`, and its absence is the decision: the field is shown when there is no
+   * working key and not shown once there is one, so there is no activate, deactivate or rotate
+   * (ADR-0011). Asserted rather than left to be noticed, because a method re-added here is a
+   * control reachable over IPC whether or not anything draws a button for it.
+   */
+  it('offers no way to remove a key', () => {
+    expect('clearApiKey' in assistantService).toBe(false)
   })
 })
 
@@ -350,7 +262,6 @@ describe('the prompt is built from the disclosure', () => {
   })
 
   it('sends the system prompt and the built context through the gateway', async () => {
-    mockConsent.get.mockReturnValue(GRANTED)
     await assistantService.ask('How am I doing?', context)
 
     expect(mockGateway.complete).toHaveBeenCalledWith({

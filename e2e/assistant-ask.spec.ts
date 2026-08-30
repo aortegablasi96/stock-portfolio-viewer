@@ -15,7 +15,7 @@ const electronPath = electronBinary as unknown as string
 const mainEntry = join(__dirname, '..', 'out', 'main', 'index.js')
 
 /**
- * The Assistant's question box (M10, Story #284, DDR-0098).
+ * The Assistant's question box (M10, Story #284, DDR-0098; M11, Story #309, ADR-0011).
  *
  * `lib/assistantAsk.test.ts` holds every state's wording and `lib/assistantContext.test.ts` holds
  * the grounding. What neither can reach is what this file is for: a real keystroke arriving at a
@@ -26,8 +26,9 @@ const mainEntry = join(__dirname, '..', 'out', 'main', 'index.js')
  * assumed**, because a textarea in this app is new. That is the substance of this suite.
  *
  * Its own user-data directory: these tests need a store that starts empty, and the single-instance
- * lock is scoped to that directory (DDR-0025). No API key is passed, so nothing can reach OpenAI
- * from here — what is under test is the surface, the keys and the states, none of which needs one.
+ * lock is scoped to that directory (DDR-0025). The key passed in was never valid anywhere and no
+ * question is ever asked, so nothing can reach OpenAI from here — what is under test is the
+ * surface, the accelerators and the states, none of which sends anything.
  */
 
 let app: ElectronApplication
@@ -83,27 +84,25 @@ test('the row is a full member of the tabs pattern, not a styled button', async 
 })
 
 /**
- * The gate is closed on a fresh store, so the box says which decision is in the way rather than
- * not being there. A box that is simply absent says nothing about why (DDR-0022).
+ * The whole of what Story #309 removed, pinned as an absence on the page it was removed from
+ * (ADR-0011). A key is present, so there is no decision to take, no list to read, and no key panel
+ * — the view is the conversation.
  */
-test('names the consent blocker beside the question rather than hiding the box silently', async () => {
+test('puts nothing in front of the chat once there is a key', async () => {
   await expect(view().getByText('Ask about your portfolio')).toBeVisible()
-  await expect(view().getByText(/Allow the assistant above before asking it anything/)).toBeVisible()
-  await expect(questionBox()).toHaveCount(0)
+  await expect(view().getByText('What would be sent')).toHaveCount(0)
+  await expect(view().getByRole('button', { name: /Allow the assistant/ })).toHaveCount(0)
+  await expect(view().getByLabel('OpenAI API key')).toHaveCount(0)
 })
 
 /**
- * Consent moves to the *next* fact rather than to a working box. On a fresh store nothing has been
+ * With the key in place the *next* fact is the grounding, and on a fresh store nothing has been
  * imported, no gateway is running and no profile is set — so there is no context at all, and a
  * question would be answered from training data alone, which is the one thing ADR-0009 says an
- * answer must never quietly be. The state is named; it is not an error.
+ * answer must never quietly be. The state is named; it is not an error, and the box is not simply
+ * absent (DDR-0022).
  */
 test('with nothing to ground an answer in, says so instead of offering the box', async () => {
-  await view()
-    .getByRole('button', { name: /^Allow the assistant/ })
-    .click()
-
-  await expect(view().getByText('The assistant is allowed to run')).toBeVisible()
   await expect(view().getByText(/nothing for an answer to be grounded in/)).toBeVisible()
   await expect(questionBox()).toHaveCount(0)
 })
@@ -132,7 +131,7 @@ test('opens the box once there is something to ground an answer in', async () =>
  */
 test.describe('the question box does not swallow the accelerators', () => {
   test.beforeEach(async () => {
-    // A profile makes the box usable; the gate above is already open from the previous test.
+    // A profile is what makes the box usable; it was set by the previous test.
     await page.getByRole('tab', { name: /^Profile/ }).click()
     await page.getByRole('tab', { name: /^Assistant/ }).click()
   })

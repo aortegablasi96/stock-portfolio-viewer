@@ -4,7 +4,6 @@ import { IpcChannels } from '@shared/ipc/channels'
 import {
   assistantApiKeyRequestSchema,
   assistantAskRequestSchema,
-  assistantConsentRequestSchema,
   balanceDriftRequestSchema,
   pingRequestSchema,
   portfolioOverviewRequestSchema,
@@ -15,7 +14,6 @@ import {
   type AssistantStatus,
   type BalanceDriftResult,
   type CaptureSnapshotResult,
-  type ClearApiKeyResult,
   type ClearHistoryResult,
   type ClearInvestorProfileResult,
   type ClearStatementsResult,
@@ -281,16 +279,12 @@ export function registerIpcHandlers(): void {
     },
   )
 
-  // The consent gate (M10, Story #283). Two pure local reads of settings — no gateway, no
-  // network.
+  // Whether the assistant can run (M11, Story #309). One pure local read — no gateway, no network.
+  // `assistant:setConsent` stood beside it and is gone with the concept (ADR-0011).
   ipcMain.handle(IpcChannels.assistantGetStatus, (): AssistantStatus => assistantService.getStatus())
-  ipcMain.handle(IpcChannels.assistantSetConsent, (_event, rawInput: unknown): AssistantStatus => {
-    const { granted } = assistantConsentRequestSchema.parse(rawInput)
-    return granted ? assistantService.grantConsent() : assistantService.revokeConsent()
-  })
 
   // The owner's own key (M10, Story #300, DDR-0105). Also local — a key is stored, not spent, and
-  // nothing here opens a socket.
+  // nothing here opens a socket. Inbound only: there is no handler that removes it (Story #309).
   //
   // The `safeParse` is the shape `assistant:ask` uses rather than the bare `.parse` beside it:
   // this payload is a secret, and a Zod throw crosses IPC carrying the value that failed. What is
@@ -307,20 +301,16 @@ export function registerIpcHandlers(): void {
     }
     return assistantService.setApiKey(parsed.data.key)
   })
-  ipcMain.handle(
-    IpcChannels.assistantClearApiKey,
-    (): ClearApiKeyResult => assistantService.clearApiKey(),
-  )
 
   // The question (M10, Story #284, DDR-0098). The only handler in the app that reaches the
-  // internet, and the one place three separate bounds meet.
+  // internet, and the one place two separate bounds meet.
   //
   // The schema is the first: it rejects an empty or oversized question and **reduces the context
-  // to the disclosed categories**, so a section the owner never read cannot cross even if the
-  // renderer offered one. The service is the second: it checks consent before the key, before a
-  // prompt and long before a socket (DDR-0097). The gateway is the third, and it returns a result
-  // union rather than throwing (DDR-0096) — so the only exception that can reach this `catch` is
-  // a rejected payload, which is why `invalid` is what it maps to rather than `error`.
+  // to the declared categories**, so an undeclared section cannot cross even if the renderer
+  // offered one. The gateway is the second, and it returns a result union rather than throwing
+  // (DDR-0096) — so the only exception that can reach this `catch` is a rejected payload, which is
+  // why `invalid` is what it maps to rather than `error`. There was a third, in the service, and
+  // ADR-0011 removed it: the key is the authorization.
   ipcMain.handle(
     IpcChannels.assistantAsk,
     async (_event, rawInput: unknown): Promise<AssistantAskResult> => {

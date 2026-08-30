@@ -1,40 +1,43 @@
 /**
- * What may leave the machine, declared once, with **no dependencies** (Story #283, DDR-0097).
+ * What may leave the machine, declared once, with **no dependencies** (Story #283, DDR-0097;
+ * narrowed by Story #309, ADR-0011).
  *
  * Every other data path in this app ends on the owner's machine: the IBKR gateway is `localhost`,
  * the database is a file in `userData`, and ADR-0007 records that only map tiles and a viewport
  * reach Mapbox — no portfolio data, with `events.mapbox.com` omitted from the CSP so the platform
- * enforces it however the library is configured. Epic #5 breaks that, ADR-0010 records why, and
- * this module is the part the owner actually reads before it happens.
+ * enforces it however the library is configured. Epic #5 breaks that, and ADR-0010 records why.
  *
- * **It is the source of truth, not a description of one.** A disclosure maintained by hand becomes
- * a lie on the first change, so the categories below are also the *only* keys an assistant context
- * may carry ({@link AssistantContext}) — a later story cannot send something new without adding a
- * category here, and adding a category changes {@link disclosureFingerprint}, which withdraws
- * consent until the owner reads the new list. Consent is to a **specific disclosure**, not to the
- * idea of one.
+ * **This module had three jobs and now has two.** It was the list the owner *read* before agreeing,
+ * and the fingerprint of that list was what consent was stored against — so re-wording a category
+ * withdrew consent until they read it again. ADR-0011 removes consent as a concept, and with it the
+ * reading and the fingerprint. What is left is the part that binds the code rather than the owner:
  *
- * Dependency-free like `investorProfileTerms.ts`, because the renderer renders it directly and Zod
- * must not reach that bundle (ADR-0002).
+ * - the categories are the **only** keys an assistant context may carry
+ *   ({@link AssistantContext}), so a later story cannot send something new without adding one here;
+ * - {@link pickDisclosedSections} is where that stops being a type and becomes a fact, at the IPC
+ *   boundary the renderer's assembled context crosses.
+ *
+ * `granularity` stays with each category for the same reason the list does: it declares at what
+ * precision a section may be written, and DDR-0098's rule that no money goes in a section declared
+ * as names or percentages is stated against it.
+ *
+ * Dependency-free like `investorProfileTerms.ts`, because Zod must not reach the renderer's bundle
+ * (ADR-0002).
  */
 
 /**
- * How disclosing a category is, which is the distinction worth drawing.
+ * At what precision a category may be written, which is the distinction worth drawing.
  *
  * A great deal of this Epic works on **weights**, and a weight is meaningfully less disclosing
  * than a balance: "37% of your portfolio is in dollars" says nothing about how much money that is.
- * Naming the granularity lets the disclosure say which questions send which — see the finding
- * recorded in DDR-0097.
+ * It was on screen as a chip beside each category until ADR-0011; what it is now is the bound a
+ * section is written against — `assistantContext.test.ts` reads assembled sections back and fails
+ * on money in one declared as names or percentages (DDR-0098).
+ *
+ * `GRANULARITY_LABELS` translated these into plain words for that chip, and went with it.
  */
 export const DISCLOSURE_GRANULARITIES = ['names', 'weights', 'figures'] as const
 export type DisclosureGranularity = (typeof DISCLOSURE_GRANULARITIES)[number]
-
-/** How each granularity is described to the owner, once, in plain words. */
-export const GRANULARITY_LABELS: Record<DisclosureGranularity, string> = {
-  names: 'Names and text',
-  weights: 'Percentages only',
-  figures: 'Amounts of money',
-}
 
 export interface DisclosureCategory {
   readonly id: string
@@ -112,45 +115,28 @@ export const DISCLOSURE_CATEGORY_IDS: readonly DisclosureCategoryId[] = DISCLOSU
 export type AssistantContext = Partial<Record<DisclosureCategoryId, string>>
 
 /**
- * A stable fingerprint of what is currently disclosed.
+ * `disclosureFingerprint`, `disclosedGranularities` and `DISCLOSURE_DESTINATION` stood here.
  *
- * Consent is granted against a specific list. When the list changes — a later story sends
- * something new — the fingerprint changes and stored consent stops matching, so the owner is asked
- * again rather than having silently agreed to more than they read. That is the whole reason the
- * disclosure lives in code the app reads rather than in prose someone maintains.
+ * The fingerprint was what consent was stored against: change a category's wording and stored
+ * consent stopped matching, so the owner was asked again rather than having silently agreed to
+ * more than they read (DDR-0097). ADR-0011 records that it **ceases to exist** along with the
+ * decision it protected — and the coupling it created, where a grounding change stopped the
+ * assistant until the owner re-read a list, was one of the reasons the gate came out.
  *
- * The **detail text is part of it**, not just the ids: re-wording what a category actually sends
- * is exactly the change an owner would want to see again, and a fingerprint over ids alone would
- * miss it. Purely cosmetic edits therefore cost one re-consent, which is the right side to err on.
+ * The other two drew the panel: a summary line of which precisions the list involves, and the
+ * sentence naming OpenAI as the destination. That panel is rendered nowhere (Story #309). The
+ * destination is stated in ADR-0010, in ADR-0011, and on the field that takes the key.
  */
-export function disclosureFingerprint(
-  categories: readonly DisclosureCategory[] = DISCLOSURE_CATEGORIES,
-): string {
-  return categories
-    .map((category) => `${category.id}:${category.granularity}:${category.detail}`)
-    .join('|')
-}
-
-/** Which granularities the current disclosure actually involves, in declaration order. */
-export function disclosedGranularities(
-  categories: readonly DisclosureCategory[] = DISCLOSURE_CATEGORIES,
-): DisclosureGranularity[] {
-  return DISCLOSURE_GRANULARITIES.filter((granularity) =>
-    categories.some((category) => category.granularity === granularity),
-  )
-}
-
-/** Where the data goes, named rather than implied. Rendered beside the categories. */
-export const DISCLOSURE_DESTINATION =
-  'OpenAI, in the United States, over the internet. This is the only feature in this app that sends anything about your portfolio off this machine.'
 
 /**
- * Keep only the sections the disclosure actually declares (Story #284).
+ * Keep only the sections the declaration actually names (Story #284).
  *
- * `AssistantContext` already forbids an undisclosed key at compile time, but the context is
+ * `AssistantContext` already forbids an undeclared key at compile time, but the context is
  * assembled in the renderer and crosses IPC, where a type is a comment. This is the runtime half:
- * the boundary parses an arbitrary string map and this reduces it to the list the owner read, so
- * "an undisclosed section cannot be sent" holds against a payload the type never reached.
+ * the boundary parses an arbitrary string map and this reduces it to the declared list, so "an
+ * undeclared section cannot be sent" holds against a payload the type never reached. **It is the
+ * job of this module that ADR-0011 left untouched**, and the stronger half of the two: it fails a
+ * build rather than informing a reader.
  *
  * Empty and whitespace-only sections are dropped too. A heading with nothing under it tells the
  * model a section exists and is blank, which is an invitation to fill it in.

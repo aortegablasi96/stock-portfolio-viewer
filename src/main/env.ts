@@ -21,7 +21,7 @@ import { join } from 'node:path'
  * ## Three rules, and the first is the important one
  *
  * **The real environment always wins.** A variable already present in `process.env` is never
- * overwritten. That is what keeps `e2e/assistant-consent.spec.ts` honest — it passes a key through
+ * overwritten. That is what keeps `e2e/assistant-api-key.spec.ts` honest — it passes a key through
  * `electron.launch({ env })`, and a developer's own `.env` must not silently replace the value a
  * test is asserting about. It is also the right precedence for a human: an OS variable is the
  * deliberate, per-session act; the file is the default sitting in a working copy.

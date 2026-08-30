@@ -1,6 +1,12 @@
 # 0097. Consent is to a list, and the list is the code
 
-- **Status:** Accepted
+- **Status:** Superseded by [[0107-the-assistant-view-is-the-chat]] (Story #309) — the consent
+  gate is removed as a concept by ADR-0011. **Two of the three readings of
+  `DISCLOSURE_CATEGORIES` below still apply**: it types `AssistantContext`, and it is the
+  boundary at which an undeclared section is dropped. The third — the list the owner read, and
+  the fingerprint consent was stored against — is retired, along with `consentService` and the
+  panel. The argument for the gate is preserved here on purpose: ADR-0011 records that a second
+  user, or an app the owner did not install, would have to argue past it.
 - **Date:** 2026-08-28
 - **Extends:** [[0096-the-model-gateway-inherits-a-discipline-and-adds-two-states]],
   [[0094-the-profile-is-a-setting-and-a-range-is-a-policy]], [[0028-window-state-persistence]],

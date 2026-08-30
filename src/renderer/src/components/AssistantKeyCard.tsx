@@ -1,52 +1,51 @@
 import { useCallback, useState } from 'react'
 import {
-  canRemoveKey,
   isSavableKey,
-  keyPanelKind,
+  keySurface,
   saveKeyLabel,
-  KEY_BODIES,
-  KEY_HEADINGS,
+  KEY_BODY,
+  KEY_HEADING,
+  KEY_SHADOWED_NOTE,
   KEY_STORAGE_NOTE,
 } from '../lib/assistantKey'
 import { controlClassName } from '../lib/fieldVariants'
 import type { AssistantStatus } from '@shared/domain/assistant'
 import { MAX_API_KEY_CHARS } from '@shared/domain/assistantKey'
-import { Badge } from './ui/Badge'
 import { Button } from './ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card'
-import { ConfirmAction } from './ConfirmAction'
 import { Field } from './ui/Field'
 import { StatePanel } from './ui/StatePanel'
 
 /**
- * Where the owner gives the app an OpenAI key (Story #300, DDR-0105).
+ * Where the owner gives the app an OpenAI key (Story #300, DDR-0105; shrunk by Story #309).
  *
  * It exists because `.env` does not solve a packaged build: there is no file beside an installed
- * binary, so before this an installed copy found a key only if the operating system already
- * carried one — invisible, unguessable from inside the app, and a poor thing to ask a desktop
- * owner for (DDR-0100 names the gap and deliberately leaves it open).
+ * binary, so without this an installed copy finds a key only if the operating system already
+ * carries one — invisible, unguessable from inside the app, and a poor thing to ask a desktop owner
+ * for. Since ADR-0011 it is also the *whole* of the setup: supplying the key is what authorizes
+ * sending, and there is no separate decision in front of it.
  *
- * It sits **below the consent gate and above the question**, in the order the decisions are made:
- * what may be sent, then what it is sent with, then the asking. That also puts it where the
- * `not_configured` gate above points, so the blocker and its fix are adjacent rather than the
- * owner being told to go and edit a file.
+ * **The surface shrinks; the feature does not.** #300 drew four panel kinds and a Remove control.
+ * The field is now shown when there is no working key and not shown once there is one — no
+ * activate, no deactivate, no rotate — so this component **renders nothing** on every run after
+ * the first, and the page is the chat. The one thing it still says about a key that is present is
+ * DDR-0105's precedence, and that is a sentence rather than a control.
  *
  * Three behaviours are the story's acceptance criteria and are worth reading before changing
  * anything here:
  *
  * **The value is never displayed back.** The field is `type="password"` while it is being typed,
  * is cleared the moment a save lands, and nothing repopulates it — because nothing *can*: no
- * channel returns a key or a fragment of one, and `AssistantStatus` carries three booleans about
- * it and no material (ADR-0010). A "show the last four characters" affordance would be the one
- * place the key came back after `aiGateway.redactKeys` went to the trouble of stripping even the
- * fragment OpenAI quotes in a refusal.
+ * channel returns a key or a fragment of one, and `AssistantStatus` carries two facts about it and
+ * no material (ADR-0010). A "show the last four characters" affordance would be the one place the
+ * key came back after `aiGateway.redactKeys` went to the trouble of stripping even the fragment
+ * OpenAI quotes in a refusal.
  *
- * **Precedence is on screen, not discovered.** Saving a key while `OPENAI_API_KEY` is set stores
- * it and does not use it, and the panel says exactly that — `keyPanelKind` has a kind for it.
+ * **Precedence is on screen, not discovered.** A key the environment shadows is reported as kept
+ * and unused, with what to do about it, and `keySurface` has a state for exactly that.
  *
- * **Removing is the in-place `ConfirmAction`** — no modal, no `window.confirm` (DDR-0012) — and,
- * unlike withdrawing consent, this one *does* warn of loss: the key cannot be shown again, so it
- * has to be pasted afresh.
+ * **No restart.** The status that comes back from the save is what this view re-seats on, so the
+ * assistant is ready in the same process that had no key a moment ago.
  */
 export function AssistantKeyCard({
   status,
@@ -55,12 +54,10 @@ export function AssistantKeyCard({
   status: AssistantStatus
   /** Re-seat the view on the status that actually landed, rather than on what was assumed. */
   onStatus: (next: AssistantStatus) => void
-}): React.JSX.Element {
+}): React.JSX.Element | null {
   const [key, setKey] = useState('')
   const [busy, setBusy] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
-
-  const kind = keyPanelKind(status)
 
   const save = useCallback(async (): Promise<void> => {
     if (!isSavableKey(key)) return
@@ -81,24 +78,35 @@ export function AssistantKeyCard({
     }
   }, [key, onStatus])
 
-  const remove = useCallback(async (): Promise<void> => {
-    const result = await window.api.clearAssistantApiKey()
-    onStatus(result.assistant)
-    setProblem(null)
-  }, [onStatus])
+  const surface = keySurface(status)
+
+  // The assistant is running on a key nobody here needs to touch. Nothing is drawn at all — a card
+  // reporting that the setup is done is the ceremony this story exists to remove.
+  if (surface === 'none') return null
+
+  // Running on the environment's key while the owner's sits unused. One sentence, no control:
+  // the order is reported rather than silent (DDR-0105), and removing a key is not something this
+  // app does (ADR-0011).
+  if (surface === 'shadowed') {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Using a key from your environment</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="assistant-lede">{KEY_SHADOWED_NOTE}</p>
+        </CardContent>
+      </Card>
+    )
+  }
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{KEY_HEADINGS[kind]}</CardTitle>
-        {/* A missing key is not a failure and is not toned as one — the same call the gate above
-            makes for a decision that has not been taken yet (DDR-0037). */}
-        <Badge variant={status.configured ? 'positive' : 'neutral'}>
-          {status.configured ? 'Key set' : 'No key'}
-        </Badge>
+        <CardTitle>{KEY_HEADING}</CardTitle>
       </CardHeader>
       <CardContent>
-        <p className="assistant-lede">{KEY_BODIES[kind]}</p>
+        <p className="assistant-lede">{KEY_BODY}</p>
 
         {/* Reuses the question box's own form layout: a stacked label over a full-width control
             and an action row beneath it. A second rule declaring the same three properties is the
@@ -131,17 +139,8 @@ export function AssistantKeyCard({
           </Field>
           <div className="assistant-ask-actions">
             <Button type="submit" variant="primary" disabled={busy || !isSavableKey(key)}>
-              {saveKeyLabel(kind, busy)}
+              {saveKeyLabel(busy)}
             </Button>
-            {canRemoveKey(status) && (
-              <ConfirmAction
-                label="Remove key"
-                confirmLabel="Yes, remove it"
-                busyLabel="Removing…"
-                warning="The assistant stops working until another key is set. This app never shows a saved key again, so you will need to paste it in afresh."
-                onConfirm={remove}
-              />
-            )}
           </div>
         </form>
 

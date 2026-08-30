@@ -57,26 +57,28 @@ export const IpcChannels = {
   // standard rather than reporting the portfolio, and because it reads **live** holdings where
   // every `analytics:*` channel reads the imported Flex store (DDR-0095).
   profileGetDrift: 'profile:getDrift',
-  // Whether the assistant may run, and the owner's decision about it (M10, Story #283). Its own
-  // prefix because consent is not a profile fact: the profile is how the owner intends to invest,
-  // this is whether anything about it may leave the machine (ADR-0010, DDR-0097).
-  assistantGetStatus: 'assistant:getStatus',
-  assistantSetConsent: 'assistant:setConsent',
-  // The owner's own OpenAI key, set from inside the app so a packaged build can use the assistant
-  // (M10, Story #300, DDR-0105). Beside consent because it is the same shape of owner-owned
-  // setting, stored as one overwritten `app_meta` value (DDR-0094, DDR-0097).
+  // Whether the assistant can run, which after ADR-0011 is one question: is there a key (M11,
+  // Story #309). Its own prefix rather than `profile:` because the profile is how the owner intends
+  // to invest and this is whether anything about it can leave the machine at all.
   //
-  // These two are the only channels in the app that carry a **secret**, and it moves in one
-  // direction only: inbound, once, on save. Nothing sends it back — `assistant:getStatus` reports
-  // which source is in force and never the value or a fragment of it (ADR-0010).
+  // `assistant:setConsent` was here and is gone with the concept (ADR-0011, DDR-0107): no consent
+  // is asked for, stored or checked anywhere.
+  assistantGetStatus: 'assistant:getStatus',
+  // The owner's own OpenAI key, set from inside the app so a packaged build can use the assistant
+  // (M10, Story #300, DDR-0105) — and, since ADR-0011, the single act that authorizes sending.
+  //
+  // This is the only channel in the app that carries a **secret**, and it moves in one direction
+  // only: inbound, once, on save. Nothing sends it back — `assistant:getStatus` reports which
+  // source is in force and never the value or a fragment of it (ADR-0010).
+  //
+  // `assistant:clearApiKey` is deliberately **absent** (Story #309). There is no activate,
+  // deactivate or rotate, and a channel that removed the key would be that control reachable from
+  // `window.api` whether or not a button drew it.
   assistantSetApiKey: 'assistant:setApiKey',
-  assistantClearApiKey: 'assistant:clearApiKey',
   // The one channel in this app that reaches the internet with something about the portfolio on
-  // it (M10, Story #284, DDR-0098). It arrives here rather than in #283 because a channel that
-  // could send is an un-consented path in all but name until there is a view asking the owner's
-  // question through it. Everything behind it is already decided: `assistantService` checks
-  // consent before the key, and the request's own schema drops any section the disclosure does
-  // not declare, so what crosses this line is bounded by what the owner read.
+  // it (M10, Story #284, DDR-0098). What crosses it is bounded by the request's own schema, which
+  // drops any section `DISCLOSURE_CATEGORIES` does not declare — the bound that outlived the panel
+  // that used to render that list (ADR-0011).
   assistantAsk: 'assistant:ask',
 } as const
 

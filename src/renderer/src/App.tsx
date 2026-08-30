@@ -119,12 +119,11 @@ type Tab =
  * analytics views, which is what lets a half-finished profile survive a trip to Allocation and
  * back (DDR-0027).
  *
- * **Story #283 inserts Assistant between them** (DDR-0097), which is why Profile is no longer
- * last. The order is the app's own grammar: five views of the data, then the surface that talks
- * about it, then the policy the owner sets over it. Assistant takes `Ctrl`/`Cmd`+`6` and Profile
- * `+7` with no code change, for the reason above — nothing here counts rows. The view opens one
- * story early carrying only its consent gate: the gate needs a room to stand in, and building a
- * temporary home elsewhere to move in #284 would be churn.
+ * **Story #283 inserts Assistant between them**, which is why Profile is no longer last. The
+ * order is the app's own grammar: five views of the data, then the surface that talks about it,
+ * then the policy the owner sets over it. Assistant takes `Ctrl`/`Cmd`+`6` and Profile `+7` with
+ * no code change, for the reason above — nothing here counts rows. Story #310 merges the two into
+ * one row; #309 deliberately leaves the list at seven.
  */
 const TABS: { id: Tab; label: string; icon: () => React.JSX.Element }[] = [
   { id: 'portfolio', label: 'Portfolio', icon: PortfolioIcon },

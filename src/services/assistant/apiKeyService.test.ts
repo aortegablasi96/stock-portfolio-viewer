@@ -17,7 +17,7 @@ import { MAX_API_KEY_CHARS } from '@shared/domain/assistantKey'
  */
 
 vi.mock('@repositories/assistant/aiGateway', () => ({
-  aiGateway: { storeKey: vi.fn(), clearStoredKey: vi.fn() },
+  aiGateway: { storeKey: vi.fn() },
 }))
 
 const mockGateway = vi.mocked(aiGateway)
@@ -95,15 +95,16 @@ describe('apiKeyService.save', () => {
   })
 })
 
-describe('apiKeyService.clear', () => {
-  it('removes the stored key', () => {
-    apiKeyService.clear()
-    expect(mockGateway.clearStoredKey).toHaveBeenCalled()
-  })
-
-  /** Removing a key that was never there is not a failure, so there is nothing to report. */
-  it('is silent when there was nothing to remove', () => {
-    mockGateway.clearStoredKey.mockReturnValue(false)
-    expect(apiKeyService.clear()).toBeUndefined()
+/**
+ * There is no `apiKeyService.clear`, and that is Story #309's decision rather than an omission.
+ *
+ * #300 had one behind a Remove control beside the field. ADR-0011 shows the field when there is no
+ * working key and not once there is one — no activate, deactivate or rotate — so a service method
+ * reachable over IPC would be that control under another name. The store's own
+ * `aiGateway.clearStoredKey` stays where it is and is tested there.
+ */
+describe('removing a key', () => {
+  it('is not something this service offers', () => {
+    expect('clear' in apiKeyService).toBe(false)
   })
 })
