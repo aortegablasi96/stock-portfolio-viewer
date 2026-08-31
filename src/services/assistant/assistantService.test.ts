@@ -1,5 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { assistantService, buildPrompt, SYSTEM_PROMPT, SYSTEM_PROMPT_RULES } from './assistantService'
+import {
+  assistantService,
+  buildPrompt,
+  SECTION_HEADINGS,
+  SYSTEM_PROMPT,
+  SYSTEM_PROMPT_PREAMBLE,
+  SYSTEM_PROMPT_SECTIONS,
+} from './assistantService'
 import { aiGateway } from '@repositories/assistant/aiGateway'
 import {
   DISCLOSURE_CATEGORIES,
@@ -272,219 +279,212 @@ describe('the prompt is built from the disclosure', () => {
 })
 
 /**
- * The system prompt is where ADR-0009's boundary is restated to the model. It is asserted rather
- * than merely written because these four sentences are the difference between an assistant that
- * phrases computed figures and one that invents them.
+ * The system prompt, section by section (Story #288 → DDR-0104; reshaped by DDR-0110).
+ *
+ * **These tests assert presence and can never assert obedience**, which is the seam DDR-0104 exists
+ * to state out loud. A figure has two lines of defence — computed by a service, then asserted
+ * character by character in the assembled context — and a *sentence* built around a correct figure
+ * has only this one. That is acceptable for wording and unacceptable for arithmetic, which is
+ * exactly why the arithmetic is #287's and only the wording is here.
+ *
+ * What each block below pins is a guarantee some record makes: ADR-0009's grounding rule and
+ * advisory boundary, ADR-0012's two-standards marking, DDR-0101's three named absences. The prose
+ * is the owner's; the guarantees are not, so a rewrite that dropped one has to fail here.
  */
-describe('the system prompt states the boundary the ADR set', () => {
+describe('the system prompt states the boundary the records set', () => {
   it('forbids the model from calculating anything', () => {
-    expect(SYSTEM_PROMPT).toContain('Never calculate')
-    expect(SYSTEM_PROMPT).toContain('verbatim in the context')
+    expect(SYSTEM_PROMPT).toContain('Do not perform calculations yourself')
+    expect(SYSTEM_PROMPT).toContain('Only state numerical results explicitly supplied')
+    expect(SYSTEM_PROMPT).toContain(
+      'Do not derive, add, subtract, average, compound, annualise, estimate, or transform figures',
+    )
   })
 
   it('licenses naming positions while forbidding orders', () => {
-    expect(SYSTEM_PROMPT).toContain('name positions')
-    expect(SYSTEM_PROMPT).toContain('never place orders')
+    expect(SYSTEM_PROMPT).toContain('You may suggest positions to consider trimming, increasing')
+    expect(SYSTEM_PROMPT).toContain('Recommendations are suggestions, not orders')
+    expect(SYSTEM_PROMPT).toContain('You never execute trades')
   })
 
   it('forbids proposing changes to the profile itself', () => {
-    expect(SYSTEM_PROMPT).toContain('Never propose changes to the owner’s investor profile')
+    expect(SYSTEM_PROMPT).toContain('Never recommend that the owner change their investor profile')
+    expect(SYSTEM_PROMPT).toContain('suggest a profile they should adopt')
   })
 
   it('requires an unheld instrument to be marked as unverified', () => {
-    expect(SYSTEM_PROMPT).toContain('training data')
-    expect(SYSTEM_PROMPT).toContain('unverified')
+    expect(SYSTEM_PROMPT).toContain('identify it as unverified')
+    expect(SYSTEM_PROMPT).toContain("availability at the owner's broker")
+    expect(SYSTEM_PROMPT).toContain("subject to the model's knowledge cutoff")
   })
 
   /**
-   * Story #285's two prompt-level rules, pinned here because the story asks for them to be held by
-   * a test rather than by the model's disposition.
+   * DDR-0013's distinction, which is the failure this Epic is least likely to catch: the wrong
+   * answer is the flattering one. A deposit moves value and does not move return.
+   */
+  it('keeps return and value apart', () => {
+    expect(SYSTEM_PROMPT).toContain('Keep portfolio **value** and **return** separate')
+    expect(SYSTEM_PROMPT).toContain('Do not attribute changes in value to performance')
+  })
+
+  /** The app has no news and no fundamentals, so a cause is a claim it cannot ground. */
+  it('forbids attributing a cause the data does not carry', () => {
+    expect(SYSTEM_PROMPT).toContain('Do not claim why a market, sector, company, instrument')
+    expect(SYSTEM_PROMPT).toContain('unless the available data supports the explanation')
+  })
+
+  /**
+   * Forecasting, and the shape of the rule matters more than its presence (DDR-0110).
    *
-   * The first is the trap that defines the story: **a change in value and a return are different
-   * sentences**, and the app's curve only answers the second (DDR-0013). An answer that attributes
-   * a 24% rise in value to performance when a deposit caused it is wrong in the flattering
-   * direction, which is the direction an owner is least likely to check.
+   * A **numeric** forecast was already blocked — *Numerical integrity* forbids the model to
+   * `estimate` a figure, and an estimated future figure is an estimate. What was open is the
+   * **qualitative** claim: *"well-positioned for the year ahead"* carries no number, so nothing
+   * caught it, and it is the one claim the marking discipline cannot reach. An unheld instrument
+   * gets labelled as repeated from training data; a forecast has no source to name.
    *
-   * The second is the story's main guardrail. "Energy fell 8% over the period" is grounded;
-   * "energy fell because of the OPEC decision" is invented, and invented in a register that sounds
-   * authoritative. The app holds no news, no fundamentals and no market data beyond the
-   * portfolio's own history, so a cause is never something it can offer.
+   * So the rule is **not** the old flat "Never forecast". It forbids the model to *produce* one
+   * while leaving room for a projection the app computes — the same shape as everything else here,
+   * the model phrasing what a service derived (ADR-0009). A blanket prohibition would have
+   * foreclosed that feature, which is the owner's reason for wanting this wording rather than the
+   * rule it replaces.
    */
-  it('forbids conflating a change in value with a return', () => {
-    expect(SYSTEM_PROMPT).toContain('Keep return and value apart')
-    expect(SYSTEM_PROMPT).toContain('moves value and does not move return')
-    expect(SYSTEM_PROMPT).toContain('never attribute a return to a deposit')
-  })
-
-  it('forbids attributing a cause the app cannot observe', () => {
-    expect(SYSTEM_PROMPT).toContain('Never say why the market, a sector or an instrument moved')
-    expect(SYSTEM_PROMPT).toContain('no news, no fundamentals and no market data')
-    expect(SYSTEM_PROMPT).toContain('not something this app can see')
-  })
-
-  it('forbids forecasting', () => {
-    expect(SYSTEM_PROMPT).toContain('Never forecast')
+  it('forbids the model producing a forecast, without foreclosing a computed projection', () => {
+    expect(SYSTEM_PROMPT).toContain('Do not state what will happen')
+    expect(SYSTEM_PROMPT).toContain('never produce one of your own')
+    // The permitted half, which is what makes this narrower than "Never forecast".
+    expect(SYSTEM_PROMPT).toContain('Where the application supplies a projection')
+    expect(SYSTEM_PROMPT).toContain('name the assumption it rests on')
+    // The numeric half, which was never the gap: an estimated future figure is an estimate.
+    expect(SYSTEM_PROMPT).toContain('estimate')
   })
 
   /**
-   * Story #286's three rules, each a special case of "never calculate" written out (DDR-0101).
-   *
-   * They are worth their own lines rather than being left to the general rule because a summary is
-   * where a model reaches for them, and none of the three *feels* like a derivation: "roughly 30%
-   * a year" reads as a restatement of "+5% over two months", "in line with the market" reads as
-   * context, and a Sharpe ratio reads as a figure someone computed. The context names each absence
-   * before it names a figure; these are the second line of defence over the same three claims.
+   * DDR-0101's three named absences, each written out because a summary reaches for it and a model
+   * does not experience any of the three as a calculation.
    */
-  it('forbids annualising a return the app never annualised', () => {
-    expect(SYSTEM_PROMPT).toContain('Never annualise')
-    expect(SYSTEM_PROMPT).toContain('producing one is a calculation')
-    expect(SYSTEM_PROMPT).toContain('name that period')
+  it('names annualisation, a benchmark and a risk statistic as their own prohibitions', () => {
+    expect(SYSTEM_PROMPT).toContain('annualise')
+    expect(SYSTEM_PROMPT).toContain(
+      'Do not report derived risk statistics such as volatility, standard deviation, Sharpe ratio, beta, or drawdown',
+    )
+    expect(SYSTEM_PROMPT).toContain(
+      'Do not compare the portfolio with benchmarks, indices, markets, or peers',
+    )
   })
 
-  it('forbids a benchmark the app does not hold', () => {
-    expect(SYSTEM_PROMPT).toContain('Never compare to a benchmark, an index, the market or a peer')
-    expect(SYSTEM_PROMPT).toContain('This app holds none')
+  /** DDR-0072's rebasing, and DDR-0103's rule that a period the set does not hold is a state. */
+  it('states the rebasing and refuses to construct a period the context does not hold', () => {
+    expect(SYSTEM_PROMPT).toContain('Returns from different periods are independently rebased')
+    expect(SYSTEM_PROMPT).toContain("state each period's length")
+    expect(SYSTEM_PROMPT).toContain(
+      'If the requested period is unavailable, say so rather than constructing it from other periods',
+    )
   })
 
-  it('forbids a risk statistic the app does not compute', () => {
-    expect(SYSTEM_PROMPT).toContain('Never state a volatility, standard deviation, Sharpe ratio')
-    expect(SYSTEM_PROMPT).toContain('daily-return counts and the best and worst day')
-    expect(SYSTEM_PROMPT).toContain('not available')
-  })
-})
-
-/**
- * Story #288's rules, and the seam they sit on (DDR-0104).
- *
- * **Every assertion below is a presence-of-rule assertion, and that is the whole guarantee.** A
- * figure is guarded twice — computed by a service, then asserted in the assembled text — but a
- * *sentence* built around a correct figure is guarded here and nowhere else. A test can hold that a
- * rule is in front of the model; it cannot hold that the model obeyed it. That is why the arithmetic
- * these rules talk about lives in #287's `periodSet` and `driftMoves` rather than in a rule, and why
- * this block is deliberately thin: it pins what is *said*, which is the only thing it can pin.
- *
- * Each rule is obeyable from the context #287 assembles. Where one is not, the fault is in the
- * grounding rather than in a missing sentence here — the story's own division.
- */
-describe('the system prompt bounds the sentences around the figures', () => {
-  /**
-   * Rebasing, both lengths, and the line between an ordering and a subtraction — one rule, because
-   * they are one act. `periodSet` computes each consecutive same-kind difference precisely so that
-   * "by how much" has somewhere to come from; every other pairing has none (DDR-0103).
-   */
-  it('bounds a comparison of two periods', () => {
-    expect(SYSTEM_PROMPT).toContain('rebased to its own period’s start')
-    expect(SYSTEM_PROMPT).toContain('not points on one scale')
-    expect(SYSTEM_PROMPT).toContain('Give both periods’ lengths')
-    expect(SYSTEM_PROMPT).toContain('which is an ordering')
-    expect(SYSTEM_PROMPT).toContain('never add, subtract, chain or average two returns')
+  it('says what a currency weight is, and is not', () => {
+    expect(SYSTEM_PROMPT).toContain(
+      'A currency weight describes the currency in which a position is held and priced',
+    )
+    expect(SYSTEM_PROMPT).toContain('It is not geographic, economic, or revenue exposure')
   })
 
   /**
-   * The failure this is against is not a refusal — it is the adjacent row answered as though it were
-   * the one asked for, which is a right-looking figure under the wrong heading (DDR-0103).
+   * Tax has no context half and never has (DDR-0104): it is not a section of the grounding but a
+   * category of claim about every one of them, so attaching it to one heading would imply the
+   * others were exempt. #315 added the costs half beside it.
    */
-  it('makes an unavailable period a named state with alternatives', () => {
-    expect(SYSTEM_PROMPT).toContain('names a period the context does not hold')
-    expect(SYSTEM_PROMPT).toContain('name the periods that are')
-    expect(SYSTEM_PROMPT).toContain('neighbouring period')
+  it('forbids a tax claim and a net-of-costs claim alike', () => {
+    expect(SYSTEM_PROMPT).toContain('Do not claim tax effects, tax efficiency, or tax outcomes')
+    expect(SYSTEM_PROMPT).toContain('Do not claim a net benefit after commissions, spreads, taxes')
   })
 
-  /** Held-and-priced-in, which is the only currency exposure this app computes. */
-  it('names which currency exposure the app holds, and which it does not', () => {
-    expect(SYSTEM_PROMPT).toContain('the currency each position is held and priced in')
-    expect(SYSTEM_PROMPT).toContain('never economic, geographic or revenue exposure')
-  })
-
-  /**
-   * Tax is Epic #8 and costs are modelled nowhere. This is the one rule with no context half: there
-   * is no section to name the absence in, because tax is not a section — it is a category of claim
-   * about every one of them (DDR-0104).
-   */
-  it('forbids a tax claim and requires costs to be disclaimed beside a move', () => {
-    expect(SYSTEM_PROMPT).toContain('Never claim a tax effect, a tax outcome, or that anything is tax-efficient')
-    expect(SYSTEM_PROMPT).toContain('no tax treatment, no jurisdiction and no holding period')
-    expect(SYSTEM_PROMPT).toContain('trading costs and spreads are outside what this app models')
-  })
-
-  /**
-   * Two states in one rule because both are the same refusal: with nothing out of range there is no
-   * move, and with no profile there is no standard **of the owner's**. A model that invents either
-   * is answering a question the owner did not ask.
-   *
-   * The second half was rewritten by Story #315 (ADR-0012), and what changed is narrow. *Do not
-   * supply a standard of your own* still holds against the model - it invents nothing. What no
-   * longer holds is that there is no standard at all: the app supplies one for what the profile
-   * leaves silent, so the rule now points at the context's baseline rather than closing the
-   * subject. It also names the Assistant view, the profile's home since #310 (DDR-0108).
-   */
+  /** Both halves of the same refusal: no gap to close, and no standard to close it against. */
   it('makes nothing-to-propose and no-profile answers rather than gaps', () => {
-    expect(SYSTEM_PROMPT).toContain('Nothing to propose is an answer')
-    expect(SYSTEM_PROMPT).toContain('never manufacture one')
-    expect(SYSTEM_PROMPT).toContain('the owner has set no profile')
-    expect(SYSTEM_PROMPT).toContain('set one in the Assistant view’s profile section')
-    expect(SYSTEM_PROMPT).toContain('never one of your own')
-    // The Profile view has not existed since Story #310, and a rule naming it would send the owner
-    // looking for a sidebar row that is not there.
+    expect(SYSTEM_PROMPT).toContain('If all supplied targets are within their permitted ranges')
+    expect(SYSTEM_PROMPT).toContain('do not manufacture a rebalancing recommendation')
+    expect(SYSTEM_PROMPT).toContain('If no profile is configured, say so')
+    expect(SYSTEM_PROMPT).toContain('Assistant profile section')
+    // The Profile view has not existed since Story #310, and a prompt naming it would send the
+    // owner looking for a sidebar row that is not there (DDR-0108).
     expect(SYSTEM_PROMPT).not.toContain('Profile view')
   })
 
   /**
-   * The baseline's own three rules (Story #315, ADR-0012).
-   *
-   * The record's stated risk is that a default becomes a recommended profile - *"consider setting a
-   * 10% ceiling"* is proposing the policy in the baseline's clothes - so the rule that forbids
-   * proposing a profile is the one that had to grow, not a new eighteenth rule beside it. The
-   * marking rule is the other half: two verdicts that read alike and only one of which carries the
-   * owner's authority.
+   * ADR-0012's central line. The app may hold a standard for what the owner left silent, and it may
+   * never invent one beyond that — the two halves have to appear together or the section licenses
+   * more than the record does.
    */
-  it('permits a baseline judgement, marks whose standard it is, and refuses to recommend one', () => {
-    expect(SYSTEM_PROMPT).toContain('against the app’s baseline where the context supplies one')
-    expect(SYSTEM_PROMPT).toContain('Say which of the two, beside the claim and never once at the end')
-    expect(SYSTEM_PROMPT).toContain('never suggest a target for them to set')
-    expect(SYSTEM_PROMPT).toContain('not a profile to adopt')
+  it('permits a baseline judgement and refuses any standard of the model’s own', () => {
+    expect(SYSTEM_PROMPT).toContain("the owner's configured investor profile")
     expect(SYSTEM_PROMPT).toContain(
-      'never on a dimension the context says the baseline does not cover',
+      "the application's stated baseline, and only on dimensions that baseline covers",
     )
+    expect(SYSTEM_PROMPT).toContain('Never invent your own investment standard')
   })
 
   /**
-   * The largest risk in the Epic, sharpened rather than duplicated. ADR-0009's own words: a trim is
-   * grounded end to end and an add is not, so the two may not be delivered in one voice — and the
-   * marking goes **beside** each claim, because a blanket caveat at the end is the decoration the
-   * ADR names as the way this mitigation fails.
+   * ADR-0009 names *the marking becoming decoration* as this mitigation's own failure mode, so the
+   * basis goes **beside** the claim rather than once at the end. It is the one sentence that keeps
+   * a computed verdict, a baseline verdict and a repeated claim from arriving in the same voice.
    */
-  it('sharpens the marking rule for a proposal, and puts it beside the claim', () => {
-    expect(SYSTEM_PROMPT).toContain('Mark what the app computed apart from what you are repeating')
-    expect(SYSTEM_PROMPT).toContain('beside each claim and never once at the end')
-    expect(SYSTEM_PROMPT).toContain('the size of a move are computed from their own data')
-    expect(SYSTEM_PROMPT).toContain('is not checked to exist or to be available at the owner’s broker')
-    expect(SYSTEM_PROMPT).toContain('subject to your knowledge cutoff')
-    expect(SYSTEM_PROMPT).toContain('Never give the two in the same voice')
+  it('requires the basis of a claim beside the claim', () => {
+    expect(SYSTEM_PROMPT).toContain(
+      'When a claim depends on a particular source or standard, make that basis clear beside the claim',
+    )
+    expect(SYSTEM_PROMPT).toContain('Distinguish between')
+    expect(SYSTEM_PROMPT).toContain('application-computed facts')
+    expect(SYSTEM_PROMPT).toContain('model knowledge')
   })
 
+  it('refuses to invent what is missing', () => {
+    expect(SYSTEM_PROMPT).toContain('Never invent missing information')
+    expect(SYSTEM_PROMPT).toContain('If required information is unavailable, say so')
+    expect(SYSTEM_PROMPT).toContain('Never pretend to know more than the available data supports')
+  })
+})
+
+describe('the prompt is a declared structure, not a template string', () => {
   /**
-   * The count, stated here and in DDR-0104 and CLAUDE.md.
+   * The count, stated here and in DDR-0110 and CLAUDE.md.
    *
-   * **A long list is a list a model weights less**, so growing it is a decision rather than an edit.
-   * The literal is what makes an eighteenth rule visible: a story that adds one has to come here,
-   * find this number, and choose to change it — which is the whole mechanism, and the reason the
-   * rules are a declared array instead of a string literal.
+   * DDR-0104's mechanism, carried across the change of shape. Its point was never the flatness of
+   * the list — it was that the literal is **declared**, so growing the prompt is a decision rather
+   * than an edit. A ninth section has to come here, find this number and change it, exactly as an
+   * eighteenth rule did.
    *
-   * Both halves are counted. The array is the declaration; the bullets are what actually reaches the
-   * model, and a rule appended to `SYSTEM_PROMPT` around the array would otherwise be invisible.
+   * Both halves are counted. The array is the declaration; the headings are what actually reaches
+   * the model, and a section appended around the array would otherwise be invisible.
    */
-  it('is seventeen rules, in the array and in the text the model reads', () => {
-    expect(SYSTEM_PROMPT_RULES).toHaveLength(17)
-    expect(SYSTEM_PROMPT.split('\n').filter((line) => line.startsWith('- '))).toHaveLength(17)
+  it('is eight sections, in the array and in the text the model reads', () => {
+    expect(SYSTEM_PROMPT_SECTIONS).toHaveLength(8)
+    expect(SECTION_HEADINGS).toHaveLength(8)
+    expect(SYSTEM_PROMPT.split('\n').filter((line) => line.startsWith('## '))).toHaveLength(8)
   })
 
-  /** No rule is empty, and none carries the bullet the renderer adds — a `- - ` would be visible. */
-  it('renders every declared rule as exactly one bullet', () => {
-    for (const rule of SYSTEM_PROMPT_RULES) {
-      expect(rule.trim()).not.toBe('')
-      expect(rule.startsWith('- ')).toBe(false)
-      expect(SYSTEM_PROMPT).toContain(`\n- ${rule}`)
+  /** The declaration and the rendered text name the same sections, in the same order. */
+  it('renders exactly the headings it declares, in order', () => {
+    expect(SYSTEM_PROMPT_SECTIONS.map((section) => section.heading)).toEqual([...SECTION_HEADINGS])
+    expect(
+      SYSTEM_PROMPT.split('\n')
+        .filter((line) => line.startsWith('## '))
+        .map((line) => line.slice(3)),
+    ).toEqual([...SECTION_HEADINGS])
+  })
+
+  /** No section is empty, and none carries the `##` the renderer adds — a `## ## ` would show. */
+  it('gives every declared section a heading and a body of its own', () => {
+    for (const section of SYSTEM_PROMPT_SECTIONS) {
+      expect(section.heading.trim()).not.toBe('')
+      expect(section.body.trim()).not.toBe('')
+      expect(section.heading.startsWith('#')).toBe(false)
+      expect(SYSTEM_PROMPT).toContain(`\n## ${section.heading}\n\n${section.body}`)
     }
+  })
+
+  /** The preamble is outside every section, and opens the prompt. */
+  it('opens with the preamble, above the first heading', () => {
+    expect(SYSTEM_PROMPT.startsWith(SYSTEM_PROMPT_PREAMBLE)).toBe(true)
+    expect(SYSTEM_PROMPT.indexOf('## Source of truth')).toBeGreaterThan(
+      SYSTEM_PROMPT_PREAMBLE.length,
+    )
   })
 })

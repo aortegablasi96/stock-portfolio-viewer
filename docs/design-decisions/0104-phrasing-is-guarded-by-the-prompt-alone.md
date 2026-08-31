@@ -1,6 +1,6 @@
 # 0104. Phrasing is guarded by the prompt alone, and the seam is stated rather than hidden
 
-- **Status:** Accepted
+- **Status:** Superseded **in its shape half only** by [[0110-the-prompt-is-eight-sections-and-the-owner-wrote-them]]
 - **Date:** 2026-08-29
 - **Amends:** [[0101-a-summary-names-what-the-app-does-not-compute]] — its consequence "`SYSTEM_PROMPT`
   is twelve rules" no longer holds. It is **seventeen**, and the count is now declared in code and
@@ -13,6 +13,10 @@
   [[0095-balance-drift-is-computed-by-a-service]],
   [[0072-a-chart-title-names-the-chart-not-the-window]],
   [[0022-gateway-timeout-and-not-responding-state]]
+
+> **The prompt is now eight `##` sections, not seventeen flat bullets, and the owner wrote them** (DDR-0110, 2026-08-31) — the alternative this record weighed and declined below as premature and untestable. Both objections are answered there: the shape is the owner’s call, and the sections are a **declared array** whose length is asserted three ways.
+>
+> **Everything else here stands.** The seam this record exists to state — *a test asserts a passage is present and can never assert the model obeyed it*, so phrasing has one line of defence where a figure has two — is untouched, and is why DDR-0110 re-pointed the assertions rather than dropping them. So are the declared-literal mechanism, the rule that a rule needing a fact to be obeyable is a gap in the *grounding*, the tax rule’s deliberate lack of a context half, and #289’s closure. The **seventeen** count is retired; the reason for counting is not.
 
 ## Context
 

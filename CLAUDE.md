@@ -77,12 +77,11 @@ Each exists end-to-end and is the reference pattern for its shape.
   `wholeHistory()` (`all`, the *identity* case, not a default), and the `empty_period` **notice** is
   gone while the **state** stays — `periodChange`'s contract (DDR-0102, superseding half of
   DDR-0099).
-  The grounding is now **every standard period, precomputed** (`lib/periodSet.ts`): a question about
-  a window the set does not hold is a **named state with alternatives**, not the adjacent row. A
+  The grounding is **every standard period, precomputed** (`lib/periodSet.ts`): a question about a
+  window the set does not hold is a **named state with alternatives**, not the adjacent row. A
   trailing year is **"Last 12 months"**, a second vocabulary on purpose — `PERIOD_LABELS`' "Last
   year" beside a row named `2025` is the ambiguity. Only **consecutive same-kind** differences are
-  computed (year vs previous year, quarter vs previous quarter); every other combination is
-  forbidden in the text. A drift-closing **move** is `services/profile/driftMoves.ts` and hangs off
+  computed; every other combination is forbidden in the text. A drift-closing **move** is `services/profile/driftMoves.ts` and hangs off
   `DriftBand.move`, non-`null` **exactly** when the band is outside its range: **proportional, not
   greedy**, capacity-capped by the owner's ceiling, the shortfall **`uncovered` and never
   redistributed, and percentage points never money**.
@@ -96,14 +95,19 @@ Each exists end-to-end and is the reference pattern for its shape.
   sector universe** are each stated — the last because IBKR's `industry` is an *open* vocabulary, so
   a mapped taxonomy joins with nothing and reads 0% (DDR-0094). `no_profile`/`no_targets` are
   **gone**, `balanced` is **nullable** (vacuous `true` is what a model calls balanced).
-  `promptBudget.test.ts` measures the worst case the caps allow (DDR-0103) — **82.7%** of
+  `promptBudget.test.ts` measures the worst case the caps allow (DDR-0103) — **81.8%** of
   `MAX_PROMPT_CHARS` over **two** fixtures, since a profile that lengthens the drift shortens the
   baseline; the **85% gate, not the ceiling, binds**, and #315's first draft failed it at 88.5%.
-  `SYSTEM_PROMPT_RULES` is a **declared array of seventeen** rules, asserted twice (array *and*
-  rendered bullets): sharpen a rule rather than add an eighteenth. **For phrasing the prompt is the
-  *only* line of defence** — a test asserts a rule is present, never that it was obeyed, so a rule
-  needing a number to be obeyable is a gap in the *grounding*. The tax/costs rule deliberately has
-  **no context half**: tax is not a section but a claim about every one of them (DDR-0104).
+  The prompt is **eight `##` sections the owner wrote** (`SYSTEM_PROMPT_SECTIONS`; DDR-0110
+  supersedes DDR-0104's shape) — a **declared array**, never one template string, the count asserted
+  three ways (array, `SECTION_HEADINGS`, rendered `## ` lines): sharpen a section, don't add a
+  ninth. Tests pin **the guarantees the records make**, never the owner's wording. **For phrasing
+  the prompt is the *only* line of defence** — a test asserts a passage is present, never that it
+  was obeyed, so a rule needing a fact to be obeyable is a gap in the *grounding*; the tax/costs
+  rule has **no context half** (DDR-0104). Cause, risk statistic and benchmark are now
+  **conditional**, leaning on DDR-0101's absence blocks — trim those and they unbind. **A forecast is
+  the model's only where the app computed a projection**: the flat "never forecast" also forbade
+  phrasing one a service derived, so it came back narrower.
 - **classification** — sector/industry. `classificationRepository` fronts *both* the mutable
   SQLite cache and `ibkrGateway`; `analytics:classifyInstruments` is the only analytics channel
   reaching IBKR. Refreshes are **resumable, not transactional** — a run that dies at 30 of 40 keeps
@@ -283,8 +287,7 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
   every pair **concurrently**, bounding the wait the same way while keeping rates that answered
   (DDR-0024).
 - **`avgCost` is per share and IBKR's own `unrealizedPnl` beats deriving one** (DDR-0087): read as
-  a position total it scales each row by its quantity and still looks right, and the derivation
-  needs **no multiplier term** (both sides carry it). This build also sends **no `ticker`**, so
+  a position total it scales each row by its quantity and still looks right. This build also sends **no `ticker`**, so
   `symbol` and `description` both fall back to `contractDesc` — DDR-0066's trap, on every live row,
   and why a live holding's name is `companyName` (Flex, by conid) *before* `description` (DDR-0088).
 - **Portfolio reads are coalesced** by `gatewayCache` between repository and gateway, so one
@@ -395,10 +398,9 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
   defaulted parameter, so neither can be tuned alone. Don't "restore" the old breakpoint by
   lowering it — that ships illegible labels; capping a chart's width stays **rejected**
   (DDR-0051, DDR-0057). **A `viewBox` clips an overflowing label in silence**, so `pad.left` is
-  *derived* from a glyph advance and a character budget — **one per axis kind**, because too much
-  gutter never clips and so is never reported; only `left` varies. The budget is measured against
-  the **rounded** domain, so the currency clip arrives at €800k of portfolio, not €1M (DDR-0051
-  §#190, DDR-0091, DDR-0092). A stacked chart's key lives in the **card header**, not a
+  *derived* from a glyph advance and a character budget — **one per axis kind**, and measured
+  against the **rounded** domain, so the currency clip arrives at €800k of portfolio, not €1M
+  (DDR-0091, DDR-0092). A stacked chart's key lives in the **card header**, not a
   `<figcaption>` — `ColumnChart` and `StackedAreaChart` both emit a bare `<svg>` (DDR-0052,
   DDR-0064). **A chart title never varies with the range**; the return curve's rebasing is disclosed
   by a *fixed* header note beside the key (DDR-0072).
@@ -493,12 +495,12 @@ alternatives this table can only name.
 | `Button` (DDR-0032) | `variant` × `size` (`icon` is a *shape*) | `ghost` changed meaning — the old `.ghost-button` is now `secondary`. `type` defaults to `"button"`. `className` is for **placement, not colour**. |
 | `Card` (DDR-0033, DDR-0059, DDR-0084) | `variant` (surface colour) × `size` (`--surface-pad-*`) | `CardContent` is a **scope** — descendant rules hang off it, keeping a state panel's prose out of reach. The ruled header strip bleeds to the edges by negating `--card-pad`, which each size **restates beside its `padding`** (change one, change both). `.card-header:last-child` gives it back; so does `.card-header.chart-card-header`, **compound or it ties** (DDR-0084). Its third host is `.data-table-scroll-card`, which has no `--card-pad`: that rule **restates** `margin`/`padding` (inherited, the bleed `calc()` is invalid and drops) and is `sticky` (DDR-0087). |
 | `StatTile` / `StatRow` (DDR-0034, DDR-0060) | `tone` only | A tile **is** a `Card`, so it declares no surface. **Neutral is the absence of a rule.** Its label is the app's *one* micro-label — the same four declarations as `.data-table thead th`; don't grow a second. |
-| `Field` + `Select` + `DateInput` + `PercentInput` + `TermInput` + the Assistant's textarea (DDR-0035, DDR-0094, DDR-0098) | `kind` only — **five**, and still no size axis | **`Field` generates its id with `useId()` and takes no `id` prop** — tabs stay mounted, so all three `RangeFilter`s can be in the document at once and a fixed id would name only the first; `TermInput`'s `<datalist>` id likewise. A `kind` carries cursor, colour-scheme and **measure**: `percent` is 5ch so a column lines up, `term` takes the row's slack. `percent` is `type="text"` + `inputMode="decimal"` **on purpose** — a number input alters its value on a passing scroll wheel and drops a comma decimal, which `parsePercent` accepts. `prose` is a `<textarea>` capping `resize` to `vertical`. `term` names a **measure**, not a vocabulary (DDR-0105) — the assistant's key field reuses it, and a `secret` kind would copy `.control-term` line for line, the duplicate the guard test cannot see. |
+| `Field` + `Select` + `DateInput` + `PercentInput` + `TermInput` + the Assistant's textarea (DDR-0035, DDR-0094, DDR-0098) | `kind` only — **five**, and still no size axis | **`Field` generates its id with `useId()` and takes no `id` prop** — tabs stay mounted, so all three `RangeFilter`s can be in the document at once and a fixed id would name only the first; `TermInput`'s `<datalist>` id likewise. A `kind` carries cursor, colour-scheme and **measure**: `percent` is 5ch so a column lines up, `term` takes the row's slack. `percent` is `type="text"` + `inputMode="decimal"` **on purpose** — a number input alters its value on a passing scroll wheel and drops a comma decimal, which `parsePercent` accepts. `prose` is a `<textarea>` capping `resize` to `vertical`. `term` names a **measure**, not a vocabulary (DDR-0105) — the key field reuses it, and a `secret` kind would copy `.control-term` line for line, a duplicate the guard test cannot see. |
 | `ToggleGroup` (DDR-0036) | `mode`, which is **worn** (`--radius-md` vs `--radius-pill`) | **Never a tablist**: `aria-pressed`, not `role="tab"`. Only `.app-tab` is a real tablist. |
-| `Collapsible` (DDR-0106) | `level` only (`group`/`section`) | A **disclosure**, not an accordion; no `role="region"`. Paints nothing, and `level` carries the heading element (`h2`/`h3`). Closed is `hidden`, never unmounted — `.collapsible-panel[hidden]` is load-bearing: the panel's own `display` defeats the attribute without it. Its call site is the profile; a `section` head replaces `CardHeader` **strip and all**, a closed panel being DDR-0059's own case for withholding it. |
+| `Collapsible` (DDR-0106) | `level` only (`group`/`section`) | A **disclosure**, not an accordion; no `role="region"`. Paints nothing, and `level` carries the heading element (`h2`/`h3`). Closed is `hidden`, never unmounted — `.collapsible-panel[hidden]` is load-bearing: the panel's own `display` defeats the attribute without it. Its call site is the profile, where a `section` head replaces `CardHeader` **strip and all** (DDR-0059). |
 | `Badge` (DDR-0037, DDR-0064, DDR-0065) | `variant` × `size` | **Never a pill** (that corner means multi-select) and **never a background** — the toned pair keeps both: `--pos` / `--neg-text` ink, the *borders* take the fill tokens. `BADGE_VARIANTS` ⊇ `STAT_TONES`, so `toneOf()` names a variant. `sm` carries no vertical padding — with it, every holdings row grows ~7px; alone in a cell it also needs `BADGE_CELL_CLASS`, because CSS cannot see that an inline chip follows a *text node*. Trades' side badge **is** toned (DDR-0086 reverses DDR-0065): the *box*, not the hue, separates it from the figure. |
 | `StatePanel` (DDR-0038) | `variant` (the state) × `surface` | Only `error` paints; the axis exists because the copy and the *announcement* differ. `role` is derived. No heading → the panel **is** a `<p>`. |
-| `DataTable` (DDR-0039, DDR-0059, DDR-0065, DDR-0087) | the *container's* `surface` × `height` | Sorting is **opt-in per column**; a **missing value sorts last in both directions**. `.data-table-dim` is the absent-value cell — a *neutral* tone is the **absence** of a class, so an untoned cell keeps `--text`. The 11px column head and its `0.06em` tracking are a **pair**. The linked row's lift is scoped to match the hover's specificity and win on source order — unscoped, `tr:hover > th` silently out-specifies it. `title` is a **slot, not a third axis** — it puts the card's strip on `surface="card"` (see `Card`). |
+| `DataTable` (DDR-0039, DDR-0059, DDR-0065, DDR-0087) | the *container's* `surface` × `height` | Sorting is **opt-in per column**; a **missing value sorts last in both directions**. `.data-table-dim` is the absent-value cell — a *neutral* tone is the **absence** of a class. The 11px column head and its `0.06em` tracking are a **pair**. The linked row's lift is scoped to match the hover's specificity and win on source order — unscoped, `tr:hover > th` silently out-specifies it. `title` is a **slot, not a third axis** (see `Card`). |
 
 ## Stack
 
@@ -538,8 +540,7 @@ split when adding a component with real logic.
 
 Several `lib/*.test.ts` files have **no module under test** — they guard `app.css`, the components,
 a view's composition, or accessibility by scanning source text. What a text scan cannot see is
-pinned by Playwright (`ls e2e/`; enumerating it here goes stale): a **cascade** resolving, a
-**measured width**, a key reaching the app.
+pinned by Playwright: a **cascade** resolving, a **measured width**, a key reaching the app.
 
 Every completed feature should include unit tests, regression review, edge-case validation, and a
 Testing Report.
@@ -556,8 +557,8 @@ capturing view screenshots, never both at once.
 - **workflow-skills** (planning) — `product-manager` → `ui-designer` / `architect` →
   `database-designer` → `implementation-engineer` → `testing`.
 - **execution-skills** — seven builders; the Implementation Engineer selects the minimum set.
-- **governance-skills** — `adr-writer` (→ `docs/decisions/`), `design-recorder`
-  (→ `docs/design-decisions/`), `refactoring-reviewer` (before significant restructuring).
+- **governance-skills** — `adr-writer`, `design-recorder`, `refactoring-reviewer` (the last before
+  significant restructuring).
 - **project-management** — `issue-writer` drafts backlog issues, `project-historian` backfills
   historical ones. They track work; they never design it.
 
