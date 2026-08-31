@@ -83,12 +83,15 @@ Review:
 
 The assistant must only interact with the system through explicit tools, where tools are used at
 all. ADR-0009 permits either a deterministically assembled context or tool selection, provided
-every tool returns a **computed report** — the model may never derive a figure of its own. The
-first Assistant story starts without tool calling; these rules govern the moment it gains any.
+every tool returns a **computed report** — the model may never derive a figure of its own. Epic
+#322 adopts tools; DDR-0111 is the contract, and these rules govern from that point.
 
 Tools must map to:
 
-* service methods
+* **exactly one service method each.** Many tools may share one method — four narrow tools over
+  `analytics:getPerformance` only *narrow* it — but **no tool may span two**, because a join is
+  computation performed in the layer least covered by the service tests. Where no method exists,
+  **add the method**; that is ADR-0009's sanctioned route and it is deliberately the expensive one.
 * repository-backed operations via services
 
 Never allow the model to access:
@@ -143,8 +146,16 @@ All actions must be predefined tools.
 Tools should:
 
 * have stable input/output schemas
-* map 1:1 to service functions
-* return structured data
+* be backed by one service function each (see *Tool-Based Architecture Only* — the mapping is
+  many-tools-to-one-method, never one-tool-to-many)
+* return a **discriminated union**, in `ibkrGateway`'s discipline: a named state per outcome, never
+  an exception, and **never an empty report standing in for a state** (DDR-0022). A model handed an
+  empty report phrases it as a finding.
+* be **rendered into the app's own prose** before reaching the model, through the app's own
+  formatters — so a figure in an answer and the same figure on a dashboard agree to the digit
+  (DDR-0098, DDR-0111). Not raw JSON.
+* accept **enumerated keys, never free-form ranges**, where the app computes a fixed set. A period
+  the set does not hold is a named state **with alternatives**, never the adjacent row (DDR-0102).
 * avoid ambiguous responses
 
 ---
@@ -195,11 +206,24 @@ Avoid leaking stack traces or sensitive system errors.
 
 All tools must:
 
-* map directly to a service method
+* map directly to **one** service method
 * accept validated inputs only
-* return structured JSON
+* return a named state or a computed report, rendered as prose (see *Deterministic Tool Layer*)
 * remain read-only (never trade, mutate holdings, or execute transactions)
 * avoid side effects outside service scope
+* declare the `DISCLOSURE_CATEGORIES` category they fall under. Tool results are assembled in
+  **main** and never cross the IPC boundary where `pickDisclosedSections` bounds the context, so
+  without this a tool is the way around the disclosure (DDR-0111).
+
+The absences are **never a tool.** *WHAT THIS APP DOES NOT COMPUTE* rides in the base context sent
+with every question. DDR-0110 made three prohibitions — cause, risk statistic, benchmark —
+conditional on those blocks being present, so a tool the model may decline to call would unbind all
+three and nothing would fail (DDR-0101, DDR-0110).
+
+The loop is **bounded twice** and is not a retry: a retry re-sends the *same* request after a
+**failure**; a round sends a *larger* message array after a **success**, and a failed round is still
+not retried (DDR-0096). A declared round cap and a per-question character ceiling both apply, and
+exhausting either ends in a named state — never a partial answer presented as complete.
 
 Prefer:
 

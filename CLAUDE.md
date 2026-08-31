@@ -95,7 +95,7 @@ Each exists end-to-end and is the reference pattern for its shape.
   sector universe** are each stated — the last because IBKR's `industry` is an *open* vocabulary, so
   a mapped taxonomy joins with nothing and reads 0% (DDR-0094). `no_profile`/`no_targets` are
   **gone**, `balanced` is **nullable** (vacuous `true` is what a model calls balanced).
-  `promptBudget.test.ts` measures the worst case the caps allow (DDR-0103) — **81.8%** of
+  `promptBudget.test.ts` measures the worst case the caps allow (DDR-0103) — **82.2%** of
   `MAX_PROMPT_CHARS` over **two** fixtures, since a profile that lengthens the drift shortens the
   baseline; the **85% gate, not the ceiling, binds**, and #315's first draft failed it at 88.5%.
   The prompt is **eight `##` sections the owner wrote** (`SYSTEM_PROMPT_SECTIONS`; DDR-0110
@@ -608,10 +608,10 @@ its own published **baseline** and says so beside the claim (ADR-0012); where th
 target, the baseline stays silent.
 
 **The model never produces a figure.** Every number in an answer is computed by a service and
-*phrased* by the model; context assembly is deterministic and unit-tested, and the model gets no
-tools and no data access. A trim is grounded; an instrument the owner doesn't hold is repeated from
-training data, unverified — and the two are **marked apart** in the answer, as are a judgement
-against the owner's target and one against the app's baseline.
+*phrased* by the model; assembly is deterministic and unit-tested, and a tool returns a computed
+report, never data to derive from (DDR-0111). A trim is grounded; an instrument the owner doesn't
+hold is repeated from training data, unverified — the two are **marked apart** in the answer, as
+are a judgement against the owner's target and one against the app's baseline.
 
 **Portfolio data leaves the machine** for that one feature (ADR-0010): `gpt-4.1-mini`, from **main
 only**, whenever a key is present and a question is asked — supplying the key is the authorization
