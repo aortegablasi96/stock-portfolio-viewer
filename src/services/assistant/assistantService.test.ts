@@ -333,6 +333,31 @@ describe('the system prompt states the boundary the records set', () => {
   })
 
   /**
+   * Forecasting, and the shape of the rule matters more than its presence (DDR-0110).
+   *
+   * A **numeric** forecast was already blocked — *Numerical integrity* forbids the model to
+   * `estimate` a figure, and an estimated future figure is an estimate. What was open is the
+   * **qualitative** claim: *"well-positioned for the year ahead"* carries no number, so nothing
+   * caught it, and it is the one claim the marking discipline cannot reach. An unheld instrument
+   * gets labelled as repeated from training data; a forecast has no source to name.
+   *
+   * So the rule is **not** the old flat "Never forecast". It forbids the model to *produce* one
+   * while leaving room for a projection the app computes — the same shape as everything else here,
+   * the model phrasing what a service derived (ADR-0009). A blanket prohibition would have
+   * foreclosed that feature, which is the owner's reason for wanting this wording rather than the
+   * rule it replaces.
+   */
+  it('forbids the model producing a forecast, without foreclosing a computed projection', () => {
+    expect(SYSTEM_PROMPT).toContain('Do not state what will happen')
+    expect(SYSTEM_PROMPT).toContain('never produce one of your own')
+    // The permitted half, which is what makes this narrower than "Never forecast".
+    expect(SYSTEM_PROMPT).toContain('Where the application supplies a projection')
+    expect(SYSTEM_PROMPT).toContain('name the assumption it rests on')
+    // The numeric half, which was never the gap: an estimated future figure is an estimate.
+    expect(SYSTEM_PROMPT).toContain('estimate')
+  })
+
+  /**
    * DDR-0101's three named absences, each written out because a summary reaches for it and a model
    * does not experience any of the three as a calculation.
    */

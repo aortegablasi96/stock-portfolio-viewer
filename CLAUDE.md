@@ -105,8 +105,9 @@ Each exists end-to-end and is the reference pattern for its shape.
   the prompt is the *only* line of defence** — a test asserts a passage is present, never that it
   was obeyed, so a rule needing a fact to be obeyable is a gap in the *grounding*; the tax/costs
   rule has **no context half** (DDR-0104). Cause, risk statistic and benchmark are now
-  **conditional**, leaning on DDR-0101's absence blocks — trim those and they unbind — and **never
-  forecast is gone**, the one rule no context half can replace.
+  **conditional**, leaning on DDR-0101's absence blocks — trim those and they unbind. **A forecast is
+  the model's only where the app computed a projection**: the flat "never forecast" also forbade
+  phrasing one a service derived, so it came back narrower.
 - **classification** — sector/industry. `classificationRepository` fronts *both* the mutable
   SQLite cache and `ibkrGateway`; `analytics:classifyInstruments` is the only analytics channel
   reaching IBKR. Refreshes are **resumable, not transactional** — a run that dies at 30 of 40 keeps
@@ -286,8 +287,7 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
   every pair **concurrently**, bounding the wait the same way while keeping rates that answered
   (DDR-0024).
 - **`avgCost` is per share and IBKR's own `unrealizedPnl` beats deriving one** (DDR-0087): read as
-  a position total it scales each row by its quantity and still looks right, and the derivation
-  needs **no multiplier term** (both sides carry it). This build also sends **no `ticker`**, so
+  a position total it scales each row by its quantity and still looks right. This build also sends **no `ticker`**, so
   `symbol` and `description` both fall back to `contractDesc` — DDR-0066's trap, on every live row,
   and why a live holding's name is `companyName` (Flex, by conid) *before* `description` (DDR-0088).
 - **Portfolio reads are coalesced** by `gatewayCache` between repository and gateway, so one

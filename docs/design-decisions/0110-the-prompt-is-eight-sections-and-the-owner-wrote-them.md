@@ -63,20 +63,40 @@ rewrite that dropped one of those guarantees has to fail a test.
 
 ## Two things the rewrite changed that the owner should know
 
-Both were reported at the time and neither was corrected, so they are recorded as accepted rather
-than missed.
+Both were reported. The first was answered by a follow-up the owner asked for; the second is
+recorded as accepted rather than missed.
 
-### Forecasting is no longer prohibited by name
+### Forecasting comes back narrower than the rule it replaces
 
-The old prompt carried *"Never forecast. What changed, not what will."* Nothing in the eight
-sections replaces it. The nearest cover is *"Never pretend to know more than the available data
-supports"*, which is a disposition rather than a prohibition, and *"Do not present model knowledge
-as current or verified data"*, which is about provenance rather than about the future.
+The owner's draft dropped *"Never forecast. What changed, not what will."* and nothing in the eight
+sections replaced it. On being asked *"why would I deny it?"* the omission turned out to be the
+better instinct, and the rule that returned is **not** the one that left.
 
-A forecast is the one claim where **no context half exists** — the grounding cannot state the
-absence of the future the way it states the absence of a benchmark — so the prompt was the whole of
-the defence, and it is the only one of DDR-0104's rules with nothing behind it. Restoring it is one
-sentence in the *Evidence and causality* section.
+**Half of it was never open.** *Numerical integrity* forbids the model to `estimate` a figure, and
+an estimated future figure is an estimate — so a **numeric** forecast was blocked by the owner's own
+draft. What was open is the **qualitative** claim: *"well-positioned for the year ahead"* carries no
+number, so nothing caught it.
+
+That half is worth closing, and for a reason peculiar to it. A forecast is the one claim the
+**marking discipline cannot reach**: an unheld instrument is labelled as repeated from training
+data, a baseline judgement is labelled as the app's own standard, and a forecast has *no source to
+name*. It is also where ADR-0009's knowingly-accepted *owner over-trust* risk is largest, because a
+retrospective figure is checkable against the app's own views and a forecast is not checkable until
+it is too late.
+
+**But "Never forecast" was too broad**, and that is the owner's point. It forbids the model to
+invent a forecast *and* forbids it to phrase one the app computed — and a projection is buildable
+here: *"if your trailing dividend yield holds, income over the next 12 months is €X"* is
+deterministic arithmetic a service can do, with a stated assumption, needing no amendment to
+ADR-0009. A blanket rule would foreclose the version actually worth trusting.
+
+So the line added to *Evidence and causality* is:
+
+> Do not state what will happen. Where the application supplies a projection, phrase it and name the
+> assumption it rests on; never produce one of your own.
+
+Which is the shape of every other rule here — the model phrases what a service derived — rather than
+a prohibition on a subject.
 
 ### Three absolute prohibitions became conditional
 
@@ -108,14 +128,15 @@ alone would conclude otherwise.
 
 The prompt got **shorter**, which was not the aim and is worth recording so nobody spends it twice:
 
-| | Before | After |
-| --- | --- | --- |
-| `SYSTEM_PROMPT` | 4,454 chars | **4,071** |
-| Worst case, every target set | 33,095 (82.7%) | **32,708 (81.8%)** |
-| Worst case, no profile | 24,090 (60.2%) | 23,707 (59.3%) |
+| | Before | Sections | Plus the forecasting line |
+| --- | --- | --- | --- |
+| `SYSTEM_PROMPT` | 4,454 chars | 4,071 | **4,226** |
+| Worst case, every target set | 33,095 (82.7%) | 32,708 (81.8%) | **32,863 (82.2%)** |
+| Worst case, no profile | 24,090 (60.2%) | 23,707 (59.3%) | 23,862 (59.7%) |
 
-DDR-0103's **85% gate** remains the binding constraint, now with roughly 1,300 characters of
-headroom rather than 900.
+DDR-0103's **85% gate** remains the binding constraint, with roughly 1,100 characters of headroom —
+still more than the 900 the rewrite started from, because the sections are more compact than the
+seventeen bullets even after a rule was added back.
 
 ## Alternatives considered
 
@@ -130,9 +151,14 @@ diff nobody counts. Rejected.
 a list derived from the thing it checks asserts nothing, which is DDR-0104's own reason for counting
 the bullets as well as the array.
 
-**Restore the forecasting rule while applying the rewrite.** Rejected as out of scope — the owner
-supplied a complete replacement, and silently adding a ninth prohibition to it would be editing
-their draft rather than applying it. Raised instead, and recorded above.
+**Restore the forecasting rule inside the rewrite itself.** Rejected as out of scope — the owner
+supplied a complete replacement, and adding a prohibition to it unasked would be editing their draft
+rather than applying it. Raised instead, and added as a follow-up on the owner's instruction, in the
+narrower form above.
+
+**Restore the old "Never forecast" verbatim.** Rejected once the question was put properly: it
+forbids the model to invent a forecast *and* forbids it to phrase a projection the app computed,
+foreclosing a feature ADR-0009 already permits.
 
 **Re-point the tests at the owner's sentences.** Rejected: the assertions would then guard the
 wording rather than the guarantee, and every future rewrite would fail them for no reason. They pin
