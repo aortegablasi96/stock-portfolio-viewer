@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import {
   assistantService,
   buildPrompt,
+  BASE_CONTEXT_HEADING,
   SECTION_HEADINGS,
   SYSTEM_PROMPT,
   SYSTEM_PROMPT_PREAMBLE,
@@ -12,6 +13,20 @@ import {
   DISCLOSURE_CATEGORIES,
   type AssistantContext,
 } from '@shared/domain/assistantDisclosure'
+import {
+  ABSENCE_DISCLOSURES,
+  BASELINE_SILENCE_NOTE,
+  BASE_CONTEXT,
+  CURRENCY_EXPOSURE_NOTE,
+  NO_ANNUALISED_NOTE,
+  NO_BENCHMARK_NOTE,
+  NO_RISK_STATISTIC_NOTE,
+  STORE_AND_CLOCK_NOTE,
+} from '@shared/domain/assistantAbsences'
+import {
+  BASELINE_UNCOVERED_NOTE,
+  NO_SECTOR_UNIVERSE_NOTE,
+} from '@shared/domain/portfolioBaseline'
 
 /**
  * The assistant's one outbound path (Story #284; reshaped by Story #309, ADR-0011).
@@ -268,6 +283,14 @@ describe('the prompt is built from the disclosure', () => {
     expect(buildPrompt('q', {})).toContain('No portfolio context was assembled')
   })
 
+  /** The base context is above the first disclosed section, whatever sections there are. */
+  it('opens with the base context, above every section', () => {
+    const prompt = buildPrompt('How am I doing?', context)
+
+    expect(prompt.startsWith(`## ${BASE_CONTEXT_HEADING}\n${BASE_CONTEXT}`)).toBe(true)
+    expect(prompt.indexOf(BASE_CONTEXT)).toBeLessThan(prompt.indexOf('## What you hold'))
+  })
+
   /**
    * Two turns, in that order — the same exchange the two strings carried, in the shape a tool loop
    * needs (Story #324, DDR-0111).
@@ -295,6 +318,143 @@ describe('the prompt is built from the disclosure', () => {
     const sent = mockGateway.complete.mock.calls[0]![0]
     expect(sent.tools).toBeUndefined()
     expect(sent.runTool).toBeUndefined()
+  })
+})
+
+/**
+ * The absences reach the model on **every** question (Story #325, DDR-0110, DDR-0111).
+ *
+ * **This is the story's central assertion and it is deliberately a negative one.** Under Epic #322
+ * a report arrives because the model asked for it, so the interesting conversation is the one where
+ * it asked for nothing — and that is exactly the conversation in which the three conditional
+ * prohibitions would have nothing behind them. Before this story the absences were part of
+ * `performanceSection`, so a question asked with no Flex history, or with a model that never
+ * reached for performance, carried *"unless explicitly supplied"* with nothing left asserting that
+ * nothing was.
+ *
+ * The mechanism is structural rather than dutiful: `buildPrompt` emits {@link BASE_CONTEXT}
+ * unconditionally, so there is no branch to forget. A tool result, a section or an empty object
+ * changes what comes *after* it and never whether it is there.
+ */
+describe('the absences ride with every question, whatever else does', () => {
+  /** The whole outbound message, as the gateway receives it — not the string a helper returned. */
+  const sentUser = (): string => {
+    const sent = mockGateway.complete.mock.calls[0]![0]
+    return sent.messages.find((message) => message.role === 'user')!.content
+  }
+
+  /**
+   * No context, no tools, no report — and all seven statements still there. This is the "no tool is
+   * called" conversation the story asks for, at the only boundary where it can be observed: what
+   * actually left for the gateway.
+   */
+  it('carries every one of them when no context was assembled and no tool was called', async () => {
+    await assistantService.ask('How volatile has the ride been?')
+
+    const sent = mockGateway.complete.mock.calls[0]![0]
+    expect(sent.tools).toBeUndefined()
+    expect(sent.runTool).toBeUndefined()
+
+    const user = sentUser()
+    expect(user).toContain('No portfolio context was assembled')
+    for (const disclosure of ABSENCE_DISCLOSURES) {
+      expect(user).toContain(disclosure.text)
+    }
+  })
+
+  /**
+   * All four sets, named individually rather than only counted, so a set that stopped being
+   * assembled fails with the name of what went missing.
+   */
+  it.each([
+    ['no annualised figure (DDR-0101)', NO_ANNUALISED_NOTE],
+    ['no benchmark (DDR-0101)', NO_BENCHMARK_NOTE],
+    ['no risk statistic (DDR-0101)', NO_RISK_STATISTIC_NOTE],
+    ['no baseline where the owner set a target (ADR-0012)', BASELINE_SILENCE_NOTE],
+    ['no currency baseline (DDR-0109)', BASELINE_UNCOVERED_NOTE],
+    ['no sector universe (DDR-0109)', NO_SECTOR_UNIVERSE_NOTE],
+    ['what a currency weight is', CURRENCY_EXPOSURE_NOTE],
+    ['which store and which clock (DDR-0098)', STORE_AND_CLOCK_NOTE],
+  ])('states %s', async (_case, text) => {
+    await assistantService.ask('q')
+    expect(sentUser()).toContain(text)
+  })
+
+  /**
+   * DDR-0101's ordering, at the level of the whole prompt: a model that has already read a figure
+   * has, by the time it reaches a caveat, largely written the sentence the caveat was meant to
+   * prevent. Every section and the question itself come after.
+   */
+  it('states them before any section and before the question', async () => {
+    await assistantService.ask('How am I doing?', { weights: 'USD 57%', holdings: 'AAA' })
+
+    const user = sentUser()
+    const last = Math.max(...ABSENCE_DISCLOSURES.map((d) => user.indexOf(d.text) + d.text.length))
+    expect(last).toBeLessThan(user.indexOf('## How your portfolio is divided'))
+    expect(last).toBeLessThan(user.indexOf('## Question'))
+  })
+
+  /**
+   * The base context is **not** a disclosure category and must not become one. It carries no owner
+   * data — it is a statement about the app — so `pickDisclosedSections` has nothing to bound, and a
+   * category invented for it would be a disclosure of nothing that could then be dropped at the IPC
+   * boundary, which is the one thing that must not happen to it (DDR-0098, DDR-0111).
+   */
+  it('is not a disclosure category, and cannot be dropped by one', () => {
+    expect(DISCLOSURE_CATEGORIES.map((category) => category.id)).not.toContain('absences')
+    // The runtime half: an assembled context that tried to smuggle it in is dropped, and the base
+    // context is there anyway.
+    const prompt = buildPrompt('q', {
+      // @ts-expect-error — the key the type forbids, used here to prove the base is not it.
+      absences: 'something else entirely',
+    })
+    expect(prompt).not.toContain('something else entirely')
+    expect(prompt).toContain(BASE_CONTEXT)
+  })
+})
+
+/**
+ * The coupling DDR-0110 wrote down, asserted so trimming either end fails (Story #325).
+ *
+ * Each case names a prompt rule that is **conditional** and the sentence that makes the condition
+ * false. The prompt half is the model's instruction; the context half is the fact that makes the
+ * instruction obeyable. Neither is worth anything alone: a rule with no fact behind it is a rule the
+ * model must guess at, and a fact with no rule is a fact it may ignore. DDR-0110 said so in as many
+ * words — *"a later story that trims the absence blocks would silently unbind three prohibitions"* —
+ * and this is what makes the silence impossible.
+ */
+describe('the three conditional prohibitions stay bound to the fact behind them', () => {
+  it.each([
+    [
+      'a risk statistic — "unless explicitly supplied"',
+      'Do not report derived risk statistics such as volatility, standard deviation, Sharpe ratio, beta, or drawdown unless explicitly supplied by the application or a tool.',
+      NO_RISK_STATISTIC_NOTE,
+    ],
+    [
+      'a benchmark — "unless comparison data is explicitly available"',
+      'Do not compare the portfolio with benchmarks, indices, markets, or peers unless comparison data is explicitly available.',
+      NO_BENCHMARK_NOTE,
+    ],
+    [
+      'a cause — "unless the available data supports the explanation"',
+      'Do not claim why a market, sector, company, instrument, or portfolio position moved unless the available data supports the explanation.',
+      STORE_AND_CLOCK_NOTE,
+    ],
+  ])('%s', (_case, rule, supporting) => {
+    expect(SYSTEM_PROMPT).toContain(rule)
+    expect(BASE_CONTEXT).toContain(supporting)
+  })
+
+  /**
+   * The fourth is pinned as **not** one of them: annualisation is forbidden outright, in the prompt
+   * and in the context both, and a later story making it conditional has to come here to do it.
+   */
+  it('keeps annualisation absolute in the prompt and stated in the context', () => {
+    expect(SYSTEM_PROMPT).toContain(
+      'Do not derive, add, subtract, average, compound, annualise, estimate, or transform figures',
+    )
+    expect(SYSTEM_PROMPT).not.toContain('annualise, unless')
+    expect(BASE_CONTEXT).toContain(NO_ANNUALISED_NOTE)
   })
 })
 

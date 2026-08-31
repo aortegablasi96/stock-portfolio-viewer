@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { SYSTEM_PROMPT, buildPrompt } from './assistantService'
 import { MAX_PROMPT_CHARS } from '@repositories/assistant/aiGateway'
+import { ABSENCE_DISCLOSURES } from '@shared/domain/assistantAbsences'
 import type { AiMessage } from '@shared/domain/assistant'
 import {
   MAX_LISTED_POSITIONS,
@@ -356,10 +357,37 @@ describe('the assembled prompt at the worst case the caps allow', () => {
 
     expect(size).toBeLessThan(MAX_PROMPT_CHARS)
     // Not merely inside it. A story that lands at 99% has spent the next story's budget as well as
-    // its own, and the next story is #288 — which adds to the *system prompt*, the other half of
-    // the number measured here. This is also the assertion that would have caught #287 shipping
-    // over the old 24,000 ceiling, which it did: raising it was that measurement's own finding.
+    // its own. This is also the assertion that would have caught #287 shipping over the old 24,000
+    // ceiling, which it did: raising it was that measurement's own finding.
+    //
+    // **Story #325 spends most of what was left, and that is this measurement's finding.** The
+    // worst case moved from 82.2% to 84.8% — the four sets of disclosure became unconditional, so
+    // the baseline's two absences and the store-and-clock pairing are now sent even by the reading
+    // that states every target and defers every check, which is this fixture. Roughly 90 characters
+    // remain under the gate. **Nothing may be added to the assembled context before Epic #322 takes
+    // figures out of it**; the next story that tries fails here, which is what the gate is for.
     expect(size).toBeLessThan(MAX_PROMPT_CHARS * 0.85)
+  })
+
+  /**
+   * The disclosures are counted, not assumed (Story #325, DDR-0111).
+   *
+   * They were measured before this story too — as part of `performanceSection`, which this fixture
+   * happens to carry. What changed is that they no longer *depend* on it: the number above now
+   * includes them in the reading that carries them least, so the gate is measuring a prompt with
+   * every unconditional statement in it rather than one that happened to earn them.
+   */
+  it.each([
+    ['every target set, so the baseline defers', REPORTS],
+    ['no profile at all, so the baseline runs', REPORTS_NO_PROFILE],
+  ])('is measured with every absence in it: %s', (_case, reports) => {
+    const [system, user] = conversation(reports)
+
+    for (const disclosure of ABSENCE_DISCLOSURES) {
+      expect(user!.content).toContain(disclosure.text)
+    }
+    // The system prompt is the other half of the number, and the half these support.
+    expect(system!.content).toContain('unless explicitly supplied by the application or a tool')
   })
 
   /**
@@ -388,7 +416,9 @@ describe('the assembled prompt at the worst case the caps allow', () => {
   it('carries both baselines, each marked as the app\u2019s own standard', () => {
     // Every check deferred is deliberately one sentence rather than a section: it is the longest
     // prompt the app assembles, and a baseline nothing can be judged against earns no headings.
-    expect(profileOf(REPORTS)).toContain('None of it applies here')
+    // Since Story #325 it says only *which* checks stood down — that the baseline stands down at
+    // all is stated unconditionally in the base context, above every section.
+    expect(profileOf(REPORTS)).toContain('None of the app’s default baseline applies here')
     expect(profileOf(REPORTS)).not.toContain('against the app’s default')
 
     const applied = profileOf(REPORTS_NO_PROFILE)

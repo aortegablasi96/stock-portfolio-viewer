@@ -27,6 +27,7 @@ import {
   NO_SECTOR_UNIVERSE_NOTE,
   type BaselineCheck,
 } from '@shared/domain/portfolioBaseline'
+import { CURRENCY_EXPOSURE_NOTE } from '@shared/domain/assistantAbsences'
 import {
   STYLE_TAG_LABELS,
   TARGET_DIMENSION_LABELS,
@@ -127,16 +128,14 @@ export const MAX_LISTED_POSITIONS = 40
 export const MAX_LISTED_MOVES = 6
 
 /**
- * What a currency weight in this app is a weight *of*, said wherever one appears.
+ * `CURRENCY_EXPOSURE_NOTE` stood here until Story #325.
  *
- * A currency exposure has two readings and the app only computes one: this is the currency each
- * position is held and priced in, which is not where the underlying business earns its revenue. An
- * owner holding a US-listed miner in dollars has dollar *pricing* and commodity revenue, and a
- * sentence about "currency exposure" that does not say which it means is wrong for whichever
- * reading the reader had (Story #287).
+ * It moved to `@shared/domain/assistantAbsences` with the other three sets of disclosure, because
+ * it now has to be said **unconditionally** as well as beside each breakdown it qualifies — and
+ * because a tool result assembled in main will want the same sentence (DDR-0111). It is still
+ * imported here and still written beside the two breakdowns below; what changed is that it is no
+ * longer only there.
  */
-export const CURRENCY_EXPOSURE_NOTE =
-  'Currency here is the currency each position is held and priced in — not the currency the underlying business earns its revenue in, which this app does not know.'
 
 /**
  * Assemble the context, keyed by the categories the owner read (DDR-0097).
@@ -538,12 +537,12 @@ function baselineBlock(review: BaselineReview): string | null {
   if (review.applied.length === 0 && review.deferred.length === 0) return null
 
   // Nothing applied is one sentence, not a section. The owner has spoken about every dimension the
-  // baseline covers, so all that is worth saying is that a default exists and is not in play — and
-  // the currency note below is beside the point when there is no baseline figure to misapply. This
-  // is the case a fully-targeted profile hits, which is also the longest prompt the app assembles,
-  // so the saving lands exactly where the budget binds (DDR-0103).
+  // baseline covers, so all that is worth saying is *which* checks stood down — that a default
+  // exists and stands down where they spoke is now said unconditionally in the base context
+  // (`BASELINE_SILENCE_NOTE`, Story #325), so repeating it here is a second copy in the longest
+  // prompt the app assembles, which is exactly where the budget binds (DDR-0103).
   if (review.applied.length === 0) {
-    return `The app has a default baseline for dimensions the owner leaves unstated. None of it applies here — their own targets govern ${list(review.deferred.map((check) => BASELINE_CHECK_LABELS[check]))} — so judge against their targets alone.`
+    return `None of the app’s default baseline applies here: the owner’s own targets govern ${list(review.deferred.map((check) => BASELINE_CHECK_LABELS[check]))}. Judge against their targets alone.`
   }
 
   const lines: string[] = [
@@ -723,8 +722,10 @@ function bandLines(dimension: DimensionDrift, sized: Set<string>): string[] {
  *
  * **What the app does not compute at all is named before any figure is.** Story #286 asks the same
  * section to survive being *summarised*, and a summary reaches for annualisation, a benchmark and a
- * risk statistic — none of which exists here. {@link uncomputedBlock} says so second, ahead of the
- * numbers, on DDR-0099's own ordering argument (see DDR-0101).
+ * risk statistic — none of which exists here. Since Story #325 those three are stated
+ * unconditionally in the base context, above every section; {@link periodSpanBlock} restates them
+ * for this period and gives the period's real calendar span second, ahead of the numbers, on
+ * DDR-0099's own ordering argument (see DDR-0101, DDR-0111).
  */
 export function performanceSection(change: PeriodChange): string {
   const c = (value: number): string => formatCurrency(value, change.baseCurrency)
@@ -739,7 +740,7 @@ export function performanceSection(change: PeriodChange): string {
     // Second, ahead of every figure, for the reason RETURN precedes VALUE: whichever is met first
     // is what a sentence reaches for (DDR-0099). A summary asked for after the numbers have been
     // read is a summary already phrased.
-    uncomputedBlock(change),
+    periodSpanBlock(change),
   ]
 
   if (change.days === 0) {
@@ -785,43 +786,38 @@ export function performanceSection(change: PeriodChange): string {
 }
 
 /**
- * The three things a summary reaches for that this app does not hold (Story #286).
+ * The three overclaims, restated for **this** period, and the one fact it has in their place.
  *
- * A summary is compression, and compression is where a model reaches for the conventional
- * phrasing of finance. Each of these is a sentence that sounds like a summary and is not grounded
- * in anything:
+ * A summary is compression, and compression is where a model reaches for the conventional phrasing
+ * of finance: an annualised figure, a benchmark, a risk statistic. None of the three exists
+ * anywhere in this app, and until Story #325 this block is where all three were said — which made
+ * saying them conditional on there being a Flex history to window at all.
  *
- * **An annualised figure.** The app computes none — not one report carries a per-year, compounded
- * or "p.a." number — so producing one is arithmetic, which is already forbidden. What makes it
- * worth its own line is that it is the one calculation a model does not experience as a
- * calculation: "roughly 30% a year" reads as a restatement of "+5% over two months" rather than as
- * a derivation, and it is meaningless besides. So the honest fact is stated instead — how many
- * calendar days the period really covers — and below a year the section forbids the word outright.
+ * **The statements themselves are now unconditional and live in
+ * `@shared/domain/assistantAbsences`**, above every section and every report, on DDR-0110's
+ * coupling: three prompt prohibitions are conditional on those sentences being present, and one
+ * that arrives only when a section does is not present (DDR-0111). What stays here is the half that
+ * is genuinely **about this period** — its calendar span — plus the restatement that carries it,
+ * which is DDR-0101's *before any figure* applied per report. The restatement is belt-and-braces
+ * and is deliberately not what holds the prohibitions.
  *
- * **A benchmark.** The app has none. Benchmark comparison is Epic #7, a different data source in a
- * different milestone, and "outperformed the market" is invented wholesale in the register that
- * sounds most authoritative.
+ * **The span is the honest fact that replaces the annualised one.** How many calendar days the
+ * period really covers is the only thing an app with no annualisation can say about "a year", and
+ * below a year the block forbids the word outright. Both lines are the app's own counts off the
+ * window and the extent — nothing here is derived.
  *
- * **A risk statistic.** Daily returns exist ({@link PeriodChange.daily}, DDR-0049), so dispersion
- * *can* be described — from the counts and the two extremes that are actually in front of the
- * model, and from nothing else. A Sharpe ratio quoted beside them would be indistinguishable in
- * tone from the figures that were computed.
- *
- * The block carries no figure that is not the app's own: two day counts off the window and the
- * extent, and otherwise statements of absence. It is emitted for an **empty** period too — a
- * window with nothing in it is exactly where an ungrounded comparison has the most room.
+ * Emitted for an **empty** period too: a window with nothing in it is exactly where an ungrounded
+ * comparison has the most room.
  */
-function uncomputedBlock(change: PeriodChange): string {
+function periodSpanBlock(change: PeriodChange): string {
   const span = change.span
 
   return [
-    'WHAT THIS APP DOES NOT COMPUTE — none of it is available, and none of it may be supplied:',
-    `- No annualised, per-year, compounded or "p.a." figure exists anywhere in this context. A return here is the return over the period named above and nothing else. That period covers ${span.periodDays} calendar day(s); the whole imported history covers ${span.historyDays}.`,
+    'WHAT THIS APP DOES NOT COMPUTE, for this period: no annualised figure, no benchmark, no risk statistic.',
+    `- This period covers ${span.periodDays} calendar day(s); the whole imported history covers ${span.historyDays}.`,
     span.coversAYear
       ? '- This period covers a year or more, so a return over it may be given as the return over this period — still never scaled, compounded or annualised to any other period.'
       : '- This period is shorter than a year, so never describe a return over it as annual, annualised, yearly or per year. State the period instead.',
-    '- No benchmark, index, market or peer figure exists. This app holds no market data beyond this portfolio’s own history, so never say the portfolio beat, lagged, tracked, outperformed or underperformed anything.',
-    '- No volatility, standard deviation, Sharpe ratio, beta, drawdown or other risk statistic exists. The daily-return counts and the best and worst day in this section are the only description of dispersion this app has; use those where they are given, and otherwise say a risk figure is not available.',
   ].join('\n')
 }
 
