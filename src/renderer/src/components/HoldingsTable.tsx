@@ -5,7 +5,7 @@ import {
   formatQuantity,
   formatSignedCurrency,
   holdingName,
-} from '../lib/format'
+} from '@shared/format'
 import { unrealizedPnlOf, unrealizedPnlTone } from '../lib/holdingPnl'
 import { toneClassName } from '../lib/statTileVariants'
 import { weightBarFill, weightBarScale } from '../lib/weightBars'

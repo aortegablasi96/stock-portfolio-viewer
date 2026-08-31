@@ -42,7 +42,7 @@
 import type { AllocationPosition } from '@shared/domain/allocation'
 import type { SectorPalette } from './sectorMap'
 import { arcPath, fullRingPath } from './pie'
-import { instrumentName } from './format'
+import { instrumentName } from '@shared/format'
 import { returnPercent } from './gainLoss'
 import { centroidFor } from './worldGeo'
 

@@ -1,5 +1,9 @@
+import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, it, expect } from 'vitest'
 import {
+  APP_LOCALE,
   formatCompanyName,
   formatCurrency,
   formatDate,
@@ -365,5 +369,114 @@ describe('formatUpdatedAt', () => {
     const at = new Date(2025, 6, 28, 10, 0).getTime()
 
     expect(formatUpdatedAt(at, now)).toMatch(/jul/i)
+  })
+})
+
+// ---- one implementation, one locale, two processes (Story #324, DDR-0111) ----
+
+/**
+ * The property the move to `@shared` had to buy, and the trap it created (DDR-0111).
+ *
+ * DDR-0098's criterion is that **a figure in an answer and the same figure on a dashboard agree to
+ * the digit**. While the renderer wrote every figure, one module was enough to make that true. Epic
+ * #322 puts a second writer in main — a tool result is rendered into prose there — so the criterion
+ * now needs two things rather than one: the same *code*, and the same *locale*.
+ *
+ * Neither is checked by anything else. Two copies of a percentage formatter typecheck; two hosts
+ * resolving `undefined` differently typecheck and pass every test written against a regex. What
+ * that failure looks like in the wild is `1,234.50` in an answer beside `1.234,50` on the page it
+ * was computed from — the same figure, disagreeing in a separator, in the one feature of this app
+ * whose whole promise is that its numbers came from somewhere.
+ */
+describe('one implementation, reachable from both processes', () => {
+  /**
+   * The repository root. `fileURLToPath`, never `URL.pathname`: the latter percent-encodes, and
+   * this checkout lives under a path with a space in it — `Andreu%20Ortega` is not a directory.
+   */
+  const root = fileURLToPath(new URL('../../', import.meta.url))
+
+  /**
+   * **This file excepted**, for the reason a text guard always carries one (DDR-0042, DDR-0047,
+   * DDR-0075): a file hunting for a string necessarily contains it. One named file rather than a
+   * pattern, so the exception cannot quietly widen.
+   */
+  const SELF = fileURLToPath(import.meta.url)
+
+  function sourceFiles(dir: string): string[] {
+    const out: string[] = []
+    for (const entry of readdirSync(dir)) {
+      const path = join(dir, entry)
+      if (statSync(path).isDirectory()) out.push(...sourceFiles(path))
+      else if (/\.tsx?$/.test(entry) && path !== SELF) out.push(path)
+    }
+    return out
+  }
+
+  /**
+   * A file's code, comments stripped — the trap this repository has walked into seven times over,
+   * and would have walked into here: `format.ts` explains *in prose* that every formatter used to
+   * pass `undefined` as its locale, and an unstripped read reports the fix as the bug.
+   */
+  function code(path: string): string {
+    return readFileSync(path, 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .split(/\r?\n/)
+      .filter((line) => !line.trimStart().startsWith('//'))
+      .join('\n')
+  }
+
+  const relative = (path: string): string => path.slice(root.length).replace(/\\/g, '/')
+
+  /**
+   * Phrased as "which files construct one" rather than as an import rule, because a second
+   * implementation needs no import of the first — which is exactly how a formatter gets duplicated
+   * into main by someone who cannot reach the renderer's copy.
+   */
+  it('builds every figure in exactly one module', () => {
+    const builders = sourceFiles(join(root, 'src'))
+      .filter((path) => /new Intl\./.test(code(path)))
+      .map(relative)
+
+    expect(builders).toEqual(['src/shared/format.ts'])
+  })
+
+  /**
+   * The host default is what a second process makes dangerous, so its shape is what is forbidden:
+   * every constructor takes the locale it was given, and the default comes from one declared value.
+   */
+  it('never asks a host for its locale', () => {
+    const source = code(join(root, 'src/shared/format.ts'))
+
+    expect(source).not.toMatch(/new Intl\.\w+\(\s*undefined/)
+    expect(source).not.toContain('resolvedOptions')
+    expect(source).not.toContain('navigator.language')
+    expect(APP_LOCALE).toBe('en-GB')
+  })
+
+  /**
+   * And the consequence, asserted as **exact strings**.
+   *
+   * Every other test in this file matches a regex loose enough to pass under any host — which was
+   * the right way to write them while the locale *was* the host's. It is the wrong way now: the
+   * whole point is that these outputs no longer depend on where the process is running, so pinning
+   * them character by character is what would fail if the default went back to being discovered.
+   * A run in main and a run in the renderer are the same call in two processes; if this passes in
+   * one it passes in both, which is the property DDR-0111 asked for.
+   */
+  it('formats the same value identically wherever it runs', () => {
+    expect(formatCurrency(1234.5, 'EUR')).toBe('€1,234.50')
+    expect(formatCurrency(1234.5, 'BASE')).toBe('1,234.50')
+    expect(formatPercent(0.6)).toBe('60.0%')
+    expect(formatPercentValue(7.125)).toBe('7.13%')
+    expect(formatSignedPoints(-1.5)).toBe('-1.50 percentage points')
+    expect(formatQuantity(1234.5678)).toBe('1,234.5678')
+    expect(formatMonth('2026-01')).toBe('Jan 2026')
+    expect(formatDate(Date.UTC(2026, 6, 27))).toBe('27 Jul 2026')
+  })
+
+  /** The argument is real, so a caller that needs another locale has one — and gets a difference. */
+  it('takes the locale as an argument, defaulting to the one the app declares', () => {
+    expect(formatCurrency(1234.5, 'EUR', APP_LOCALE)).toBe(formatCurrency(1234.5, 'EUR'))
+    expect(formatCurrency(1234.5, 'EUR', 'de-DE')).not.toBe(formatCurrency(1234.5, 'EUR'))
   })
 })

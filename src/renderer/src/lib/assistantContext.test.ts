@@ -968,7 +968,7 @@ describe('performanceSection', () => {
   })
 
   /**
-   * Every figure goes through `lib/format`, so a figure in an answer and the same figure on a page
+   * Every figure goes through `@shared/format`, so a figure in an answer and the same figure on a page
    * are one number. The formatters group thousands; a raw JavaScript number would not.
    */
   it('formats every figure through the app’s own formatters', () => {

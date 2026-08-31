@@ -1,4 +1,4 @@
-import { instrumentName } from '../../lib/format'
+import { instrumentName } from '@shared/format'
 
 /**
  * The secondary line under a ticker: the instrument's name, where the import carries one
@@ -16,7 +16,7 @@ import { instrumentName } from '../../lib/format'
  * beside the one it does not cover.
  *
  * The component is four lines because Vitest runs Node-only and nothing inside one is testable
- * (DDR-0029); the decision lives in `lib/format.ts`, which is where the tests are.
+ * (DDR-0029); the decision lives in `@shared/format.ts`, which is where the tests are.
  */
 export function InstrumentName({
   symbol,

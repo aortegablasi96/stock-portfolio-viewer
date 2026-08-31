@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { formatCurrency, formatSignedPercent } from './format'
+import { formatCurrency, formatSignedPercent } from '@shared/format'
 import { MAX_SERIES_TICKS, seriesDomain } from './column'
 import {
   AXIS_LABEL_ADVANCE_UNITS,
@@ -208,7 +208,9 @@ describe('every chart’s gutter is sized from the labels that chart draws', () 
      functions `PerformanceView` hands the charts. */
   const LABELS: Record<AxisLabelKind, readonly string[]> = {
     currency: [0, 1234.5, 68_517.7, 80_000, 250_000].map((v) => formatCurrency(v, 'EUR')),
-    percent: [0, -1.23, 7.5, -16.14, 123.45, 999.99, -999.99].map(formatSignedPercent),
+    // Wrapped rather than passed by reference: the formatters take an optional locale (DDR-0111),
+    // and `map` would hand the index in as one.
+    percent: [0, -1.23, 7.5, -16.14, 123.45, 999.99, -999.99].map((v) => formatSignedPercent(v)),
   }
 
   const widest = (labels: readonly string[]): number => Math.max(...labels.map((l) => l.length))

@@ -5,7 +5,7 @@ import {
   formatDate,
   formatSignedCurrency,
   formatSignedPercent,
-} from '../../lib/format'
+} from '@shared/format'
 import { boundsFor } from '../../lib/dateRange'
 import { dailyReturns } from '../../lib/dailyReturns'
 import { sliceComposition } from '../../lib/composition'

@@ -299,6 +299,18 @@ describe('answerFromResult', () => {
   })
 
   /**
+   * The other half of that distinction, and the reason `incomplete` is its own state rather than a
+   * second use of `too_large` (Story #324, DDR-0111). By the time a tool loop can run out of room,
+   * rounds have gone out — so this heading must not repeat the claim that nothing was sent, and it
+   * must not read as an answer either.
+   */
+  it('says an answer is missing when the loop ran out of room, not that nothing was sent', () => {
+    expect(FAILURE_HEADINGS.incomplete).toContain('No answer')
+    expect(FAILURE_HEADINGS.incomplete).not.toContain('nothing left this machine')
+    expect(FAILURE_HEADINGS.incomplete).not.toBe(FAILURE_HEADINGS.too_large)
+  })
+
+  /**
    * The failure headings and the gateway's own variants are one list — and after ADR-0011 they are
    * the *same* list, with nothing decided in front of the gateway. A status added to the gateway
    * without a heading here would render an answer under `undefined`; a heading left behind for a

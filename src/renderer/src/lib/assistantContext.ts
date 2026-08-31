@@ -6,7 +6,7 @@ import {
   formatSignedPercent,
   formatSignedPoints,
   instrumentName,
-} from './format'
+} from '@shared/format'
 import { periodChange, type PeriodChange } from './periodChange'
 import { standardPeriods, type PeriodSet, type StandardPeriod } from './periodSet'
 import type { AssistantContext } from '@shared/domain/assistantDisclosure'

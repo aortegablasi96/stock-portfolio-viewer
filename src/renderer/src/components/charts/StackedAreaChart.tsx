@@ -1,7 +1,7 @@
 import { useId, useRef, useState } from 'react'
 import type { CompositionBand, CompositionPoint } from '@shared/domain/performance'
 import { PERFORMANCE_PLOTS } from '../../lib/chartGeometry'
-import { formatPercent } from '../../lib/format'
+import { formatPercent } from '@shared/format'
 import {
   bandPaint,
   nearestIndex,

@@ -1,3 +1,4 @@
+import { APP_LOCALE } from '@shared/format'
 import { aiGateway } from '@repositories/assistant/aiGateway'
 import { MAX_API_KEY_CHARS } from '@shared/domain/assistantKey'
 
@@ -41,7 +42,7 @@ export function describeKeyProblem(raw: string): string | null {
 
   if (key === '') return 'Paste a key before saving.'
   if (key.length > MAX_API_KEY_CHARS) {
-    return `That is longer than ${MAX_API_KEY_CHARS.toLocaleString()} characters, which is longer than any API key. Check what was pasted.`
+    return `That is longer than ${MAX_API_KEY_CHARS.toLocaleString(APP_LOCALE)} characters, which is longer than any API key. Check what was pasted.`
   }
   if (/[^\x21-\x7e]/.test(key)) {
     return 'That contains a space or a character an API key cannot hold. Paste the key on its own, with nothing around it.'

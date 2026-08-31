@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { FlexStatementImport, FlexStatementStore } from '@shared/domain/flex'
-import { formatDate, formatDateTime } from '../lib/format'
+import { formatDate, formatDateTime } from '@shared/format'
 import { flexDataVersion } from '../lib/dataVersion'
 import { ConfirmAction } from './ConfirmAction'
 import { Badge } from './ui/Badge'

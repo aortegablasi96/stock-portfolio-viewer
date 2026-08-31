@@ -12,7 +12,7 @@ import { signInk, type TooltipRow } from './chartTooltip'
  * accommodate values on both sides of zero.
  *
  * Kept out of the component so it can be unit-tested in Vitest's Node environment (no DOM),
- * matching how `lib/pie.ts` and `lib/format.ts` are tested.
+ * matching how `lib/pie.ts` and `@shared/format.ts` are tested.
  *
  * The Performance view's daily-return `BarChart` shares this module rather than growing its own:
  * a single signed series is the degenerate stack (`upper` = 0), so `columnDomain` already gives it

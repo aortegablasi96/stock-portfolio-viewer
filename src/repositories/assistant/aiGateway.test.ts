@@ -5,6 +5,7 @@ import {
   DEFAULT_MODEL,
   MAX_OUTPUT_TOKENS,
   MAX_PROMPT_CHARS,
+  MAX_TOOL_ROUNDS,
   OPENAI_API_KEY_META_KEY,
 } from './aiGateway'
 import { metaRepository } from '@repositories/meta/metaRepository'
@@ -65,6 +66,17 @@ async function startProvider(handler: Handler, timeoutMs = 120): Promise<void> {
   process.env['OPENAI_TIMEOUT_MS'] = String(timeoutMs)
 }
 
+/**
+ * The transport deadline the **loop** cases run under, which is not the stall cases' 120ms.
+ *
+ * A loop test issues up to five requests and runs a test double between them, so a 120ms
+ * per-request bound is close enough to a loaded CI machine's jitter to turn "the loop stopped at
+ * its round cap" into "a round timed out" — a green suite that fails once a week and teaches the
+ * next reader to re-run it. The cases that are *about* a stall keep the short bound; these are
+ * about counting rounds, so their transport deadline should never be the thing that fires.
+ */
+const LOOP_TIMEOUT_MS = 2_000
+
 /** Reply with a well-formed completion carrying `text`. */
 const answering =
   (text: string, extra: Record<string, unknown> = {}): Handler =>
@@ -80,8 +92,23 @@ const answering =
     )
   }
 
-const ask = (over: Partial<AiRequest> = {}): Promise<AiResult> =>
-  aiGateway.complete({ system: 'Be brief.', user: 'How am I doing?', ...over })
+/**
+ * One question, in the shape the loop takes (Story #324): a system turn and a user turn.
+ *
+ * `system` and `user` survive as *test* conveniences because almost every case here is about one
+ * bounded request and reads better without an array literal in it. The tool cases below build the
+ * request directly.
+ */
+const ask = (over: Partial<AiRequest> & { system?: string; user?: string } = {}): Promise<AiResult> => {
+  const { system = 'Be brief.', user = 'How am I doing?', ...rest } = over
+  return aiGateway.complete({
+    messages: [
+      { role: 'system', content: system },
+      { role: 'user', content: user },
+    ],
+    ...rest,
+  })
+}
 
 beforeEach(() => {
   received = []
@@ -96,6 +123,7 @@ beforeEach(() => {
 afterEach(async () => {
   delete process.env['OPENAI_BASE_URL']
   delete process.env['OPENAI_TIMEOUT_MS']
+  delete process.env['OPENAI_QUESTION_TIMEOUT_MS']
   delete process.env['OPENAI_API_KEY']
   delete process.env['OPENAI_MODEL']
   if (!server) return
@@ -642,5 +670,423 @@ describe('the deadline', () => {
       new Promise<'still waiting'>((resolve) => setTimeout(() => resolve('still waiting'), 150)),
     ])
     expect(raced).toBe('still waiting')
+  })
+})
+
+// ---- the bounded tool loop (Story #324, DDR-0111) ---------------------------
+
+/**
+ * The loop, with a **test double where the reports will be** (Story #324).
+ *
+ * #324 ships the mechanism and #326-#329 ship the tools, which is the order the Epic asks for: the
+ * bound, the states and the accounting are proven before a single report is wired up, so a tool
+ * story that finds one of them wrong finds it in *its* diff rather than in this one.
+ *
+ * Everything here is asserted **at the wire**, for the reason the single-attempt guarantee already
+ * was: what a loop against a metered endpoint costs is the number of requests it made, and only the
+ * stand-in knows that. A future refactor can talk its way past a mock. It cannot talk its way past
+ * a request count.
+ */
+describe('a question the model asks for reports before answering', () => {
+  const TOOLS = [
+    {
+      name: 'get_performance',
+      description: 'Return for one standard period.',
+      parameters: { type: 'object', properties: { period: { type: 'string' } } },
+    },
+  ]
+
+  /** One call, as OpenAI writes it: the arguments arrive as a JSON *string*. */
+  const callFor = (name: string, args = '{"period":"2025"}', id = 'call_1'): unknown => ({
+    id,
+    type: 'function',
+    function: { name, arguments: args },
+  })
+
+  /** A round asking for reports: no content, `tool_calls`, `finish_reason: 'tool_calls'`. */
+  const asking =
+    (...calls: unknown[]): Handler =>
+    (_req, res) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(
+        JSON.stringify({
+          model: 'gpt-4.1-mini-2025-04-14',
+          choices: [
+            {
+              message: { role: 'assistant', content: null, tool_calls: calls },
+              finish_reason: 'tool_calls',
+            },
+          ],
+          usage: { prompt_tokens: 100, completion_tokens: 20, total_tokens: 120 },
+        }),
+      )
+    }
+
+  /** Asks on the first round, answers on the second - the shape of every real tool question. */
+  const asksThenAnswers =
+    (text = 'Your 2025 return was 7.12%.'): Handler =>
+    (req, res, body) =>
+      received.length === 1
+        ? asking(callFor('get_performance'))(req, res, body)
+        : answering(text)(req, res, body)
+
+  /** The executor the caller injects. Returns the app's own prose, never JSON (DDR-0111). */
+  const runTool = vi.fn(async () => '2025 return: 7.12%. Value and return are separate figures.')
+
+  const askWithTools = (over: Partial<AiRequest> = {}): Promise<AiResult> =>
+    aiGateway.complete({
+      messages: [
+        { role: 'system', content: 'Be brief.' },
+        { role: 'user', content: 'How did 2025 go?' },
+      ],
+      tools: TOOLS,
+      runTool,
+      ...over,
+    })
+
+  beforeEach(() => {
+    runTool.mockClear()
+  })
+
+  it('runs the call, sends the answer back, and returns what the model then said', async () => {
+    await startProvider(asksThenAnswers(), LOOP_TIMEOUT_MS)
+
+    const result = await askWithTools()
+
+    expect(result.status).toBe('ok')
+    expect(result.status === 'ok' && result.answer.text).toBe('Your 2025 return was 7.12%.')
+    expect(runTool).toHaveBeenCalledWith({
+      id: 'call_1',
+      name: 'get_performance',
+      argumentsJson: '{"period":"2025"}',
+    })
+    expect(received).toHaveLength(2)
+  })
+
+  /**
+   * The second round carries the whole exchange: the model's own turn *with its call on it*, then
+   * the app's prose answering that call by id. A provider handed either without the other rejects
+   * the request, and the failure reads as a malformed round rather than as the missing pairing.
+   */
+  it('sends the call and its answer back as two turns, paired by id', async () => {
+    await startProvider(asksThenAnswers(), LOOP_TIMEOUT_MS)
+    await askWithTools()
+
+    const second = JSON.parse(received[1]!.body).messages
+    expect(second).toHaveLength(4)
+    expect(second[2]).toEqual({
+      role: 'assistant',
+      content: '',
+      tool_calls: [
+        {
+          id: 'call_1',
+          type: 'function',
+          function: { name: 'get_performance', arguments: '{"period":"2025"}' },
+        },
+      ],
+    })
+    expect(second[3]).toEqual({
+      role: 'tool',
+      tool_call_id: 'call_1',
+      content: '2025 return: 7.12%. Value and return are separate figures.',
+    })
+  })
+
+  /** Declared by the caller and passed through untouched - the gateway holds no inventory. */
+  it('declares the caller’s tools on the wire, and none when there are none', async () => {
+    await startProvider(asksThenAnswers(), LOOP_TIMEOUT_MS)
+    await askWithTools()
+
+    expect(JSON.parse(received[0]!.body).tools).toEqual([
+      {
+        type: 'function',
+        function: {
+          name: 'get_performance',
+          description: TOOLS[0]!.description,
+          parameters: TOOLS[0]!.parameters,
+        },
+      },
+    ])
+
+    received.length = 0
+    await ask()
+    expect(JSON.parse(received[0]!.body).tools).toBeUndefined()
+  })
+
+  /** Several reports in one round is the whole reason a *round* is not a *tool*. */
+  it('runs every call in a round before sending the next one', async () => {
+    await startProvider((req, res, body) =>
+      received.length === 1
+        ? asking(
+            callFor('get_performance', '{"period":"2025"}', 'call_a'),
+            callFor('get_performance', '{"period":"2024"}', 'call_b'),
+          )(req, res, body)
+        : answering('Both years are in.')(req, res, body),
+      LOOP_TIMEOUT_MS,
+    )
+
+    const result = await askWithTools()
+
+    expect(result.status).toBe('ok')
+    expect(runTool).toHaveBeenCalledTimes(2)
+    expect(received).toHaveLength(2)
+    expect(JSON.parse(received[1]!.body).messages.map((m: { role: string }) => m.role)).toEqual([
+      'system',
+      'user',
+      'assistant',
+      'tool',
+      'tool',
+    ])
+  })
+
+  /**
+   * The loop's version of *a 200 with no answer is `invalid`, never an empty `ok`*.
+   *
+   * A name nobody declared is not a report this app can produce, and running it would be the
+   * general query ADR-0009 forbids arriving by the back door. The executor is never reached, which
+   * is the half of this that matters: the check is before the call, not after it.
+   */
+  it('reports a call for a tool that does not exist as invalid, and runs nothing', async () => {
+    await startProvider(asking(callFor('execute_query')), LOOP_TIMEOUT_MS)
+
+    const result = await askWithTools()
+
+    expect(result.status).toBe('invalid')
+    expect(result.status === 'invalid' && result.message).toContain('execute_query')
+    expect(runTool).not.toHaveBeenCalled()
+    expect(received).toHaveLength(1)
+  })
+
+  it('reports a call as invalid when the caller declared no tools at all', async () => {
+    await startProvider(asking(callFor('get_performance')), LOOP_TIMEOUT_MS)
+
+    const result = await aiGateway.complete({
+      messages: [{ role: 'user', content: 'How did 2025 go?' }],
+    })
+
+    expect(result.status).toBe('invalid')
+  })
+
+  /**
+   * A throw from the caller's executor is a bug rather than a state - and a gateway that let one
+   * escape would be the one outcome this union could not name.
+   */
+  it('turns a failing executor into a state rather than a rejection', async () => {
+    await startProvider(asksThenAnswers(), LOOP_TIMEOUT_MS)
+    runTool.mockRejectedValueOnce(new Error('the repository is closed'))
+
+    const result = await askWithTools()
+
+    expect(result.status).toBe('error')
+    expect(result.status === 'error' && result.message).toContain('the repository is closed')
+  })
+})
+
+// ---- the loop is bounded, three ways ----------------------------------------
+
+describe('the bounds on a question', () => {
+  const alwaysAsking: Handler = (_req, res) => {
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(
+      JSON.stringify({
+        model: 'm',
+        choices: [
+          {
+            message: {
+              content: 'Let me look that up.',
+              tool_calls: [
+                { id: 'call_1', type: 'function', function: { name: 'peek', arguments: '{}' } },
+              ],
+            },
+            finish_reason: 'tool_calls',
+          },
+        ],
+        usage: { prompt_tokens: 10, completion_tokens: 2, total_tokens: 12 },
+      }),
+    )
+  }
+
+  const looping = (runTool: AiRequest['runTool']): Promise<AiResult> =>
+    aiGateway.complete({
+      messages: [
+        { role: 'system', content: 'Be brief.' },
+        { role: 'user', content: 'How am I doing?' },
+      ],
+      tools: [{ name: 'peek', description: 'A report.', parameters: { type: 'object' } }],
+      runTool,
+    })
+
+  /** Growth is a decision, not an edit - DDR-0104's mechanism, applied to a cost this time. */
+  it('declares its round cap as a constant', () => {
+    expect(MAX_TOOL_ROUNDS).toBe(4)
+  })
+
+  /**
+   * A model that never stops asking stops anyway, at a number this file declares - and the cost is
+   * asserted at the wire, because rounds are what a metered endpoint bills for.
+   */
+  it('stops after the declared number of rounds, in a named state', async () => {
+    await startProvider(alwaysAsking, LOOP_TIMEOUT_MS)
+
+    const result = await looping(async () => 'a report')
+
+    expect(result.status).toBe('incomplete')
+    expect(received).toHaveLength(MAX_TOOL_ROUNDS + 1)
+    expect(result.status === 'incomplete' && result.message).toContain(String(MAX_TOOL_ROUNDS))
+  })
+
+  /**
+   * The distinction DDR-0111 added the state for. `too_large` means **nothing was sent**; by the
+   * time a conversation can outgrow the ceiling, rounds have already gone. Folding the two would
+   * tell the owner their portfolio never left the machine when it had.
+   */
+  it('reports a conversation that outgrows the ceiling mid-loop as incomplete, not too_large', async () => {
+    await startProvider(alwaysAsking, LOOP_TIMEOUT_MS)
+
+    const result = await looping(async () => 'x'.repeat(MAX_PROMPT_CHARS))
+
+    expect(result.status).toBe('incomplete')
+    expect(result.status === 'incomplete' && result.message).toContain('characters')
+    // One round went out, and its answer came back too big for a second - so the loop stopped
+    // before sending it, having already sent something.
+    expect(received).toHaveLength(1)
+  })
+
+  /** And the first round is still the other state, with nothing sent at all. */
+  it('still reports a question that is too large before the first round as too_large', async () => {
+    await startProvider(alwaysAsking, LOOP_TIMEOUT_MS)
+
+    const result = await aiGateway.complete({
+      messages: [{ role: 'user', content: 'x'.repeat(MAX_PROMPT_CHARS + 1) }],
+    })
+
+    expect(result.status).toBe('too_large')
+    expect(received).toHaveLength(0)
+  })
+
+  /**
+   * The second deadline (DDR-0111). The transport deadline stops a socket that has gone quiet and
+   * cannot bound a question that makes N requests; this one can, and says the total it bounded.
+   */
+  it('stops a loop that outlives the whole-question deadline, naming the wait', async () => {
+    await startProvider(alwaysAsking, 5_000)
+    process.env['OPENAI_QUESTION_TIMEOUT_MS'] = '120'
+
+    const result = await looping(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 80))
+      return 'a report'
+    })
+
+    expect(result.status).toBe('incomplete')
+    expect(result.status === 'incomplete' && result.message).toContain('whole question')
+    expect(received.length).toBeLessThan(MAX_TOOL_ROUNDS + 1)
+  })
+
+  /**
+   * **Still no retry** (DDR-0096). A round that fails ends the question: the loop is N requests
+   * because each carries new information, not because a failed one is worth sending again.
+   */
+  it('ends the question on a round that fails, without re-issuing it', async () => {
+    await startProvider((req, res, body) => {
+      if (received.length === 1) return alwaysAsking(req, res, body)
+      res.writeHead(429)
+      res.end('{"error":{"message":"slow down"}}')
+    }, LOOP_TIMEOUT_MS)
+
+    const result = await looping(async () => 'a report')
+
+    expect(result.status).toBe('refused')
+    expect(received).toHaveLength(2)
+  })
+
+  it('ends the question on a round that stalls, without re-issuing it', async () => {
+    await startProvider((req, res, body) => {
+      if (received.length === 1) return alwaysAsking(req, res, body)
+      /* accept the second round and never answer it */
+    })
+
+    const result = await looping(async () => 'a report')
+
+    expect(result.status).toBe('not_responding')
+    expect(received).toHaveLength(2)
+  })
+
+  /** A bound reached is never an answer. There is no partial text to mistake for one. */
+  it('presents no partial answer when it stops', async () => {
+    await startProvider(alwaysAsking, LOOP_TIMEOUT_MS)
+
+    const result = await looping(async () => 'a report')
+
+    expect(result.status).not.toBe('ok')
+    expect(JSON.stringify(result)).not.toContain('Let me look that up.')
+  })
+})
+
+// ---- what a question cost ---------------------------------------------------
+
+describe('the usage a loop reports', () => {
+  /** A round that asks for one report, carrying whatever usage it is given. */
+  const askingWith = (usage: Record<string, number>): Handler =>
+    (_req, res) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(
+        JSON.stringify({
+          model: 'm',
+          choices: [
+            {
+              message: {
+                content: null,
+                tool_calls: [
+                  { id: 'c1', type: 'function', function: { name: 'peek', arguments: '{}' } },
+                ],
+              },
+              finish_reason: 'tool_calls',
+            },
+          ],
+          usage,
+        }),
+      )
+    }
+
+  const twoRounds = (): Promise<AiResult> =>
+    aiGateway.complete({
+      messages: [{ role: 'user', content: 'How am I doing?' }],
+      tools: [{ name: 'peek', description: 'A report.', parameters: { type: 'object' } }],
+      runTool: async () => 'a report',
+    })
+
+  /**
+   * The **question's** cost, not the last round's. A loop that ran three rounds and reported the
+   * third's usage would understate the bill it had just run up - and usage is the one figure here
+   * an owner reconciles against a statement written by someone else.
+   */
+  it('sums every round', async () => {
+    await startProvider((req, res, body) =>
+      received.length === 1
+        ? askingWith({ prompt_tokens: 100, completion_tokens: 20, total_tokens: 120 })(req, res, body)
+        : answering('Done.')(req, res, body),
+      LOOP_TIMEOUT_MS,
+    )
+
+    // 100/20/120 from the asking round, 11/7/18 from the answering one.
+    const result = await twoRounds()
+    expect(result.status === 'ok' && result.answer.usage).toEqual({
+      promptTokens: 111,
+      completionTokens: 27,
+      totalTokens: 138,
+    })
+  })
+
+  /** One round without a full count makes the total unknowable, and `null` says so. */
+  it('reports null when any round did not report all three figures', async () => {
+    await startProvider((req, res, body) =>
+      received.length === 1
+        ? askingWith({ prompt_tokens: 100 })(req, res, body)
+        : answering('Done.')(req, res, body),
+      LOOP_TIMEOUT_MS,
+    )
+
+    const result = await twoRounds()
+    expect(result.status === 'ok' && result.answer.usage).toBeNull()
   })
 })

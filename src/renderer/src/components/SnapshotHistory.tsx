@@ -1,5 +1,5 @@
 import type { SnapshotSummary } from '@shared/domain/snapshot'
-import { formatCurrency, formatDateTime } from '../lib/format'
+import { formatCurrency, formatDateTime } from '@shared/format'
 import { Badge } from './ui/Badge'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card'
 import { StatePanel } from './ui/StatePanel'

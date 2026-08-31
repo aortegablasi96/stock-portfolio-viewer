@@ -18,14 +18,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 M0–M9 are delivered: live IBKR holdings/balances/allocation in a display currency, immutable
 snapshots, Flex statement import, and four analytics views over it, behind a vertical sidebar.
 M10 is delivered — the investor profile, the assistant's **surface** (grounded Q&A), a period
-explained, a performance summary, the widened grounding (#287), the prompt's phrasing rules (#288)
-and the in-app OpenAI key (#300). #289 is closed as superseded by #287's computed moves — read its
-closing comment before re-proposing an end-state check on model output.
-**M11 is delivered — the assistant is one view**: ADR-0011 (#307) and #309 removed the consent
-gate, on the record and from the code, and #310 folded the profile in, taking the seventh sidebar
-row with it (DDR-0108). #315 then widened it past #306's own *Not Included*, on the owner's
-instruction: ADR-0012 gives the app **a baseline of its own**. Not built: multi-broker, benchmarks,
-tax.
+explained, a performance summary, the widened grounding (#287), the prompt's phrasing rules and the
+in-app OpenAI key. #289 is closed as superseded by #287's computed moves — read its closing comment
+before re-proposing an end-state check on model output.
+**M11 is delivered — the assistant is one view**: ADR-0011 removed the consent gate, on the record
+and from the code, and #310 folded the profile in, taking the seventh sidebar row with it
+(DDR-0108); ADR-0012 then gave the app **a baseline of its own**. Not built: multi-broker,
+benchmarks, tax.
 
 **Which Epics are open is deliberately not recorded here** — read the backlog (*Current Priority*).
 The **lifecycle** is the rule: an Epic closes with its stories, and refinement opens a *new*
@@ -58,13 +57,15 @@ Each exists end-to-end and is the reference pattern for its shape.
   channel with gateway states (DDR-0095).
 - **assistant** — `assistantService` is the **only** caller of `aiGateway`. **The key is the
   authorization**: a question goes with nothing in front of it, and the *gateway* owns the refusal.
-  No consent is asked for, stored or checked anywhere; `consentService`, the fingerprint and
-  `needs_consent` are gone (ADR-0011; DDR-0107 supersedes DDR-0097).
+  No consent is asked for, stored or checked anywhere (ADR-0011; DDR-0107 supersedes DDR-0097).
   `DISCLOSURE_CATEGORIES` outlives the panel it drew — it *types* `AssistantContext`, so an
   undeclared section cannot be sent. The key field shows **only with no working key**; there is **no
   remove, replace or rotate, not even a channel**. `assistant:ask` is the **one outbound channel**;
-  context is assembled in the **renderer** (`lib/assistantContext.ts`) so figures use the app's own
-  formatters, and the boundary drops undeclared sections. A section is **absent, never empty**; no money goes in one declared
+  context is assembled in the **renderer** (`lib/assistantContext.ts`) and the boundary drops
+  undeclared sections. Figures go through **`@shared/format`**, moved out of the renderer so main
+  can write one too (#324, DDR-0111): it **imports nothing** (which is what satisfies
+  `zodIsolation`), and its locale is **`APP_LOCALE`, never the host's** — two processes resolve
+  `undefined` differently, in silence. A section is **absent, never empty**; no money goes in one declared
   as names or percentages; each names its store *and clock* — composition is Flex, drift live
   (DDR-0098). An **explained period** keeps return and value in separate fields under separate
   headings, return first — the curve is TWR, so a deposit moves value alone; the period is anchored
@@ -97,7 +98,7 @@ Each exists end-to-end and is the reference pattern for its shape.
   **gone**, `balanced` is **nullable** (vacuous `true` is what a model calls balanced).
   `promptBudget.test.ts` measures the worst case the caps allow (DDR-0103) — **82.2%** of
   `MAX_PROMPT_CHARS` over **two** fixtures, since a profile that lengthens the drift shortens the
-  baseline; the **85% gate, not the ceiling, binds**, and #315's first draft failed it at 88.5%.
+  baseline; the **85% gate, not the ceiling, binds**.
   The prompt is **eight `##` sections the owner wrote** (`SYSTEM_PROMPT_SECTIONS`; DDR-0110
   supersedes DDR-0104's shape) — a **declared array**, never one template string, the count asserted
   three ways (array, `SECTION_HEADINGS`, rendered `## ` lines): sharpen a section, don't add a
@@ -106,8 +107,8 @@ Each exists end-to-end and is the reference pattern for its shape.
   was obeyed, so a rule needing a fact to be obeyable is a gap in the *grounding*; the tax/costs
   rule has **no context half** (DDR-0104). Cause, risk statistic and benchmark are now
   **conditional**, leaning on DDR-0101's absence blocks — trim those and they unbind. **A forecast is
-  the model's only where the app computed a projection**: the flat "never forecast" also forbade
-  phrasing one a service derived, so it came back narrower.
+  the model's only where the app computed a projection** — the flat "never forecast" also forbade
+  phrasing one a service derived.
 - **classification** — sector/industry. `classificationRepository` fronts *both* the mutable
   SQLite cache and `ibkrGateway`; `analytics:classifyInstruments` is the only analytics channel
   reaching IBKR. Refreshes are **resumable, not transactional** — a run that dies at 30 of 40 keeps
@@ -146,15 +147,14 @@ These have each shipped broken at least once. Read them before touching analytic
 
 ```text
 src/
-  main/          Electron main: index.ts + ipc/handlers.ts (thin, Zod-validated)
+  main/          index.ts + ipc/handlers.ts (thin, Zod-validated)
   preload/       contextBridge → window.api (types + channel names only, no Zod)
-  renderer/      React + Vite (src/renderer/src/*): App sidebar shell under a custom TitleBar,
-                 components/{analytics,charts,ui}/, lib/ (pure, unit-tested), assets/fonts/
-  services/      pure business logic; beyond the domains above, system/ (app:ping) and
-                 window/ (windowStateService, sidebarStateService)
+  renderer/src/  App sidebar shell under a custom TitleBar; components/{analytics,charts,ui}/,
+                 lib/ (pure, unit-tested), assets/fonts/
+  services/      pure business logic; beyond the domains above, system/ and window/
   repositories/  the ONLY layer touching a data source (SQLite, the IBKR gateway, or both)
   db/            client.ts (better-sqlite3 + Drizzle singleton), migrate.ts, schema.ts
-  shared/        ipc/contract.ts (Zod + inferred types), ipc/channels.ts, domain/, errors.ts
+  shared/        ipc/contract.ts (Zod + inferred types), ipc/channels.ts, domain/, format.ts
 e2e/             Playwright specs launching the built app
 ```
 
@@ -162,7 +162,6 @@ e2e/             Playwright specs launching the built app
 
 - **Minimal slice / test style** — `app:ping` and `metaService.getInstallId()`; see
   `services/meta/metaService.test.ts` for the repository-mocking pattern.
-- **Fire-and-forget command + state event** — the `window:*` channels. DDR-0011.
 - **Destructive action** — `flex:clear` / `snapshot:clear`: the in-place `ConfirmAction` control —
   no modal, no `window.confirm`. ADR-0006, DDR-0012.
 
@@ -186,9 +185,8 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
   electron-vite inlines `MAIN_VITE_*` / `PRELOAD_VITE_*` / `RENDERER_VITE_*` at **build** time —
   its `loadEnv` reads *those prefixes and no others* and assigns nothing to `process.env`.
   Everything unprefixed is loaded into `process.env` at **startup** by `src/main/env.ts`, called
-  as `index.ts`'s first statement, above the single-instance lock — the fix for Bug #297, without
-  which `OPENAI_API_KEY` in `.env` reached nothing. Three rules — **a real environment variable
-  wins** over the file (the e2e suite passes one), a **missing file is a no-op** (a packaged build
+  as `index.ts`'s first statement, above the single-instance lock (Bug #297). Three rules — **a real environment variable
+  wins** over the file, a **missing file is a no-op** (a packaged build
   has none — the in-app key field is that build's source, DDR-0105), and **only names are
   logged**. Unprefixed still means never
   bundled (ADR-0010). Editing it needs a **restart**. Without `RENDERER_VITE_MAPBOX_TOKEN` the map
@@ -255,14 +253,21 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
 - **`repositories/assistant/aiGateway.ts` is the only code that reaches OpenAI** (ADR-0010,
   DDR-0096). Plain HTTPS, **not** the `openai` SDK — its retry must be off, its socket timeout is
   the wrong bound, and its errors get re-mapped anyway. It **returns a result union, never throws**:
-  one operation, seven states. `not_configured` (no key) is OpenAI's `not_connected` and a fresh
+  one operation, eight states. `not_configured` (no key) is OpenAI's `not_connected` and a fresh
   clone's resting state; **`too_large` is not `refused`** — the first means *nothing was sent*;
   `not_responding` absorbs stall, unreachable host **and 5xx**, because DDR-0022 divides by
   *recovery*; a `200` with no answer is `invalid`, never an empty `ok`. `MAX_PROMPT_CHARS` is a
   **constant, not an env var**, and counts characters — a tokenizer is a dependency for a ceiling
-  that only has to stop runaway growth. It is **40,000**, raised from 24,000 once when #287's
-  grounding outgrew it; the ceiling rations a *bug*, never the grounding (DDR-0103 amends DDR-0096). A refusal is **redacted** before it leaves the file: a wrong
+  that only has to stop runaway growth. It is **40,000**; the ceiling rations a *bug*,
+  never the grounding (DDR-0103 amends DDR-0096). A refusal is **redacted** before it leaves the file: a wrong
   key comes back quoting a masked fragment of itself.
+- **A question is a bounded tool loop, and no round is a retry** (#324, DDR-0111): a round sends a
+  *larger* array after a **success**, and a failed round ends the question. `AiRequest` is a
+  **message array**; the caller declares the tools and injects the executor. Three bounds —
+  **`MAX_TOOL_ROUNDS`** (4, a constant, never an env var), `MAX_PROMPT_CHARS` over the **whole
+  conversation, before every round**, and a **whole-question deadline** beside the per-request one
+  (which bounds a socket, not N requests). Any reached is the eighth state **`incomplete`** — *not*
+  `too_large`, which means nothing was sent. An undeclared tool name is `invalid`.
 - **The key is read in one place and never bundled.** `OPENAI_API_KEY` is unprefixed on purpose;
   `aiGatewayIsolation.test.ts` fails if `src/renderer` or `src/preload` so much as names an
   `OPENAI_` variable, if anything outside main imports the gateway, or if the CSP's `connect-src`
@@ -517,7 +522,6 @@ else). **Avoid adding dependencies without clear long-term value.**
 # package.json lists the scripts, and they do what their names say. What it does NOT tell you:
 
 npm install            # postinstall: electron-rebuild for better-sqlite3 (native)
-npm run lint           # eslint . — also enforces the layer-boundary import rules
 npm test               # vitest run — Node env, *.test.ts under src/
 npm run test:e2e       # builds first, then Playwright launches the built app
 npm run db:migrate     # applies to ./local.dev.db, NOT the app's DB (override: DATABASE_URL)
@@ -542,8 +546,7 @@ Several `lib/*.test.ts` files have **no module under test** — they guard `app.
 a view's composition, or accessibility by scanning source text. What a text scan cannot see is
 pinned by Playwright: a **cascade** resolving, a **measured width**, a key reaching the app.
 
-Every completed feature should include unit tests, regression review, edge-case validation, and a
-Testing Report.
+Every completed feature needs unit tests, edge cases, and a Testing Report.
 
 ## Skills System (`.claude/skills/`)
 
@@ -556,11 +559,9 @@ capturing view screenshots, never both at once.
 
 - **workflow-skills** (planning) — `product-manager` → `ui-designer` / `architect` →
   `database-designer` → `implementation-engineer` → `testing`.
-- **execution-skills** — seven builders; the Implementation Engineer selects the minimum set.
-- **governance-skills** — `adr-writer`, `design-recorder`, `refactoring-reviewer` (the last before
-  significant restructuring).
-- **project-management** — `issue-writer` drafts backlog issues, `project-historian` backfills
-  historical ones. They track work; they never design it.
+- **execution-skills** — the Implementation Engineer selects the minimum set.
+- **governance-skills** — `refactoring-reviewer` runs *before* significant restructuring.
+- **project-management** — they track work; they never design it.
 
 Work **originates in GitHub Issues** — the owner authors Epics and Stories, and the Product Manager
 **reads them before planning**. Issues are never created after implementation to record work done.
@@ -570,9 +571,8 @@ and return to the owning workflow skill rather than being made inline.**
 
 ## Documentation
 
-`docs/` holds `decisions/` (ADRs) and `design-decisions/` (DDRs) beside its prose, each with a
-README indexing every record in one line. Adding a repository means keeping
-`src/repositories/README.md` in step; the layering itself is `docs/architecture.md`.
+`docs/` holds `decisions/` (ADRs) and `design-decisions/` (DDRs), each with a README indexing every
+record in one line. Adding a repository means keeping `src/repositories/README.md` in step.
 
 Two `docs/` subdirectories are **gitignored**, absent from a fresh clone: `flex-queries/` (see
 *Flex data traps*) and `figma_design/` — a design reference, never built or imported by `src/`,
