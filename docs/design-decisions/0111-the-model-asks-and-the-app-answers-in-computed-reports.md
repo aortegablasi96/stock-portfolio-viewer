@@ -180,20 +180,28 @@ report never stands in for a state.** A tool that returns nothing where it means
 imported* is the failure that rule exists to prevent, and it is worse here than at the IPC boundary:
 a model handed an empty report will phrase it as a finding.
 
-| Tool | Backing method | States beyond `ok` |
-| --- | --- | --- |
-| `get_portfolio_overview` | `portfolio:getOverview` | `not_connected`, `not_responding` |
-| `get_position` | `portfolioService` (**new**) | `ambiguous` (candidates listed), `not_held`, `not_connected`, `not_responding` |
-| `get_investor_profile` | `profile:get` | `not_set` — "never written" and "cleared" are one state (DDR-0094) |
-| `get_rebalance_gaps` | `profile:getDrift` | `not_connected`, `not_responding` |
-| `get_allocation` | `analytics:getAllocation` | `needs_import` |
-| `get_performance_periods` | `analytics:getPerformance` | `needs_import`, `empty_period` |
-| `get_performance` | `analytics:getPerformance` | `needs_import`, `period_not_available` (**with alternatives**) |
-| `get_daily_returns` | `analytics:getPerformance` | `needs_import`, `empty_period` |
-| `get_portfolio_history` | `analytics:getPerformance` | `needs_import` |
-| `get_dividend_income` | `analytics:getDividends` | `needs_import` |
-| `get_realized_gains` | `analytics:getRealizedGains` | `needs_import` |
-| `get_data_coverage` | coverage service (**new**) | — always answers; "nothing imported" is a coverage report |
+| Tool | Backing method | Arguments | States beyond `ok` |
+| --- | --- | --- | --- |
+| `get_portfolio_overview` | `portfolio:getOverview` | **none** | `not_connected`, `not_responding` |
+| `get_position` | `portfolioService` (**new**) | `query` (symbol or name, *resolved* to a conid) | `ambiguous` (candidates listed), `not_held`, `not_connected`, `not_responding` |
+| `get_investor_profile` | `profile:get` | **none** | `not_set` — "never written" and "cleared" are one state (DDR-0094) |
+| `get_rebalance_gaps` | `profile:getDrift` | **none** | `not_connected`, `not_responding` |
+| `get_allocation` | `analytics:getAllocation` | `dimension` (enum), optional `limit` for largest-N | `needs_import` |
+| `get_performance_periods` | `analytics:getPerformance` | **none** — the discovery tool | `needs_import`, `empty_period` |
+| `get_performance` | `analytics:getPerformance` | `period` (**enumerated key**) | `needs_import`, `period_not_available` (**with alternatives**) |
+| `get_daily_returns` | `analytics:getPerformance` | `period` (**enumerated key**) | `needs_import`, `empty_period` |
+| `get_portfolio_history` | `analytics:getPerformance` | `period` (**enumerated key**), `series` (`value` \| `composition`) | `needs_import` |
+| `get_dividend_income` | `analytics:getDividends` | `period` (**enumerated key**) | `needs_import` |
+| `get_realized_gains` | `analytics:getRealizedGains` | **none** | `needs_import` |
+| `get_data_coverage` | coverage service (**new**) | **none** | — always answers; "nothing imported" is a coverage report |
+
+**No argument is a predicate.** No tool takes a filter, a sort, a comparison, a threshold or a free-form
+range — those are the general query ADR-0009 forbids, arriving as a parameter rather than as a tool.
+`get_allocation`'s `limit` is the one bounded exception and it is a *count*, not a condition:
+largest-N by weight, which is a shape the allocation report already computes. `get_position` takes an
+identity and nothing else. `get_portfolio_history`'s `series` is the split
+[[0013-performance-twr-curve-and-chart-hover]] requires — value and return may not arrive in one
+payload, or the model attributes a deposit to performance.
 
 `get_concentration` is **not in the inventory**. It is folded into `get_allocation` (largest-N by
 weight) and `get_rebalance_gaps` (the baseline's own 10% ceiling). A third computation would run off
