@@ -9,7 +9,11 @@
  *
  * `investorProfile.ts` builds its schemas over these and re-exports them, so there is still one
  * import path for anything in the main process and exactly one source of truth for both.
+ *
+ * It imports `assetClass.ts`, which is dependency-free for the same reason, so the pair stays
+ * bundle-safe.
  */
+import { assetClassLabel } from './assetClass'
 
 /**
  * The five style tags, as the owner wrote them in Epic #5.
@@ -83,6 +87,23 @@ export const TARGET_DIMENSION_HEADINGS: Record<TargetDimension, string> = {
   currency: 'Currency exposure',
   sector: 'Sector weight',
   assetClass: 'Asset-class weight',
+}
+
+/**
+ * How a stored target's key reads to a person, or to a model.
+ *
+ * **A target key is not always a label**, and asset class is the dimension where they part company.
+ * A currency target is stored as `USD` and a sector target as `Banks` — both are already the words
+ * anyone would use. An asset-class target is stored under the key the *allocation report* published
+ * (DDR-0094, which is what makes a stored target join at all), and those are IBKR's codes: `STK`,
+ * `BOND`, and the `__cash__` sentinel that cannot collide with one.
+ *
+ * So the raw key must never reach a reader. It shipped in two places and read `Asset class
+ * __cash__: 2.00%–10.00%` in the assembled context — a sentinel in front of a model, beside a
+ * drift band that called the same thing `Cash`, so one answer could name it both ways.
+ */
+export function targetLabel(dimension: TargetDimension, key: string): string {
+  return dimension === 'assetClass' ? assetClassLabel(key) : key
 }
 
 /** Which field on the profile each dimension's list lives in. */
