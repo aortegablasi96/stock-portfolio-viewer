@@ -80,7 +80,7 @@ export const DISCLOSURE_CATEGORIES = [
     id: 'profile',
     title: 'Your investor profile',
     detail:
-      'The style tags and target ranges you set, and how far each one is from your actual weights — all as percentages.',
+      'The style tags and target ranges you set, how far each one is from your actual weights, and — for anything you have set no target for — how those weights sit against the app’s own default baseline. All as percentages.',
     granularity: 'weights',
   },
   {

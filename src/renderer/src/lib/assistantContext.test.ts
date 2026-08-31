@@ -17,7 +17,14 @@ import type { PerformanceReport } from '@shared/domain/performance'
 import { DISCLOSURE_CATEGORY_IDS } from '@shared/domain/assistantDisclosure'
 import { EMPTY_INVESTOR_PROFILE, type InvestorProfile } from '@shared/domain/investorProfileTerms'
 import type { AllocationPosition, AllocationReport } from '@shared/domain/allocation'
-import type { BalanceDriftReport, DriftBand, DriftMove } from '@shared/domain/balanceDrift'
+import type {
+  BalanceDriftReport,
+  BaselineReview,
+  DriftBand,
+  DriftMove,
+} from '@shared/domain/balanceDrift'
+import { BASELINE_CHECKS, BASELINE_VERSION } from '@shared/domain/portfolioBaseline'
+import { CASH_ASSET_KEY } from '@shared/domain/assetClass'
 
 /**
  * The grounding (Story #284, DDR-0098).
@@ -69,6 +76,50 @@ function report(over: Partial<AllocationReport> = {}): AllocationReport {
   }
 }
 
+/**
+ * The baseline `PROFILE` would actually produce (Story #315, ADR-0012).
+ *
+ * `PROFILE` states currency targets and a position ceiling and nothing about sectors or asset
+ * classes, which is the shape almost every real profile has - so `position` defers to the owner and
+ * the other three run. The fixture is that state rather than a convenient one, because "the profile
+ * wins where it speaks" is the property most of these assertions are about.
+ */
+function baseline(over: Partial<BaselineReview> = {}): BaselineReview {
+  return {
+    version: BASELINE_VERSION,
+    applied: ['sector', 'cash', 'coverage'],
+    deferred: ['position'],
+    ceilings: [
+      {
+        check: 'sector',
+        key: 'Technology',
+        label: 'Technology',
+        name: null,
+        actual: 41.5,
+        limit: 30,
+        status: 'above',
+        distance: 11.5,
+        bounded: false,
+      },
+      {
+        check: 'cash',
+        key: CASH_ASSET_KEY,
+        label: 'Cash',
+        name: null,
+        actual: 5,
+        limit: 15,
+        status: 'inside',
+        distance: 0,
+        bounded: false,
+      },
+    ],
+    absentAssetClasses: [{ key: 'BOND', label: 'Bonds' }],
+    sectorsHeld: 3,
+    withinBaseline: false,
+    ...over,
+  }
+}
+
 function drift(over: Partial<BalanceDriftReport> = {}): BalanceDriftReport {
   return {
     displayCurrency: 'EUR',
@@ -113,6 +164,7 @@ function drift(over: Partial<BalanceDriftReport> = {}): BalanceDriftReport {
     ],
     position: null,
     unplaced: { positions: 0, cashBalances: 0, currencies: [], nativeTotals: [] },
+    baseline: baseline(),
     balanced: false,
     ...over,
   }
@@ -292,11 +344,21 @@ describe('buildAssistantContext', () => {
     expect(context).toHaveProperty('profile')
   })
 
-  it('omits the profile section entirely when the owner has stated no policy and nothing measured', () => {
+  /**
+   * The inverse of what this asserted before Story #315, and the reversal is the story.
+   *
+   * An owner with no policy used to produce no profile section at all - there was nothing to say,
+   * and a heading over nothing invites a model to fill it in. There is something to say now, and it
+   * is the most important sentence in the section: *they have not written one*. Without it the
+   * app's baseline below is a standard with no owner named, which is exactly how a default becomes
+   * a policy the model attributes to them.
+   */
+  it('still carries a profile section for an owner who has stated no policy, saying so', () => {
     const context = buildAssistantContext(
-      inputs({ profile: EMPTY_INVESTOR_PROFILE, drift: { status: 'no_profile' } }),
+      inputs({ profile: EMPTY_INVESTOR_PROFILE, drift: { status: 'no_data' } }),
     )
-    expect(context).not.toHaveProperty('profile')
+    expect(context.profile).toContain('has not set an investor profile at all')
+    expect(context.profile).toContain('Assistant view’s profile section')
   })
 
   /**
@@ -428,12 +490,15 @@ describe('profileSection', () => {
     },
   )
 
-  it('is absent, not empty, for an owner who has stated nothing and measured nothing', () => {
-    expect(profileSection(EMPTY_INVESTOR_PROFILE, { status: 'no_profile' })).toBeNull()
+  it('says the owner has written nothing, rather than being absent, when they have', () => {
+    const text = profileSection(EMPTY_INVESTOR_PROFILE, { status: 'no_data' })
+    expect(text).toContain('has not set an investor profile at all')
+    // And never as an error: an unwritten profile is a state, not a failure.
+    expect(text).not.toContain('could not')
   })
 
   it('does not open with a blank line when the owner set targets but no style', () => {
-    const text = profileSection({ ...PROFILE, styleTags: [] }, { status: 'no_profile' }) ?? ''
+    const text = profileSection({ ...PROFILE, styleTags: [] }, { status: 'no_data' })
     expect(text.startsWith('\n')).toBe(false)
     expect(text.startsWith('Targets the owner set:')).toBe(true)
   })
@@ -449,7 +514,10 @@ describe('profileSection', () => {
       const text = profileSection(PROFILE, { status: 'no_data' }) ?? ''
       expect(text).toContain('the owner has set no target for sector and asset class')
       expect(text).toContain('neither balanced nor unbalanced')
-      expect(text).toContain('never as balanced')
+      expect(text).toContain('Never report them as balanced')
+      // The line hands the dimension on rather than closing the subject (Story #315): the model may
+      // still invent nothing, and there is now somewhere for it to look instead.
+      expect(text).toContain('invent no standard of your own')
     })
 
     it('says so about a missing concentration ceiling too', () => {
@@ -480,10 +548,24 @@ describe('measuredDrift', () => {
   })
 
   it('states the verdict the service computed, rather than leaving it to be derived', () => {
-    expect(measuredDrift(drift())).toContain('At least one target is currently outside its range.')
-    expect(measuredDrift(drift({ balanced: true }))).toContain(
-      'Every target is currently inside its range.',
+    expect(measuredDrift(drift())).toContain(
+      'At least one target the owner set is currently outside its range.',
     )
+    expect(measuredDrift(drift({ balanced: true }))).toContain(
+      'Every target the owner set is currently inside its range.',
+    )
+  })
+
+  /**
+   * `balanced: null` is the state Story #315 created and the one a model would most like to
+   * mis-phrase: no targets is not every target met, and "your portfolio is balanced" is the
+   * sentence a bare `true` would have produced. The service stopped emitting that `true`; this is
+   * the assertion that the section stopped writing it too.
+   */
+  it('refuses to call a portfolio balanced when the owner set nothing to be balanced against', () => {
+    const text = measuredDrift(drift({ balanced: null, dimensions: [] }))
+    expect(text).toContain('The owner has set no targets')
+    expect(text).not.toContain('inside its range')
   })
 
   it('writes a band as actual, range, and the signed distance out of it', () => {
@@ -1156,5 +1238,129 @@ describe('hasProfile', () => {
   it('is true once any policy is stated, targets or style alone', () => {
     expect(hasProfile(PROFILE)).toBe(true)
     expect(hasProfile({ ...EMPTY_INVESTOR_PROFILE, styleTags: ['dividend_income'] })).toBe(true)
+  })
+})
+
+// ---- the app's own standard, and saying so ----------------------------------
+
+/**
+ * The baseline block (Story #315, ADR-0012).
+ *
+ * The record traded ADR-0009's clean claim - *the standard is only ever the owner's* - for the
+ * capability, and what it bought back is the **marking**: a judgement against a target the owner
+ * wrote and a judgement against a default the app ships read identically once they are prose, and
+ * only one of them carries the owner's authority. Every assertion here is about that distinction
+ * surviving into the text, because the prompt is the only line of defence for phrasing (DDR-0104)
+ * and a rule can be asserted present but never asserted obeyed.
+ */
+describe('the app’s baseline is marked apart from the owner’s own standard', () => {
+  it('names whose standard it is, beside the claim rather than once at the end', () => {
+    const text = profileSection(PROFILE, { status: 'ok', report: drift() })
+
+    expect(text).toContain('The app’s default baseline, version 1')
+    expect(text).toContain('say the standard is the app’s default and not theirs')
+    expect(text).toContain('against the app’s default 30%')
+  })
+
+  /**
+   * ADR-0012's central line in the text: the owner's own ceiling governs positions here, so the
+   * baseline says it is standing aside rather than adding a second opinion about the same
+   * dimension.
+   */
+  it('says which checks the owner’s own targets govern, and stands aside on them', () => {
+    const text = profileSection(PROFILE, { status: 'ok', report: drift() })
+
+    expect(text).toContain('Not applied, the owner’s own targets govern them: single-position size')
+    expect(text).toContain('Judge those against their targets above, never against a default')
+    expect(text).not.toContain('Largest single position:')
+  })
+
+  /**
+   * The record's own stated risk: a default becoming a recommended profile. *"Consider setting a
+   * 10% ceiling"* is proposing the policy in the baseline's clothes, and this is the sentence in
+   * the grounding that forbids it - beside the rule that says the same thing in the prompt.
+   */
+  it('forbids the baseline being offered as a profile to adopt', () => {
+    const text = profileSection(PROFILE, { status: 'ok', report: drift() })
+
+    expect(text).toContain('not a profile for them to adopt')
+    expect(text).toContain('never suggest they set one')
+  })
+
+  /**
+   * Currency's absence is a decision, not an omission. The app knows where a position is priced and
+   * not where its business earns, so a default there would assert an exposure it cannot see - and
+   * an absent verdict reads as a clean one unless it is named (DDR-0101).
+   */
+  it('states that currency is covered by no default at all', () => {
+    const text = profileSection(PROFILE, { status: 'ok', report: drift() })
+
+    expect(text).toContain('The baseline covers no currency')
+    expect(text).toContain('Judge currency against the owner’s targets or not at all')
+  })
+
+  /**
+   * The user-facing half of ADR-0012's Option D. The app's "sector" is IBKR's `industry` field, an
+   * open vocabulary - so it holds no universe to subtract a portfolio from, and a model asked which
+   * sectors are missing will answer from training data unless the grounding says the list does not
+   * exist.
+   */
+  it('gives the sector count and forbids naming a sector as missing', () => {
+    const text = profileSection(PROFILE, { status: 'ok', report: drift() })
+
+    expect(text).toContain('Holdings carry 3 distinct sector name(s)')
+    expect(text).toContain('never name a missing sector')
+    expect(text).toContain('not something this app computes')
+  })
+
+  /** The one absence the app *will* name, because that vocabulary is fixed and the app owns it. */
+  it('names an absent asset class as a fact about shape rather than a fault', () => {
+    const text = profileSection(PROFILE, { status: 'ok', report: drift() })
+
+    expect(text).toContain('holds no weight at all in Bonds')
+    expect(text).toContain('absence is a fact about shape, not a fault')
+    expect(text).toContain('Never say what to buy to close it')
+  })
+
+  /**
+   * A fully-targeted profile gets one sentence rather than a section. There is no baseline figure on
+   * offer, so there is nothing to mark, nothing to misapply to currency and no headings to earn -
+   * and this is the longest prompt the app assembles, so the saving lands where the budget binds
+   * (DDR-0103).
+   */
+  it('shrinks to a single sentence when the owner has targeted everything', () => {
+    const text = profileSection(
+      PROFILE,
+      {
+        status: 'ok',
+        report: drift({
+          baseline: baseline({ applied: [], deferred: [...BASELINE_CHECKS], ceilings: [] }),
+        }),
+      },
+    )
+
+    expect(text).toContain('None of it applies here')
+    expect(text).not.toContain('against the app’s default')
+    expect(text).not.toContain('The baseline covers no currency')
+  })
+
+  /** No baseline without a reading: a gateway that is not running produces no weights to judge. */
+  it('offers no baseline at all when the live portfolio could not be read', () => {
+    const text = profileSection(PROFILE, { status: 'not_connected', message: 'x' })
+
+    expect(text).not.toContain('default baseline')
+    expect(text).toContain('- Currency USD:')
+  })
+
+  /**
+   * The disclosure's promise, over the section this story grew. `profile` is declared as
+   * percentages only, so a baseline figure in euros would make the disclosure a lie about the one
+   * category that must not carry money (DDR-0098).
+   */
+  it('puts no amount of money in the baseline', () => {
+    const text = profileSection(EMPTY_INVESTOR_PROFILE, { status: 'ok', report: drift() })
+
+    expect(text).not.toMatch(/[€$£]/)
+    expect(text).not.toMatch(/\d{1,3}(,\d{3})+(\.\d+)?(?!%)/)
   })
 })

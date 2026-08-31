@@ -93,8 +93,9 @@ Keep domains cohesive.
 ## AI Principles
 
 AI enhances portfolio *understanding* (explain changes, summarize performance, compare
-periods, answer questions) and, against the owner's own **investor profile**, judges balance
-and may propose rebalancing — naming positions (ADR-0009).
+periods, answer questions) and judges balance — against the owner's own **investor profile**, and,
+for whatever that profile leaves silent, against the app's own published **baseline** (ADR-0012). It
+may propose rebalancing, naming positions (ADR-0009).
 
 Three architectural rules make that safe, and they replace the former analytics-only guardrail:
 
@@ -104,8 +105,11 @@ Three architectural rules make that safe, and they replace the former analytics-
   model has no tools and no data access — it reaches neither the database, the repositories,
   nor the IBKR gateway.
 - **The app never acts.** No order placement, no broker write, no path to one.
-- **The app never sets the policy.** It proposes moves toward the owner's targets; it never
-  proposes the targets.
+- **The app never sets the owner's policy.** It proposes moves toward their targets; it never
+  proposes the targets, and never suggests one for them to set. Where they have stated nothing, the
+  app applies its own **baseline** — a versioned, dependency-free module of default ceilings, never
+  a number the model supplies — and marks that judgement apart from one against a target the owner
+  wrote, beside the claim (ADR-0012). It is not applied to a dimension they have targeted.
 
 A proposal about a held position is grounded and carries its arithmetic. An instrument the
 owner does not hold comes from the model's training data — unverified, not price-checked — and

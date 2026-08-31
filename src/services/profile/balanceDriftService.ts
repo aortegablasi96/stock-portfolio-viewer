@@ -3,10 +3,13 @@ import { flexReadRepository } from '@repositories/flex/flexReadRepository'
 import { portfolioService, type CashPosition } from '@services/portfolio/portfolioService'
 import { investorProfileService } from '@services/profile/investorProfileService'
 import { driftMove, type BandPosition } from '@services/profile/driftMoves'
+import {
+  reviewAgainstBaseline,
+  type WeighedPosition,
+} from '@services/profile/portfolioBaselineReview'
 import { assetClassLabel, CASH_ASSET_KEY, CASH_ASSET_LABEL } from '@shared/domain/assetClass'
 import {
   countTargets,
-  isProfileEmpty,
   TARGET_DIMENSIONS,
   TARGET_DIMENSION_FIELDS,
   type CategoryTarget,
@@ -15,6 +18,7 @@ import {
 } from '@shared/domain/investorProfileTerms'
 import type {
   BalanceDriftResult,
+  BaselineReview,
   DimensionDrift,
   DriftBand,
   DriftResidual,
@@ -62,6 +66,22 @@ import type { Holding } from '@shared/domain/portfolio'
  *
  * A dimension the profile states nothing about is **absent from the report** — not present with
  * an empty band list, and never a drift of zero.
+ *
+ * ### It also measures the app's own baseline (Story #315, ADR-0012)
+ *
+ * The profile is still the only standard the *owner* set, and the drift half above measures against
+ * nothing else. Beside it the report now carries a `baseline`: the app's own default ceilings,
+ * applied **only** to a dimension the profile leaves silent, and never to one the owner targeted —
+ * filling a silence is permitted, contradicting a stated target is not.
+ *
+ * It is computed here, in this call, from the same live reading, the same `placedValue` and the same
+ * weights, rather than in a service of its own. A second service would derive its own denominator
+ * and so could disagree with this one about how large a position is, and two verdicts that disagree
+ * inside one answer is the failure that would be hardest to see (ADR-0012, Option F).
+ *
+ * `no_profile` and `no_targets` are gone with it. They short-circuited before the portfolio was
+ * read, which is exactly the case the baseline exists for — an owner with no profile still has a
+ * portfolio with a shape.
  */
 
 /** The denominator, and everything that goes into it. */
@@ -86,9 +106,9 @@ export const balanceDriftService = {
     displayCurrency: string,
     now: number = Date.now(),
   ): Promise<BalanceDriftResult> {
+    // No short-circuit on an empty profile: the baseline has something to say about a portfolio
+    // whose owner has written no policy, and it needs the live weights to say it (ADR-0012).
     const profile = investorProfileService.get()
-    if (isProfileEmpty(profile)) return { status: 'no_profile' }
-    if (countTargets(profile) === 0) return { status: 'no_targets' }
 
     const [overview, cash] = await Promise.all([
       portfolioService.getOverview(displayCurrency),
@@ -112,6 +132,7 @@ export const balanceDriftService = {
 
     const unplaced = unplacedFrom(overview.holdings, cash)
     const position = positionDriftFor(profile, placed, weightOf, unplaced)
+    const baseline = baselineFor(profile, placed, weightOf, unplaced, sectorOf, classOf)
 
     return {
       status: 'ok',
@@ -122,11 +143,15 @@ export const balanceDriftService = {
         dimensions,
         position,
         unplaced,
-        // Vacuously true only when there is nothing to judge, which `no_targets` above has
-        // already ruled out: a profile reaching here carries at least one target.
+        baseline,
+        // `null`, never a vacuous `true`: an owner with no targets has not had every target met,
+        // and `true` is the answer a model would phrase as "your portfolio is balanced". The
+        // baseline reports its own verdict separately, against its own standard.
         balanced:
-          dimensions.every((d) => d.bands.every((b) => b.status === 'inside')) &&
-          (position === null || position.status === 'inside'),
+          countTargets(profile) === 0
+            ? null
+            : dimensions.every((d) => d.bands.every((b) => b.status === 'inside')) &&
+              (position === null || position.status === 'inside'),
       },
     }
   },
@@ -411,6 +436,76 @@ function bandPositions(
       weight: weightOf(entry.value),
     }))
     .sort((a, b) => b.weight - a.weight)
+}
+
+/**
+ * The app's baseline, over the weights this call already computed (Story #315, ADR-0012).
+ *
+ * Everything here is a re-shaping of quantities derived above, never a second derivation: the same
+ * `placed` items, the same `weightOf`, the same resolvers. `reviewAgainstBaseline` decides which
+ * checks run; this decides what they see.
+ *
+ * Three exclusions, and each is one of the residuals DDR-0095 refuses to absorb:
+ *
+ * - **Cash carries no sector**, so it is not in `sectorWeights` and cannot become the largest one.
+ * - **An unclassified instrument is not a sector** and an instrument imported history has never seen
+ *   is not an asset class. Counting either would report a gap in local reference data as a
+ *   concentration, or make coverage look better than it is.
+ * - **Positions are summed by conid**, exactly as `positionDriftFor` sums them, so a split holding
+ *   cannot be under-reported by the app's ceiling while the owner's own ceiling catches it.
+ */
+function baselineFor(
+  profile: InvestorProfile,
+  placed: readonly PlacedItem[],
+  weightOf: (value: number) => number,
+  unplaced: UnplacedHoldings,
+  sectorOf: (h: Holding) => string,
+  classOf: (h: Holding) => string,
+): BaselineReview {
+  const byConid = new Map<number, { holding: Holding; value: number }>()
+  const sectorValues = new Map<string, number>()
+  const assetClassValues = new Map<string, number>()
+
+  for (const item of placed) {
+    if (item.holding === null) {
+      // Uninvested cash: an asset class under the sentinel key, and no sector at all.
+      assetClassValues.set(CASH_ASSET_KEY, (assetClassValues.get(CASH_ASSET_KEY) ?? 0) + item.value)
+      continue
+    }
+    const existing = byConid.get(item.holding.conid)
+    if (existing) existing.value += item.value
+    else byConid.set(item.holding.conid, { holding: item.holding, value: item.value })
+
+    const sector = sectorOf(item.holding)
+    if (sector !== '') sectorValues.set(sector, (sectorValues.get(sector) ?? 0) + item.value)
+
+    const code = classOf(item.holding)
+    if (code !== '') assetClassValues.set(code, (assetClassValues.get(code) ?? 0) + item.value)
+  }
+
+  const positions: WeighedPosition[] = [...byConid.values()].map((entry) => ({
+    symbol: entry.holding.symbol,
+    name: entry.holding.companyName,
+    weight: weightOf(entry.value),
+  }))
+
+  return reviewAgainstBaseline({
+    profile,
+    positions,
+    sectorWeights: asWeights(sectorValues, weightOf),
+    assetClassWeights: asWeights(assetClassValues, weightOf),
+    // Any unvalued row makes every weight a lower bound, cash balances included: a balance the
+    // gateway could not price is still part of the portfolio and is in no denominator (DDR-0007).
+    bounded: unplaced.positions > 0 || unplaced.cashBalances > 0,
+  })
+}
+
+/** Values in the display currency, as shares of the placed total. */
+function asWeights(
+  values: ReadonlyMap<string, number>,
+  weightOf: (value: number) => number,
+): Map<string, number> {
+  return new Map([...values.entries()].map(([key, value]) => [key, weightOf(value)]))
 }
 
 /**

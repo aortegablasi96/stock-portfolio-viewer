@@ -8,9 +8,18 @@ import {
 } from '@renderer/lib/assistantContext'
 import { CASH_ASSET_KEY } from '@shared/domain/assetClass'
 import type { AllocationPosition, AllocationReport, AllocationSlice } from '@shared/domain/allocation'
-import type { BalanceDriftReport, DriftBand } from '@shared/domain/balanceDrift'
+import type {
+  BalanceDriftReport,
+  BaselineReview,
+  DriftBand,
+} from '@shared/domain/balanceDrift'
+import { BASELINE_CHECKS, BASELINE_VERSION } from '@shared/domain/portfolioBaseline'
 import type { PerformanceReport, ValuePoint } from '@shared/domain/performance'
-import type { CategoryTarget, InvestorProfile } from '@shared/domain/investorProfileTerms'
+import {
+  EMPTY_INVESTOR_PROFILE,
+  type CategoryTarget,
+  type InvestorProfile,
+} from '@shared/domain/investorProfileTerms'
 
 /**
  * The prompt budget, measured at the worst case the caps allow (Story #287, DDR-0103).
@@ -167,6 +176,72 @@ const band = (prefix: string, index: number): DriftBand => ({
   },
 })
 
+/**
+ * The baseline at its longest, which needs a profile at its **emptiest** (Story #315, ADR-0012).
+ *
+ * The two halves of this section cannot both be maximal in one reading, and that is a property of
+ * the design rather than an accident of the fixture: a check runs only where the profile states
+ * nothing, so every target that lengthens the drift block shortens the baseline block. `PROFILE`
+ * targets every dimension, so its baseline is four deferred checks and three short lines; this one
+ * belongs to an owner who has written nothing at all.
+ *
+ * Both are measured, because either could be the larger prompt and only measuring both says which.
+ */
+const BASELINE_APPLIED: BaselineReview = {
+  version: BASELINE_VERSION,
+  applied: [...BASELINE_CHECKS],
+  deferred: [],
+  ceilings: [
+    {
+      check: 'position',
+      key: 'SYMBOL0',
+      label: 'SYMBOL0',
+      name: `${LONG_NAME} 0`,
+      actual: 18.75,
+      limit: 10,
+      status: 'above',
+      distance: 8.75,
+      bounded: true,
+    },
+    {
+      check: 'sector',
+      key: LONG_SECTOR,
+      label: LONG_SECTOR,
+      name: null,
+      actual: 41.5,
+      limit: 30,
+      status: 'above',
+      distance: 11.5,
+      bounded: true,
+    },
+    {
+      check: 'cash',
+      key: CASH_ASSET_KEY,
+      label: 'Cash',
+      name: null,
+      actual: 22.25,
+      limit: 15,
+      status: 'above',
+      distance: 7.25,
+      bounded: true,
+    },
+  ],
+  absentAssetClasses: [{ key: 'BOND', label: 'Bonds' }],
+  sectorsHeld: 24,
+  withinBaseline: false,
+}
+
+/** What the same service returns for `PROFILE`, which states a target in every dimension. */
+const BASELINE_DEFERRED: BaselineReview = {
+  version: BASELINE_VERSION,
+  applied: [],
+  deferred: [...BASELINE_CHECKS],
+  ceilings: [],
+  absentAssetClasses: [],
+  sectorsHeld: 24,
+  withinBaseline: null,
+}
+
 const DRIFT: BalanceDriftReport = {
   displayCurrency: 'EUR',
   readAt: Date.UTC(2026, 5, 30, 14, 22),
@@ -215,6 +290,7 @@ const DRIFT: BalanceDriftReport = {
       { currency: 'SEK', amount: 65_432 },
     ],
   },
+  baseline: BASELINE_DEFERRED,
   balanced: false,
 }
 
@@ -225,6 +301,21 @@ const REPORTS: GroundingReports = {
   performance: { status: 'ok', report: longHistory() },
 }
 
+/**
+ * The other reachable extreme: no profile at all, so the baseline runs every check.
+ *
+ * The drift block shrinks to nothing with it - no targets is no bands - which is exactly why this
+ * has to be measured separately rather than folded into the fixture above.
+ */
+const REPORTS_NO_PROFILE: GroundingReports = {
+  ...REPORTS,
+  profile: EMPTY_INVESTOR_PROFILE,
+  drift: {
+    status: 'ok',
+    report: { ...DRIFT, dimensions: [], position: null, baseline: BASELINE_APPLIED, balanced: null },
+  },
+}
+
 /** As long as a person actually types, which is longer than a test would otherwise make it. */
 const QUESTION =
   'Comparing 2025 with 2024 and the last two quarters against each other, how did the portfolio do, ' +
@@ -232,9 +323,20 @@ const QUESTION =
   'I have to trim or add to close the three widest gaps without pushing anything past my ' +
   'single-position ceiling? Please name the positions.'
 
+/** System plus user, which is the only pair the gateway's ceiling is checked against. */
+const promptSize = (reports: GroundingReports): number =>
+  SYSTEM_PROMPT.length + buildPrompt(QUESTION, buildAssistantContext(reports)).length
+
+/** The one section both baselines are written into. */
+const profileOf = (reports: GroundingReports): string =>
+  buildAssistantContext(reports).profile ?? ''
+
 describe('the assembled prompt at the worst case the caps allow', () => {
-  it('fits inside the ceiling the gateway enforces, with room left', () => {
-    const size = SYSTEM_PROMPT.length + buildPrompt(QUESTION, buildAssistantContext(REPORTS)).length
+  it.each([
+    ['every target set, so the baseline defers', REPORTS],
+    ['no profile at all, so the baseline runs', REPORTS_NO_PROFILE],
+  ])('fits inside the ceiling the gateway enforces, with room left: %s', (_case, reports) => {
+    const size = promptSize(reports)
 
     expect(size).toBeLessThan(MAX_PROMPT_CHARS)
     // Not merely inside it. A story that lands at 99% has spent the next story's budget as well as
@@ -256,5 +358,26 @@ describe('the assembled prompt at the worst case the caps allow', () => {
     expect(context.performance).toContain('Calendar years: the 8 most recent of 20')
     expect(context.performance).toContain('Calendar quarters: the 8 most recent of 80')
     expect(context.profile).toContain('33 band(s) are outside their range; the 6 with the largest gaps')
+  })
+
+  /**
+   * The baseline is measured rather than assumed absent (Story #315).
+   *
+   * Its block is bounded by construction - four checks, at most three ceilings, one coverage
+   * line - so it cannot grow with the portfolio the way a band list can. What it *can* do is
+   * grow with a story, which is what the 85% gate above is there to catch. This asserts the
+   * fixtures really did carry it, so the gate is measuring prompts with a baseline in them -
+   * one deferring every check and one running every check.
+   */
+  it('carries both baselines, each marked as the app\u2019s own standard', () => {
+    // Every check deferred is deliberately one sentence rather than a section: it is the longest
+    // prompt the app assembles, and a baseline nothing can be judged against earns no headings.
+    expect(profileOf(REPORTS)).toContain('None of it applies here')
+    expect(profileOf(REPORTS)).not.toContain('against the app’s default')
+
+    const applied = profileOf(REPORTS_NO_PROFILE)
+    expect(applied).toContain('against the app’s default 10%')
+    expect(applied).toContain('holds no weight at all in Bonds')
+    expect(applied).toContain('never name a missing sector')
   })
 })

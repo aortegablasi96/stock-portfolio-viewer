@@ -10,6 +10,7 @@ import {
   type InvestorProfile,
 } from '@shared/domain/investorProfileTerms'
 import type { BalanceDriftReport, DimensionDrift } from '@shared/domain/balanceDrift'
+import { BASELINE_CEILINGS, BASELINE_CHECKS } from '@shared/domain/portfolioBaseline'
 import type { Holding, PortfolioOverview } from '@shared/domain/portfolio'
 
 /**
@@ -152,16 +153,36 @@ beforeEach(() => {
 
 describe('what comes back when there is nothing to measure', () => {
   /**
-   * The two look alike and want different copy: one says *set a profile*, the other *add some
-   * targets*. Telling an owner to do what they have already done is the failure DDR-0022's
-   * not_connected/not_responding pair exists to avoid, one story over.
+   * `no_profile` and `no_targets` are gone (Story #315, ADR-0012), and this asserts the reversal.
+   *
+   * They short-circuited *before the portfolio was read*, which is exactly the case the app's
+   * baseline exists for: an owner who has written nothing still has a portfolio with a shape, and
+   * refusing to read it is refusing to answer the question the story is about. What they carried is
+   * not lost - the profile itself sits beside this report in the assembled context, so "they have
+   * not set one" is still sayable, from the profile rather than from the absence of a measurement.
    */
-  it('distinguishes an unwritten profile from one carrying only style tags', async () => {
+  it('measures an unwritten profile rather than refusing to look at the portfolio', async () => {
     given({ profile: EMPTY_INVESTOR_PROFILE })
-    expect((await balanceDriftService.getBalanceDrift('EUR', NOW)).status).toBe('no_profile')
+    const empty = await balanceDriftService.getBalanceDrift('EUR', NOW)
+
+    expect(empty.status).toBe('ok')
+    if (empty.status !== 'ok') return
+    // Nothing of the owner's to be inside or outside, said as `null` rather than as a vacuous
+    // `true` - which is the sentence a model would phrase as "your portfolio is balanced".
+    expect(empty.report.balanced).toBeNull()
+    expect(empty.report.dimensions).toEqual([])
+    expect(empty.report.baseline.applied).toEqual([...BASELINE_CHECKS])
+    expect(empty.report.baseline.deferred).toEqual([])
 
     given({ profile: profile({ styleTags: ['dividend_income'] }) })
-    expect((await balanceDriftService.getBalanceDrift('EUR', NOW)).status).toBe('no_targets')
+    const tagsOnly = await balanceDriftService.getBalanceDrift('EUR', NOW)
+
+    // Style tags are not targets, so the baseline still covers everything: a tag is a description
+    // of an intent, and there is nothing in one to measure a weight against.
+    expect(tagsOnly.status).toBe('ok')
+    if (tagsOnly.status !== 'ok') return
+    expect(tagsOnly.report.balanced).toBeNull()
+    expect(tagsOnly.report.baseline.applied).toEqual([...BASELINE_CHECKS])
   })
 
   it('reports no data for an account holding nothing', async () => {
@@ -819,5 +840,132 @@ describe('balanced', () => {
     expect(r.readAt).toBe(NOW)
     expect(r.displayCurrency).toBe('EUR')
     expect(r.placedValue).toBeCloseTo(100, 6)
+  })
+})
+
+// ---- the app's own standard, beside the owner's ------------------------------
+
+/**
+ * The baseline half of the same report (Story #315, ADR-0012).
+ *
+ * It is measured **here** rather than in a service of its own, and that is the property this block
+ * exists to pin: one live reading, one `placedValue`, one set of weights. A second service would
+ * derive its own denominator and could disagree with this one about how large a position is - two
+ * verdicts contradicting each other inside a single answer, which is the failure hardest to see.
+ *
+ * The fixture sums to 100, so every weight below is also its own value: AAA 40, BBB 25, CCC 15,
+ * DDD 10, cash 10. Technology is AAA + CCC = 55; DDD is unclassified and is therefore not a sector.
+ */
+describe('the app’s baseline, over the same reading as the drift', () => {
+  it('measures the largest position and sector against the app’s own ceilings', async () => {
+    given({ profile: EMPTY_INVESTOR_PROFILE })
+    const { baseline } = await report()
+
+    expect(baseline.ceilings.find((c) => c.check === 'position')).toMatchObject({
+      key: 'AAA',
+      actual: 40,
+      limit: BASELINE_CEILINGS.position,
+      status: 'above',
+      distance: 30,
+    })
+    const sector = baseline.ceilings.find((c) => c.check === 'sector')
+    expect(sector).toMatchObject({
+      key: 'Technology',
+      limit: BASELINE_CEILINGS.sector,
+      status: 'above',
+    })
+    // Unrounded, exactly as a `DriftBand`'s own `actual` is: two summed conversions land on
+    // 55.00000000000001, and the section's formatters are what round it for the page.
+    expect(sector?.actual).toBeCloseTo(55, 6)
+    expect(sector?.distance).toBeCloseTo(25, 6)
+    expect(baseline.withinBaseline).toBe(false)
+  })
+
+  /**
+   * The residuals DDR-0095 refuses to absorb, refused here too. DDD carries no sector because the
+   * classification refresh is resumable and died before reaching it - counting that cache miss as a
+   * sector would report a gap in local reference data as a concentration.
+   */
+  it('leaves an unclassified holding out of the sector figures entirely', async () => {
+    given({ profile: EMPTY_INVESTOR_PROFILE })
+    const { baseline } = await report()
+
+    expect(baseline.sectorsHeld).toBe(2)
+    expect(baseline.ceilings.map((c) => c.key)).not.toContain('')
+  })
+
+  /** Cash has no sector and every currency, so it is an asset class here and nothing else. */
+  it('reports uninvested cash as an asset class, never as a sector', async () => {
+    given({ profile: EMPTY_INVESTOR_PROFILE })
+    const { baseline } = await report()
+
+    expect(baseline.ceilings.find((c) => c.check === 'cash')).toMatchObject({
+      actual: 10,
+      limit: BASELINE_CEILINGS.cash,
+      status: 'inside',
+    })
+  })
+
+  /**
+   * The fixture holds stocks, an ETF and cash and no bonds, which is the only absence the app is
+   * willing to name: the asset-class vocabulary is fixed and the app owns it, and there is no
+   * equivalent for sectors (ADR-0012, Option D).
+   */
+  it('names the coverage class the portfolio holds nothing in', async () => {
+    given({ profile: EMPTY_INVESTOR_PROFILE })
+    const { baseline } = await report()
+
+    expect(baseline.absentAssetClasses).toEqual([{ key: 'BOND', label: 'Bonds' }])
+  })
+
+  /**
+   * One position split across two rows must not read as two smaller ones. `positionDriftFor` sums
+   * by conid for the owner's own ceiling; the app's ceiling has to sum the same way or the two
+   * disagree about the same holding.
+   */
+  it('sums a split holding by conid, exactly as the owner’s own ceiling does', async () => {
+    given({
+      profile: EMPTY_INVESTOR_PROFILE,
+      holdings: [
+        holding({ conid: 1, symbol: 'AAA', currency: 'USD', displayValue: 20, marketValue: 22 }),
+        holding({ conid: 1, symbol: 'AAA', currency: 'USD', displayValue: 20, marketValue: 22 }),
+        ...HOLDINGS.slice(1),
+      ],
+    })
+    const { baseline } = await report()
+
+    expect(baseline.ceilings.find((c) => c.check === 'position')).toMatchObject({
+      key: 'AAA',
+      actual: 40,
+    })
+  })
+
+  /**
+   * DDR-0007's rule reaching the baseline: an unconvertible holding is in no denominator, so the
+   * largest position the app can see may not be the largest one there is.
+   */
+  it('marks its figures a lower bound when a holding could not be valued', async () => {
+    given({
+      profile: EMPTY_INVESTOR_PROFILE,
+      holdings: [...HOLDINGS, holding({ conid: 9, symbol: 'ZZZ', displayValue: null })],
+    })
+    const { baseline } = await report()
+
+    expect(baseline.ceilings.every((c) => c.bounded)).toBe(true)
+  })
+
+  /**
+   * ADR-0012's central line, end to end: the owner's stated ceiling governs, and the app's default
+   * is not computed, not returned and not mentioned for that dimension. A 25% ceiling on a 40%
+   * position is out of range by the owner's own standard - and the app does not also say it is out
+   * of range by 30 points of its own, which would be second-guessing a decision they made.
+   */
+  it('says nothing of its own about a dimension the owner has targeted', async () => {
+    given({ profile: profile({ positionSize: { low: 0, high: 25 } }) })
+    const r = await report()
+
+    expect(r.position).toMatchObject({ symbol: 'AAA', actual: 40, status: 'above' })
+    expect(r.baseline.deferred).toContain('position')
+    expect(r.baseline.ceilings.map((c) => c.check)).not.toContain('position')
   })
 })

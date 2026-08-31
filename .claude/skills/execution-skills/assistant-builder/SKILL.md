@@ -110,8 +110,10 @@ assistant **proposes but never acts, and never sets the policy**. Tools must:
 
 * read and analyze the owner's portfolio data
 * never place trades, modify holdings, or execute transactions — and expose no path to one
-* never propose changes to the owner's investor profile; that is the allocation decision and it
-  is theirs
+* never propose changes to the owner's investor profile, and never suggest a target for them to
+  set; that is the allocation decision and it is theirs
+* apply the app's own **baseline** only where the profile states nothing, never to a dimension the
+  owner has targeted, and always mark whose standard a judgement is against (ADR-0012)
 
 The assistant *may* judge balance against the profile the owner authored and suggest how to close
 a gap, naming positions. It **must not produce a figure of its own**: every number comes from a

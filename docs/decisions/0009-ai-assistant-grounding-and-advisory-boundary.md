@@ -2,6 +2,13 @@
 
 - **Status:** Accepted
 - **Date:** 2026-08-27
+- **Amended by:** [[0012-the-app-holds-a-baseline-and-says-whose-standard-it-is]] (2026-08-30)
+  — *The policy is the owner's; the app only measures against it* below is **narrowed**: the app
+  now holds a small, versioned **baseline** of its own and applies it to a dimension the profile
+  states nothing about. The owner's targets still win wherever they exist — the baseline fills a
+  silence and never contradicts a stated target — and every judgement says whose standard it is,
+  beside the claim. Every other **decision** here stands as written, including the grounding rule:
+  the model never supplies the baseline and never computes a gap against it.
 
 ## Context
 
@@ -77,6 +84,10 @@ no order-placing tool and must not gain one. A suggestion is text; the owner act
 does not.
 
 ### The policy is the owner's; the app only measures against it
+
+**Narrowed by [[0012-the-app-holds-a-baseline-and-says-whose-standard-it-is]] (Story #315): the app
+holds a default baseline for a dimension the owner has left silent. It never applies one to a
+dimension they have targeted, and the sentence below still governs that case exactly.**
 
 This is what keeps "decide allocations" from quietly becoming true. The app does not judge a
 portfolio against a standard of its own — it judges against the **investor profile the owner
