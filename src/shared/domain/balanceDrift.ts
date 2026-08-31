@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { TARGET_DIMENSIONS } from './investorProfileTerms'
+import { BASELINE_CHECKS } from './portfolioBaseline'
 
 /**
  * Balance drift: how far the portfolio sits from the targets the owner set (Story #281,
@@ -197,6 +198,80 @@ export const unplacedHoldingsSchema = z.object({
 })
 export type UnplacedHoldings = z.infer<typeof unplacedHoldingsSchema>
 
+/**
+ * One of the app's own ceilings, and where the portfolio sits against it (Story #315, ADR-0012).
+ *
+ * Shaped like {@link driftBandSchema} on purpose - a key, a label, an actual, a status and a signed
+ * distance - because the two are read side by side in one answer and a reader comparing them should
+ * not have to translate. What is deliberately *not* shared is the name: a `DriftBand` is the owner's
+ * verdict and this is the app's, and ADR-0012 turns on those two never being confused.
+ *
+ * There is no `move`. `driftMoves` sizes a move that closes a gap against a target the owner wrote
+ * (DDR-0103); sizing one against the app's own default would be proposing the policy in an
+ * arithmetic disguise. What is stated is the gap, and the owner decides what to do about it.
+ */
+export const baselineCeilingSchema = z.object({
+  check: z.enum(['position', 'sector', 'cash']),
+  /** The symbol, the sector name, or the cash key - whatever the figure is about. */
+  key: z.string(),
+  /** How that reads on screen. */
+  label: z.string(),
+  /** The instrument's name, where the check is `position` and local history knows one. */
+  name: z.string().nullable(),
+  /** Share of the placed portfolio, in percent. */
+  actual: z.number(),
+  /** The app's ceiling, in percent. */
+  limit: z.number(),
+  status: z.enum(['inside', 'above']),
+  /** Percentage points above the ceiling; exactly `0` when inside it. */
+  distance: z.number(),
+  /**
+   * True where something could not be valued, so `actual` is a **lower bound** (DDR-0007).
+   *
+   * The same qualification {@link positionDriftSchema} carries, and for the same reason: reporting
+   * `12.4%` when the honest answer is "at least 12.4%" is the quiet wrongness this Epic exists to
+   * avoid.
+   */
+  bounded: z.boolean(),
+})
+export type BaselineCeiling = z.infer<typeof baselineCeilingSchema>
+
+/**
+ * The app's baseline, applied to what the profile left silent (Story #315, ADR-0012).
+ *
+ * **`applied` and `deferred` are both reported**, and that is the whole marking discipline in the
+ * shape rather than in the prose. An answer has to be able to say *"the app judged sectors because
+ * you set no sector target, and said nothing about currency because you did"*; a report that listed
+ * only its findings could not, and an absent verdict would read as a clean one (DDR-0101).
+ */
+export const baselineReviewSchema = z.object({
+  /** Which baseline produced this, so a kept answer says what standard it used. */
+  version: z.number().int(),
+  /** The checks that ran, because the profile states nothing about what they cover. */
+  applied: z.array(z.enum(BASELINE_CHECKS)),
+  /** The checks that did not, because the owner's own targets govern that dimension. */
+  deferred: z.array(z.enum(BASELINE_CHECKS)),
+  /** Every applied ceiling, with the portfolio's figure against it. */
+  ceilings: z.array(baselineCeilingSchema),
+  /**
+   * Asset classes the app's coverage vocabulary names and the portfolio holds **nothing** in.
+   *
+   * Empty when the `coverage` check did not run, and empty when it ran and found nothing absent -
+   * `applied` is what tells those two apart.
+   */
+  absentAssetClasses: z.array(z.object({ key: z.string(), label: z.string() })),
+  /**
+   * How many distinct sector names the portfolio's holdings carry.
+   *
+   * A count and never a list of what is missing: the app holds no sector universe, which is stated
+   * in the context beside this figure (`NO_SECTOR_UNIVERSE_NOTE`).
+   */
+  sectorsHeld: z.number().int().nonnegative(),
+  /** True when every applied ceiling is inside. `null` when no check ran at all. */
+  withinBaseline: z.boolean().nullable(),
+})
+export type BaselineReview = z.infer<typeof baselineReviewSchema>
+
 export const balanceDriftReportSchema = z.object({
   /** The currency every weight below was computed in. */
   displayCurrency: z.string(),
@@ -217,20 +292,36 @@ export const balanceDriftReportSchema = z.object({
   /** `null` when the profile states no position ceiling, or when nothing is placed. */
   position: positionDriftSchema.nullable(),
   unplaced: unplacedHoldingsSchema,
-  /** True when every band is inside its range. */
-  balanced: z.boolean(),
+  /**
+   * The app's own standard, over whatever the profile left silent (Story #315, ADR-0012).
+   *
+   * In the same report, from the same reading and the same denominator, on purpose: a second
+   * service computing its own weights would be a second answer that can disagree with this one.
+   */
+  baseline: baselineReviewSchema,
+  /**
+   * True when every band the **owner** set is inside its range, and `null` when they set none.
+   *
+   * `null` rather than `true` because a vacuous verdict is the worst of the three: an owner with no
+   * targets is not an owner whose targets are all met, and `true` is the answer a model would
+   * cheerfully phrase as "your portfolio is balanced". It says nothing about the baseline, which
+   * reports its own verdict in `baseline.withinBaseline`.
+   */
+  balanced: z.boolean().nullable(),
 })
 export type BalanceDriftReport = z.infer<typeof balanceDriftReportSchema>
 
 /**
  * The drift result, as data (DDR-0022).
  *
- * Six states, and the pairs that look alike are kept apart on purpose. `no_profile` (nothing
- * stated at all) and `no_targets` (style tags but no numbers) both mean "nothing to measure" and
- * want different copy — one says *set a profile*, the other *add some targets*, and telling
- * someone to do what they have already done is the failure. `not_connected` (the gateway is not
- * running) and `not_responding` (it accepted and then went quiet) are the pair DDR-0022 records,
- * and they are still not interchangeable.
+ * **`no_profile` and `no_targets` are gone** (Story #315, ADR-0012). They meant *nothing to
+ * measure*, and they short-circuited before the portfolio was read - which is precisely the case
+ * the app's baseline now has something to say about. What they carried is not lost: the profile
+ * itself is in the assembled context beside this report, so "the owner has not set one" is still
+ * sayable, and it is sayable from the profile rather than from the absence of a measurement.
+ *
+ * `not_connected` (the gateway is not running) and `not_responding` (it accepted and then went
+ * quiet) are the pair DDR-0022 records, and they are still not interchangeable.
  *
  * `no_data` covers an account holding nothing **and** one in which nothing could be valued in the
  * display currency: with no denominator there are no weights either way, and the Portfolio view
@@ -238,8 +329,6 @@ export type BalanceDriftReport = z.infer<typeof balanceDriftReportSchema>
  */
 export const balanceDriftResultSchema = z.discriminatedUnion('status', [
   z.object({ status: z.literal('ok'), report: balanceDriftReportSchema }),
-  z.object({ status: z.literal('no_profile') }),
-  z.object({ status: z.literal('no_targets') }),
   z.object({ status: z.literal('no_data') }),
   z.object({ status: z.literal('not_connected'), message: z.string() }),
   z.object({ status: z.literal('not_responding'), message: z.string() }),

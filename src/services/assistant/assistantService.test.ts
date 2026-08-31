@@ -409,15 +409,43 @@ describe('the system prompt bounds the sentences around the figures', () => {
 
   /**
    * Two states in one rule because both are the same refusal: with nothing out of range there is no
-   * move, and with no profile there is no standard. A model that invents either is answering a
-   * question the owner did not ask.
+   * move, and with no profile there is no standard **of the owner's**. A model that invents either
+   * is answering a question the owner did not ask.
+   *
+   * The second half was rewritten by Story #315 (ADR-0012), and what changed is narrow. *Do not
+   * supply a standard of your own* still holds against the model - it invents nothing. What no
+   * longer holds is that there is no standard at all: the app supplies one for what the profile
+   * leaves silent, so the rule now points at the context's baseline rather than closing the
+   * subject. It also names the Assistant view, the profile's home since #310 (DDR-0108).
    */
   it('makes nothing-to-propose and no-profile answers rather than gaps', () => {
     expect(SYSTEM_PROMPT).toContain('Nothing to propose is an answer')
     expect(SYSTEM_PROMPT).toContain('never manufacture one')
-    expect(SYSTEM_PROMPT).toContain('carries no profile section at all')
-    expect(SYSTEM_PROMPT).toContain('set one on the Profile view')
-    expect(SYSTEM_PROMPT).toContain('Do not supply a standard of your own')
+    expect(SYSTEM_PROMPT).toContain('the owner has set no profile')
+    expect(SYSTEM_PROMPT).toContain('set one in the Assistant view’s profile section')
+    expect(SYSTEM_PROMPT).toContain('never one of your own')
+    // The Profile view has not existed since Story #310, and a rule naming it would send the owner
+    // looking for a sidebar row that is not there.
+    expect(SYSTEM_PROMPT).not.toContain('Profile view')
+  })
+
+  /**
+   * The baseline's own three rules (Story #315, ADR-0012).
+   *
+   * The record's stated risk is that a default becomes a recommended profile - *"consider setting a
+   * 10% ceiling"* is proposing the policy in the baseline's clothes - so the rule that forbids
+   * proposing a profile is the one that had to grow, not a new eighteenth rule beside it. The
+   * marking rule is the other half: two verdicts that read alike and only one of which carries the
+   * owner's authority.
+   */
+  it('permits a baseline judgement, marks whose standard it is, and refuses to recommend one', () => {
+    expect(SYSTEM_PROMPT).toContain('against the app’s baseline where the context supplies one')
+    expect(SYSTEM_PROMPT).toContain('Say which of the two, beside the claim and never once at the end')
+    expect(SYSTEM_PROMPT).toContain('never suggest a target for them to set')
+    expect(SYSTEM_PROMPT).toContain('not a profile to adopt')
+    expect(SYSTEM_PROMPT).toContain(
+      'never on a dimension the context says the baseline does not cover',
+    )
   })
 
   /**

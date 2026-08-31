@@ -15,10 +15,18 @@ import type { PerformanceResult } from '@shared/domain/performance'
 import type {
   BalanceDriftReport,
   BalanceDriftResult,
+  BaselineCeiling,
+  BaselineReview,
   DimensionDrift,
   DriftBand,
   DriftMove,
 } from '@shared/domain/balanceDrift'
+import {
+  BASELINE_LABEL,
+  BASELINE_UNCOVERED_NOTE,
+  NO_SECTOR_UNIVERSE_NOTE,
+  type BaselineCheck,
+} from '@shared/domain/portfolioBaseline'
 import {
   STYLE_TAG_LABELS,
   TARGET_DIMENSION_LABELS,
@@ -143,8 +151,10 @@ export function buildAssistantContext(reports: GroundingReports): AssistantConte
     context.weights = weightsSection(reports.allocation.report)
   }
 
-  const profile = profileSection(reports.profile, reports.drift)
-  if (profile !== null) context.profile = profile
+  // Unconditional since Story #315: there is always something to say about the owner's policy,
+  // and "they have not written one" is the most important of those things - it is what stops a
+  // model treating the app's baseline as theirs.
+  context.profile = profileSection(reports.profile, reports.drift)
 
   const change = wholeHistory(reports)
   if (change !== null) {
@@ -323,21 +333,23 @@ export function weightsSection(report: AllocationReport): string {
 }
 
 /**
- * The owner's policy, and how far the live portfolio sits from it.
+ * The owner's policy, how far the live portfolio sits from it, and the app's own baseline over
+ * whatever it leaves silent.
  *
- * Two things in one section because the disclosure declares them as one: a target range read
- * without the actual weight beside it is a number with nothing to say. `null` when the owner has
- * written no policy *and* there is no drift to report — the section would then be a heading over
- * nothing, and the view says "no profile" in its own words instead.
+ * Three things in one section because the disclosure declares them as one: a target range read
+ * without the actual weight beside it is a number with nothing to say, and the baseline is only
+ * legible next to the targets it is standing in for. It is never absent and never empty: an owner
+ * who has written nothing still has that fact stated, and that statement is what stops a model
+ * reading the app's baseline below as a policy of theirs.
  *
- * **No model ever does this arithmetic** (DDR-0095). Every band, every distance and the verdict
- * itself are computed by `balanceDriftService`; what is written here is the phrasing of a decided
- * answer.
+ * **No model ever does this arithmetic** (DDR-0095, ADR-0012). Every band, every distance, every
+ * baseline ceiling and both verdicts are computed by `balanceDriftService`; what is written here is
+ * the phrasing of a decided answer.
+ *
+ * The order is deliberate: the owner's standard first, then the measurement against it, then the
+ * app's. A reader who stops early stops on the owner's own policy.
  */
-export function profileSection(
-  profile: InvestorProfile,
-  drift: BalanceDriftResult,
-): string | null {
+export function profileSection(profile: InvestorProfile, drift: BalanceDriftResult): string {
   const blocks: string[] = []
 
   if (profile.styleTags.length > 0) {
@@ -348,18 +360,27 @@ export function profileSection(
   const targets = targetLines(profile)
   if (targets.length > 0) blocks.push('', 'Targets the owner set:', ...targets)
 
-  // Only where the owner has stated *something*. "Untargeted" is a fact about a policy, and an
-  // owner who has written no policy has not left three dimensions untargeted — they have no
-  // profile, which the view says beside the box in its own words. Emitting these would also make
-  // the section non-empty for an owner with nothing in it, which is the absence this file's whole
-  // "absent is absent" rule turns on.
-  const untargeted = isProfileEmpty(profile) ? [] : untargetedLines(profile)
-  if (untargeted.length > 0) blocks.push('', ...untargeted)
+  // An owner with nothing stored has not left three dimensions untargeted — they have no profile,
+  // and saying it in those words is what stops "untargeted" reading as a policy decision. Before
+  // Story #315 this branch emitted nothing at all, because there was no standard to fall back on
+  // and a heading over nothing is an invitation to fill it in. Now there is one, so the absence is
+  // named and handed to the baseline below.
+  if (isProfileEmpty(profile)) {
+    blocks.push(
+      '',
+      'The owner has not set an investor profile at all. There is no standard of theirs to judge against: say so, and say they can set one in the Assistant view’s profile section. Never treat the app’s baseline below as theirs.',
+    )
+  } else {
+    const untargeted = untargetedLines(profile)
+    if (untargeted.length > 0) blocks.push('', ...untargeted)
+  }
 
   const measured = driftBlock(drift)
   if (measured !== null) blocks.push('', measured)
 
-  if (blocks.length === 0) return null
+  const baseline = drift.status === 'ok' ? baselineBlock(drift.report.baseline) : null
+  if (baseline !== null) blocks.push('', baseline)
+
   // A leading blank from an absent style line would open the section with an empty row.
   return blocks.join('\n').replace(/^\n+/, '')
 }
@@ -399,6 +420,11 @@ function targetLines(profile: InvestorProfile): string[] {
  * front of a model: a heading that is not there reads as a question that came back clean, and
  * "your sectors are balanced" is the sentence that follows. So the absence is said out loud, with
  * the reason it is not a verdict.
+ *
+ * **Story #315 changed what follows from that absence, not the absence itself.** These lines used to
+ * end with *never against a standard of your own*, which is still true of the model — it may invent
+ * nothing. What has changed is that the app now supplies one for the silence, so each line hands the
+ * dimension to the baseline block below rather than closing the subject.
  */
 function untargetedLines(profile: InvestorProfile): string[] {
   const byDimension: Record<TargetDimension, readonly CategoryTarget[]> = {
@@ -414,12 +440,12 @@ function untargetedLines(profile: InvestorProfile): string[] {
   if (missing.length > 0) {
     const named = missing.map((dimension) => TARGET_DIMENSION_LABELS[dimension].toLowerCase())
     lines.push(
-      `Untargeted: the owner has set no target for ${list(named)}. There is no standard of theirs to measure ${missing.length === 1 ? 'it' : 'them'} against, so ${missing.length === 1 ? 'it is' : 'they are'} neither balanced nor unbalanced. Report ${missing.length === 1 ? 'it' : 'them'} as untargeted; never as balanced, and never against a standard of your own.`,
+      `Untargeted: the owner has set no target for ${list(named)}. There is no standard of theirs to measure ${missing.length === 1 ? 'it' : 'them'} against, so ${missing.length === 1 ? 'it is' : 'they are'} neither balanced nor unbalanced by the owner’s standard. Never report ${missing.length === 1 ? 'it' : 'them'} as balanced, and invent no standard of your own — where the app’s baseline below covers ${missing.length === 1 ? 'it' : 'them'}, judge against that and say the standard is the app’s.`,
     )
   }
   if (profile.positionSize === null) {
     lines.push(
-      'Untargeted: the owner has set no single-position concentration ceiling, so no position is too large or too small by any standard of theirs.',
+      "Untargeted: the owner has set no single-position concentration ceiling, so no position is too large or too small by any standard of theirs. Where the app’s baseline below covers it, judge against that and say the standard is the app’s.",
     )
   }
 
@@ -450,12 +476,14 @@ export function measuredDrift(report: BalanceDriftReport): string {
 
   const lines: string[] = [
     `Measured against the live portfolio, read ${isoMinute(report.readAt)}, weights as a share of what could be valued in ${report.displayCurrency}.`,
-    report.balanced
-      ? 'Every target is currently inside its range.'
-      : 'At least one target is currently outside its range.',
+    report.balanced === null
+      ? 'The owner has set no targets, so there is nothing of theirs to be inside or outside. Say that rather than that the portfolio is balanced.'
+      : report.balanced
+        ? 'Every target the owner set is currently inside its range.'
+        : 'At least one target the owner set is currently outside its range.',
   ]
 
-  if (!report.balanced) lines.push('', ...movesPreamble(report, sized))
+  if (report.balanced === false) lines.push('', ...movesPreamble(report, sized))
 
   for (const dimension of report.dimensions) {
     lines.push('', `${TARGET_DIMENSION_LABELS[dimension.dimension]} targets:`)
@@ -486,6 +514,111 @@ export function measuredDrift(report: BalanceDriftReport): string {
   }
 
   return lines.join('\n')
+}
+
+/**
+ * The app's own standard, and where the portfolio sits against it (Story #315, ADR-0012).
+ *
+ * **Every line here says whose standard it is.** That is not politeness, it is the whole of what
+ * ADR-0012 traded for the capability: a judgement against a target the owner wrote and a judgement
+ * against a default the app ships read identically once they are prose, and only one of them carries
+ * the owner's authority. The marking is beside each claim rather than once at the top, the same
+ * discipline ADR-0009 already imposes on grounded against repeated claims, and for the same reason —
+ * a caveat at the top of a section is read once and then not read.
+ *
+ * **What did not run is stated as loudly as what did.** A deferred check and an uncovered dimension
+ * are both absences, and an absent verdict reads as a clean one unless it is named (DDR-0101).
+ *
+ * `null` where nothing ran and nothing was deferred, which is a portfolio with no shape to judge.
+ */
+function baselineBlock(review: BaselineReview): string | null {
+  if (review.applied.length === 0 && review.deferred.length === 0) return null
+
+  // Nothing applied is one sentence, not a section. The owner has spoken about every dimension the
+  // baseline covers, so all that is worth saying is that a default exists and is not in play — and
+  // the currency note below is beside the point when there is no baseline figure to misapply. This
+  // is the case a fully-targeted profile hits, which is also the longest prompt the app assembles,
+  // so the saving lands exactly where the budget binds (DDR-0103).
+  if (review.applied.length === 0) {
+    return `The app has a default baseline for dimensions the owner leaves unstated. None of it applies here — their own targets govern ${list(review.deferred.map((check) => BASELINE_CHECK_LABELS[check]))} — so judge against their targets alone.`
+  }
+
+  const lines: string[] = [
+    `${capitalise(BASELINE_LABEL)}, version ${review.version}: what the app falls back on where the owner has stated nothing. Beside every judgement below, say the standard is the app’s default and not theirs. It is not a profile for them to adopt, so never present one of these figures as a target they set, and never suggest they set one.`,
+  ]
+
+  if (review.deferred.length > 0) {
+    lines.push(
+      '',
+      `Not applied, the owner’s own targets govern them: ${list(review.deferred.map((check) => BASELINE_CHECK_LABELS[check]))}. Judge those against their targets above, never against a default.`,
+    )
+  }
+
+  lines.push(
+    '',
+    BASELINE_UNCOVERED_NOTE,
+    '',
+    `Applied, the owner has set no target covering them: ${list(review.applied.map((check) => BASELINE_CHECK_LABELS[check]))}.`,
+    review.withinBaseline === null
+      ? 'Nothing could be measured against them.'
+      : review.withinBaseline
+        ? 'Every applied ceiling is inside the default.'
+        : 'At least one applied ceiling is above the default.',
+  )
+
+  for (const ceiling of review.ceilings) {
+    lines.push(ceilingLine(ceiling))
+  }
+
+  if (review.applied.includes('sector')) {
+    lines.push(
+      '',
+      `Holdings carry ${review.sectorsHeld} distinct sector name(s). ${NO_SECTOR_UNIVERSE_NOTE}`,
+    )
+  }
+
+  if (review.applied.includes('coverage')) {
+    lines.push(
+      '',
+      review.absentAssetClasses.length === 0
+        ? 'Asset-class coverage (the app’s check): the portfolio holds a weight in every class the app checks for.'
+        : `Asset-class coverage (the app’s check): the portfolio holds no weight at all in ${list(review.absentAssetClasses.map((c) => c.label))}. Only these classes are checked; absence is a fact about shape, not a fault. Never say what to buy to close it.`,
+    )
+  }
+
+  return lines.join('\n')
+}
+
+/** One ceiling as a sentence, in percentage points, saying whose ceiling it is. */
+function ceilingLine(ceiling: BaselineCeiling): string {
+  // The same `symbol (name)` shape `measuredDrift` writes, from the same already-resolved field:
+  // `null` there means local history knows no name, not that the name is blank (DDR-0088).
+  const held = ceiling.name === null ? ceiling.key : `${ceiling.key} (${ceiling.name})`
+  const subject =
+    ceiling.check === 'position'
+      ? `Largest single position: ${held}`
+      : ceiling.check === 'sector'
+        ? `Largest sector: ${ceiling.label}`
+        : `Uninvested cash: ${ceiling.label}`
+  const measured =
+    ceiling.status === 'above' ? `${formatPoints(ceiling.distance)} above it` : 'inside it'
+  const bound = ceiling.bounded ? ' Lower bound: something could not be valued.' : ''
+  // The ceiling is written bare rather than through `formatPercentValue`: it is a round
+  // constant this module owns, and `10.00%` reads as a measurement of something.
+  return `- ${subject} at ${formatPercentValue(ceiling.actual)} against the app’s default ${ceiling.limit}% — ${measured}.${bound}`
+}
+
+/** How each check reads in a sentence that lists several of them. */
+const BASELINE_CHECK_LABELS: Record<BaselineCheck, string> = {
+  position: 'single-position size',
+  sector: 'sector concentration',
+  cash: 'uninvested cash',
+  coverage: 'asset-class coverage',
+}
+
+/** Sentence case for a label written mid-sentence elsewhere. */
+function capitalise(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1)
 }
 
 /**

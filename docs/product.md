@@ -12,10 +12,16 @@ is what stops it. Every other data path stays on the machine.
 Help an investor understand *what* their portfolio is and *how* it has behaved over time — and,
 against targets they set themselves, whether it still matches how they meant to invest.
 
-The app **proposes; it never acts, and it never sets the policy.** The owner writes the investor
-profile; the app measures the portfolio against it and may suggest how to close a gap, naming
-positions. It places no orders and has no path to one. Suggesting the owner change their targets
-is out of scope — that decision is theirs (ADR-0009).
+The app **proposes; it never acts, and it never sets the owner's policy.** The owner writes the
+investor profile; the app measures the portfolio against it and may suggest how to close a gap,
+naming positions. It places no orders and has no path to one. Suggesting the owner change their
+targets is out of scope — that decision is theirs (ADR-0009).
+
+Where the profile says **nothing** about a dimension, the app applies a small, published **baseline**
+of its own — default ceilings on single-position size, sector concentration and idle cash, and a
+check for asset classes the portfolio holds none of. It fills a silence and never contradicts a
+target the owner wrote, and every judgement says whose standard it is (ADR-0012). The baseline is
+not a profile to adopt, and the app never suggests one.
 
 ## Current Capabilities
 
@@ -63,7 +69,9 @@ Stock Portfolio Viewer deliberately does **not** provide:
 - Automated trading
 - Order execution, or any path to it
 - Automated or scheduled rebalancing
-- Proposals to change the owner's own investor profile
+- Proposals to change the owner's own investor profile, or a suggested target for them to set
+- A named "missing" sector. The app holds no universe of sectors, only the names its own
+  classification data has produced for instruments the owner holds (ADR-0012)
 - Instrument screening, ranking or discovery from market data the app does not hold
 
 The user always remains the decision maker: every suggestion is read and acted on by hand.

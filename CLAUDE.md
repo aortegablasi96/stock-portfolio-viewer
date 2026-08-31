@@ -4,35 +4,33 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 > **Budget: keep this file under 50 KB** (`wc -c CLAUDE.md` ≤ 51200) — it is loaded into every
 > session, so its cost is paid before any work starts. **`src/claudeMdBudget.test.ts` enforces it**
-> — unenforced, it was overrun for six commits unnoticed.
+> — unenforced, it was overrun for six commits unnoticed. Raised twice, deliberately: 36 → 44 → 50.
 >
 > Every ADR and DDR is 8–20 KB and carries its own reasoning, and
 > `docs/design-decisions/README.md` indexes each in one line. So when a story lands, add *the
-> trap* in a sentence with its DDR number — never the argument. If the budget is exceeded, cut a
-> paragraph that argues a case rather than drop a trap.
->
-> **Raised twice, deliberately: 36 KB → 44 KB → 50 KB.** The second raise paid for correcting a
-> bullet that was *wrong* rather than merely absent — a trap stated backwards sends the next
-> session looking in the right file for the wrong reason, which costs more than the paragraph it
-> would have taken to say nothing. Cut what restates a machine-readable fact before compressing a
-> trap; a dropped trap costs a DDR re-read or a re-shipped bug.
+> trap* in a sentence with its DDR number — never the argument. Over budget, cut in this order: a
+> fact the machine already carries, then a paragraph that argues a case, and only then a trap — a
+> dropped trap costs a DDR re-read or a re-shipped bug, and a trap stated **backwards** costs more
+> than saying nothing.
 
 ## Current Repository State
 
 M0–M9 are delivered: live IBKR holdings/balances/allocation in a display currency, immutable
 snapshots, Flex statement import, and four analytics views over it, behind a vertical sidebar.
 M10 is delivered — the investor profile, the assistant's **surface** (grounded Q&A), a period
-explained, a performance summary, the **widened grounding** (#287), the **prompt's phrasing
-rules** (#288) and the **in-app OpenAI key** (#300). #289 is closed as superseded by #287's
-computed moves — read its closing comment before re-proposing an end-state check on model output.
+explained, a performance summary, the widened grounding (#287), the prompt's phrasing rules (#288)
+and the in-app OpenAI key (#300). #289 is closed as superseded by #287's computed moves — read its
+closing comment before re-proposing an end-state check on model output.
 **M11 is delivered — the assistant is one view**: ADR-0011 (#307) and #309 removed the consent
 gate, on the record and from the code, and #310 folded the profile in, taking the seventh sidebar
-row with it (DDR-0108). Not built: multi-broker, benchmarks, tax.
+row with it (DDR-0108). #315 then widened it past #306's own *Not Included*, on the owner's
+instruction: ADR-0012 gives the app **a baseline of its own**. Not built: multi-broker, benchmarks,
+tax.
 
 **Which Epics are open is deliberately not recorded here** — read the backlog (*Current Priority*).
 The **lifecycle** is the rule: an Epic closes with its stories, and refinement opens a *new*
-area-scoped Epic rather than reopening a delivered one (#240 → #245). `docs/github-issues.md` has
-the one narrow exception; Epic #125 is the precedent.
+area-scoped Epic rather than reopening a delivered one. `docs/github-issues.md` has the one narrow
+exception and its precedent.
 
 ### Domains
 
@@ -51,7 +49,7 @@ Each exists end-to-end and is the reference pattern for its shape.
 - **analytics / dividends** — read-only over Flex through `flexReadRepository`, converting to base
   (EUR) **in the service**, each returning `ok | needs_import`. See DDR-0005, DDR-0010, DDR-0015.
 - **profile** — the investor profile (a **section of the Assistant view**, DDR-0108), and how far
-  the portfolio sits from it.
+  the portfolio sits from it and from the app's baseline (DDR-0109).
   `investorProfileService` → `metaRepository` → **one overwritten `app_meta` value**: a profile is a
   *setting*, not history, so ADR-0006 does not reach it and `metaRepository.remove` is not its
   refused delete-by-id. "Clear" **removes the key**, so "never written" and "cleared" are one state
@@ -63,23 +61,22 @@ Each exists end-to-end and is the reference pattern for its shape.
   No consent is asked for, stored or checked anywhere; `consentService`, the fingerprint and
   `needs_consent` are gone (ADR-0011; DDR-0107 supersedes DDR-0097).
   `DISCLOSURE_CATEGORIES` outlives the panel it drew — it *types* `AssistantContext`, so an
-  undeclared section cannot be sent. The key field shows **only with no working key**; there is
-  **no remove, replace or rotate, not even a channel**. `assistant:ask` is the **one outbound
-  channel**; context is assembled in the
-  **renderer** (`lib/assistantContext.ts`) so figures use the app's own formatters, and the boundary
-  drops undeclared sections. A section is **absent, never empty**; no money goes in one declared
+  undeclared section cannot be sent. The key field shows **only with no working key**; there is **no
+  remove, replace or rotate, not even a channel**. `assistant:ask` is the **one outbound channel**;
+  context is assembled in the **renderer** (`lib/assistantContext.ts`) so figures use the app's own
+  formatters, and the boundary drops undeclared sections. A section is **absent, never empty**; no money goes in one declared
   as names or percentages; each names its store *and clock* — composition is Flex, drift live
   (DDR-0098). An **explained period** keeps return and value in separate fields under separate
-  headings, return first — the curve is TWR, so a deposit moves value alone; the period is the
-  shared vocabulary anchored to `extent.to`, an overlapping statement row is summed **whole** and
-  names the span it covered, an empty window is a *state* not a flat period, and no cause is ever
-  offered (DDR-0099). What the app **does not** compute is named **before any figure**: no
-  annualised figure at any length (the period's *calendar* span is stated instead), no benchmark,
-  and dispersion only from the daily returns that exist — the empty period keeps all three
-  (DDR-0101). There is **no period control**: free text already carries a period, so a picker beside
-  it asks twice and the click wins silently. Grounding is `wholeHistory()` (`all`, the *identity*
-  case, not a default), and the `empty_period` **notice** is gone while the **state** stays — that
-  empty window is `periodChange`'s contract (DDR-0102, superseding half of DDR-0099).
+  headings, return first — the curve is TWR, so a deposit moves value alone; the period is anchored
+  to `extent.to`, an overlapping statement row is summed **whole** and names the span it covered, an
+  empty window is a *state* not a flat period, and no cause is ever offered (DDR-0099). What the app
+  **does not** compute is named **before any figure**: no annualised figure at any length (the
+  *calendar* span is stated instead), no benchmark, and dispersion only from the daily returns that
+  exist — the empty period keeps all three (DDR-0101). There is **no period control**: free text
+  already carries a period, so a picker asks twice and the click wins silently. Grounding is
+  `wholeHistory()` (`all`, the *identity* case, not a default), and the `empty_period` **notice** is
+  gone while the **state** stays — `periodChange`'s contract (DDR-0102, superseding half of
+  DDR-0099).
   The grounding is now **every standard period, precomputed** (`lib/periodSet.ts`): a question about
   a window the set does not hold is a **named state with alternatives**, not the adjacent row. A
   trailing year is **"Last 12 months"**, a second vocabulary on purpose — `PERIOD_LABELS`' "Last
@@ -87,19 +84,26 @@ Each exists end-to-end and is the reference pattern for its shape.
   computed (year vs previous year, quarter vs previous quarter); every other combination is
   forbidden in the text. A drift-closing **move** is `services/profile/driftMoves.ts` and hangs off
   `DriftBand.move`, non-`null` **exactly** when the band is outside its range: **proportional, not
-  greedy**, capacity-capped by the owner's concentration ceiling, the shortfall **`uncovered` and
-  never redistributed, and percentage points never money** — the profile is not written in money.
+  greedy**, capacity-capped by the owner's ceiling, the shortfall **`uncovered` and never
+  redistributed, and percentage points never money**.
   Cash sits in a band and **never in a move**. An **untargeted dimension is said out loud**; absent
-  from the report reads as balanced. `services/assistant/promptBudget.test.ts` measures the worst
-  case the caps allow (DDR-0103) — now **81%** of `MAX_PROMPT_CHARS`, so the test's **85% gate, not
-  the ceiling, is the binding constraint**; measure before growing either half.
-  `SYSTEM_PROMPT_RULES` is a **declared array of
-  seventeen** rules and the count is asserted twice (array *and* rendered bullets), because a long
-  list is one a model weights less: sharpen a rule rather than add an eighteenth. **For phrasing the
-  prompt is the *only* line of defence** — a test asserts a rule is present and can never assert it
-  was obeyed, which is why arithmetic is #287's and wording is #288's; a rule that needs a number to
-  be obeyable is a gap in the *grounding*. The tax/costs rule deliberately has **no context half**:
-  tax is not a section but a claim about every one of them (DDR-0104).
+  from the report reads as balanced. Beside it sits the app's **baseline**
+  (`@shared/domain/portfolioBaseline.ts`, ADR-0012, DDR-0109): four declared checks applied **only**
+  where the profile is silent, **never** to a dimension the owner targeted — that is proposing the
+  policy. Computed in `balanceDriftService` off the *same* reading and denominator (a second service
+  is a second answer), by conid, unrounded, on-the-ceiling is inside, and with **no move**. Every
+  line **says whose standard it is**, and deferred checks, uncovered currency and the **absent
+  sector universe** are each stated — the last because IBKR's `industry` is an *open* vocabulary, so
+  a mapped taxonomy joins with nothing and reads 0% (DDR-0094). `no_profile`/`no_targets` are
+  **gone**, `balanced` is **nullable** (vacuous `true` is what a model calls balanced).
+  `promptBudget.test.ts` measures the worst case the caps allow (DDR-0103) — **82.7%** of
+  `MAX_PROMPT_CHARS` over **two** fixtures, since a profile that lengthens the drift shortens the
+  baseline; the **85% gate, not the ceiling, binds**, and #315's first draft failed it at 88.5%.
+  `SYSTEM_PROMPT_RULES` is a **declared array of seventeen** rules, asserted twice (array *and*
+  rendered bullets): sharpen a rule rather than add an eighteenth. **For phrasing the prompt is the
+  *only* line of defence** — a test asserts a rule is present, never that it was obeyed, so a rule
+  needing a number to be obeyable is a gap in the *grounding*. The tax/costs rule deliberately has
+  **no context half**: tax is not a section but a claim about every one of them (DDR-0104).
 - **classification** — sector/industry. `classificationRepository` fronts *both* the mutable
   SQLite cache and `ibkrGateway`; `analytics:classifyInstruments` is the only analytics channel
   reaching IBKR. Refreshes are **resumable, not transactional** — a run that dies at 30 of 40 keeps
@@ -178,11 +182,11 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
   electron-vite inlines `MAIN_VITE_*` / `PRELOAD_VITE_*` / `RENDERER_VITE_*` at **build** time —
   its `loadEnv` reads *those prefixes and no others* and assigns nothing to `process.env`.
   Everything unprefixed is loaded into `process.env` at **startup** by `src/main/env.ts`, called
-  as `index.ts`'s first statement, above the single-instance lock. That loader is the fix for Bug
-  #297: without it `OPENAI_API_KEY` in `.env` reached nothing and the assistant was permanently
-  `not_configured`. Three rules — **a real environment variable wins** over the file (the e2e suite
-  passes one), a **missing file is a no-op** (a packaged build has none — the in-app key field is
-  that build's source, DDR-0105), and **only names are logged**. Unprefixed still means never
+  as `index.ts`'s first statement, above the single-instance lock — the fix for Bug #297, without
+  which `OPENAI_API_KEY` in `.env` reached nothing. Three rules — **a real environment variable
+  wins** over the file (the e2e suite passes one), a **missing file is a no-op** (a packaged build
+  has none — the in-app key field is that build's source, DDR-0105), and **only names are
+  logged**. Unprefixed still means never
   bundled (ADR-0010). Editing it needs a **restart**. Without `RENDERER_VITE_MAPBOX_TOKEN` the map
   renders a placeholder; nothing else is affected.
 - **Electron security is locked down** — `sandbox: true`, `contextIsolation: true`,
@@ -318,9 +322,10 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
   is **fill only**, `--neg-text` **text only**; same shape for `--accent` (labels + ring) vs
   `--accent-strong` (the primary button's fill alone). `--neg-text`'s constraint is **not** 4.5:1
   but `--pos − 0.5`. `contrast.ts` **enumerates pairings by hand**; it models
-  `.btn-primary:hover`'s `brightness(1.08)`, which *lowers* contrast where axe tests rest only. A tint mixed into a surface is a **measured** number, never eyeballed (the sidebar's active row is
-  4.95:1 at 16%; 22% fails), and a tone rendered on a **hovered row** is measured on the
-  lift, not on `--card` (DDR-0064).
+  `.btn-primary:hover`'s `brightness(1.08)`, which *lowers* contrast where axe tests rest only. A
+  tint mixed into a surface is a **measured** number, never eyeballed (the sidebar's active row is
+  4.95:1 at 16%; 22% fails), and a tone on a **hovered row** is measured on the lift, not on
+  `--card` (DDR-0064).
 - **The palette is navy/indigo; the eight `--series-*` slots did not move** (DDR-0054).
   `designTokens.test.ts` guards the stylesheet itself: it fails if `outline` gains a second value,
   a scale stops ascending, or a validated colour moves.
@@ -346,16 +351,15 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
   unexpressible; a collapsed label is **clipped, never removed**, so a row is still named by its
   own text. The toggle shares the head row with the app name, which **wraps** to fit it — never
   re-ellipsise it, and never widen the column (DDR-0068). Accelerators sit **beside** the pattern,
-  never in it — one `window` listener in `App.tsx` holds both: `Ctrl`/`Cmd`+`1`–`5` per row
+  never in it — one `window` listener in `App.tsx` holds both: `Ctrl`/`Cmd`+digit per row
   (DDR-0083) and `Ctrl`(+`Shift`)+`Tab` rotating (DDR-0090), the latter **`Ctrl`-only**, `Shift`
   the *direction*, reading `key` where the digits read `code`. For `Tab` both are `'Tab'`, so the
   handlers' separation is **`nextTabIndex` declining `'Tab'`**: delete that case and plain Tab
-  rotates. `preventDefault` is load-bearing there (the default *is* a focus move); wrapping is
-  `stepIndex`, shared with the arrows. Both **decline while text is being entered**, and each is
-  disclosed at **the scope of what it acts on** — a row's `title` for its digit (amending
-  DDR-0057), the "Views" label's `title` + the tablist's `aria-keyshortcuts` for the rotation. Two
-  bindings are still not a table. A drawn digit per row was built and **withdrawn** — don't
-  re-propose it, or a legend. **One row is not a data view**: Assistant (6), last, holding the chat
+  rotates. `preventDefault` is load-bearing there; wrapping is `stepIndex`, shared with the arrows.
+  Both **decline while text is being entered**, and each is disclosed at **the scope of what it acts
+  on** — a row's `title` for its digit (amending DDR-0057), the "Views" label's `title` + the
+  tablist's `aria-keyshortcuts` for the rotation. A drawn digit per row was built and **withdrawn**
+  — don't re-propose it, or a legend. **One row is not a data view**: Assistant (6), last, holding the chat
   *and* the profile — data, then the surface that talks about it (DDR-0107, DDR-0108). It **stays
   mounted** and declares its own `<main>`/`<h1>`, having no four-branch guard to wear; no
   accelerator counts rows. Changing the list is a **list edit in six e2e specs**.
@@ -395,31 +399,30 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
   gutter never clips and so is never reported; only `left` varies. The budget is measured against
   the **rounded** domain, so the currency clip arrives at €800k of portfolio, not €1M (DDR-0051
   §#190, DDR-0091, DDR-0092). A stacked chart's key lives in the **card header**, not a
-  `<figcaption>` — `ColumnChart` and
-  `StackedAreaChart` both emit a bare `<svg>` (DDR-0052, DDR-0064). **A chart title never varies
-  with the range**; the return curve's rebasing is disclosed by a *fixed* header note beside the
-  key (DDR-0072).
+  `<figcaption>` — `ColumnChart` and `StackedAreaChart` both emit a bare `<svg>` (DDR-0052,
+  DDR-0064). **A chart title never varies with the range**; the return curve's rebasing is disclosed
+  by a *fixed* header note beside the key (DDR-0072).
 - **One chart tooltip, drawn inside the `viewBox`** (DDR-0061). `ChartTooltip` over
-  `lib/chartTooltip` draws in the plot's own space — so it **cannot** cover the neighbouring chart
-  — **pinned to the plot's top** in all four, never tracking the mark. It floats on
+  `lib/chartTooltip` draws in the plot's own space — so it **cannot** cover the neighbouring chart —
+  **pinned to the plot's top** in all four, never tracking the mark. It floats on
   `--surface-raised`; its padding, corner and `MIN_WIDTH` are **viewBox units**, not CSS lengths.
   The income chart is **two bars a month across one baseline** (never a stack), sized in **pixels**
   (`COLUMN_UNIT_PX` = 1, from the label floor) inside `.chart-scroll` — the app's one chart off
   DDR-0018's aspect rule. Gross rises, **withholding hangs below zero**: direction is the
-  **series'**, never the value, and a *net* bar is the signed series DDR-0078 refused (DDR-0080). A bar or row with no figure is **absent, not zero**; only the undrawn net is toned.
-  `pairedDomain` is **not** `columnDomain` — the step is the dominant side's and the tax side keeps
-  its own scale, so the axis is **uneven across zero on purpose** (DDR-0081). Its **value axis is
-  HTML**, sticky **inside** the scroller — outside it a scrollbar puts every tick 15px low once the
-  plot scrolls; the month labels stay in the `viewBox` (DDR-0077–0081).
+  **series'**, never the value, and a *net* bar is the signed series DDR-0078 refused (DDR-0080). A
+  bar or row with no figure is **absent, not zero**; only the undrawn net is toned. `pairedDomain`
+  is **not** `columnDomain` — the tax side keeps its own scale, so the axis is **uneven across zero
+  on purpose** (DDR-0081). Its **value axis is HTML**, sticky **inside** the scroller — outside it a
+  scrollbar puts every tick 15px low once the plot scrolls; the month labels stay in the `viewBox`
+  (DDR-0077–0081).
 - **A `--series-*` slot is a fill; as ink it is `--series-ink-*`** (DDR-0070) — three of the eight
   fail AA as text. A composition row resolves its band's class through that ramp; the slots don't
   move. Daily return's row is toned by **sign**, a zero day not.
 - **A curve is `--accent`; a *signed* one splits at zero** into the bars' `--pos`/`--neg` — SVG
   writes both as `fill` (DDR-0071). The split is **clipped geometry, never two series**, and its
   wash anchors on **zero**, not the domain floor. `lib/signedCurve` clamps the clip — a range never
-  crossing zero gives a **negative height**, and SVG then renders *nothing*. Gradient `fill`s are
-  per element (`useId()`). Dots need a **doubled** selector; `.chart-dot` out-orders a bare one
-  (DDR-0059; shipped once).
+  crossing zero gives a **negative height**, which SVG renders as *nothing*. Gradient `fill`s are per
+  element (`useId()`). Dots need a **doubled** selector (DDR-0059; shipped once).
 - **A value axis is `lib/column`'s, never a chart's own** (DDR-0092): `seriesDomain` rounds both
   extremes *outward* to `niceStep`, always ticks zero — so the emphasised rule is the class **that**
   line takes and `showZero` asks whether the series *crosses* zero — and never draws more than
@@ -429,14 +432,13 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
   **chain-linked from that curve** (`lib/dailyReturns`), never differenced from `valueSeries`, and
   take the **unwindowed** series, so the opening bar measures against the day that really preceded
   it; bars **thin rather than aggregate** (DDR-0049). Composition stacks **cumulatively in base
-  currency** with the top edge as NAV: a negative band **hangs below the zero line** (never
-  clamped or folded), and `other` is the **residual, surfaced and never redistributed** — drop a
-  category into it instead and nothing will look wrong (DDR-0052). The report's `bands` order is
-  the **palette**, not the stack: `lib/composition`'s `stackOrder` draws bottom-up Accruals · Cash ·
-  `other` · Options · Stocks, so reordering `BAND_SPECS` repaints every band instead of moving one
-  (DDR-0073). A slot publishes `--series-hue`; `.stack-hue` mixes it to `--band-tint` — bands
-  soften by **mix, not opacity** (only a value is measurable) and stay *under* their full-strength
-  edge (DDR-0076). A ribbon carries **no** palette class: a CSS `fill` beats `url(#…)` and the
+  currency** with the top edge as NAV: a negative band **hangs below the zero line** (never clamped
+  or folded), and `other` is the **residual, surfaced and never redistributed** (DDR-0052). The
+  report's `bands` order is the **palette**, not the stack: `lib/composition`'s `stackOrder` draws
+  bottom-up Accruals · Cash · `other` · Options · Stocks, so reordering `BAND_SPECS` repaints every
+  band instead of moving one (DDR-0073). A slot publishes `--series-hue`; `.stack-hue` mixes it to
+  `--band-tint` — bands soften by **mix, not opacity** and stay *under* their full-strength edge
+  (DDR-0076). A ribbon carries **no** palette class: a CSS `fill` beats `url(#…)` and the
   tint, hence the `<g>`.
 - **The map popup's tint is banked into its edges** (DDR-0041): the gradient's inner stops sit at
   `--popup-pad-y`, an **absolute length, never a percentage** (which creeps under taller popups'
@@ -448,12 +450,11 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
   `setTimeout` in `SidebarRail.tsx` is a **clock** arming the moment a live reading goes stale,
   not an interval. `displayCurrency` is the **app's** selection, so the control is never disabled,
   and it is a boxed chip too — its `<select>` giving up its resting `border-color` and
-  `padding-inline`, and **nothing else** (amends DDR-0035; DDR-0075). The badge is a **boxed chip** on `--surface-raised`, one of **three**
-  users (the hover card and that currency field are the others) — so every tone is measured
-  **there**, not on `--card`, and `SURFACE_EDGE` is not a WCAG bar (DDR-0069).
-  `sidebarRail.test.ts` **counts** its uses — a fourth adopter must measure its own inks
-  (DDR-0070). The nav's **"Views" title is the tablist's `aria-labelledby`**, not a caption beside
-  it (DDR-0075).
+  `padding-inline`, and **nothing else** (amends DDR-0035; DDR-0075). The badge is a **boxed chip**
+  on `--surface-raised`, one of **three** users (the hover card and that currency field are the
+  others) — so every tone is measured **there**, not on `--card`, and `SURFACE_EDGE` is not a WCAG
+  bar (DDR-0069). `sidebarRail.test.ts` **counts** its uses — a fourth adopter measures its own inks
+  (DDR-0070). The nav's **"Views" title is the tablist's `aria-labelledby`** (DDR-0075).
 - **One sector, one hue, everywhere.** `pie-series-1` — the palette's only blue — is reserved for
   the map's country-weight donut, so the *sector* dimension starts at slot 2 (`SECTOR_SLOT_OFFSET`
   in `lib/pie`) wherever a sector appears. Only sectors pay it; asset class, currency and country
@@ -464,15 +465,14 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
   `tabindex="-1"`, and **every marker host at `tabindex="-1"` set *before* the `Marker` is
   constructed**, because Mapbox only assigns its own when the element lacks one. It is **one view,
   coloured by sector** — the gain/loss mode was withdrawn and `designTokens.test.ts` pins that
-  *absence*, so don't paint wedges green and red (DDR-0045). Geometry and colour live in
-  `lib/countryDonuts`, which emits palette **classes** rather than values. It sits **above** the
-  breakdown, and its ratio and floor are **one budget** derived from `WINDOW_DEFAULT_HEIGHT` — a
-  taller map puts the breakdown's title below the fold (DDR-0074, superseding DDR-0063's ordering).
-  Its popup is **not** clipped by the map: Mapbox flips one above or below a mark and nowhere else,
-  so the clip lives on `.mapboxgl-canvas-container`, which needs `position: absolute; inset: 0` to
-  be the marks' containing block — left static and unsized it clips nothing, and they draw over the
-  tiles, the title and the sidebar (#272). The popup may overlap the card below. Marks **name**
-  their holdings — bounded, `instrumentName`, `Badge` via `badgeClassName`.
+  *absence* (DDR-0045). Geometry and colour live in `lib/countryDonuts`, which emits palette
+  **classes** rather than values. It sits **above** the breakdown, and its ratio and floor are **one
+  budget** derived from `WINDOW_DEFAULT_HEIGHT` — a taller map puts the breakdown's title below the
+  fold (DDR-0074, superseding DDR-0063's ordering). Its popup is **not** clipped by the map, so the
+  clip lives on `.mapboxgl-canvas-container`, which needs `position: absolute; inset: 0` to be the
+  marks' containing block — left static and unsized it clips nothing and they draw over the tiles,
+  the title and the sidebar (#272). The popup may overlap the card below. Marks **name** their
+  holdings — bounded, `instrumentName`, `Badge` via `badgeClassName`.
 - **The Allocation breakdown's table and donut link on the slice's `key`, never on position** — the
   table sorts by any column, so row order and arc order have no reason to agree. Emphasis **never
   touches `fill`**: the active wedge keeps its colour and the rest drop to 0.35 opacity (DDR-0040).
@@ -493,7 +493,7 @@ alternatives this table can only name.
 | `Button` (DDR-0032) | `variant` × `size` (`icon` is a *shape*) | `ghost` changed meaning — the old `.ghost-button` is now `secondary`. `type` defaults to `"button"`. `className` is for **placement, not colour**. |
 | `Card` (DDR-0033, DDR-0059, DDR-0084) | `variant` (surface colour) × `size` (`--surface-pad-*`) | `CardContent` is a **scope** — descendant rules hang off it, keeping a state panel's prose out of reach. The ruled header strip bleeds to the edges by negating `--card-pad`, which each size **restates beside its `padding`** (change one, change both). `.card-header:last-child` gives it back; so does `.card-header.chart-card-header`, **compound or it ties** (DDR-0084). Its third host is `.data-table-scroll-card`, which has no `--card-pad`: that rule **restates** `margin`/`padding` (inherited, the bleed `calc()` is invalid and drops) and is `sticky` (DDR-0087). |
 | `StatTile` / `StatRow` (DDR-0034, DDR-0060) | `tone` only | A tile **is** a `Card`, so it declares no surface. **Neutral is the absence of a rule.** Its label is the app's *one* micro-label — the same four declarations as `.data-table thead th`; don't grow a second. |
-| `Field` + `Select` + `DateInput` + `PercentInput` + `TermInput` + the Assistant's textarea (DDR-0035, DDR-0094, DDR-0098) | `kind` only — **five**, and still no size axis | **`Field` generates its id with `useId()` and takes no `id` prop** — tabs stay mounted, so all three `RangeFilter`s can be in the document at once and a fixed id would name only the first; `TermInput`'s `<datalist>` id is generated for the same reason. A `kind` carries cursor, colour-scheme and **measure**: `percent` is 5ch so a column lines up, `term` takes the row's slack. `percent` is `type="text"` + `inputMode="decimal"` **on purpose** — a number input alters its value on a passing scroll wheel and drops a comma decimal, which `parsePercent` accepts. `prose` is a `<textarea>` and caps `resize` to `vertical`. `term` names a **measure**, not a vocabulary (DDR-0105) — the assistant's key field reuses it, and a `secret` kind would be a rule copying `.control-term` line for line, the duplicate the guard test cannot see. |
+| `Field` + `Select` + `DateInput` + `PercentInput` + `TermInput` + the Assistant's textarea (DDR-0035, DDR-0094, DDR-0098) | `kind` only — **five**, and still no size axis | **`Field` generates its id with `useId()` and takes no `id` prop** — tabs stay mounted, so all three `RangeFilter`s can be in the document at once and a fixed id would name only the first; `TermInput`'s `<datalist>` id likewise. A `kind` carries cursor, colour-scheme and **measure**: `percent` is 5ch so a column lines up, `term` takes the row's slack. `percent` is `type="text"` + `inputMode="decimal"` **on purpose** — a number input alters its value on a passing scroll wheel and drops a comma decimal, which `parsePercent` accepts. `prose` is a `<textarea>` capping `resize` to `vertical`. `term` names a **measure**, not a vocabulary (DDR-0105) — the assistant's key field reuses it, and a `secret` kind would copy `.control-term` line for line, the duplicate the guard test cannot see. |
 | `ToggleGroup` (DDR-0036) | `mode`, which is **worn** (`--radius-md` vs `--radius-pill`) | **Never a tablist**: `aria-pressed`, not `role="tab"`. Only `.app-tab` is a real tablist. |
 | `Collapsible` (DDR-0106) | `level` only (`group`/`section`) | A **disclosure**, not an accordion; no `role="region"`. Paints nothing, and `level` carries the heading element (`h2`/`h3`). Closed is `hidden`, never unmounted — `.collapsible-panel[hidden]` is load-bearing: the panel's own `display` defeats the attribute without it. Its call site is the profile; a `section` head replaces `CardHeader` **strip and all**, a closed panel being DDR-0059's own case for withholding it. |
 | `Badge` (DDR-0037, DDR-0064, DDR-0065) | `variant` × `size` | **Never a pill** (that corner means multi-select) and **never a background** — the toned pair keeps both: `--pos` / `--neg-text` ink, the *borders* take the fill tokens. `BADGE_VARIANTS` ⊇ `STAT_TONES`, so `toneOf()` names a variant. `sm` carries no vertical padding — with it, every holdings row grows ~7px; alone in a cell it also needs `BADGE_CELL_CLASS`, because CSS cannot see that an inline chip follows a *text node*. Trades' side badge **is** toned (DDR-0086 reverses DDR-0065): the *box*, not the hue, separates it from the figure. |
@@ -520,8 +520,6 @@ npm test               # vitest run — Node env, *.test.ts under src/
 npm run test:e2e       # builds first, then Playwright launches the built app
 npm run db:migrate     # applies to ./local.dev.db, NOT the app's DB (override: DATABASE_URL)
 
-npx vitest run src/services/meta/metaService.test.ts   # a single unit test
-npx vitest run -t "generates and persists"             # by test-name substring
 npm run build && npx playwright test e2e/tab-navigation.spec.ts   # a single e2e spec
 ```
 
@@ -536,7 +534,7 @@ Mock repositories and external providers; services are the primary target.
 **Vitest runs every test under `src/` in a Node environment with no jsdom, so no test may render a
 React component.** This shapes the renderer: chart maths, filtering, sorting, formatting and state
 are **extracted into pure modules under `renderer/src/lib/`** so they can be tested — follow that
-split when adding a component with real logic. Pure repository helpers are tested alike.
+split when adding a component with real logic.
 
 Several `lib/*.test.ts` files have **no module under test** — they guard `app.css`, the components,
 a view's composition, or accessibility by scanning source text. What a text scan cannot see is
@@ -549,19 +547,19 @@ Testing Report.
 ## Skills System (`.claude/skills/`)
 
 Four tiers, each stage's artifact the next stage's input; execution skills consume only *approved*
-artifacts and must not redefine requirements, design, or architecture. They are
-**plain `SKILL.md` files, not `Skill`-tool skills** — nested one level deeper
-than the loader looks, so read `.claude/skills/<tier>/<name>/SKILL.md` directly; invoking one by
-name resolves nothing. **`run-app` is the exception**: top level and *is* invocable (`/run-app`),
-launching the app for the owner **or** capturing view screenshots, never both at once.
+artifacts and must not redefine requirements, design, or architecture. They are **plain `SKILL.md`
+files, not `Skill`-tool skills** — nested one level deeper than the loader looks, so read
+`.claude/skills/<tier>/<name>/SKILL.md` directly; invoking one by name resolves nothing. **`run-app`
+is the exception**: top level and *is* invocable (`/run-app`), launching the app for the owner **or**
+capturing view screenshots, never both at once.
 
 - **workflow-skills** (planning) — `product-manager` → `ui-designer` / `architect` →
   `database-designer` → `implementation-engineer` → `testing`.
 - **execution-skills** — seven builders; the Implementation Engineer selects the minimum set.
 - **governance-skills** — `adr-writer` (→ `docs/decisions/`), `design-recorder`
-  (→ `docs/design-decisions/`), `refactoring-reviewer` (required before significant restructuring).
+  (→ `docs/design-decisions/`), `refactoring-reviewer` (before significant restructuring).
 - **project-management** — `issue-writer` drafts backlog issues, `project-historian` backfills
-  historical ones. These track work; they never design it.
+  historical ones. They track work; they never design it.
 
 Work **originates in GitHub Issues** — the owner authors Epics and Stories, and the Product Manager
 **reads them before planning**. Issues are never created after implementation to record work done.
@@ -571,10 +569,9 @@ and return to the owning workflow skill rather than being made inline.**
 
 ## Documentation
 
-`docs/` holds `architecture.md`, `database.md`, `product.md`, `mcp.md`, `github-issues.md`, plus
-`decisions/` (ADRs) and `design-decisions/` (DDRs), each with a README indexing every record in one
-line. Adding a repository means keeping `src/repositories/README.md` in step; the layering itself
-is `docs/architecture.md`.
+`docs/` holds `decisions/` (ADRs) and `design-decisions/` (DDRs) beside its prose, each with a
+README indexing every record in one line. Adding a repository means keeping
+`src/repositories/README.md` in step; the layering itself is `docs/architecture.md`.
 
 Two `docs/` subdirectories are **gitignored**, absent from a fresh clone: `flex-queries/` (see
 *Flex data traps*) and `figma_design/` — a design reference, never built or imported by `src/`,
@@ -600,17 +597,20 @@ tools**.
 Stock Portfolio Viewer is a **standalone, single-user, local-first desktop application** for
 personal portfolio analytics.
 
-**The AI assistant proposes; it never acts, and it never sets the policy** (ADR-0009, reversing the
-former analytics-only guardrail — don't restore it from an older doc). It may explain, summarize,
-compare periods, judge balance against the owner's **investor profile**, and suggest rebalancing
-**naming positions**. It may not place an order or reach any path to one, propose changes to the
-profile itself, or rebalance on a schedule. The profile is the allocation decision and the owner
-writes it.
+**The AI assistant proposes; it never acts, and it never sets the owner's policy** (ADR-0009 —
+don't restore the analytics-only guardrail from an older doc). It may explain, summarize, compare
+periods, judge balance, and suggest rebalancing **naming positions**. It may not place an order or
+reach any path to one, propose changes to the profile itself, **suggest a target for the owner to
+set**, or rebalance on a schedule. The profile is the allocation decision and the
+owner writes it. Where they have written **nothing** about a dimension, the app judges it against
+its own published **baseline** and says so beside the claim (ADR-0012); where they have written a
+target, the baseline stays silent.
 
 **The model never produces a figure.** Every number in an answer is computed by a service and
 *phrased* by the model; context assembly is deterministic and unit-tested, and the model gets no
 tools and no data access. A trim is grounded; an instrument the owner doesn't hold is repeated from
-training data — unverified, not price-checked — and the two are **marked apart** in the answer.
+training data, unverified — and the two are **marked apart** in the answer, as are a judgement
+against the owner's target and one against the app's baseline.
 
 **Portfolio data leaves the machine** for that one feature (ADR-0010): `gpt-4.1-mini`, from **main
 only**, whenever a key is present and a question is asked — supplying the key is the authorization
