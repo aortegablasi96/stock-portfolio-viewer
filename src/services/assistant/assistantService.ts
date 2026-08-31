@@ -1,5 +1,6 @@
 import { aiGateway } from '@repositories/assistant/aiGateway'
 import { apiKeyService } from '@services/assistant/apiKeyService'
+import { BASE_CONTEXT } from '@shared/domain/assistantAbsences'
 import {
   DISCLOSURE_CATEGORIES,
   type AssistantContext,
@@ -243,6 +244,11 @@ export const assistantService = {
    * the shape a tool loop needs. **No tool is declared here yet** and that is deliberate: #324
    * ships the loop with a test double, and a service that declared a tool before there was a report
    * behind it would be the model's first invitation to ask for one that does not exist.
+   *
+   * The caller's context is optional and the default is `{}` — which is the case Story #325 makes
+   * safe rather than merely legal. A question asked with nothing assembled still carries the base
+   * context {@link buildPrompt} puts in front of it, so the prompt's three conditional prohibitions
+   * are supported on **every** question, including the ones no report reached.
    */
   async ask(question: string, context: AssistantContext = {}): Promise<AssistantAskResult> {
     return aiGateway.complete({
@@ -255,13 +261,31 @@ export const assistantService = {
 }
 
 /**
+ * The heading the base context arrives under, naming the property that puts it first.
+ *
+ * DDR-0101's rule is *before any figure*, and here that is literal: everything under this heading
+ * precedes every section, every report and the question itself.
+ */
+export const BASE_CONTEXT_HEADING = 'Before any figure'
+
+/**
  * The context and the question, as one string, under the disclosure's own headings.
  *
- * Two properties matter more than the formatting. Sections appear in **declaration order**, so the
- * prompt's shape does not depend on the order a caller happened to build its object in. And a key
- * that is not a disclosed category is **dropped**, which makes the runtime agree with the type:
- * `AssistantContext` already forbids one, and this is what holds if the object arrived from
- * somewhere the type did not reach.
+ * Three properties matter more than the formatting.
+ *
+ * **The base context opens it, unconditionally** (Story #325, DDR-0111). {@link BASE_CONTEXT} is
+ * emitted whether or not a single section was assembled, whether or not any report was fetched, and
+ * whether or not this app has anything imported at all — because DDR-0110 made three prohibitions
+ * conditional on those statements being present, and a statement that arrives only when a section
+ * does is not present. It goes **first** for DDR-0101's reason: a model that has already read a
+ * figure has, by the time it reaches a caveat, largely written the sentence the caveat was meant to
+ * prevent. It is not a `DISCLOSURE_CATEGORIES` section and cannot become one — there is no owner
+ * data in it to disclose.
+ *
+ * Sections then appear in **declaration order**, so the prompt's shape does not depend on the order
+ * a caller happened to build its object in. And a key that is not a disclosed category is
+ * **dropped**, which makes the runtime agree with the type: `AssistantContext` already forbids one,
+ * and this is what holds if the object arrived from somewhere the type did not reach.
  *
  * The question goes **last**, after everything it might refer to, and the `question` category is
  * skipped as a section because the question is not context — it is the ask.
@@ -275,10 +299,14 @@ export function buildPrompt(question: string, context: AssistantContext): string
     sections.push(`## ${category.title}\n${body.trim()}`)
   }
 
-  const preamble =
+  const assembled =
     sections.length === 0
       ? 'No portfolio context was assembled for this question.'
       : sections.join('\n\n')
 
-  return `${preamble}\n\n## Question\n${question.trim()}`
+  return [
+    `## ${BASE_CONTEXT_HEADING}\n${BASE_CONTEXT}`,
+    assembled,
+    `## Question\n${question.trim()}`,
+  ].join('\n\n')
 }

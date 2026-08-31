@@ -215,10 +215,21 @@ All tools must:
   **main** and never cross the IPC boundary where `pickDisclosedSections` bounds the context, so
   without this a tool is the way around the disclosure (DDR-0111).
 
-The absences are **never a tool.** *WHAT THIS APP DOES NOT COMPUTE* rides in the base context sent
-with every question. DDR-0110 made three prohibitions — cause, risk statistic, benchmark —
-conditional on those blocks being present, so a tool the model may decline to call would unbind all
-three and nothing would fail (DDR-0101, DDR-0110).
+The absences are **never a tool.** *WHAT THIS APP DOES NOT COMPUTE* is `BASE_CONTEXT` in
+`@shared/domain/assistantAbsences.ts`, and `buildPrompt` emits it above every section on every
+question — whichever tools ran and whether any did. DDR-0110 made three prohibitions — cause, risk
+statistic, benchmark — conditional on those blocks being present, so a tool the model may decline to
+call would unbind all three and nothing would fail (DDR-0101, DDR-0110, DDR-0111).
+
+**A new tool restates the absences its own figures qualify**, in its own payload, the way
+`performanceSection` restates the three for the period it is about. That is belt-and-braces: what
+holds the prohibitions is the base context, and a tool that carried them *instead* would put them
+back behind a choice.
+
+**Do not add to the base context or to the assembled sections without measuring.**
+`promptBudget.test.ts` sits at **84.8%** of `MAX_PROMPT_CHARS` against an 85% gate — roughly 90
+characters. Epic #322 reclaims that room by moving figures behind tools; until it has, a story that
+adds prose to either fails there.
 
 The loop is **bounded twice** and is not a retry: a retry re-sends the *same* request after a
 **failure**; a round sends a *larger* message array after a **success**, and a failed round is still

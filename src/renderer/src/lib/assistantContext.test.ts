@@ -992,19 +992,27 @@ describe('performanceSection', () => {
 })
 
 /**
- * The three overclaims a summary reaches for (Story #286).
+ * The three overclaims a summary reaches for (Story #286; relocated by Story #325).
  *
  * **A summary is compression, and compression is where a model reaches for the conventional
- * phrasing of finance.** Each of the three below sounds like a summary and is grounded in nothing
- * this app holds: an annualised return (no report carries one), a benchmark (Epic #7, a different
- * data source in a different milestone) and a risk statistic (no volatility, no Sharpe, no beta,
- * no drawdown is computed anywhere).
+ * phrasing of finance.** Each of the three sounds like a summary and is grounded in nothing this
+ * app holds: an annualised return (no report carries one), a benchmark (Epic #7, a different data
+ * source in a different milestone) and a risk statistic (no volatility, no Sharpe, no beta, no
+ * drawdown is computed anywhere).
  *
- * They are asserted here rather than left to the system prompt for the same reason every other
- * property in this file is: the prompt is the second line of defence, and the first is that the
- * context itself names each absence — ahead of the figures, on DDR-0099's ordering argument.
+ * **The statements themselves are no longer here**, and that is Story #325's whole point: living
+ * inside this section made them conditional on there being a Flex history to window, and under Epic
+ * #322 conditional on a model choosing to ask for one. They are in
+ * `@shared/domain/assistantAbsences` now, sent above every section on every question, and
+ * `assistantService.test.ts` holds the assertion that a conversation with no report in it still
+ * carries all three.
+ *
+ * What stays here is the half that is about **this period**: its real calendar span, which is the
+ * honest fact an app with no annualisation has in place of one, and the restatement that carries
+ * it. That restatement is belt-and-braces — DDR-0101's *before any figure* applied per report — and
+ * is deliberately not what holds the prohibitions.
  */
-describe('performanceSection: the three overclaims', () => {
+describe('performanceSection: the three overclaims, restated for the period', () => {
   /**
    * Ahead of every figure, deliberately. A model that has already read `+2.00%` and a six-day
    * period has, by the time it reaches a caveat, largely written the sentence the caveat was
@@ -1018,16 +1026,22 @@ describe('performanceSection: the three overclaims', () => {
     expect(returnAt).toBeGreaterThan(limitsAt)
   })
 
+  /** All three named together, in one line, so the period's figures arrive already qualified. */
+  it('restates all three absences for the period it is about', () => {
+    expect(performanceSection(change())).toContain(
+      'no annualised figure, no benchmark, no risk statistic.',
+    )
+  })
+
   /**
    * The most common way a summary becomes misleading: six days of history scaled to a year is a
    * number with no meaning, and the model does not experience the scaling as a calculation. The
-   * app computes no annualised figure at all, so the section says so and gives the real length of
-   * the period in its place.
+   * app computes no annualised figure at all, so the section gives the real length of the period
+   * in its place — the one fact only this report holds.
    */
-  it('says no annualised figure exists and gives the real length of the period instead', () => {
+  it('gives the real length of the period, in calendar days, against the whole history', () => {
     const text = performanceSection(change())
-    expect(text).toContain('No annualised, per-year, compounded or "p.a." figure exists')
-    expect(text).toContain('That period covers 6 calendar day(s); the whole imported history covers 6.')
+    expect(text).toContain('This period covers 6 calendar day(s); the whole imported history covers 6.')
     expect(text).toContain('This period is shorter than a year')
     expect(text).toContain('never describe a return over it as annual, annualised, yearly or per year')
   })
@@ -1057,33 +1071,22 @@ describe('performanceSection: the three overclaims', () => {
     expect(long).not.toContain('This period is shorter than a year')
   })
 
-  /** The app has none. Benchmark comparison is Epic #7, and inventing one is inventing a source. */
-  it('says no benchmark, index or peer figure exists', () => {
-    const text = performanceSection(change())
-    expect(text).toContain('No benchmark, index, market or peer figure exists')
-    expect(text).toContain('no market data beyond this portfolio’s own history')
-    expect(text).toContain('never say the portfolio beat, lagged, tracked, outperformed or underperformed anything')
-  })
-
   /**
-   * Dispersion *can* be described — from the daily-return counts and the two extremes that are
-   * actually in the section (DDR-0049) — and from nothing else. A Sharpe ratio quoted beside them
-   * would be indistinguishable in tone from the figures that were computed.
+   * The dispersion the base context's risk statement points at has to actually be in the report,
+   * or the unconditional sentence licenses a description of nothing. This is the section's half of
+   * that bargain (DDR-0049).
    */
-  it('names the risk statistics that do not exist and the dispersion that does', () => {
+  it('supplies the dispersion the risk statement says is the only one available', () => {
     const text = performanceSection(change())
-    expect(text).toContain(
-      'No volatility, standard deviation, Sharpe ratio, beta, drawdown or other risk statistic exists',
-    )
-    expect(text).toContain('the only description of dispersion this app has')
-    // What it points at has to actually be there, or the section licenses a description of nothing.
     expect(text).toContain('3 trading day(s)')
     expect(text).toContain('Best day:')
+    expect(text).toContain('Worst day:')
   })
 
   /**
    * An empty window is where an ungrounded comparison has the most room: there is no figure to
-   * anchor a sentence, so "roughly in line with the market" costs nothing to write.
+   * anchor a sentence, so "roughly in line with the market" costs nothing to write. An empty period
+   * is a **state**, and it keeps the restatement and its span (DDR-0099, DDR-0101).
    */
   it('carries the same three refusals over a period holding no data', () => {
     const text = performanceSection(
@@ -1094,9 +1097,8 @@ describe('performanceSection: the three overclaims', () => {
         },
       }),
     )
-    expect(text).toContain('No annualised, per-year, compounded or "p.a." figure exists')
-    expect(text).toContain('No benchmark, index, market or peer figure exists')
-    expect(text).toContain('No volatility, standard deviation, Sharpe ratio')
+    expect(text).toContain('no annualised figure, no benchmark, no risk statistic.')
+    expect(text).toContain('calendar day(s); the whole imported history covers')
     expect(text).toContain('No day in the imported history falls inside this period')
   })
 
@@ -1391,7 +1393,7 @@ describe('the app’s baseline is marked apart from the owner’s own standard',
       },
     )
 
-    expect(text).toContain('None of it applies here')
+    expect(text).toContain('None of the app’s default baseline applies here')
     expect(text).not.toContain('against the app’s default')
     expect(text).not.toContain('The baseline covers no currency')
   })
