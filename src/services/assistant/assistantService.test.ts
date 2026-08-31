@@ -268,13 +268,33 @@ describe('the prompt is built from the disclosure', () => {
     expect(buildPrompt('q', {})).toContain('No portfolio context was assembled')
   })
 
+  /**
+   * Two turns, in that order — the same exchange the two strings carried, in the shape a tool loop
+   * needs (Story #324, DDR-0111).
+   */
   it('sends the system prompt and the built context through the gateway', async () => {
     await assistantService.ask('How am I doing?', context)
 
     expect(mockGateway.complete).toHaveBeenCalledWith({
-      system: SYSTEM_PROMPT,
-      user: buildPrompt('How am I doing?', context),
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: buildPrompt('How am I doing?', context) },
+      ],
     })
+  })
+
+  /**
+   * **No tool is declared yet**, and the assertion is the story's rather than the shape's: #324
+   * ships the loop, and #326–#329 ship the reports. A tool named here before a service computed one
+   * would be an invitation for the model to ask for a report that does not exist — which the
+   * gateway would report as `invalid`, correctly and uselessly.
+   */
+  it('declares no tools, because none is backed by a report yet', async () => {
+    await assistantService.ask('How am I doing?', context)
+
+    const sent = mockGateway.complete.mock.calls[0]![0]
+    expect(sent.tools).toBeUndefined()
+    expect(sent.runTool).toBeUndefined()
   })
 })
 

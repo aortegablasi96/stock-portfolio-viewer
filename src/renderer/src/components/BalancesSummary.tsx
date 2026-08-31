@@ -1,5 +1,5 @@
 import type { AccountBalances } from '@shared/domain/portfolio'
-import { formatCurrency } from '../lib/format'
+import { formatCurrency } from '@shared/format'
 import { StatRow, StatTile } from './ui/StatTile'
 
 /**

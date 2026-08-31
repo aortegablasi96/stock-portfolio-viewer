@@ -5,7 +5,7 @@ import type {
   AllocationResult,
   AllocationSlice,
 } from '@shared/domain/allocation'
-import { formatCurrency, formatDate, formatSignedCurrency } from '../../lib/format'
+import { formatCurrency, formatDate, formatSignedCurrency } from '@shared/format'
 import { SECTOR_SLOT_OFFSET } from '../../lib/pie'
 import { CountryMap } from '../charts/CountryMap'
 import { AllocationBreakdown } from './AllocationBreakdown'

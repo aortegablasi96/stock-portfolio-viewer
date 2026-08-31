@@ -163,6 +163,11 @@ export type TurnAnswer =
 export const FAILURE_HEADINGS: Record<FailureStatus, string> = {
   not_configured: 'No API key',
   too_large: 'Too large to send — nothing left this machine',
+  // The pair `too_large` is one half of (Story #324, DDR-0111). Its heading has to say the opposite
+  // thing out loud: the assistant was gathering reports, so this one *did* leave the machine, and
+  // what is missing is the answer rather than the sending. A heading that merely said "too large"
+  // would tell the owner nothing was sent, which by this point is false.
+  incomplete: 'No answer — the assistant ran out of room gathering reports',
   refused: 'OpenAI declined the request',
   not_responding: 'No answer came back',
   invalid: 'The answer did not arrive in a usable shape',

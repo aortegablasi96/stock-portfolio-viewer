@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { SYSTEM_PROMPT, buildPrompt } from './assistantService'
 import { MAX_PROMPT_CHARS } from '@repositories/assistant/aiGateway'
+import type { AiMessage } from '@shared/domain/assistant'
 import {
   MAX_LISTED_POSITIONS,
   buildAssistantContext,
@@ -323,9 +324,24 @@ const QUESTION =
   'I have to trim or add to close the three widest gaps without pushing anything past my ' +
   'single-position ceiling? Please name the positions.'
 
-/** System plus user, which is the only pair the gateway's ceiling is checked against. */
+/**
+ * The whole conversation, which is what the gateway's ceiling now counts (Story #324, DDR-0111).
+ *
+ * The number does not move and neither does what it measures *here*: a question is still a system
+ * turn and a user turn, so this is the same arithmetic the two strings used to do. What changed is
+ * that the gateway checks it **before every round** rather than once — so this measures the first
+ * round, which is the one the caps in `assistantContext` are responsible for. The rounds a tool
+ * loop adds are bounded by `MAX_TOOL_ROUNDS` and by the same ceiling, and are `aiGateway.test.ts`'s
+ * to assert; a story that wires up a tool has to keep *this* fitting first, because a first round
+ * over the ceiling never reaches a second.
+ */
+const conversation = (reports: GroundingReports): AiMessage[] => [
+  { role: 'system', content: SYSTEM_PROMPT },
+  { role: 'user', content: buildPrompt(QUESTION, buildAssistantContext(reports)) },
+]
+
 const promptSize = (reports: GroundingReports): number =>
-  SYSTEM_PROMPT.length + buildPrompt(QUESTION, buildAssistantContext(reports)).length
+  conversation(reports).reduce((total, message) => total + message.content.length, 0)
 
 /** The one section both baselines are written into. */
 const profileOf = (reports: GroundingReports): string =>

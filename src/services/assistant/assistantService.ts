@@ -238,11 +238,18 @@ export const assistantService = {
    * Nothing is checked before the gateway, because there is nothing left to check: the key **is**
    * the authorization, and a missing one is the gateway's own `not_configured` — a state in the
    * same register as everything beside it, never an exception (DDR-0022, DDR-0096).
+   *
+   * The two strings are now **two messages** (Story #324, DDR-0111), which is the same exchange in
+   * the shape a tool loop needs. **No tool is declared here yet** and that is deliberate: #324
+   * ships the loop with a test double, and a service that declared a tool before there was a report
+   * behind it would be the model's first invitation to ask for one that does not exist.
    */
   async ask(question: string, context: AssistantContext = {}): Promise<AssistantAskResult> {
     return aiGateway.complete({
-      system: SYSTEM_PROMPT,
-      user: buildPrompt(question, context),
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: buildPrompt(question, context) },
+      ],
     })
   },
 }

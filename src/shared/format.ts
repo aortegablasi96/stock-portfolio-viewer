@@ -1,22 +1,60 @@
 /**
  * Pure display formatters for the portfolio UI. Kept out of components so the
  * number/locale logic can be unit-tested directly (ui-builder guidance).
+ *
+ * ## Why this lives in `@shared` and not in the renderer (Story #324, DDR-0111)
+ *
+ * It was `renderer/src/lib/format.ts` for the app's whole life, which was right while the renderer
+ * was the only process that wrote a figure for a person to read. Epic #322 puts the second one in
+ * place: a tool result is computed and **rendered into prose in main**, and DDR-0098's criterion is
+ * that a figure in an answer and the same figure on a dashboard agree to the digit. Two
+ * implementations of "how this app writes a percentage" is exactly the drift that criterion exists
+ * to prevent, so there is still exactly one — now reachable from both processes.
+ *
+ * The move cost a path change and nothing else, because **this module imports nothing**. That is
+ * also what satisfies `zodIsolation.test.ts` by construction rather than by a rule somebody has to
+ * remember: a module with no dependencies cannot pull Zod into the renderer bundle (DDR-0105).
+ * **Keep it that way** — a single `import` here is a bundle decision, not a convenience.
  */
+
+/**
+ * The one locale every figure in this app is written in — **both processes, one value**.
+ *
+ * Every formatter below used to pass `undefined`, which resolves the *host's* default. That was
+ * correct and invisible while one process wrote every figure. With two it is a bug waiting for a
+ * reader: Electron's main process resolves its locale from Node's ICU and the OS, the renderer from
+ * Chromium's own language settings, and nothing makes the two agree. The failure it produces is the
+ * one DDR-0098 exists to prevent and the hardest kind to notice — `1,234.50` in an answer beside
+ * `1.234,50` on the dashboard it was computed from, the *same* figure, silently disagreeing in a
+ * separator.
+ *
+ * So the locale is **declared, not discovered** (DDR-0111). A resolver that reads each host's
+ * default would centralise the call and leave the disagreement exactly where it was; only a fixed
+ * value makes "main and the renderer format the same value identically" a property rather than a
+ * hope.
+ *
+ * `en-GB` because it is what the app already is. Its copy is British English throughout, and this
+ * file's own worked example of a formatted timestamp — *"27 Jul, 09:04"* in {@link formatUpdatedAt}
+ * — is `en-GB` output, written down long before anything enforced it. It is a **display** decision
+ * and touches no stored value: money is stored in minor units or `real` with its own currency
+ * code, and every timestamp is epoch-ms UTC.
+ */
+export const APP_LOCALE = 'en-GB'
 
 /**
  * Format a monetary value. Interactive Brokers' base-currency ledger reports the
  * pseudo-code `BASE` (and positions may lack a currency); in those cases we fall
  * back to a plain 2-decimal number rather than a currency symbol.
  */
-export function formatCurrency(value: number, currency: string): string {
+export function formatCurrency(value: number, currency: string, locale = APP_LOCALE): string {
   if (currency && currency !== 'BASE') {
     try {
-      return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(value)
+      return new Intl.NumberFormat(locale, { style: 'currency', currency }).format(value)
     } catch {
       // Not a valid ISO currency code — fall through to plain formatting.
     }
   }
-  return new Intl.NumberFormat(undefined, {
+  return new Intl.NumberFormat(locale, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(value)
@@ -28,10 +66,10 @@ export function formatCurrency(value: number, currency: string): string {
  * CAD 0.094), so two decimals would round a genuine rate to "0.09" or away to "0.00".
  * Up to four decimals are kept, trailing zeros dropped past the usual two.
  */
-export function formatPerShare(value: number, currency: string): string {
+export function formatPerShare(value: number, currency: string, locale = APP_LOCALE): string {
   if (currency && currency !== 'BASE') {
     try {
-      return new Intl.NumberFormat(undefined, {
+      return new Intl.NumberFormat(locale, {
         style: 'currency',
         currency,
         minimumFractionDigits: 2,
@@ -41,29 +79,29 @@ export function formatPerShare(value: number, currency: string): string {
       // Not a valid ISO currency code — fall through to plain formatting.
     }
   }
-  return new Intl.NumberFormat(undefined, {
+  return new Intl.NumberFormat(locale, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 4,
   }).format(value)
 }
 
 /** Format a share/contract quantity (fractional shares allowed, no forced decimals). */
-export function formatQuantity(value: number): string {
-  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 4 }).format(value)
+export function formatQuantity(value: number, locale = APP_LOCALE): string {
+  return new Intl.NumberFormat(locale, { maximumFractionDigits: 4 }).format(value)
 }
 
 /** Format an allocation weight expressed as a fraction in [0, 1] as a percentage. */
-export function formatPercent(fraction: number): string {
-  return new Intl.NumberFormat(undefined, {
+export function formatPercent(fraction: number, locale = APP_LOCALE): string {
+  return new Intl.NumberFormat(locale, {
     style: 'percent',
     minimumFractionDigits: 1,
     maximumFractionDigits: 1,
   }).format(fraction)
 }
 
-/** Format a snapshot capture time (epoch milliseconds, UTC) in the local locale. */
-export function formatDateTime(epochMs: number): string {
-  return new Intl.DateTimeFormat(undefined, {
+/** Format a snapshot capture time (epoch milliseconds, UTC) in the app's locale. */
+export function formatDateTime(epochMs: number, locale = APP_LOCALE): string {
+  return new Intl.DateTimeFormat(locale, {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(new Date(epochMs))
@@ -77,7 +115,11 @@ export function formatDateTime(epochMs: number): string {
  *
  * `now` is a parameter rather than a `Date.now()` call so the day comparison is testable.
  */
-export function formatUpdatedAt(epochMs: number, now: number = Date.now()): string {
+export function formatUpdatedAt(
+  epochMs: number,
+  now: number = Date.now(),
+  locale = APP_LOCALE,
+): string {
   const at = new Date(epochMs)
   const today = new Date(now)
   const sameDay =
@@ -85,38 +127,38 @@ export function formatUpdatedAt(epochMs: number, now: number = Date.now()): stri
     at.getMonth() === today.getMonth() &&
     at.getDate() === today.getDate()
 
-  const time = new Intl.DateTimeFormat(undefined, { timeStyle: 'short' }).format(at)
+  const time = new Intl.DateTimeFormat(locale, { timeStyle: 'short' }).format(at)
   if (sameDay) return time
-  return `${new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' }).format(at)}, ${time}`
+  return `${new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short' }).format(at)}, ${time}`
 }
 
 /** Format a plain date (epoch milliseconds, UTC) — no time — for Flex statement ranges. */
-export function formatDate(epochMs: number): string {
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(epochMs))
+export function formatDate(epochMs: number, locale = APP_LOCALE): string {
+  return new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(epochMs))
 }
 
 /**
  * Format a monetary value with an explicit leading sign (+/−) — for P&L, income, and
  * other figures where the direction matters. Zero carries no sign.
  */
-export function formatSignedCurrency(value: number, currency: string): string {
-  const base = formatCurrency(Math.abs(value), currency)
+export function formatSignedCurrency(value: number, currency: string, locale = APP_LOCALE): string {
+  const base = formatCurrency(Math.abs(value), currency, locale)
   if (value < 0) return `-${base}`
   if (value > 0) return `+${base}`
   return base
 }
 
 /** Format an already-percent value (e.g. a TWR of 7.12 → "7.12%"). */
-export function formatPercentValue(value: number): string {
-  return `${new Intl.NumberFormat(undefined, {
+export function formatPercentValue(value: number, locale = APP_LOCALE): string {
+  return `${new Intl.NumberFormat(locale, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(value)}%`
 }
 
 /** Format an already-percent value with an explicit leading sign (+/−). Zero carries no sign. */
-export function formatSignedPercent(value: number): string {
-  const base = formatPercentValue(Math.abs(value))
+export function formatSignedPercent(value: number, locale = APP_LOCALE): string {
+  const base = formatPercentValue(Math.abs(value), locale)
   if (value < 0) return `-${base}`
   if (value > 0) return `+${base}`
   return base
@@ -136,8 +178,8 @@ export function formatSignedPercent(value: number): string {
  * worth a branch: the figure is fixed at two decimals, so an exact 1.00 is a coincidence rather
  * than a case.
  */
-export function formatPoints(value: number): string {
-  return `${new Intl.NumberFormat(undefined, {
+export function formatPoints(value: number, locale = APP_LOCALE): string {
+  return `${new Intl.NumberFormat(locale, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(value)} percentage points`
@@ -151,8 +193,8 @@ export function formatPoints(value: number): string {
  * read as `-0.00 percentage points` — a direction the figure does not have, in a sentence a model
  * is being asked to quote verbatim.
  */
-export function formatSignedPoints(value: number): string {
-  const base = formatPoints(Math.abs(value))
+export function formatSignedPoints(value: number, locale = APP_LOCALE): string {
+  const base = formatPoints(Math.abs(value), locale)
   if (Math.abs(value) < 0.005) return base
   return value < 0 ? `-${base}` : `+${base}`
 }
@@ -244,11 +286,11 @@ export function formatCompanyName(raw: string): string {
 }
 
 /** Format a `YYYY-MM` month key as e.g. "Jan 2026"; passes through anything else (e.g. "Unknown"). */
-export function formatMonth(key: string): string {
+export function formatMonth(key: string, locale = APP_LOCALE): string {
   const match = /^(\d{4})-(\d{2})$/.exec(key)
   if (!match) return key
   const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, 1))
-  return new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat(locale, {
     month: 'short',
     year: 'numeric',
     timeZone: 'UTC',

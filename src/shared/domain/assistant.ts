@@ -14,15 +14,85 @@ import { z } from 'zod'
  */
 
 /**
- * What a caller asks for. Two strings and an output ceiling — deliberately not a message list:
- * conversation memory is out of scope for this story, and a shape that could carry a transcript
- * would invite one before anyone decided whether it should be stored.
+ * One turn in the exchange (Story #324, DDR-0111).
+ *
+ * It was two strings — `system` and `user` — and the header above said why: a shape that could
+ * carry a transcript would have invited one before anyone decided whether it should be stored. That
+ * decision is made. A **tool loop is a conversation by construction**: the model asks for a report,
+ * the app answers with one, and the next request carries both, so the array is the request rather
+ * than a convenience laid on top of it.
+ *
+ * The four roles are OpenAI's, mapped at the gateway's wire boundary and nowhere else. `tool` is
+ * the app answering a call it was asked to make; `assistant` with {@link toolCalls} is the model
+ * making one.
+ */
+export interface AiMessage {
+  role: 'system' | 'user' | 'assistant' | 'tool'
+  /**
+   * The turn's text. For a `tool` message this is **the app's own prose**, rendered through
+   * `@shared/format` — never raw JSON, so a figure in an answer and the same figure on a dashboard
+   * agree to the digit (DDR-0111).
+   */
+  content: string
+  /** On an `assistant` turn: the reports the model asked for. */
+  toolCalls?: readonly AiToolCall[]
+  /** On a `tool` turn: which call it answers. */
+  toolCallId?: string
+}
+
+/**
+ * A report the model asked for, as it asked for it.
+ *
+ * The arguments stay a **string** all the way to the executor. Parsing them is the tool's own job
+ * and its failure is the tool's own state; a gateway that parsed them would be deciding, on the
+ * model's behalf, what a malformed request meant.
+ */
+export interface AiToolCall {
+  /** The provider's id for this call — what a `tool` message answers with. */
+  id: string
+  name: string
+  /** The arguments as the model wrote them: a JSON string, never parsed here. */
+  argumentsJson: string
+}
+
+/**
+ * A report the model may ask for. **Declared by the caller, never by the gateway** — a repository
+ * that knew the tool inventory would be one that reached the services it is below.
+ */
+export interface AiToolDefinition {
+  name: string
+  /** What the report is, in the register the model reads. */
+  description: string
+  /** JSON Schema for {@link AiToolCall.argumentsJson}. */
+  parameters: Record<string, unknown>
+}
+
+/**
+ * How a call is answered: the app's own prose for the model to phrase (DDR-0111).
+ *
+ * Injected rather than imported, and that is the layering: `aiGateway` is a repository, so it may
+ * not reach a service. The caller — `assistantService`, which is the only one — holds the mapping
+ * from a tool name to the method that computes its report. Here it is a test double, because
+ * #324 ships the loop and #326–#329 ship the reports.
+ *
+ * It **resolves, never rejects**, for the reason every state in this file is a value: a thrown
+ * error mid-loop would be the one outcome the union could not name.
+ */
+export type AiToolRunner = (call: AiToolCall) => Promise<string>
+
+/**
+ * What a caller asks for: the conversation so far, and what the model may ask the app for.
+ *
+ * `tools` and `runTool` are two halves of one decision and are checked as a pair — a tool the model
+ * names that is not declared here is `invalid`, never an improvised call.
  */
 export interface AiRequest {
-  /** How the model should behave. */
-  system: string
-  /** The question, with whatever grounding a later story assembles into it. */
-  user: string
+  /** The exchange so far, in the order the model reads it. */
+  messages: readonly AiMessage[]
+  /** The reports the model may ask for. Omitted or empty means it may ask for none. */
+  tools?: readonly AiToolDefinition[]
+  /** Runs one call and returns the prose the model sees. Required if `tools` is non-empty. */
+  runTool?: AiToolRunner
   /** Ceiling on the answer's length, in tokens. Bounded again by the gateway. */
   maxOutputTokens?: number
 }
@@ -55,7 +125,7 @@ export type AiAnswer = z.infer<typeof aiAnswerSchema>
 /**
  * Every way the exchange can end, as data (DDR-0022, DDR-0096).
  *
- * Seven variants, and each pair that looks alike is kept apart because the owner's next move
+ * Eight variants, and each pair that looks alike is kept apart because the owner's next move
  * differs:
  *
  * - **`not_configured`** — no `OPENAI_API_KEY`. This is the resting state of a fresh clone and
@@ -65,6 +135,12 @@ export type AiAnswer = z.infer<typeof aiAnswerSchema>
  *   Distinct from `refused` on purpose: conflating them would tell the owner the provider rejected
  *   their portfolio when in fact it never left the machine, which is the one distinction ADR-0010
  *   exists to keep clear.
+ * - **`incomplete`** — the tool loop reached one of its bounds with the model still asking for
+ *   reports, so there is no answer (Story #324, DDR-0111). **Not `too_large`**, and the difference
+ *   is the whole reason it exists: `too_large` means nothing was sent, and by the time a loop can
+ *   end this way things *have* been sent. Folding the two would repeat exactly the misattribution
+ *   DDR-0096 refused when it declined to fold `too_large` into `refused`. The recovery is the
+ *   owner's and it is a real one: ask a narrower question.
  * - **`refused`** — the provider declined: a bad key, a quota, a content policy. The app is
  *   working; the request is not acceptable.
  * - **`not_responding`** — no answer was produced. A stall past the deadline, an unreachable host,
@@ -78,6 +154,7 @@ export const aiResultSchema = z.discriminatedUnion('status', [
   z.object({ status: z.literal('ok'), answer: aiAnswerSchema }),
   z.object({ status: z.literal('not_configured'), message: z.string() }),
   z.object({ status: z.literal('too_large'), message: z.string() }),
+  z.object({ status: z.literal('incomplete'), message: z.string() }),
   z.object({ status: z.literal('refused'), message: z.string() }),
   z.object({ status: z.literal('not_responding'), message: z.string() }),
   z.object({ status: z.literal('invalid'), message: z.string() }),

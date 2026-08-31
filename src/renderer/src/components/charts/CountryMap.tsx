@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import type { AllocationPosition, AllocationSlice } from '@shared/domain/allocation'
-import { formatSignedPercent } from '../../lib/format'
+import { formatSignedPercent } from '@shared/format'
 import { sectorPalette } from '../../lib/sectorMap'
 import {
   countryDonuts,

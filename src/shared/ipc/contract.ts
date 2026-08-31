@@ -325,11 +325,15 @@ export type { SaveApiKeyResult }
  * A question and the grounding it is asked against (DDR-0098).
  *
  * **The context is assembled in the renderer, and that is a decision rather than a convenience.**
- * Every figure the assistant may quote is already on a dashboard, and the formatters that put it
- * there — `renderer/src/lib/format.ts` — are renderer code. Assembling in main would mean a second
- * set of formatters, and the criterion this story is held to is that a number in prose and the
- * same number on a dashboard agree to the digit. The renderer is not therefore trusted: the schema
- * below is what bounds *what* may cross.
+ * Every figure the assistant may quote is already on a dashboard, and the criterion this story is
+ * held to is that a number in prose and the same number on a dashboard agree to the digit. The
+ * renderer is not therefore trusted: the schema below is what bounds *what* may cross.
+ *
+ * The formatters that put those figures there used to be renderer code, which is what made
+ * assembling in main mean a second set of them. They are `@shared/format` now (Story #324,
+ * DDR-0111), so both processes reach the same ones — the criterion is *strengthened*, and the
+ * renderer keeps assembling this context because DDR-0111 kept it there, not because main could
+ * not.
  *
  * `context` is parsed as an arbitrary string map and then **reduced to the declared categories**.
  * An undeclared section is dropped here, at the boundary, rather than being relied on to be absent

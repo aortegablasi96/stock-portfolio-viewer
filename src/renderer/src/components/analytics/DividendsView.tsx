@@ -12,7 +12,7 @@ import {
   formatMonth,
   formatPerShare,
   formatQuantity,
-} from '../../lib/format'
+} from '@shared/format'
 import { datedExtent, filterByRange, windowFor } from '../../lib/dateRange'
 import { distinctTypes, filterByTypes } from '../../lib/tableFilter'
 import { useTypeSelection } from './useTypeSelection'

@@ -1,4 +1,4 @@
-import { formatUpdatedAt } from './format'
+import { formatUpdatedAt } from '@shared/format'
 
 /**
  * What the sidebar's gateway badge says, given what the app last learned (Story #183).

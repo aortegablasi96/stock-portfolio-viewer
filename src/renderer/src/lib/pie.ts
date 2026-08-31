@@ -2,7 +2,7 @@
  * Pure geometry + grouping helpers for the donut charts (Milestone M3, Story #30).
  *
  * Kept out of the component so they can be unit-tested in Vitest's Node environment
- * (no DOM), matching how `lib/format.ts` is tested.
+ * (no DOM), matching how `@shared/format.ts` is tested.
  */
 
 export interface PieDatum {

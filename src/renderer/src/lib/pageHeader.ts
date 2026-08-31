@@ -1,4 +1,4 @@
-import { formatUpdatedAt } from './format'
+import { formatUpdatedAt } from '@shared/format'
 
 /**
  * The wording behind the one page header the five views share (Story #185, DDR-0058).
