@@ -843,6 +843,33 @@ describe('balanced', () => {
   })
 })
 
+  /**
+   * The label a band takes when the owner targets a category the portfolio holds **nothing** in.
+   *
+   * That is the interesting case by design — "I want 10% in bonds and hold none" is exactly the
+   * answer being asked for — and it is the one where there is no bucket to take a label from. The
+   * fallback was the raw stored key, so a 0% band read `__cash__` or `BOND` while every held band
+   * beside it read `Stocks`: one report, two vocabularies for the same dimension.
+   */
+  it('labels a target the portfolio holds nothing in, rather than falling back to its key', async () => {
+    given({
+      profile: profile({
+        assetClassTargets: [
+          { key: 'STK', low: 50, high: 90 },
+          { key: 'BOND', low: 5, high: 20 },
+          { key: CASH_ASSET_KEY, low: 2, high: 10 },
+        ],
+      }),
+      assetClasses: ASSET_CLASSES.map((a) => ({ ...a, assetCategory: 'STK' })),
+    })
+    const bands = dimension(await report(), 'assetClass').bands
+
+    expect(bands.map((b) => b.label)).toEqual(['Stocks', 'Bonds', 'Cash'])
+    // And the held one still takes the bucket's own label, which is the path that already worked.
+    expect(bands.find((b) => b.key === 'STK')?.actual).toBeGreaterThan(0)
+    expect(bands.find((b) => b.key === 'BOND')?.actual).toBe(0)
+  })
+
 // ---- the app's own standard, beside the owner's ------------------------------
 
 /**

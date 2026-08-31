@@ -31,6 +31,7 @@ import {
   STYLE_TAG_LABELS,
   TARGET_DIMENSION_LABELS,
   isProfileEmpty,
+  targetLabel,
   type CategoryTarget,
   type InvestorProfile,
   type TargetDimension,
@@ -396,8 +397,10 @@ function targetLines(profile: InvestorProfile): string[] {
 
   for (const dimension of ['currency', 'sector', 'assetClass'] as const) {
     for (const target of byDimension[dimension]) {
+      // `targetLabel`, never the raw key: an asset-class target is stored under IBKR's code, and
+      // cash under a sentinel that means nothing to a model (DDR-0094).
       lines.push(
-        `- ${TARGET_DIMENSION_LABELS[dimension]} ${target.key}: ${range(target.low, target.high)}`,
+        `- ${TARGET_DIMENSION_LABELS[dimension]} ${targetLabel(dimension, target.key)}: ${range(target.low, target.high)}`,
       )
     }
   }

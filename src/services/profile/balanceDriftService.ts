@@ -10,6 +10,7 @@ import {
 import { assetClassLabel, CASH_ASSET_KEY, CASH_ASSET_LABEL } from '@shared/domain/assetClass'
 import {
   countTargets,
+  targetLabel,
   TARGET_DIMENSIONS,
   TARGET_DIMENSION_FIELDS,
   type CategoryTarget,
@@ -368,10 +369,13 @@ function driftFor(
     const bucket = buckets.get(id)
     // A target the portfolio does not hold is a real drift at 0%, not an absent band: "I want 10%
     // in utilities and hold none" is exactly the answer being asked for.
+    // The bucket's label where the portfolio holds the category, and the *key's* label where it
+    // does not — which is exactly the 0% case above, so the fallback is the one that has to be
+    // right. A raw `__cash__` or `STK` here would disagree with every held band beside it.
     return bandFor(
       target,
       bucket ? weightOf(bucket.value) : 0,
-      bucket?.label ?? target.key,
+      bucket?.label ?? targetLabel(dimension, target.key),
       bandPositions(carriers.get(id), weightOf),
       profile.positionSize?.high ?? null,
     )

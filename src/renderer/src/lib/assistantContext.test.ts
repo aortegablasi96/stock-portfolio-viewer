@@ -465,6 +465,58 @@ describe('weightsSection', () => {
 })
 
 describe('profileSection', () => {
+
+  /**
+   * A target key is not always a label, and asset class is where they part company (DDR-0094).
+   *
+   * The stored key is the one the *allocation report* published, which is what makes a target join
+   * at all — so it is IBKR's `STK` or `BOND`, or the `__cash__` sentinel chosen precisely because it
+   * cannot collide with one of those. This line shipped writing the key raw, so the model was handed
+   * `Asset class __cash__: 2.00%–10.00%`: a sentinel, in the section that is supposed to state the
+   * owner's own policy back to them.
+   */
+  it('writes an asset-class target by its label, never by its stored key', () => {
+    const text = profileSection(
+      {
+        ...PROFILE,
+        assetClassTargets: [
+          { key: 'STK', low: 55, high: 80 },
+          { key: 'BOND', low: 5, high: 20 },
+          { key: CASH_ASSET_KEY, low: 2, high: 10 },
+        ],
+      },
+      { status: 'no_data' },
+    )
+
+    expect(text).toContain('- Asset class Stocks: 55.00%–80.00%')
+    expect(text).toContain('- Asset class Bonds: 5.00%–20.00%')
+    expect(text).toContain('- Asset class Cash: 2.00%–10.00%')
+    expect(text).not.toContain(CASH_ASSET_KEY)
+  })
+
+  /** Currency and sector keys *are* their labels, so the fix must not translate them into anything. */
+  it('leaves a currency or sector target key exactly as the owner stored it', () => {
+    const text = profileSection(
+      { ...PROFILE, sectorTargets: [{ key: 'Diversified Finan Serv', low: 0, high: 5 }] },
+      { status: 'no_data' },
+    )
+
+    expect(text).toContain('- Currency USD: 30.00%–50.00%')
+    expect(text).toContain('- Sector Diversified Finan Serv: 0.00%–5.00%')
+  })
+
+  /**
+   * The whole section, not just the targets list. `__cash__` reaching a model anywhere is the bug;
+   * this is the assertion that does not care which line it came from.
+   */
+  it('never lets the cash sentinel reach the model', () => {
+    const text = profileSection(
+      { ...PROFILE, assetClassTargets: [{ key: CASH_ASSET_KEY, low: 2, high: 10 }] },
+      { status: 'ok', report: drift() },
+    )
+
+    expect(text).not.toContain('__')
+  })
   it('states the style tags in the words the app shows them in', () => {
     const text = profileSection(PROFILE, { status: 'no_data' }) ?? ''
     expect(text).toContain('Investing style the owner states: Dividend income.')
