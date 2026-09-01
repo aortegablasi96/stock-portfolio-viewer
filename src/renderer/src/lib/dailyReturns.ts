@@ -23,30 +23,11 @@
  * against the synthetic carry-forward point `sliceSeries` anchors at the window edge.
  *
  * Kept out of the component and unit-tested under Node, like every other renderer helper here.
+ *
+ * **The function itself lives in `@shared/domain/performanceWindow` since Story #327** and is
+ * re-exported here, so the bar chart's call site keeps this module's name. `get_daily_returns`
+ * reports the same steps from **main**, where a renderer module is not (DDR-0111), and two
+ * implementations of a chain-linked step would be free to disagree — the answer's best day and the
+ * chart's tallest bar have to be one figure.
  */
-import type { ValuePoint } from '@shared/domain/performance'
-import type { Bounds } from './dateRange'
-import { chainLink } from './performanceRange'
-
-/**
- * The point-over-point return at each point of a cumulative-return series, as a percentage —
- * `date` is the day the return landed on, `value` is that day's return.
- *
- * The **first point emits nothing**: it has no predecessor, and a first day rendered as a 0% bar
- * would claim a flat day the data does not describe. So a series of one point (or none) yields no
- * returns at all, and an N-point series yields N−1.
- *
- * `bounds` restricts which returns are *returned*, not which are computed — every return is still
- * measured against the point that really preceded it, including the one landing on `bounds.from`.
- *
- * Assumes the series is sorted ascending by `date`, the way the service builds it.
- */
-export function dailyReturns(series: readonly ValuePoint[], bounds?: Bounds): ValuePoint[] {
-  const out: ValuePoint[] = []
-  for (let i = 1; i < series.length; i++) {
-    const point = series[i]!
-    if (bounds && (point.date < bounds.from || point.date > bounds.to)) continue
-    out.push({ date: point.date, value: chainLink(point.value, series[i - 1]!.value) })
-  }
-  return out
-}
+export { dailyReturns } from '@shared/domain/performanceWindow'

@@ -11,73 +11,26 @@
  * ranges reframes the charts and recomputes the top stats instantly.
  *
  * All series are assumed sorted ascending by `date` (the service builds them that way).
+ *
+ * **`chainLink`, `seriesExtent`, `valueAt` and `windowStats` live in
+ * `@shared/domain/performanceWindow` since Story #327** and are re-exported here. The assistant's
+ * performance tools read the same endpoints from **main**, where a renderer module is not
+ * (DDR-0111), and a second implementation of a chain-linked return would be free to disagree with
+ * the curve the owner is looking at. What stayed is what is about *drawing*: the two slices that
+ * anchor synthetic endpoints so a plotted line meets the edges of its own plot.
  */
 import type { ValuePoint } from '@shared/domain/performance'
-import type { Bounds } from './dateRange'
+import {
+  chainLink,
+  seriesExtent,
+  valueAt,
+  windowStats,
+  type Bounds,
+  type WindowStats,
+} from '@shared/domain/performanceWindow'
 
-/**
- * Chain-link a cumulative return onto a new base — `(1 + rₜ) / (1 + r₀) − 1`, both percentages.
- * This is the one place the rebasing arithmetic lives, so the *Time-weighted return* tile and
- * the rebased curve cannot drift apart: the curve's final point is this function applied to the
- * same two endpoints the tile reads (Story #169).
- *
- * Exported for `dailyReturns`, which rebases each point onto the one before it (Story #170) — the
- * same operation with a different base, and the same reason to have one definition of it: a
- * private copy would be free to disagree about the two degenerate bases below.
- *
- * A base of exactly 0% short-circuits to the value itself. That is not just an optimisation —
- * it keeps "Full history" an exact identity rather than one float round-trip away from it.
- *
- * A base of exactly −100% is a total loss: the denominator is zero, the window's time-weighted
- * return is undefined, and the chain-link would emit `Infinity` (or `NaN`, when the value is
- * also −100%) into a chart axis. Degrade to the difference — bounded, still 0 at the window's
- * open, and equal to the chain-link in the only shape a wiped-out account can actually take
- * (a series that stays at −100%, since without a deposit there is nothing left to grow).
- */
-export function chainLink(cumulativePct: number, basePct: number): number {
-  if (basePct === 0) return cumulativePct
-  const baseGrowth = 1 + basePct / 100
-  if (baseGrowth === 0) return cumulativePct - basePct
-  return ((1 + cumulativePct / 100) / baseGrowth - 1) * 100
-}
-
-/** Windowed headline figures the Performance stat tiles render. */
-export interface WindowStats {
-  /** Portfolio value at the window end. */
-  endValue: number
-  /** Absolute value change across the window (end − start). */
-  changeAbs: number
-  /** Percentage value change; `null` when the start value is zero (undefined ratio). */
-  changePct: number | null
-  /** Time-weighted return over the window, chain-linked from the cumulative TWR endpoints. */
-  twr: number
-}
-
-/** The full [earliest, latest] date span of a series, or `null` when it has no points. */
-export function seriesExtent(series: readonly ValuePoint[]): Bounds | null {
-  if (series.length === 0) return null
-  let from = series[0]!.date
-  let to = series[0]!.date
-  for (const p of series) {
-    if (p.date < from) from = p.date
-    if (p.date > to) to = p.date
-  }
-  return { from, to }
-}
-
-/**
- * The series value in effect at time `t` — the last point at or before `t` (carry-forward
- * step), or the first point's value when `t` predates the series. Assumes ascending order.
- */
-export function valueAt(series: readonly ValuePoint[], t: number): number {
-  if (series.length === 0) return 0
-  let result = series[0]!.value
-  for (const p of series) {
-    if (p.date <= t) result = p.value
-    else break
-  }
-  return result
-}
+export { chainLink, seriesExtent, valueAt, windowStats }
+export type { WindowStats }
 
 /**
  * Slice a series to a window for charting, anchoring synthetic endpoints at the window edges
@@ -119,25 +72,4 @@ export function rebaseSeries(series: readonly ValuePoint[], bounds: Bounds): Val
   const base = windowed[0]!.value
   if (base === 0) return windowed
   return windowed.map((p) => ({ date: p.date, value: chainLink(p.value, base) }))
-}
-
-/**
- * Headline figures for a window: portfolio value at the end, its absolute and percentage
- * change from the window start, and the window's time-weighted return. TWR is chain-linked
- * from the cumulative-TWR curve's endpoints, so it is contribution-adjusted like the series —
- * and through the shared `chainLink`, it is exactly where `rebaseSeries` leaves the curve.
- */
-export function windowStats(
-  valueSeries: readonly ValuePoint[],
-  returnSeries: readonly ValuePoint[],
-  bounds: Bounds,
-): WindowStats {
-  const startValue = valueAt(valueSeries, bounds.from)
-  const endValue = valueAt(valueSeries, bounds.to)
-  const changeAbs = endValue - startValue
-  const changePct = startValue !== 0 ? (changeAbs / startValue) * 100 : null
-
-  const twr = chainLink(valueAt(returnSeries, bounds.to), valueAt(returnSeries, bounds.from))
-
-  return { endValue, changeAbs, changePct, twr }
 }

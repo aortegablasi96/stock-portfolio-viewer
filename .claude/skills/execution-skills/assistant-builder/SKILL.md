@@ -88,7 +88,7 @@ every tool returns a **computed report** — the model may never derive a figure
 
 Tools must map to:
 
-* **exactly one service method each.** Many tools may share one method — four narrow tools over
+* **exactly one service method each.** Many tools may share one method — the four period tools over
   `analytics:getPerformance` only *narrow* it — but **no tool may span two**, because a join is
   computation performed in the layer least covered by the service tests. Where no method exists,
   **add the method**; that is ADR-0009's sanctioned route and it is deliberately the expensive one.
@@ -222,22 +222,30 @@ statistic, benchmark — conditional on those blocks being present, so a tool th
 call would unbind all three and nothing would fail (DDR-0101, DDR-0110, DDR-0111).
 
 **A new tool restates the absences its own figures qualify**, in its own payload, the way
-`performanceSection` restates the three for the period it is about. That is belt-and-braces: what
+`get_performance` restates the three for the period it is about. That is belt-and-braces: what
 holds the prohibitions is the base context, and a tool that carried them *instead* would put them
-back behind a choice.
+back behind a choice. Watch the **name** as well as the payload: `get_daily_extremes` was renamed to
+`get_daily_returns` before it was built, because a name promising volatility reads as the supply
+DDR-0110's risk-statistic prohibition is conditional on (Story #327).
 
-**A report says what its percentages are a share of** (Story #326). Two of the four weigh the same
+**A report says what its percentages are a share of** (Story #326). Two of the reports weigh the same
 portfolio against two totals by design — the live overview excludes cash, the rebalancing gaps
 include it (DDR-0095) — and both are right. A model that met them without being told would reconcile
 two right answers by picking one, so each opening line names its own denominator, its store and its
 clock.
 
+**A period is an enumerated key, never a range** (Story #327, DDR-0102). The set is precomputed, so a
+window it does not hold is a **named state listing the alternatives** — never the adjacent row, which
+is the *helpful substitution* a model reaches for. Resolution is an exact match on the key: no case
+fold, no prefix, no nearest. A tool taking `from`/`to` is the period picker DDR-0102 removed,
+arriving through a different door.
+
 **Do not add to the base context, to a tool report, or to a tool description without measuring.**
-`promptBudget.test.ts` measures the **conversation**, not the prompt: the first round is ~36% of
-`MAX_PROMPT_CHARS`, and every report at once ~90%. The **85% gate binds the first round plus the
-largest single report**, which is what a real question costs and where a new tool's room has to come
-from. Tool *schemas* are outside the gateway's own count — a schema is not a message — so they are
-measured there too.
+`promptBudget.test.ts` measures the **conversation**, not the prompt: the first round is ~16% of
+`MAX_PROMPT_CHARS` (the renderer assembles nothing now), and every report at once ~96%. The **85%
+gate binds the first round plus the largest single report** — ~41% — which is what a real question
+costs and where a new tool's room has to come from. Tool *schemas* are outside the gateway's own
+count — a schema is not a message — so they are measured there too.
 
 The loop is **bounded twice** and is not a retry: a retry re-sends the *same* request after a
 **failure**; a round sends a *larger* message array after a **success**, and a failed round is still

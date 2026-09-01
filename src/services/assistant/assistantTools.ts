@@ -1,5 +1,6 @@
 import { portfolioService } from '@services/portfolio/portfolioService'
 import { allocationService } from '@services/analytics/allocationService'
+import { performanceService } from '@services/analytics/performanceService'
 import { investorProfileService } from '@services/profile/investorProfileService'
 import { balanceDriftService } from '@services/profile/balanceDriftService'
 import { IbkrNotConnectedError, IbkrTimeoutError } from '@shared/errors'
@@ -16,9 +17,17 @@ import {
   type AllocationDimension,
   type LivePortfolioResult,
 } from './toolReports'
+import {
+  HISTORY_SERIES,
+  dailyReturnsReport,
+  performancePeriodsReport,
+  performanceReport,
+  portfolioHistoryReport,
+  type HistorySeries,
+} from './performanceReports'
 
 /**
- * The reports the model may ask for, and the one place a tool name meets a service (Story #326).
+ * The reports the model may ask for, and the one place a tool name meets a service (#326, #327).
  *
  * ## What a tool is allowed to be
  *
@@ -31,27 +40,36 @@ import {
  *    entry below calls a *service*, and the layering is the enforcement rather than the intention:
  *    a service is where the app's business rules already are.
  * 3. **One backing service method per tool.** Many tools may share a method; none may span two,
- *    because a join is computation performed in the layer least covered by service tests.
- *    `get_rebalance_gaps` is the case that makes the rule visible — the owner's targets and
- *    ADR-0012's baseline arrive in *one* payload, off one reading and one denominator, because
- *    splitting them is the second answer that record refused.
- * 4. **No write tool, and no path to one.** Four reads. `assistantTools.test.ts` asserts the
+ *    because a join is computation performed in the layer least covered by service tests. Both
+ *    halves of that rule are visible here. `get_rebalance_gaps` is the *may not span two* half — the
+ *    owner's targets and ADR-0012's baseline arrive in one payload, off one reading and one
+ *    denominator, because splitting them is the second answer that record refused. The four
+ *    performance tools are the *may share one* half: they are four narrowings of
+ *    `analytics:getPerformance`, adding no arithmetic and no join, where one tool with a `section`
+ *    argument would be a discriminated tool wearing a disguise (Story #327).
+ * 4. **No write tool, and no path to one.** Eight reads. `assistantTools.test.ts` asserts the
  *    registry against the read-only methods it is allowed to name, so a future entry that mutated
  *    anything fails there rather than being caught by review.
  *
  * **No argument is a predicate** (DDR-0111). No filter, sort, comparison, threshold or free-form
- * range: those are the general query arriving as a parameter rather than as a tool.
- * `get_allocation`'s `limit` is the one bounded exception and it is a **count, not a condition** —
- * largest-N by weight, a shape the allocation report already computes.
+ * range: those are the general query arriving as a parameter rather than as a tool. Three arguments
+ * exist and none of them is one. `get_allocation`'s `limit` is a **count, not a condition** —
+ * largest-N by weight, a shape the allocation report already computes. A `period` is an
+ * **enumerated key** out of the precomputed set, so a window this app did not measure is a named
+ * state with the alternatives rather than a range anyone can describe (DDR-0102). And
+ * `get_portfolio_history`'s `series` **selects between two answers**, which is the split DDR-0013
+ * requires rather than a filter over one.
  *
  * ## The disclosure has to reach a tool result, or a tool is the way around it
  *
  * `pickDisclosedSections` bounds the assembled context at the IPC boundary, and tool results never
  * cross that boundary — they are built here, in main, and go straight to the gateway. So each tool
  * **declares the category it falls under**, the categories are asserted to be a subset of
- * `DISCLOSURE_CATEGORIES`, and the granularity that category declares is what the report may carry:
- * all four fall under `holdings`, `weights` or `profile`, which are names and percentages, so **no
- * amount of money appears in any of them** (DDR-0098, DDR-0111 decision 6).
+ * `DISCLOSURE_CATEGORIES`, and the granularity that category declares is what the report may carry.
+ * The line runs between the two halves of this registry: the first four fall under `holdings`,
+ * `weights` or `profile`, which are names and percentages, so **no amount of money appears in any of
+ * them**; the four performance tools declare `performance`, which is the one category disclosed at
+ * `figures` and the only place an amount is allowed (DDR-0098, DDR-0111 decision 6).
  *
  * ## The absences are not here, and that is deliberate
  *
@@ -128,6 +146,54 @@ const NO_PARAMETERS: Record<string, unknown> = {
   additionalProperties: false,
 }
 
+/**
+ * How a period is named to the model, and why the schema cannot enumerate the keys itself.
+ *
+ * **The set is a function of the imported history**, so the valid keys are `2025` and `Q3 2025` in
+ * one account and `2011` and `Q1 2012` in another; a static `enum` here would be a lie in every
+ * account but one. The enumeration is real all the same and is enforced where it can be — the key
+ * must be one `get_performance_periods` listed, `findPeriod` matches it exactly, and a miss is a
+ * named state **with the alternatives** rather than the adjacent row (DDR-0102, DDR-0111).
+ *
+ * It is therefore **not** a free-form range: there is no `from`, no `to`, and no way to describe a
+ * window in words. A tool taking one would be the period picker DDR-0102 removed, arriving through a
+ * different door.
+ */
+const PERIOD_ARGUMENT: Record<string, unknown> = {
+  type: 'string',
+  description:
+    'Which period, as one of the exact keys get_performance_periods lists (for example "all", "trailing:1y", "year:2025", "quarter:Q3 2025"). Call that tool first if you do not already have the keys. There is no free-form date range: a window this app did not compute comes back as unavailable, with the periods that exist listed.',
+}
+
+const PERIOD_PARAMETERS: Record<string, unknown> = {
+  type: 'object',
+  properties: { period: PERIOD_ARGUMENT },
+  required: ['period'],
+  additionalProperties: false,
+}
+
+/**
+ * `get_portfolio_history`'s two arguments: which period, and **which** series.
+ *
+ * The `series` enum is the split DDR-0013 requires and DDR-0111 pinned. Value over time and
+ * composition over time are two answers about the same days, and returning both in one payload is
+ * how a model attributes a deposit to performance — so the model asks for one.
+ */
+const HISTORY_PARAMETERS: Record<string, unknown> = {
+  type: 'object',
+  properties: {
+    period: PERIOD_ARGUMENT,
+    series: {
+      type: 'string',
+      enum: [...HISTORY_SERIES],
+      description:
+        'Which series to return: "value" for the portfolio value on each day, or "composition" for how that value was divided across asset classes. One or the other, never both — a return over the period is get_performance’s single figure, and this tool returns no return at all.',
+    },
+  },
+  required: ['period', 'series'],
+  additionalProperties: false,
+}
+
 export const ASSISTANT_TOOLS: readonly AssistantTool[] = [
   {
     name: 'get_portfolio_overview',
@@ -172,6 +238,54 @@ export const ASSISTANT_TOOLS: readonly AssistantTool[] = [
     backedBy: 'balanceDriftService.getBalanceDrift',
     async run(_args, context): Promise<string> {
       return rebalanceGapsReport(await liveDrift(context.displayCurrency))
+    },
+  },
+  {
+    name: 'get_performance_periods',
+    description:
+      'Which periods this app has computed, by their exact keys: the whole imported history, the trailing windows, the recent calendar years and the recent calendar quarters, each with the window it covers and whether it holds any data. Carries no return and no value — it is the discovery tool. Call it before get_performance, get_daily_returns or get_portfolio_history unless you already have the keys, because those accept these keys only and no free-form date range exists.',
+    parameters: NO_PARAMETERS,
+    categories: ['performance'],
+    backedBy: 'performanceService.getPerformance',
+    async run(): Promise<string> {
+      return performancePeriodsReport(performanceService.getPerformance())
+    },
+  },
+  {
+    name: 'get_performance',
+    description:
+      'The return and the value over one period of the imported statement history, kept apart as two separate figures: a time-weighted return that money paid in or taken out does not move, and a change in value that it does. Also the deposits, withdrawals, dividend income, interest and commissions over the statement periods the window touches, and the whole-history roll-ups. Amounts are in the base currency of the imported statements. Takes one of get_performance_periods’ exact keys; a window this app did not compute comes back as unavailable with the alternatives listed.',
+    parameters: PERIOD_PARAMETERS,
+    categories: ['performance'],
+    backedBy: 'performanceService.getPerformance',
+    async run(args): Promise<string> {
+      return performanceReport(performanceService.getPerformance(), periodArgument(args))
+    },
+  },
+  {
+    name: 'get_daily_returns',
+    description:
+      'How the return over one period was travelled day by day: how many trading days were up, down and unchanged, and the best and worst day with its date. Each day is chain-linked from the return curve and measured against the trading day that really preceded it. It supplies no volatility, standard deviation, Sharpe ratio, beta or drawdown — this app computes none, and these counts and extremes are the only dispersion that exists. Takes one of get_performance_periods’ exact keys.',
+    parameters: PERIOD_PARAMETERS,
+    categories: ['performance'],
+    backedBy: 'performanceService.getPerformance',
+    async run(args): Promise<string> {
+      return dailyReturnsReport(performanceService.getPerformance(), periodArgument(args))
+    },
+  },
+  {
+    name: 'get_portfolio_history',
+    description:
+      'One period’s history day by day, as either the portfolio value on each day or how that value was divided across asset classes — one series or the other, never both, since a value and a return are different figures about the same days. Amounts are in the base currency of the imported statements, and long periods are sampled to a stated number of days. Takes one of get_performance_periods’ exact keys. It returns no return at all: ask get_performance for that.',
+    parameters: HISTORY_PARAMETERS,
+    categories: ['performance'],
+    backedBy: 'performanceService.getPerformance',
+    async run(args): Promise<string> {
+      return portfolioHistoryReport(
+        performanceService.getPerformance(),
+        periodArgument(args),
+        seriesArgument(args),
+      )
     },
   },
 ]
@@ -251,10 +365,48 @@ function parseArguments(argumentsJson: string): ParsedArguments {
  * place to land.
  */
 function allocationArguments(args: unknown): { dimension: AllocationDimension; limit: number | null } {
-  const record = typeof args === 'object' && args !== null ? (args as Record<string, unknown>) : {}
+  const record = argumentRecord(args)
   const dimension = ALLOCATION_DIMENSIONS.find((candidate) => candidate === record['dimension'])
   const limit = typeof record['limit'] === 'number' ? record['limit'] : null
   return { dimension: dimension ?? 'position', limit }
+}
+
+/**
+ * The period key as the model wrote it, passed through **unvalidated and unaltered** (Story #327).
+ *
+ * The opposite of {@link allocationArguments}' fallback, and deliberately: a dimension outside the
+ * enum is a model that has not read a schema listing five fixed names, where a period key is a
+ * question about a *window* and the honest answers are two — the app computed it, or it did not. A
+ * fallback here would answer about a period nobody asked for, which is the substitution DDR-0102's
+ * precomputed set exists to make impossible.
+ *
+ * So a missing or non-string key becomes the empty string and takes the same route as `2024-03-01..
+ * 2024-06-15`: `period_not_available`, naming what was asked for and listing every key that exists.
+ * There is no trimming, no case folding and no nearest match — every one of those turns *"this app
+ * does not hold that window"* into a right-looking figure under the wrong heading.
+ */
+function periodArgument(args: unknown): string {
+  const value = argumentRecord(args)['period']
+  return typeof value === 'string' ? value : ''
+}
+
+/**
+ * Which series `get_portfolio_history` was asked for; `value` where the model named neither.
+ *
+ * A fallback is right here where it is wrong for a period, and the difference is what an unreadable
+ * argument *means*: the enum has two fixed members the schema advertises in full, so an unknown one
+ * is a model that did not read it rather than a question about something the app cannot answer. The
+ * portfolio's value is the series a question about "history" almost always means, and the report
+ * names the series it returned in its own heading — so a wrong guess is visible rather than silent.
+ */
+function seriesArgument(args: unknown): HistorySeries {
+  const value = argumentRecord(args)['series']
+  return HISTORY_SERIES.find((candidate) => candidate === value) ?? 'value'
+}
+
+/** Whatever the model sent, as something with keys. A non-object carries no arguments. */
+function argumentRecord(args: unknown): Record<string, unknown> {
+  return typeof args === 'object' && args !== null ? (args as Record<string, unknown>) : {}
 }
 
 /**

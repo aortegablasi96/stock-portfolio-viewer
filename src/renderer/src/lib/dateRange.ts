@@ -7,13 +7,18 @@
  * Everything here is pure and view-agnostic: a range selection resolves to a `Bounds` window,
  * and rows or points are filtered against it by the caller. All timestamps are epoch-ms UTC,
  * matching the rest of the app.
+ *
+ * **`RangeId`, `Bounds` and `boundsFor` live in `@shared/domain/performanceWindow` since Story
+ * #327** and are re-exported here, so every call site keeps this module's name. The assistant's
+ * performance tools window the same report from **main**, where a renderer module is not
+ * (DDR-0111), and a second implementation of "what 1M means" would be free to disagree with the
+ * chart. What stayed is what is about a *control*: the preset list its buttons render, the row
+ * filters the tables use, and the two date-input conversions.
  */
+import { boundsFor, type Bounds, type RangeId } from '@shared/domain/performanceWindow'
 
-/**
- * The selectable ranges: trailing windows back from the latest data point, one calendar-anchored
- * window (`ytd`), the full history, and custom.
- */
-export type RangeId = '1m' | '3m' | '1y' | 'ytd' | 'all' | 'custom'
+export { boundsFor }
+export type { Bounds, RangeId }
 
 export interface RangeOption {
   id: RangeId
@@ -45,73 +50,6 @@ export const RANGE_OPTIONS: readonly RangeOption[] = [
   { id: 'all', label: 'All', title: 'Full history' },
   { id: 'custom', label: 'Custom', title: 'Custom date range' },
 ] as const
-
-/** An inclusive [from, to] window as epoch-ms UTC. */
-export interface Bounds {
-  from: number
-  to: number
-}
-
-/** Subtract whole months from an epoch-ms timestamp, in UTC. `Date.UTC` normalises overflow. */
-function subtractMonths(ms: number, months: number): number {
-  const d = new Date(ms)
-  return Date.UTC(
-    d.getUTCFullYear(),
-    d.getUTCMonth() - months,
-    d.getUTCDate(),
-    d.getUTCHours(),
-    d.getUTCMinutes(),
-    d.getUTCSeconds(),
-    d.getUTCMilliseconds(),
-  )
-}
-
-/** UTC midnight on 1 January of the year containing `ms`. */
-function startOfUtcYear(ms: number): number {
-  return Date.UTC(new Date(ms).getUTCFullYear(), 0, 1)
-}
-
-/**
- * Resolve a range selection to a concrete window. Trailing presets end at the latest data
- * point (`extent.to`) and start N months back, clamped so a short history never starts before
- * the first point. `custom` is normalised (ordered and clamped into the data span).
- *
- * Anchoring to the data rather than to "now" matters for imported history: a statement exported
- * last month would otherwise leave "1M" empty.
- *
- * `ytd` is the one **calendar-anchored** preset (Story #256, DDR-0085), and it takes the same
- * anchor as the trailing ones — `extent.to`, not today. Two reasons, and both are the anchor
- * rather than the arithmetic: this function is a pure function of its arguments, which is what
- * lets its whole contract be asserted without a clock; and a history that stops in an earlier year
- * resolves to that year's 1 January through its last point, which is the tail of the last year
- * that has data. Anchored to today the same history would resolve to an empty window — a chart
- * showing nothing, with no way for a reader to tell the preset from the data.
- *
- * The `switch` is deliberately **exhaustive without a `default`**: the declared return type makes
- * a missing case a compile error, where a `default` would have quietly folded a new id into
- * `all` — a window over everything looks plausible enough to ship.
- */
-export function boundsFor(range: RangeId, extent: Bounds, custom: Bounds): Bounds {
-  switch (range) {
-    case '1m':
-      return { from: Math.max(subtractMonths(extent.to, 1), extent.from), to: extent.to }
-    case '3m':
-      return { from: Math.max(subtractMonths(extent.to, 3), extent.from), to: extent.to }
-    case '1y':
-      return { from: Math.max(subtractMonths(extent.to, 12), extent.from), to: extent.to }
-    case 'ytd':
-      return { from: Math.max(startOfUtcYear(extent.to), extent.from), to: extent.to }
-    case 'custom': {
-      const lo = Math.min(custom.from, custom.to)
-      const hi = Math.max(custom.from, custom.to)
-      const from = Math.max(lo, extent.from)
-      const to = Math.min(hi, extent.to)
-      return { from: Math.min(from, to), to }
-    }
-    case 'all':
-      return extent
-  }
-}
 
 /** The last instant of the UTC day containing `ms`. */
 function endOfUtcDay(ms: number): number {

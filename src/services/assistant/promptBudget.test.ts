@@ -9,6 +9,14 @@ import {
   rebalanceGapsReport,
   type LivePortfolioResult,
 } from './toolReports'
+import {
+  MAX_HISTORY_POINTS,
+  dailyReturnsReport,
+  performancePeriodsReport,
+  performanceReport,
+  portfolioHistoryReport,
+} from './performanceReports'
+import { MAX_LISTED_QUARTERS, MAX_LISTED_YEARS } from '@shared/domain/standardPeriods'
 import { MAX_PROMPT_CHARS, MAX_TOOL_ROUNDS } from '@repositories/assistant/aiGateway'
 import { ABSENCE_DISCLOSURES } from '@shared/domain/assistantAbsences'
 import type { AiMessage } from '@shared/domain/assistant'
@@ -22,7 +30,7 @@ import type {
   DriftBand,
 } from '@shared/domain/balanceDrift'
 import { BASELINE_CHECKS, BASELINE_VERSION } from '@shared/domain/portfolioBaseline'
-import type { PerformanceReport, ValuePoint } from '@shared/domain/performance'
+import type { PerformanceReport, PerformanceResult, ValuePoint } from '@shared/domain/performance'
 import {
   EMPTY_INVESTOR_PROFILE,
   type CategoryTarget,
@@ -378,49 +386,74 @@ const LIVE: LivePortfolioResult = {
 }
 
 /**
- * The first round: the system prompt, the base context, the one remaining section and the question.
+ * The first round: the system prompt, the base context and the question.
  *
- * Two turns, as they were — what shrank is the second of them (Story #326). A first round over the
- * ceiling never reaches a second, so this is still measured on its own before anything is added.
+ * Two turns, as they always were — what shrank is the second of them. #326 took three of the four
+ * assembled sections behind tools and #327 took the fourth, so the user turn is now the base context
+ * and the question alone (`buildAssistantContext` returns `{}` and takes nothing). It is still
+ * measured on its own before anything is added: a first round over the ceiling never reaches a
+ * second, and it no longer varies with the reports at all — which is why the two cases below differ
+ * only in what their *tool answers* cost.
  */
-const firstRound = (reports: GroundingReports): AiMessage[] => [
+const firstRound = (): AiMessage[] => [
   { role: 'system', content: SYSTEM_PROMPT },
-  { role: 'user', content: buildPrompt(QUESTION, buildAssistantContext(reports)) },
+  { role: 'user', content: buildPrompt(QUESTION, buildAssistantContext()) },
 ]
 
 /**
  * The worst round a tool loop can produce: **every** report, in one round, at every cap.
  *
- * A real question calls one or two tools. This calls all four in a single round — which is a shape
+ * A real question calls one or two tools. This calls all eight in a single round — which is a shape
  * the provider may genuinely return, and the largest one round can be — and measures the
  * conversation the *next* round would carry, because that is the array the gateway checks. Sizing
  * only the reports would miss the question they are appended to.
  *
+ * Each performance tool is measured over the **longest** history the caps allow and the widest
+ * period in it, which is the whole twenty years: the periods list is at both its caps, the value and
+ * composition histories are at `MAX_HISTORY_POINTS`, and every band is populated on every day.
+ *
  * The call arguments are counted the way `conversationSize` counts them: a name and its JSON, which
  * is the material a loop adds and the growth the ceiling exists to see.
  */
+const HISTORY = longHistory()
+const PERFORMANCE: PerformanceResult = { status: 'ok', report: HISTORY }
+
 const toolAnswers = (reports: GroundingReports): string[] => [
   portfolioOverviewReport(LIVE),
   investorProfileReport(reports.profile),
   allocationReport({ status: 'ok', report: ALLOCATION }, 'position', MAX_LISTED_POSITIONS),
   rebalanceGapsReport(reports.drift),
+  performancePeriodsReport(PERFORMANCE),
+  performanceReport(PERFORMANCE, 'all'),
+  dailyReturnsReport(PERFORMANCE, 'all'),
+  portfolioHistoryReport(PERFORMANCE, 'all', 'composition'),
+]
+
+/** The calls that produce {@link toolAnswers}, index-aligned with it. */
+const TOOL_CALLS = [
+  { id: 'call_1', name: 'get_portfolio_overview', argumentsJson: '{}' },
+  { id: 'call_2', name: 'get_investor_profile', argumentsJson: '{}' },
+  { id: 'call_3', name: 'get_allocation', argumentsJson: '{"dimension":"position","limit":40}' },
+  { id: 'call_4', name: 'get_rebalance_gaps', argumentsJson: '{}' },
+  { id: 'call_5', name: 'get_performance_periods', argumentsJson: '{}' },
+  { id: 'call_6', name: 'get_performance', argumentsJson: '{"period":"all"}' },
+  { id: 'call_7', name: 'get_daily_returns', argumentsJson: '{"period":"all"}' },
+  {
+    id: 'call_8',
+    name: 'get_portfolio_history',
+    argumentsJson: '{"period":"all","series":"composition"}',
+  },
 ]
 
 const afterOneToolRound = (reports: GroundingReports): AiMessage[] => {
-  const calls = [
-    { id: 'call_1', name: 'get_portfolio_overview', argumentsJson: '{}' },
-    { id: 'call_2', name: 'get_investor_profile', argumentsJson: '{}' },
-    { id: 'call_3', name: 'get_allocation', argumentsJson: '{"dimension":"position","limit":40}' },
-    { id: 'call_4', name: 'get_rebalance_gaps', argumentsJson: '{}' },
-  ]
   const answers = toolAnswers(reports)
 
   return [
-    ...firstRound(reports),
-    { role: 'assistant', content: '', toolCalls: calls },
+    ...firstRound(),
+    { role: 'assistant', content: '', toolCalls: TOOL_CALLS },
     ...answers.map((content, index) => ({
       role: 'tool' as const,
-      toolCallId: calls[index]!.id,
+      toolCallId: TOOL_CALLS[index]!.id,
       content,
     })),
   ]
@@ -444,24 +477,29 @@ const CASES: [string, GroundingReports][] = [
   ['no profile at all, so the baseline runs', REPORTS_NO_PROFILE],
 ]
 
+/**
+ * **The first round no longer varies with the portfolio at all**, which is Story #327's own result
+ * and the reason this block is one case where it used to be two: the renderer assembles nothing, so
+ * the first message array is the system prompt, the absences and the question, whatever has been
+ * imported and whatever the owner has written. What still varies per case is the *reports*, and they
+ * are measured below.
+ */
 describe('the first round at the worst case the caps allow', () => {
-  it.each(CASES)(
-    'fits inside the ceiling with room for the reports to come: %s',
-    (_case, reports) => {
-      const first = size(firstRound(reports))
+  it('fits inside the ceiling with room for the reports to come', () => {
+    const first = size(firstRound())
 
-      expect(first).toBeLessThan(MAX_PROMPT_CHARS)
-      // **Story #326 is what bought this room back.** The worst case was 84.8% of the ceiling with
-      // roughly 90 characters to spare, which is why nothing could be added to the assembled
-      // context — and why a tool result appended to it would have ended the question as
-      // `incomplete` rather than answering it. Three of the four sections are tools now, so the
-      // first round is a fraction of what it was and the rest of the budget is what reports spend.
-      expect(first).toBeLessThan(MAX_PROMPT_CHARS * 0.5)
-    },
-  )
+    expect(first).toBeLessThan(MAX_PROMPT_CHARS)
+    // **Stories #326 and #327 are what bought this room back.** The worst case was 84.8% of the
+    // ceiling with roughly 90 characters to spare, which is why nothing could be added to the
+    // assembled context — and why a tool result appended to it would have ended the question as
+    // `incomplete` rather than answering it. Every section is a tool now and the renderer assembles
+    // nothing, so the first round is ~15.9% at the time of writing, and the rest of the budget is
+    // what reports spend.
+    expect(first).toBeLessThan(MAX_PROMPT_CHARS * 0.25)
+  })
 
-  it.each(CASES)('is measured with every absence in it: %s', (_case, reports) => {
-    const [system, user] = firstRound(reports)
+  it('is measured with every absence in it', () => {
+    const [system, user] = firstRound()
 
     for (const disclosure of ABSENCE_DISCLOSURES) {
       expect(user!.content).toContain(disclosure.text)
@@ -479,7 +517,7 @@ describe('the conversation after the model has asked for reports', () => {
    * the room for #327's performance tools has to come from.
    */
   it.each(CASES)('leaves the gate intact for the largest single report: %s', (_case, reports) => {
-    const first = size(firstRound(reports))
+    const first = size(firstRound())
     const largest = Math.max(...toolAnswers(reports).map((answer) => answer.length))
 
     expect(first + largest).toBeLessThan(MAX_PROMPT_CHARS * 0.85)
@@ -488,14 +526,19 @@ describe('the conversation after the model has asked for reports', () => {
   /**
    * **The exhaustive case: every report this app has, in one round.** It fits, and it is measured
    * here without the 85% gate on purpose — the gate is DDR-0103's on what is *assembled* and sent
-   * unasked, and this is a conversation in which the model asked for all four at once over a fixture
-   * larger than any real portfolio. At the time of writing it comes to roughly 90% of the ceiling
-   * against a first round at 36%, which is the trade this story made: what used to be sent with
-   * every question is now sent only when it is asked for.
+   * unasked, and this is a conversation in which the model asked for all eight at once over a
+   * fixture larger than any real portfolio: forty long-named positions, thirty-three bands every one
+   * of them out of range, and twenty years of daily history. At the time of writing it comes to
+   * roughly 96% of the ceiling against a first round at 16%, which is the trade the Epic made: what
+   * used to be sent with every question is now sent only when it is asked for.
+   *
+   * **96% is the number a ninth tool has to be measured against**, and it is deliberately not the
+   * gate: a question that calls every report at once is not one anyone asks, and the assertion above
+   * — the largest single report on the largest first round, at ~41% — is what a real question costs.
    *
    * A *second* exhaustive round is what the bounds exist to stop, and it stops as `incomplete` — a
-   * named state, never a partial answer. There are only four reports, so a model asking for all of
-   * them twice is the runaway `MAX_PROMPT_CHARS` rations rather than a question anyone asked.
+   * named state, never a partial answer. A model asking for all eight reports twice is the runaway
+   * `MAX_PROMPT_CHARS` rations rather than a question anyone asked.
    */
   it.each(CASES)('fits inside the ceiling with every report in it: %s', (_case, reports) => {
     expect(size(afterOneToolRound(reports))).toBeLessThan(MAX_PROMPT_CHARS)
@@ -512,16 +555,22 @@ describe('the conversation after the model has asked for reports', () => {
    * than on the ceiling. What the ceiling still rations is a model asking for the *same* report
    * twice, which is the runaway rather than a question.
    */
-  it.each(CASES)('fits however the four reports are spread over the rounds: %s', (_case, reports) => {
+  it.each(CASES)('fits however the eight reports are spread over the rounds: %s', (_case, reports) => {
     const answers = toolAnswers(reports)
-    expect(answers).toHaveLength(MAX_TOOL_ROUNDS)
+    // Two calls per round, at `MAX_TOOL_ROUNDS` exactly — the shape a multi-step question takes,
+    // and the most rounds a conversation carrying every report can be spread over.
+    const perRound = answers.length / MAX_TOOL_ROUNDS
+    expect(Number.isInteger(perRound)).toBe(true)
 
-    const messages: AiMessage[] = [...firstRound(reports)]
-    answers.forEach((content, index) => {
-      const call = { id: `call_${index}`, name: 'get_rebalance_gaps', argumentsJson: '{}' }
-      messages.push({ role: 'assistant', content: '', toolCalls: [call] })
-      messages.push({ role: 'tool', toolCallId: call.id, content })
-    })
+    const messages: AiMessage[] = [...firstRound()]
+    for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+      const calls = TOOL_CALLS.slice(round * perRound, (round + 1) * perRound)
+      messages.push({ role: 'assistant', content: '', toolCalls: calls })
+      for (const call of calls) {
+        const index = TOOL_CALLS.indexOf(call)
+        messages.push({ role: 'tool', toolCallId: call.id, content: answers[index]! })
+      }
+    }
 
     expect(size(messages)).toBeLessThan(MAX_PROMPT_CHARS)
   })
@@ -531,10 +580,15 @@ describe('the conversation after the model has asked for reports', () => {
    * left out, in the report that cut it.
    */
   it('is held there by the caps, each of which states what it left out', () => {
-    const context = buildAssistantContext(REPORTS)
-
-    expect(context.performance).toContain('Calendar years: the 8 most recent of 20')
-    expect(context.performance).toContain('Calendar quarters: the 8 most recent of 80')
+    expect(performancePeriodsReport(PERFORMANCE)).toContain(
+      `Calendar years: the ${MAX_LISTED_YEARS} most recent of 20`,
+    )
+    expect(performancePeriodsReport(PERFORMANCE)).toContain(
+      `Calendar quarters: the ${MAX_LISTED_QUARTERS} most recent of 80`,
+    )
+    expect(portfolioHistoryReport(PERFORMANCE, 'all', 'composition')).toContain(
+      `The ${MAX_HISTORY_POINTS} day(s) below are evenly spaced samples of the 7300 day(s)`,
+    )
     expect(portfolioOverviewReport(LIVE)).toContain(
       `The ${MAX_LISTED_POSITIONS} largest of ${MAX_LISTED_POSITIONS + 14} open positions`,
     )
@@ -548,11 +602,17 @@ describe('the conversation after the model has asked for reports', () => {
 
   /**
    * The tool declarations are sent on every round too, and they are **not** in the gateway's count —
-   * a schema is not a message. What stops them growing is this: a story adding a fifth tool, or a
+   * a schema is not a message. What stops them growing is this: a story adding a ninth tool, or a
    * paragraph to a description, measures it here.
+   *
+   * **The ceiling was raised from 4,000 to 8,000 in Story #327**, deliberately and once: eight tools
+   * at roughly 830 characters each, where the four of #326 came to about 2,800. The descriptions are
+   * where the four period tools say the key comes from `get_performance_periods` and that no
+   * free-form range exists, which is the sentence that keeps a model from inventing one — so the
+   * growth buys the property DDR-0102 is about rather than padding.
    */
   it('declares tool schemas small enough to be sent on every round', () => {
-    expect(JSON.stringify(assistantToolDefinitions()).length).toBeLessThan(4_000)
+    expect(JSON.stringify(assistantToolDefinitions()).length).toBeLessThan(8_000)
   })
 
   /**

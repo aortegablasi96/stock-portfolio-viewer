@@ -45,8 +45,15 @@
  */
 import type { CompositionBand, CompositionPoint } from '@shared/domain/performance'
 import { columnDomain, type ColumnDomain } from './column'
-import type { Bounds } from './dateRange'
 import { OTHER_KEY, sliceColorClasses } from './pie'
+
+/**
+ * The window slice moved to `@shared/domain/performanceWindow` in Story #327 and is re-exported
+ * here, keeping this module's name at every call site. `get_portfolio_history` slices the same
+ * points from **main**, and the refusal below — a composition point is a simultaneous observation
+ * and is never carried forward — is one rule, stated once (DDR-0052, DDR-0111).
+ */
+export { sliceComposition } from '@shared/domain/performanceWindow'
 
 /**
  * The palette class for each band, index-aligned with `bands`.
@@ -169,23 +176,6 @@ export function bandPaint(stack: readonly StackBand[], gradientId: string): Band
       ? { className: 'stack-band stack-band-top', fill: `url(#${gradientId})` }
       : { className: 'stack-band stack-band-flat' }),
   }))
-}
-
-/**
- * Restrict the series to a window, keeping only the days that really fall in it.
- *
- * Deliberately **not** `sliceSeries`, which anchors synthetic endpoints at the window edges by
- * carrying the last known value forward. That is right for a single scalar — a portfolio had
- * *some* value on the window's first day — but a composition point is a simultaneous
- * observation of every band, and a carried-forward one would draw a portfolio shape on a date
- * it was never measured. The series is daily, so the real first point inside the window is at
- * most a day away from its edge and there is nothing to gain by inventing one.
- */
-export function sliceComposition(
-  points: readonly CompositionPoint[],
-  bounds: Bounds,
-): CompositionPoint[] {
-  return points.filter((p) => p.date >= bounds.from && p.date <= bounds.to)
 }
 
 /** The plot box, in `viewBox` units. */

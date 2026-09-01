@@ -836,8 +836,12 @@ function countLine(listed: number, total: number): string {
  * formatters" rule gives way on purpose: a locale date is ambiguous read back (03/04 is two dates),
  * and unlike every figure here, a date in an answer is prose the model rewrites rather than a number
  * it must quote verbatim.
+ *
+ * Exported for `performanceReports.ts`, which writes dates in the same shape (Story #327). One
+ * definition rather than two: a period's bounds and an allocation's report date have to read alike,
+ * or the model has two date formats to reconcile inside one answer.
  */
-function isoDay(epochMs: number): string {
+export function isoDay(epochMs: number): string {
   return new Date(epochMs).toISOString().slice(0, 10)
 }
 
