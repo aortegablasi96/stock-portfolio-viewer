@@ -1,5 +1,6 @@
 import { aiGateway } from '@repositories/assistant/aiGateway'
 import { apiKeyService } from '@services/assistant/apiKeyService'
+import { assistantToolDefinitions, runAssistantTool } from '@services/assistant/assistantTools'
 import { BASE_CONTEXT } from '@shared/domain/assistantAbsences'
 import {
   DISCLOSURE_CATEGORIES,
@@ -27,6 +28,14 @@ import type {
  * the list — the type says so at compile time, and {@link buildPrompt} drops anything unknown at
  * runtime, in declaration order. `DISCLOSURE_CATEGORIES` stopped being *rendered* and did not stop
  * being the bound (DDR-0098).
+ *
+ * **It is also where the tool inventory meets the gateway** (Story #326, DDR-0111). The reports
+ * themselves are `assistantTools.ts`'s; what happens here is that they are declared *and* executed
+ * as a pair, which is the shape `aiGateway` requires — a repository holding the inventory would be
+ * one reaching the services above it. The same boundary applies to a tool result as to a section,
+ * and it applies **here** rather than at IPC: a report is assembled in main and never crosses that
+ * bound, so each tool declares its disclosure category and a test holds the registry to the list
+ * (DDR-0111, decision 6).
  */
 
 /**
@@ -196,6 +205,17 @@ export const SYSTEM_PROMPT = [
   ...SYSTEM_PROMPT_SECTIONS.map((section) => `\n## ${section.heading}\n\n${section.body}`),
 ].join('\n')
 
+/**
+ * The display currency a question falls back to when its caller names none (Story #326).
+ *
+ * The renderer always names one: it is the shell's own selection, and every live weight a tool
+ * returns is a share of a total in it (DDR-0007). This is the fallback for a caller with no view —
+ * today only a test — and it is `EUR` because that is the account's base currency, the value
+ * `App.tsx` opens on, and what `performanceService`, `dividendService` and `realizedGainsService`
+ * each fall back to already. A fourth spelling of the same default, rather than a fourth default.
+ */
+const FALLBACK_DISPLAY_CURRENCY = 'EUR'
+
 export const assistantService = {
   /**
    * Whether the assistant can run, which after ADR-0011 is one question: is there a key.
@@ -234,28 +254,40 @@ export const assistantService = {
   },
 
   /**
-   * Ask the model a question, with context the caller has already assembled.
+   * Ask the model a question, and let it ask the app for the reports it needs.
    *
    * Nothing is checked before the gateway, because there is nothing left to check: the key **is**
    * the authorization, and a missing one is the gateway's own `not_configured` — a state in the
    * same register as everything beside it, never an exception (DDR-0022, DDR-0096).
    *
-   * The two strings are now **two messages** (Story #324, DDR-0111), which is the same exchange in
-   * the shape a tool loop needs. **No tool is declared here yet** and that is deliberate: #324
-   * ships the loop with a test double, and a service that declared a tool before there was a report
-   * behind it would be the model's first invitation to ask for one that does not exist.
+   * **The four tools are declared here, and this is the only place they are** (Story #326,
+   * DDR-0111). The gateway takes them and the executor together and checks them as a pair: a name
+   * the model asks for that is not in this list is `invalid`, and `runAssistantTool` never runs. The
+   * repository could not hold the inventory itself — a repository that knew which service computes
+   * which report would be one reaching the layer above it — so the mapping lives with the only
+   * caller the gateway has.
+   *
+   * `displayCurrency` rides with the question because a live weight is a share of a total in *some*
+   * currency, and the one the owner is looking at is the shell's selection (DDR-0007). A tool that
+   * resolved its own would answer in a currency that is on no page.
    *
    * The caller's context is optional and the default is `{}` — which is the case Story #325 makes
    * safe rather than merely legal. A question asked with nothing assembled still carries the base
    * context {@link buildPrompt} puts in front of it, so the prompt's three conditional prohibitions
    * are supported on **every** question, including the ones no report reached.
    */
-  async ask(question: string, context: AssistantContext = {}): Promise<AssistantAskResult> {
+  async ask(
+    question: string,
+    context: AssistantContext = {},
+    displayCurrency: string = FALLBACK_DISPLAY_CURRENCY,
+  ): Promise<AssistantAskResult> {
     return aiGateway.complete({
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: buildPrompt(question, context) },
       ],
+      tools: assistantToolDefinitions(),
+      runTool: (call) => runAssistantTool(call, { displayCurrency }),
     })
   },
 }

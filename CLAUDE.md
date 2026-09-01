@@ -56,57 +56,57 @@ Each exists end-to-end and is the reference pattern for its shape.
   arithmetic** — over the **live** portfolio, not Flex, which is why it is the one `profile:*`
   channel with gateway states (DDR-0095).
 - **assistant** — `assistantService` is the **only** caller of `aiGateway`. **The key is the
-  authorization**: a question goes with nothing in front of it, and the *gateway* owns the refusal.
-  No consent is asked for, stored or checked anywhere (ADR-0011; DDR-0107 supersedes DDR-0097).
-  `DISCLOSURE_CATEGORIES` outlives the panel it drew — it *types* `AssistantContext`, so an
-  undeclared section cannot be sent. The key field shows **only with no working key**; there is **no
-  remove, replace or rotate, not even a channel**. `assistant:ask` is the **one outbound channel**;
-  context is assembled in the **renderer** (`lib/assistantContext.ts`); the boundary drops
-  undeclared sections. Figures go through **`@shared/format`**, moved out of the renderer so main
-  can write one too (DDR-0111): it **imports nothing** (satisfying
-  `zodIsolation`), and its locale is **`APP_LOCALE`, never the host's** — two processes resolve
-  `undefined` differently, in silence. A section is **absent, never empty**; no money goes in one declared
-  as names or percentages; each names its store *and clock* — composition is Flex, drift live
-  (DDR-0098). An **explained period** keeps return and value in separate fields under separate
-  headings, return first — the curve is TWR, so a deposit moves value alone; the period is anchored
-  to `extent.to`, an overlapping statement row is summed **whole** and names the span it covered, an
-  empty window is a *state* not a flat period, and no cause is ever offered (DDR-0099). What the app
-  **does not** compute leads **every** prompt, **never a tool**: a fact the model may decline
-  to fetch holds no rule (`BASE_CONTEXT`, `@shared/domain/assistantAbsences.ts`): no annualised
-  figure, no benchmark, dispersion only from the daily returns that exist, the baseline's silences,
-  the currency reading, **two stores, two clocks**. A report restates its own — belt-and-braces, not
-  the binding (DDR-0101/0111). There is **no period control**: free text
-  already carries a period; a picker asks twice. Grounding is `wholeHistory()` (`all`, the
-  *identity* case, not a default), and the `empty_period` **notice** is gone while the **state**
-  stays — `periodChange`'s contract (DDR-0102).
-  The grounding is **every standard period, precomputed** (`lib/periodSet.ts`): a question about a
-  window the set does not hold is a **named state with alternatives**, not the adjacent row. A
+  authorization**: nothing stands in front of a question and the *gateway* owns the refusal; no
+  consent is asked for, stored or checked anywhere (ADR-0011, DDR-0107).
+  `DISCLOSURE_CATEGORIES` *types* `AssistantContext` **and every tool declares one** — a result
+  built in main never crosses the boundary that drops an undeclared section, so the registry test
+  is that half. The key field shows **only with no working key**; there is **no remove, replace or
+  rotate, not even a channel**. `assistant:ask` is the **one outbound channel**. **Four tools run
+  in main** (`assistantTools.ts`, prose in `toolReports.ts`): one read-only method each, **no
+  argument is a predicate** (`limit` is a *count*), a state is **never an empty report**, gaps
+  carry targets *and* baseline in one payload (DDR-0111). Only `performance` is still assembled, in
+  the renderer. **Two denominators**: the overview's weights **exclude cash**, drift's **include
+  it** — each says which. Figures go through **`@shared/format`** so main can write one too
+  (DDR-0111); its locale is **`APP_LOCALE`, never the host's** — two processes resolve `undefined`
+  differently, in silence. A section is **absent, never empty**; no money goes in one declared as
+  names or percentages; each names its store *and clock* — composition is Flex, drift live
+  (DDR-0098). An **explained period** keeps return and value apart, return first — the curve is
+  TWR, so a deposit moves value alone; the period is anchored to `extent.to`, an overlapping
+  statement row is summed **whole** and names its span, an empty window is a *state* not a flat
+  period, and no cause is ever offered (DDR-0099). What the app **does not** compute leads
+  **every** prompt, **never a tool**: a fact the model may decline to fetch holds no rule
+  (`BASE_CONTEXT`, `assistantAbsences.ts`): no annualised figure, no benchmark, no risk statistic,
+  the baseline's silences, the currency reading, **two stores, two clocks**. A report restates its
+  own — belt-and-braces, not the binding (DDR-0101). There is **no period control**: free text
+  already carries a period; a picker asks twice. Grounding is `wholeHistory()`; the `empty_period`
+  **notice** is gone, the **state** stays (DDR-0102). **Every standard period is precomputed**
+  (`periodSet.ts`): a question about a window the set does not hold is a **named state with
+  alternatives**, not the adjacent row. A
   trailing year is **"Last 12 months"** on purpose: `PERIOD_LABELS`' "Last year" beside a row named
   `2025` is the ambiguity. Only **consecutive same-kind** differences are computed; every other is
   forbidden in the text. A drift-closing **move** hangs off `DriftBand.move`
-  (`services/profile/driftMoves.ts`), non-`null` **exactly** when the band is outside its range: **proportional, not
+  (`driftMoves.ts`), non-`null` **exactly** when the band is outside its range: **proportional, not
   greedy**, capacity-capped by the owner's ceiling, the shortfall **`uncovered` and never
   redistributed, and percentage points never money**.
   Cash sits in a band, **never in a move**. An **untargeted dimension is said out loud**; absent
   from the report reads as balanced. Beside it sits the app's **baseline**
-  (`@shared/domain/portfolioBaseline`, ADR-0012, DDR-0109): four declared checks applied **only**
+  (`portfolioBaseline`, ADR-0012, DDR-0109): four declared checks applied **only**
   where the profile is silent, **never** to one the owner targeted — that is proposing the
   policy. Computed in `balanceDriftService` off the *same* reading and denominator (a second service
-  is a second answer), by conid, unrounded, on-the-ceiling is inside, and with **no move**. Every
-  line **says whose standard it is**; its silences — deferred checks, currency, the **absent sector
-  universe** (IBKR's `industry` is *open*, so a mapped taxonomy reads 0%) — are in `BASE_CONTEXT`. `no_profile`/`no_targets` are
-  **gone**, `balanced` is **nullable** (vacuous `true` is what a model calls balanced).
-  `promptBudget.test.ts` measures the worst case the caps allow (DDR-0103) — **84.8%** of
-  `MAX_PROMPT_CHARS` over **two** fixtures, since a profile that lengthens the drift shortens the
-  baseline; the **85% gate binds**, and ~90 chars are left: **add nothing to the context** until
-  tools take figures out.
-  The prompt is **eight `##` sections the owner wrote** (`SYSTEM_PROMPT_SECTIONS`; DDR-0110
-  supersedes DDR-0104's shape) — a **declared array**, never one template string, the count asserted
-  three ways (array, `SECTION_HEADINGS`, rendered `## ` lines): sharpen a section, don't add a
-  ninth. Tests pin **the guarantees the records make**, never the owner's wording. **For phrasing
-  the prompt is the *only* line of defence** — a test asserts a passage is present, never that it
-  was obeyed, so a rule needing a fact to be obeyable is a gap in the *grounding*; the tax/costs
-  rule has **no context half** (DDR-0104). Cause, risk statistic and benchmark are **conditional**
+  is a second answer), on-the-ceiling is inside, and with **no move**. Every line **says whose
+  standard it is**; its silences — deferred checks, currency, the **absent sector universe**
+  (IBKR's `industry` is *open*, so a mapped taxonomy reads 0%) — are in `BASE_CONTEXT`.
+  `no_profile`/`no_targets` are **gone**, `balanced` is **nullable** (vacuous `true` is what a model calls balanced).
+  `promptBudget.test.ts` measures the **conversation**, over **two** fixtures since a profile that
+  lengthens the drift shortens the baseline (DDR-0103). The **85% gate binds the first round plus
+  the largest single report**, not the exhaustive case — all four at once is ~90% and fits; a
+  *repeated* report is what the ceiling rations, and crossing it mid-loop is `incomplete`.
+  The prompt is **eight `##` sections the owner wrote** (`SYSTEM_PROMPT_SECTIONS`, DDR-0110) — a
+  **declared array**, never one template string, the count asserted three ways: sharpen a section,
+  don't add a ninth. Tests pin **the guarantees the records make**, never the owner's wording:
+  **for phrasing the prompt is the only defence** — a passage can be asserted present, never
+  obeyed, so a rule needing a fact to be obeyable is a gap in the *grounding*; the tax/costs rule
+  has **no context half** (DDR-0104). Cause, risk statistic and benchmark are **conditional**
   on the absence blocks; each is bound to its sentence by test, so trimming one fails rather than
   unbinding a rule in silence. **A forecast is the model's only where the app computed one.**
 - **classification** — sector/industry. `classificationRepository` fronts *both* the mutable

@@ -1,13 +1,19 @@
 import { describe, expect, it } from 'vitest'
 import { SYSTEM_PROMPT, buildPrompt } from './assistantService'
-import { MAX_PROMPT_CHARS } from '@repositories/assistant/aiGateway'
-import { ABSENCE_DISCLOSURES } from '@shared/domain/assistantAbsences'
-import type { AiMessage } from '@shared/domain/assistant'
+import { assistantToolDefinitions } from './assistantTools'
 import {
   MAX_LISTED_POSITIONS,
-  buildAssistantContext,
-  type GroundingReports,
-} from '@renderer/lib/assistantContext'
+  allocationReport,
+  investorProfileReport,
+  portfolioOverviewReport,
+  rebalanceGapsReport,
+  type LivePortfolioResult,
+} from './toolReports'
+import { MAX_PROMPT_CHARS, MAX_TOOL_ROUNDS } from '@repositories/assistant/aiGateway'
+import { ABSENCE_DISCLOSURES } from '@shared/domain/assistantAbsences'
+import type { AiMessage } from '@shared/domain/assistant'
+import type { Holding } from '@shared/domain/portfolio'
+import { buildAssistantContext, type GroundingReports } from '@renderer/lib/assistantContext'
 import { CASH_ASSET_KEY } from '@shared/domain/assetClass'
 import type { AllocationPosition, AllocationReport, AllocationSlice } from '@shared/domain/allocation'
 import type {
@@ -26,20 +32,26 @@ import {
 /**
  * The prompt budget, measured at the worst case the caps allow (Story #287, DDR-0103).
  *
- * **A context truncated by the gateway is truncated arbitrarily: the last section simply stops.**
- * `aiGateway` refuses a prompt over `MAX_PROMPT_CHARS` outright — nothing is sent, which is the
- * honest failure — but a story that grows the context and never measures it ships an assistant that
- * refuses every question on a large enough portfolio. Every cap in the grounding exists to make
- * that unreachable, and this is the assertion that they still do.
+ * **A conversation over the gateway's ceiling is not sent, or is cut off mid-question.** `aiGateway`
+ * refuses a first round over `MAX_PROMPT_CHARS` outright as `too_large` — nothing is sent, which is
+ * the honest failure — and refuses a *later* one as `incomplete`, which is worse for an owner: the
+ * question was answered by nothing after several rounds were paid for. Every cap in the grounding
+ * and in the tool reports exists to make both unreachable, and this is the assertion that they still
+ * do.
  *
- * It sits on the **service** side, which is the one place the two halves of the real prompt meet:
- * the ceiling is the gateway's, the assembly is `buildPrompt`'s, and the sections are the
- * renderer's. Measuring anything less than `system + user` would be measuring a number the gateway
- * does not check.
+ * It sits on the **service** side, which is the one place every half of the real conversation meets:
+ * the ceiling is the gateway's, the assembly is `buildPrompt`'s, the one remaining section is the
+ * renderer's, and the reports are `toolReports.ts`'s.
+ *
+ * **Story #326 changes what is measured, because it changed what is sent.** Three of the four
+ * assembled sections became tools, so the first round is far smaller and the *conversation* is what
+ * has to fit: the question, then the reports the model asked for, each round carrying everything
+ * before it. Measuring only the first round would now measure the easy case and miss the one that
+ * ends in `incomplete`.
  *
  * The fixture is deliberately larger than a portfolio is: every list at its cap, every band out of
- * range, every name long, twenty years of history, and a question at the length a person will
- * actually type. If this passes, no real reading can fail.
+ * range, every name long, twenty years of history, every tool called in one round, and a question at
+ * the length a person will actually type. If this passes, no real reading can fail.
  */
 
 // As long as the real vocabularies get. A fixture whose every label is the longest string anyone
@@ -326,62 +338,130 @@ const QUESTION =
   'single-position ceiling? Please name the positions.'
 
 /**
- * The whole conversation, which is what the gateway's ceiling now counts (Story #324, DDR-0111).
+ * The live book at its worst: every position long-named, and six that could not be valued.
  *
- * The number does not move and neither does what it measures *here*: a question is still a system
- * turn and a user turn, so this is the same arithmetic the two strings used to do. What changed is
- * that the gateway checks it **before every round** rather than once — so this measures the first
- * round, which is the one the caps in `assistantContext` are responsible for. The rounds a tool
- * loop adds are bounded by `MAX_TOOL_ROUNDS` and by the same ceiling, and are `aiGateway.test.ts`'s
- * to assert; a story that wires up a tool has to keep *this* fitting first, because a first round
- * over the ceiling never reaches a second.
+ * The live overview has no cap of its own beyond `MAX_LISTED_POSITIONS`, and this fixture is beyond
+ * it on purpose — the report must be the thing that cuts, not the fixture.
  */
-const conversation = (reports: GroundingReports): AiMessage[] => [
+const LIVE_HOLDINGS: Holding[] = Array.from({ length: MAX_LISTED_POSITIONS + 20 }, (_, index) => ({
+  conid: index,
+  symbol: `SYMBOL${index}`,
+  description: `SYMBOL${index}`,
+  companyName: `${LONG_NAME} ${index}`,
+  quantity: 100,
+  averageCost: 100,
+  marketPrice: 150,
+  marketValue: 15_000,
+  unrealizedPnl: 5_000,
+  currency: 'USD',
+  // The last six carry no rate, which is the branch that names them and bounds every weight.
+  displayValue: index >= MAX_LISTED_POSITIONS + 14 ? null : 15_000 - index,
+  displayUnrealizedPnl: null,
+}))
+
+const LIVE: LivePortfolioResult = {
+  status: 'ok',
+  overview: {
+    holdings: LIVE_HOLDINGS,
+    balances: {
+      currency: 'EUR',
+      totalCashValue: 1_000_000,
+      netLiquidation: 50_000_000,
+      stockMarketValue: 49_000_000,
+    },
+    allocation: [],
+    totalMarketValue: 49_000_000,
+    displayCurrency: 'EUR',
+  },
+  displayCurrency: 'EUR',
+  readAt: Date.UTC(2026, 5, 30, 14, 22),
+}
+
+/**
+ * The first round: the system prompt, the base context, the one remaining section and the question.
+ *
+ * Two turns, as they were — what shrank is the second of them (Story #326). A first round over the
+ * ceiling never reaches a second, so this is still measured on its own before anything is added.
+ */
+const firstRound = (reports: GroundingReports): AiMessage[] => [
   { role: 'system', content: SYSTEM_PROMPT },
   { role: 'user', content: buildPrompt(QUESTION, buildAssistantContext(reports)) },
 ]
 
-const promptSize = (reports: GroundingReports): number =>
-  conversation(reports).reduce((total, message) => total + message.content.length, 0)
+/**
+ * The worst round a tool loop can produce: **every** report, in one round, at every cap.
+ *
+ * A real question calls one or two tools. This calls all four in a single round — which is a shape
+ * the provider may genuinely return, and the largest one round can be — and measures the
+ * conversation the *next* round would carry, because that is the array the gateway checks. Sizing
+ * only the reports would miss the question they are appended to.
+ *
+ * The call arguments are counted the way `conversationSize` counts them: a name and its JSON, which
+ * is the material a loop adds and the growth the ceiling exists to see.
+ */
+const toolAnswers = (reports: GroundingReports): string[] => [
+  portfolioOverviewReport(LIVE),
+  investorProfileReport(reports.profile),
+  allocationReport({ status: 'ok', report: ALLOCATION }, 'position', MAX_LISTED_POSITIONS),
+  rebalanceGapsReport(reports.drift),
+]
 
-/** The one section both baselines are written into. */
-const profileOf = (reports: GroundingReports): string =>
-  buildAssistantContext(reports).profile ?? ''
+const afterOneToolRound = (reports: GroundingReports): AiMessage[] => {
+  const calls = [
+    { id: 'call_1', name: 'get_portfolio_overview', argumentsJson: '{}' },
+    { id: 'call_2', name: 'get_investor_profile', argumentsJson: '{}' },
+    { id: 'call_3', name: 'get_allocation', argumentsJson: '{"dimension":"position","limit":40}' },
+    { id: 'call_4', name: 'get_rebalance_gaps', argumentsJson: '{}' },
+  ]
+  const answers = toolAnswers(reports)
 
-describe('the assembled prompt at the worst case the caps allow', () => {
-  it.each([
-    ['every target set, so the baseline defers', REPORTS],
-    ['no profile at all, so the baseline runs', REPORTS_NO_PROFILE],
-  ])('fits inside the ceiling the gateway enforces, with room left: %s', (_case, reports) => {
-    const size = promptSize(reports)
+  return [
+    ...firstRound(reports),
+    { role: 'assistant', content: '', toolCalls: calls },
+    ...answers.map((content, index) => ({
+      role: 'tool' as const,
+      toolCallId: calls[index]!.id,
+      content,
+    })),
+  ]
+}
 
-    expect(size).toBeLessThan(MAX_PROMPT_CHARS)
-    // Not merely inside it. A story that lands at 99% has spent the next story's budget as well as
-    // its own. This is also the assertion that would have caught #287 shipping over the old 24,000
-    // ceiling, which it did: raising it was that measurement's own finding.
-    //
-    // **Story #325 spends most of what was left, and that is this measurement's finding.** The
-    // worst case moved from 82.2% to 84.8% — the four sets of disclosure became unconditional, so
-    // the baseline's two absences and the store-and-clock pairing are now sent even by the reading
-    // that states every target and defers every check, which is this fixture. Roughly 90 characters
-    // remain under the gate. **Nothing may be added to the assembled context before Epic #322 takes
-    // figures out of it**; the next story that tries fails here, which is what the gate is for.
-    expect(size).toBeLessThan(MAX_PROMPT_CHARS * 0.85)
-  })
+/** What the gateway counts: every character that would go on the wire, tool calls included. */
+const size = (messages: AiMessage[]): number =>
+  messages.reduce(
+    (total, message) =>
+      total +
+      message.content.length +
+      (message.toolCalls ?? []).reduce(
+        (calls, call) => calls + call.name.length + call.argumentsJson.length,
+        0,
+      ),
+    0,
+  )
 
-  /**
-   * The disclosures are counted, not assumed (Story #325, DDR-0111).
-   *
-   * They were measured before this story too — as part of `performanceSection`, which this fixture
-   * happens to carry. What changed is that they no longer *depend* on it: the number above now
-   * includes them in the reading that carries them least, so the gate is measuring a prompt with
-   * every unconditional statement in it rather than one that happened to earn them.
-   */
-  it.each([
-    ['every target set, so the baseline defers', REPORTS],
-    ['no profile at all, so the baseline runs', REPORTS_NO_PROFILE],
-  ])('is measured with every absence in it: %s', (_case, reports) => {
-    const [system, user] = conversation(reports)
+const CASES: [string, GroundingReports][] = [
+  ['every target set, so the baseline defers', REPORTS],
+  ['no profile at all, so the baseline runs', REPORTS_NO_PROFILE],
+]
+
+describe('the first round at the worst case the caps allow', () => {
+  it.each(CASES)(
+    'fits inside the ceiling with room for the reports to come: %s',
+    (_case, reports) => {
+      const first = size(firstRound(reports))
+
+      expect(first).toBeLessThan(MAX_PROMPT_CHARS)
+      // **Story #326 is what bought this room back.** The worst case was 84.8% of the ceiling with
+      // roughly 90 characters to spare, which is why nothing could be added to the assembled
+      // context — and why a tool result appended to it would have ended the question as
+      // `incomplete` rather than answering it. Three of the four sections are tools now, so the
+      // first round is a fraction of what it was and the rest of the budget is what reports spend.
+      expect(first).toBeLessThan(MAX_PROMPT_CHARS * 0.5)
+    },
+  )
+
+  it.each(CASES)('is measured with every absence in it: %s', (_case, reports) => {
+    const [system, user] = firstRound(reports)
 
     for (const disclosure of ABSENCE_DISCLOSURES) {
       expect(user!.content).toContain(disclosure.text)
@@ -389,41 +469,110 @@ describe('the assembled prompt at the worst case the caps allow', () => {
     // The system prompt is the other half of the number, and the half these support.
     expect(system!.content).toContain('unless explicitly supplied by the application or a tool')
   })
+})
+
+describe('the conversation after the model has asked for reports', () => {
+  /**
+   * **A real question, at the worst case the caps allow.** One tool answers most questions and two
+   * answer nearly all of them, so the assertion that matters day to day is that the largest single
+   * report on top of the largest first round leaves the 85% gate intact (DDR-0103) — which is where
+   * the room for #327's performance tools has to come from.
+   */
+  it.each(CASES)('leaves the gate intact for the largest single report: %s', (_case, reports) => {
+    const first = size(firstRound(reports))
+    const largest = Math.max(...toolAnswers(reports).map((answer) => answer.length))
+
+    expect(first + largest).toBeLessThan(MAX_PROMPT_CHARS * 0.85)
+  })
 
   /**
-   * The caps have to be what holds it, not the fixture happening to be small. If a cap stopped
-   * cutting, this fixture is large enough that the assertion above would fail — so it is worth
-   * knowing that the sections really did truncate.
+   * **The exhaustive case: every report this app has, in one round.** It fits, and it is measured
+   * here without the 85% gate on purpose — the gate is DDR-0103's on what is *assembled* and sent
+   * unasked, and this is a conversation in which the model asked for all four at once over a fixture
+   * larger than any real portfolio. At the time of writing it comes to roughly 90% of the ceiling
+   * against a first round at 36%, which is the trade this story made: what used to be sent with
+   * every question is now sent only when it is asked for.
+   *
+   * A *second* exhaustive round is what the bounds exist to stop, and it stops as `incomplete` — a
+   * named state, never a partial answer. There are only four reports, so a model asking for all of
+   * them twice is the runaway `MAX_PROMPT_CHARS` rations rather than a question anyone asked.
+   */
+  it.each(CASES)('fits inside the ceiling with every report in it: %s', (_case, reports) => {
+    expect(size(afterOneToolRound(reports))).toBeLessThan(MAX_PROMPT_CHARS)
+  })
+
+  /**
+   * **And it fits however the rounds are spread**, which is the property that makes the number
+   * above a bound rather than one arrangement's measurement.
+   *
+   * The array only ever grows, so what a conversation costs is the reports in it and not the rounds
+   * they arrived over — one round of four calls and four rounds of one call carry the same reports,
+   * differing only by the assistant turns between them. This is the shape a multi-step question
+   * actually takes, at `MAX_TOOL_ROUNDS` exactly, so the loop ends on its **round count** rather
+   * than on the ceiling. What the ceiling still rations is a model asking for the *same* report
+   * twice, which is the runaway rather than a question.
+   */
+  it.each(CASES)('fits however the four reports are spread over the rounds: %s', (_case, reports) => {
+    const answers = toolAnswers(reports)
+    expect(answers).toHaveLength(MAX_TOOL_ROUNDS)
+
+    const messages: AiMessage[] = [...firstRound(reports)]
+    answers.forEach((content, index) => {
+      const call = { id: `call_${index}`, name: 'get_rebalance_gaps', argumentsJson: '{}' }
+      messages.push({ role: 'assistant', content: '', toolCalls: [call] })
+      messages.push({ role: 'tool', toolCallId: call.id, content })
+    })
+
+    expect(size(messages)).toBeLessThan(MAX_PROMPT_CHARS)
+  })
+
+  /**
+   * The caps have to be what holds it, not the fixture happening to be small. Each states what it
+   * left out, in the report that cut it.
    */
   it('is held there by the caps, each of which states what it left out', () => {
     const context = buildAssistantContext(REPORTS)
 
-    expect(context.holdings).toContain(`The ${MAX_LISTED_POSITIONS} largest of 60 open positions`)
     expect(context.performance).toContain('Calendar years: the 8 most recent of 20')
     expect(context.performance).toContain('Calendar quarters: the 8 most recent of 80')
-    expect(context.profile).toContain('33 band(s) are outside their range; the 6 with the largest gaps')
+    expect(portfolioOverviewReport(LIVE)).toContain(
+      `The ${MAX_LISTED_POSITIONS} largest of ${MAX_LISTED_POSITIONS + 14} open positions`,
+    )
+    expect(
+      allocationReport({ status: 'ok', report: ALLOCATION }, 'position', MAX_LISTED_POSITIONS),
+    ).toContain(`The ${MAX_LISTED_POSITIONS} largest of ${MAX_LISTED_POSITIONS + 20} open positions`)
+    expect(rebalanceGapsReport(REPORTS.drift)).toContain(
+      '33 band(s) are outside their range; the 6 with the largest gaps',
+    )
   })
 
   /**
-   * The baseline is measured rather than assumed absent (Story #315).
-   *
-   * Its block is bounded by construction - four checks, at most three ceilings, one coverage
-   * line - so it cannot grow with the portfolio the way a band list can. What it *can* do is
-   * grow with a story, which is what the 85% gate above is there to catch. This asserts the
-   * fixtures really did carry it, so the gate is measuring prompts with a baseline in them -
-   * one deferring every check and one running every check.
+   * The tool declarations are sent on every round too, and they are **not** in the gateway's count —
+   * a schema is not a message. What stops them growing is this: a story adding a fifth tool, or a
+   * paragraph to a description, measures it here.
    */
-  it('carries both baselines, each marked as the app\u2019s own standard', () => {
-    // Every check deferred is deliberately one sentence rather than a section: it is the longest
-    // prompt the app assembles, and a baseline nothing can be judged against earns no headings.
-    // Since Story #325 it says only *which* checks stood down — that the baseline stands down at
-    // all is stated unconditionally in the base context, above every section.
-    expect(profileOf(REPORTS)).toContain('None of the app’s default baseline applies here')
-    expect(profileOf(REPORTS)).not.toContain('against the app’s default')
+  it('declares tool schemas small enough to be sent on every round', () => {
+    expect(JSON.stringify(assistantToolDefinitions()).length).toBeLessThan(4_000)
+  })
 
-    const applied = profileOf(REPORTS_NO_PROFILE)
+  /**
+   * The baseline is measured rather than assumed absent (Story #315). Its block is bounded by
+   * construction — four checks, at most three ceilings, one coverage line — so it cannot grow with
+   * the portfolio the way a band list can. What it *can* do is grow with a story, which is what the
+   * gate above is there to catch.
+   */
+  it('carries both baselines, each marked as the app’s own standard', () => {
+    // Every check deferred is deliberately one sentence rather than a section: that a default exists
+    // and stands down where the owner spoke is said unconditionally in the base context.
+    expect(rebalanceGapsReport(REPORTS.drift)).toContain(
+      'None of the app’s default baseline applies here',
+    )
+    expect(rebalanceGapsReport(REPORTS.drift)).not.toContain('against the app’s default')
+
+    const applied = rebalanceGapsReport(REPORTS_NO_PROFILE.drift)
     expect(applied).toContain('against the app’s default 10%')
     expect(applied).toContain('holds no weight at all in Bonds')
     expect(applied).toContain('never name a missing sector')
   })
 })
+
