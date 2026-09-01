@@ -260,7 +260,7 @@ export const assistantService = {
    * the authorization, and a missing one is the gateway's own `not_configured` — a state in the
    * same register as everything beside it, never an exception (DDR-0022, DDR-0096).
    *
-   * **The four tools are declared here, and this is the only place they are** (Story #326,
+   * **The twelve tools are declared here, and this is the only place they are** (Stories #326–#329,
    * DDR-0111). The gateway takes them and the executor together and checks them as a pair: a name
    * the model asks for that is not in this list is `invalid`, and `runAssistantTool` never runs. The
    * repository could not hold the inventory itself — a repository that knew which service computes

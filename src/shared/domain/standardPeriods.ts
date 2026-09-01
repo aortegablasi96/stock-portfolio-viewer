@@ -77,8 +77,23 @@ import type {
 /** Which family a period belongs to — and therefore what it is compared against. */
 export type PeriodKind = 'trailing' | 'year' | 'quarter' | 'all'
 
-/** One window the model may ask about, with everything the app knows about it. */
-export interface StandardPeriod {
+/**
+ * One window, named and bounded — everything a period is **before** anything is measured over it.
+ *
+ * Split out from {@link StandardPeriod} by Story #329, and the split is the vocabulary rule holding
+ * under a second caller. `get_dividend_income` takes an enumerated period key like the four
+ * performance tools do, and it may reach **one** service method (DDR-0111) — which is the dividend
+ * service, not the performance one. So it cannot borrow the performance report's period set, and the
+ * alternative to sharing this was a second list of window names: `year:2025` meaning one thing in a
+ * return and another in an income figure, with nothing to notice the drift.
+ *
+ * What is shared is the naming and the arithmetic that turns an extent into windows. What is **not**
+ * shared is the extent itself: income is anchored to the dividend history's own last event, a return
+ * to the last day the value series holds, and each report says which — two histories that end on
+ * different days are two different sets of periods with the same names, and a report that did not say
+ * so would be answering about a window the owner did not ask for.
+ */
+export interface PeriodWindow {
   /**
    * Stable identity: `year:2025`, `quarter:Q3 2025`, `trailing:1y`, `all`.
    *
@@ -101,10 +116,14 @@ export interface StandardPeriod {
    */
   descriptor: string
   kind: PeriodKind
-  /** The resolved window, clamped into the imported history. */
+  /** The resolved window, clamped into the history it was cut from. */
   bounds: Bounds
   /** Calendar days it covers, both ends included — what a period's *length* means. */
   calendarDays: number
+}
+
+/** One window the model may ask about, with everything the app knows about it. */
+export interface StandardPeriod extends PeriodWindow {
   /** Value points really inside it. Zero is a state, never a flat period. */
   days: number
   /** Time-weighted return over the window, rebased to its own start. */
@@ -124,18 +143,23 @@ export interface StandardPeriod {
   previous: { label: string; points: number } | null
 }
 
-/** The whole set, with what each cap left out stated beside it. */
-export interface PeriodSet {
-  baseCurrency: string
-  /** The span the imported history covers, which every window is anchored to. */
+/** The windows one history yields, with what each cap left out stated beside it. */
+export interface PeriodWindowSet {
+  /** The span the history covers, which every window is anchored to. */
   extent: Bounds
-  periods: StandardPeriod[]
+  windows: PeriodWindow[]
   /** How many calendar years the history spans, against how many are listed. */
   yearsTotal: number
   yearsListed: number
   /** The same for quarters. */
   quartersTotal: number
   quartersListed: number
+}
+
+/** The whole set, measured — the windows above with a return and a value over each. */
+export interface PeriodSet extends Omit<PeriodWindowSet, 'windows'> {
+  baseCurrency: string
+  periods: StandardPeriod[]
 }
 
 /**
@@ -195,42 +219,59 @@ export function standardPeriods(report: PerformanceReport): PeriodSet | null {
   const extent = seriesExtent(report.valueSeries)
   if (extent === null) return null
 
-  const measure = (
-    id: string,
-    label: string,
-    descriptor: string,
-    kind: PeriodKind,
-    bounds: Bounds,
-  ): StandardPeriod => measurePeriod(report, id, label, descriptor, kind, bounds)
+  const { windows, ...counts } = standardWindows(extent)
 
+  return {
+    baseCurrency: report.baseCurrency,
+    ...counts,
+    periods: withConsecutiveDifferences(windows.map((window) => measurePeriod(report, window))),
+  }
+}
+
+/**
+ * Every standard window over a span of history, named but not measured (Story #329).
+ *
+ * The naming rules and both caps live here rather than in {@link standardPeriods}, because a second
+ * report now cuts the same windows out of a different history: dividend income is windowed by the
+ * same keys off the dividend events' own extent. One definition of *which windows exist and what they
+ * are called* is what keeps `year:2025` meaning the same shape of question in both, which is the
+ * property a second copy would lose quietly — the model reads a key it got from one report and hands
+ * it to the other.
+ */
+export function standardWindows(extent: Bounds): PeriodWindowSet {
   const years = calendarYears(extent)
   const quarters = calendarQuarters(extent)
   const listedYears = years.slice(-MAX_LISTED_YEARS).reverse()
   const listedQuarters = quarters.slice(-MAX_LISTED_QUARTERS).reverse()
 
-  const periods: StandardPeriod[] = [
-    measure('all', 'Full history', 'the whole imported history', 'all', boundsFor('all', extent, extent)),
-    ...TRAILING_PERIODS.map((trailing) =>
-      measure(
-        `trailing:${trailing.range}`,
-        trailing.label,
-        trailing.descriptor,
-        'trailing',
-        boundsFor(trailing.range, extent, extent),
-      ),
-    ),
-    ...listedYears.map((year) =>
-      measure(`year:${year.label}`, year.label, 'calendar year', 'year', year.bounds),
-    ),
-    ...listedQuarters.map((quarter) =>
-      measure(`quarter:${quarter.label}`, quarter.label, 'calendar quarter', 'quarter', quarter.bounds),
-    ),
-  ]
+  const window = (
+    id: string,
+    label: string,
+    descriptor: string,
+    kind: PeriodKind,
+    bounds: Bounds,
+  ): PeriodWindow => ({ id, label, descriptor, kind, bounds, calendarDays: calendarDays(bounds) })
 
   return {
-    baseCurrency: report.baseCurrency,
     extent,
-    periods: withConsecutiveDifferences(periods),
+    windows: [
+      window('all', 'Full history', 'the whole imported history', 'all', boundsFor('all', extent, extent)),
+      ...TRAILING_PERIODS.map((trailing) =>
+        window(
+          `trailing:${trailing.range}`,
+          trailing.label,
+          trailing.descriptor,
+          'trailing',
+          boundsFor(trailing.range, extent, extent),
+        ),
+      ),
+      ...listedYears.map((year) =>
+        window(`year:${year.label}`, year.label, 'calendar year', 'year', year.bounds),
+      ),
+      ...listedQuarters.map((quarter) =>
+        window(`quarter:${quarter.label}`, quarter.label, 'calendar quarter', 'quarter', quarter.bounds),
+      ),
+    ],
     yearsTotal: years.length,
     yearsListed: listedYears.length,
     quartersTotal: quarters.length,
@@ -251,23 +292,17 @@ export function findPeriod(set: PeriodSet, id: string): StandardPeriod | null {
   return set.periods.find((period) => period.id === id) ?? null
 }
 
+/** The same exact match over an unmeasured set, for a caller windowing something else (#329). */
+export function findWindow(set: PeriodWindowSet, id: string): PeriodWindow | null {
+  return set.windows.find((window) => window.id === id) ?? null
+}
+
 /** One window's figures, each named for what it is and none of them derived here. */
-function measurePeriod(
-  report: PerformanceReport,
-  id: string,
-  label: string,
-  descriptor: string,
-  kind: PeriodKind,
-  bounds: Bounds,
-): StandardPeriod {
+function measurePeriod(report: PerformanceReport, window: PeriodWindow): StandardPeriod {
+  const { bounds } = window
   const stats = windowStats(report.valueSeries, report.returnSeries, bounds)
   return {
-    id,
-    label,
-    descriptor,
-    kind,
-    bounds,
-    calendarDays: calendarDays(bounds),
+    ...window,
     days: report.valueSeries.filter((p) => p.date >= bounds.from && p.date <= bounds.to).length,
     twr: stats.twr,
     startValue: valueAt(report.valueSeries, bounds.from),

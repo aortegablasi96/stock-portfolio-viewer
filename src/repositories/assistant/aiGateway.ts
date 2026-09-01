@@ -143,7 +143,7 @@ export const MAX_TOOL_ROUNDS = 4
  *
  * Characters rather than tokens because counting tokens needs a tokenizer, and a tokenizer is a
  * dependency taken to price a request exactly when the job here is only to stop runaway growth.
- * ~40k characters is roughly 10k tokens of English prose and figures — two orders of magnitude
+ * ~60k characters is roughly 15k tokens of English prose and figures — two orders of magnitude
  * below the model's own context window, and far below anything that would surprise the owner on a
  * bill.
  *
@@ -164,8 +164,18 @@ export const MAX_TOOL_ROUNDS = 4
  * per-question ceiling, and a loop cannot spend the budget one affordable round at a time. Crossing
  * it before the first round is `too_large` and **nothing was sent**; crossing it later is
  * `incomplete`, because by then things have.
+ *
+ * **Raised a second time, 40,000 → 60,000, by the owner** (Story #329, DDR-0112). The reason is the
+ * same one DDR-0103 raised it for the first time, arriving at a different number of tools: twelve
+ * reports exist now, and the ceiling had stopped rationing runaway growth and started rationing a
+ * question. The six largest reports on one conversation came to 92.7% of 40,000 — a shape a genuinely
+ * multi-part question takes — so a seventh ended it as `incomplete`, which is a question answered by
+ * nothing after every round was paid for. At 60,000, **every** report this app has, in one round,
+ * over a fixture larger than any real portfolio, is 79.6%. What has not changed is what the number is
+ * for: a bug, a loop, a thousand-position book. It is still a constant, still hard to raise on
+ * purpose, and still measured by `promptBudget.test.ts` before any story can grow into it.
  */
-export const MAX_PROMPT_CHARS = 40_000
+export const MAX_PROMPT_CHARS = 60_000
 
 /** The default ceiling on the **answer**, in tokens; a caller may ask for less, never more. */
 export const MAX_OUTPUT_TOKENS = 1_200

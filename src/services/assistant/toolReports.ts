@@ -978,7 +978,13 @@ export function isoDay(epochMs: number): string {
   return new Date(epochMs).toISOString().slice(0, 10)
 }
 
-/** The same, to the minute, for a live reading whose time of day is the point. */
-function isoMinute(epochMs: number): string {
+/**
+ * The same, to the minute, for a live reading whose time of day is the point.
+ *
+ * Exported for `storeReports.ts` alongside {@link isoDay}, for that function's reason: a coverage
+ * report names when it read the stores beside dates the other reports write, and two spellings of a
+ * timestamp inside one answer are two things for a model to reconcile (Story #329).
+ */
+export function isoMinute(epochMs: number): string {
   return `${new Date(epochMs).toISOString().slice(0, 16).replace('T', ' ')} UTC`
 }
