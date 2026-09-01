@@ -2,9 +2,12 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> **Budget: keep this file under 50 KB** (`wc -c CLAUDE.md` ≤ 51200) — it is loaded into every
+> **Budget: keep this file under 56 KB** (`wc -c CLAUDE.md` ≤ 57344) — it is loaded into every
 > session, so its cost is paid before any work starts. **`src/claudeMdBudget.test.ts` enforces it**
-> — unenforced, it was overrun for six commits unnoticed. Raised twice, deliberately: 36 → 44 → 50.
+> — unenforced, it was overrun for six commits unnoticed. Raised three times, deliberately:
+> 36 → 44 → 50 → 56. The raise is the owner's call and is **not** how a story makes room: #328 came
+> within one byte of the old ceiling and paid for its trap in cuts first, which is the order that
+> stays right whatever the number is.
 >
 > Every ADR and DDR is 8–20 KB and carries its own reasoning, and
 > `docs/design-decisions/README.md` indexes each in one line. So when a story lands, add *the
@@ -35,9 +38,9 @@ Each exists end-to-end and is the reference pattern for its shape.
 
 - **portfolio** — live IBKR read. `portfolioService` → `portfolioRepository` → `ibkrGateway`
   (HTTP + Zod). Converts with **live gateway FX**, not Flex `fxRateToBase`; unconvertible rows
-  carry `displayValue === null` and leave totals/allocation (DDR-0007). Its **one** local read is
-  the instrument *name*, joined from `flexReadRepository` by conid — the gateway has none
-  (DDR-0088).
+  carry `displayValue === null` and leave totals/allocation (DDR-0007). Its local reads are the
+  instrument *name*, by conid from `flexReadRepository` — the gateway has none (DDR-0088) — and a
+  position's cached *sector*.
 - **snapshots** — immutable local history. `snapshotService` (12h de-dupe on open, always-write on
   demand) → `snapshotRepository` → SQLite. Reads IBKR only *through* `portfolioService` (DDR-0003).
 - **flex** — imported Flex history, split **write-only** `flexRepository` / **read-only**
@@ -59,11 +62,18 @@ Each exists end-to-end and is the reference pattern for its shape.
   `DISCLOSURE_CATEGORIES` *types* `AssistantContext` **and every tool declares one** — a result
   built in main never crosses the boundary that drops an undeclared section, so the registry test
   is that half. The key field shows **only with no working key**; there is **no remove, replace or
-  rotate, not even a channel**. `assistant:ask` is the **one outbound channel**. **Eight tools run
+  rotate, not even a channel**. `assistant:ask` is the **one outbound channel**. **Nine tools run
   in main** (`assistantTools.ts`; prose in `toolReports.ts`, `performanceReports.ts`): one
   read-only method each — many share one, **none spans two** — **no argument is a
-  predicate** (`limit` a *count*, `period` a *key*, `series` a *choice*), a state is
-  **never an empty report**, gaps carry targets *and* baseline in one payload (DDR-0111). The
+  predicate** (`limit` a *count*, `period` a *key*, `series` a *choice*, `query` an *identity*), a
+  state is **never an empty report**, gaps carry targets *and* baseline in one payload (DDR-0111).
+  `get_position` reaches past every cap and resolves **in the service, by conid** — identity, exact
+  ticker, exact name, then a 2+ char substring, **first tier winning**, so a ticker typed exactly is
+  never ambiguous against the names containing it. **Ambiguous lists candidates and never guesses**;
+  *not held* carries the unverified-training-data marking, and is **not** what a gateway that never
+  answered returns. Its figure beside the weight is the gain as a **percent of cost** — IBKR's own
+  `unrealizedPnl` over a per-share `avgCost` (DDR-0087), needing no rate, so it survives a holding
+  that has no weight — because no money may appear in a `holdings`/`weights` report (#328). The
   renderer assembles **nothing**; the empty context and its bound stay.
   **Two denominators**: the overview's weights **exclude cash**, drift's **include
   it** — each says which. Figures go through **`@shared/format`** so main can write one too

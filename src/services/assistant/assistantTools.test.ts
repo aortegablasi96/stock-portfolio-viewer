@@ -28,7 +28,7 @@ import type { AiToolCall } from '@shared/domain/assistant'
  */
 
 vi.mock('@services/portfolio/portfolioService', () => ({
-  portfolioService: { getOverview: vi.fn() },
+  portfolioService: { getOverview: vi.fn(), getPosition: vi.fn() },
 }))
 vi.mock('@services/analytics/allocationService', () => ({
   allocationService: { getAllocation: vi.fn() },
@@ -44,6 +44,7 @@ vi.mock('@services/analytics/performanceService', () => ({
 }))
 
 const overview = vi.mocked(portfolioService.getOverview)
+const position = vi.mocked(portfolioService.getPosition)
 const allocation = vi.mocked(allocationService.getAllocation)
 const profile = vi.mocked(investorProfileService.get)
 const gaps = vi.mocked(balanceDriftService.getBalanceDrift)
@@ -71,6 +72,7 @@ beforeEach(() => {
     totalMarketValue: 0,
     displayCurrency: 'EUR',
   })
+  position.mockResolvedValue({ status: 'not_held', query: 'TSLA', heldPositions: 0 })
   allocation.mockReturnValue({ status: 'needs_import' })
   profile.mockReturnValue(EMPTY_INVESTOR_PROFILE)
   gaps.mockResolvedValue({ status: 'no_data' })
@@ -80,9 +82,10 @@ beforeEach(() => {
 // ---- the inventory ADR-0009 permits -----------------------------------------
 
 describe('the registry is the contract ADR-0009 wrote', () => {
-  it('is the eight reports the Epic ships so far, named as the record names them', () => {
+  it('is the nine reports the Epic ships so far, named as the record names them', () => {
     expect(ASSISTANT_TOOLS.map((tool) => tool.name)).toEqual([
       'get_portfolio_overview',
+      'get_position',
       'get_investor_profile',
       'get_allocation',
       'get_rebalance_gaps',
@@ -118,6 +121,7 @@ describe('the registry is the contract ADR-0009 wrote', () => {
   it('is backed by read-only service methods and nothing else', () => {
     expect(ASSISTANT_TOOLS.map((tool) => tool.backedBy)).toEqual([
       'portfolioService.getOverview',
+      'portfolioService.getPosition',
       'investorProfileService.get',
       'allocationService.getAllocation',
       'balanceDriftService.getBalanceDrift',
@@ -174,7 +178,13 @@ describe('the registry is the contract ADR-0009 wrote', () => {
         (id) => DISCLOSURE_CATEGORIES.find((category) => category.id === id)!.granularity,
       )
 
-    for (const name of ['get_portfolio_overview', 'get_investor_profile', 'get_allocation', 'get_rebalance_gaps']) {
+    for (const name of [
+      'get_portfolio_overview',
+      'get_position',
+      'get_investor_profile',
+      'get_allocation',
+      'get_rebalance_gaps',
+    ]) {
       expect(granularity(name), name).not.toContain('figures')
     }
     for (const name of ['get_performance_periods', 'get_performance', 'get_daily_returns', 'get_portfolio_history']) {
@@ -217,6 +227,29 @@ describe('the definitions the gateway declares', () => {
     expect(properties('get_performance')).toEqual(['period'])
     expect(properties('get_daily_returns')).toEqual(['period'])
     expect(properties('get_portfolio_history')).toEqual(['period', 'series'])
+    expect(properties('get_position')).toEqual(['query'])
+  })
+
+  /**
+   * **`get_position` takes one identity and nothing that could narrow a list** (Story #328).
+   *
+   * It is the only tool taking free text, which makes it the one place the general query could
+   * arrive wearing an identity's clothes — so the argument surface is pinned rather than reviewed.
+   * A `limit` here would be the *first N of what*, and a `sector`, a `minWeight` or a `sort` is the
+   * predicate DDR-0111 forbids as a parameter. Largest-N by weight is `get_allocation`'s count.
+   */
+  it('offers no way to ask get_position for more than one holding', () => {
+    for (const forbidden of ['limit', 'sort', 'sector', 'currency', 'minWeight', 'above', 'filter']) {
+      expect(properties('get_position'), forbidden).not.toContain(forbidden)
+    }
+    expect(schema('get_position').properties['query']).toMatchObject({ type: 'string' })
+    // Said in both descriptions too, because a shape is not what the model reads first.
+    expect(schema('get_position').properties['query']).toMatchObject({
+      description: expect.stringContaining('never a condition'),
+    })
+    expect(
+      assistantToolDefinitions().find((tool) => tool.name === 'get_position')!.description,
+    ).toContain('no filter, no threshold and no list')
   })
 
   /**
@@ -343,6 +376,46 @@ describe('running a call', () => {
       expect(answer).not.toContain('%')
     },
   )
+
+  /**
+   * The query reaches the service **unresolved**, which is DDR-0111's rule that the resolution rule
+   * and its states live where the app's business rules are tested — not in this layer.
+   */
+  it('passes the query to the service rather than matching it here', async () => {
+    await runAssistantTool(call('get_position', '{"query":"  apple "}'), CONTEXT)
+
+    expect(position).toHaveBeenCalledWith('apple', 'EUR')
+    expect(overview).not.toHaveBeenCalled()
+    expect(allocation).not.toHaveBeenCalled()
+  })
+
+  /**
+   * A call naming no instrument reads nothing at all, and the reason it is handled here rather than
+   * as a service state is that it is not a fact about the portfolio: an unknown *period* is a real
+   * answer about a real window, where a blank query is a call the model did not finish writing.
+   */
+  it.each(['{}', '', '{"query":"   "}', '{"query":42}'])(
+    'answers a call naming no instrument without reading the portfolio: %s',
+    async (args) => {
+      const answer = await runAssistantTool(call('get_position', args), CONTEXT)
+
+      expect(answer).toContain('needs the ticker or name of one instrument')
+      expect(answer).toContain('get_portfolio_overview')
+      expect(position).not.toHaveBeenCalled()
+    },
+  )
+
+  /** A lookup that never ran must not be able to arrive as "you do not hold it" (DDR-0022). */
+  it.each([
+    [new IbkrNotConnectedError('gateway down'), 'the IBKR gateway is not running'],
+    [new IbkrTimeoutError('stalled'), 'stopped answering'],
+  ])('reports a gateway failure on a lookup as its own state', async (error, phrase) => {
+    position.mockRejectedValue(error)
+
+    const answer = await runAssistantTool(call('get_position', '{"query":"AAPL"}'), CONTEXT)
+    expect(answer).toContain(phrase)
+    expect(answer).not.toContain('training data')
+  })
 
   /** The app's currency selection reaches the live reads, so an answer is weighed in it. */
   it('weighs a live report in the currency the question carried', async () => {

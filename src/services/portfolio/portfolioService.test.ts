@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { portfolioService } from './portfolioService'
+import { classificationRepository } from '@repositories/classification/classificationRepository'
 import { flexReadRepository } from '@repositories/flex/flexReadRepository'
 import { portfolioRepository } from '@repositories/portfolio/portfolioRepository'
 import { IbkrNotConnectedError } from '@shared/errors'
@@ -21,8 +22,15 @@ vi.mock('@repositories/flex/flexReadRepository', () => ({
   flexReadRepository: { getInstrumentNames: vi.fn(() => []) },
 }))
 
+// A position's sector is read from the local classification cache — the cache only, never a refresh
+// (Story #328's scope, DDR-0009). Mocked for the third time for the same reason.
+vi.mock('@repositories/classification/classificationRepository', () => ({
+  classificationRepository: { getAll: vi.fn(() => []) },
+}))
+
 const mockRepo = vi.mocked(portfolioRepository)
 const mockFlex = vi.mocked(flexReadRepository)
+const mockClassifications = vi.mocked(classificationRepository)
 
 function holding(overrides: Partial<Holding> & Pick<Holding, 'conid' | 'symbol' | 'marketValue'>): Holding {
   return {
@@ -471,5 +479,324 @@ describe('portfolioService.getCashPositions', () => {
 
     expect(await portfolioService.getCashPositions('EUR')).toEqual([])
     expect(mockRepo.getExchangeRates).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * One position by identity — the resolution rule, in the layer that owns it (Story #328, DDR-0111).
+ *
+ * **These assertions are why the method exists.** `get_position` was drafted as a filter over
+ * `getOverview` in the assistant's tool layer, which is the layer least covered by the tests that
+ * make ADR-0009's grounding rule true. DDR-0111 moved it here instead, so *ambiguous* and *not held*
+ * are business rules with tests rather than prose in a report, and the tool became a name for a
+ * service operation.
+ */
+describe('portfolioService.getPosition', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockRepo.getBalances.mockResolvedValue(balances)
+    mockClassifications.getAll.mockReturnValue([])
+    mockRepo.getExchangeRates.mockResolvedValue({ EUR: 1, USD: 0.5 })
+    // Restated rather than left to `clearAllMocks`, which clears calls and keeps the last return
+    // value: an earlier block's index would otherwise re-name — or un-name — every fixture here,
+    // since `nameHoldings` overwrites `companyName` from whatever the join finds.
+    mockFlex.getInstrumentNames.mockReturnValue([])
+  })
+
+  const book = (...holdings: Holding[]): void => {
+    mockRepo.getHoldings.mockResolvedValue(holdings)
+  }
+
+  const AAPL = holding({
+    conid: 1,
+    symbol: 'AAPL',
+    marketValue: 1_000,
+    companyName: 'APPLE INC',
+    quantity: 10,
+    averageCost: 50,
+    unrealizedPnl: 125,
+  })
+  const MSFT = holding({ conid: 2, symbol: 'MSFT', marketValue: 400, companyName: 'MICROSOFT CORP' })
+
+  it('resolves an exact ticker to the one holding it names', async () => {
+    book(AAPL, MSFT)
+
+    const found = await portfolioService.getPosition('aapl', 'EUR')
+
+    expect(found.status).toBe('ok')
+    expect(found).toMatchObject({ position: { conid: 1, symbol: 'AAPL', currency: 'USD' } })
+  })
+
+  /**
+   * **The conid is the key and a name is an input** (DDR-0088). A model that read a previous report
+   * has the identity itself, and it is the one input that cannot be ambiguous.
+   */
+  it('resolves the contract id itself', async () => {
+    book(AAPL, MSFT)
+
+    expect(await portfolioService.getPosition('2', 'EUR')).toMatchObject({
+      status: 'ok',
+      position: { conid: 2 },
+    })
+  })
+
+  /**
+   * Both spellings of a name, because both are things an owner types: the shortened form the views
+   * draw, and the raw string the Flex export carries (DDR-0066, DDR-0067).
+   */
+  it.each([
+    ['the shortened name every view draws', 'apple'],
+    ['the raw exported name', 'APPLE INC'],
+    ['part of a name', 'micro'],
+  ])('resolves %s', async (_case, query) => {
+    book(AAPL, MSFT)
+
+    expect((await portfolioService.getPosition(query, 'EUR')).status).toBe('ok')
+  })
+
+  /**
+   * **Exact beats partial, or a ticker the owner typed exactly comes back ambiguous.** `CAD` is a
+   * bare identifier IBKR writes where an instrument has no name, and it is a substring of half the
+   * Canadian market — matched flat, the one holding actually called `CAD` would be lost among them.
+   */
+  it('prefers an exact ticker over the names that merely contain it', async () => {
+    book(
+      holding({ conid: 3, symbol: 'CAD', marketValue: 100, companyName: null, description: 'CAD' }),
+      holding({ conid: 4, symbol: 'CP', marketValue: 900, companyName: 'CANADIAN PACIFIC KANSAS' }),
+    )
+
+    expect(await portfolioService.getPosition('CAD', 'EUR')).toMatchObject({
+      status: 'ok',
+      position: { conid: 3 },
+    })
+  })
+
+  /** A one-character query is an exact ticker or nothing: a substring that short matches the book. */
+  it('resolves a single character only as a ticker', async () => {
+    book(holding({ conid: 5, symbol: 'F', marketValue: 100, companyName: 'FORD MOTOR CO' }), AAPL)
+
+    expect(await portfolioService.getPosition('F', 'EUR')).toMatchObject({
+      status: 'ok',
+      position: { conid: 5 },
+    })
+    // 'A' is in APPLE and in neither ticker — and matching every name containing it would report an
+    // ambiguity so wide it says nothing.
+    expect((await portfolioService.getPosition('A', 'EUR')).status).toBe('not_held')
+  })
+
+  /**
+   * **Ambiguous names the candidates and picks none of them.** Choosing the larger would be right
+   * often enough to be trusted and wrong silently, which is the failure this state exists to make
+   * impossible.
+   */
+  it('reports every candidate when a query names more than one holding', async () => {
+    book(
+      holding({ conid: 6, symbol: 'GDX', marketValue: 100, companyName: 'VANECK GOLD MINERS' }),
+      holding({ conid: 7, symbol: 'SGZ', marketValue: 800, companyName: 'SERABI GOLD PLC' }),
+    )
+
+    const found = await portfolioService.getPosition('gold', 'EUR')
+
+    expect(found.status).toBe('ambiguous')
+    // Largest first, as every list in this app is.
+    expect(found).toMatchObject({
+      query: 'gold',
+      candidates: [
+        { conid: 7, symbol: 'SGZ', name: 'Serabi Gold' },
+        { conid: 6, symbol: 'GDX', name: 'Vaneck Gold Miners' },
+      ],
+    })
+  })
+
+  /** A candidate is an identity and nothing else — no weight, no figure, nothing to answer from. */
+  it('carries no figure on an ambiguous candidate', async () => {
+    book(
+      holding({ conid: 6, symbol: 'GDX', marketValue: 100, companyName: 'VANECK GOLD MINERS' }),
+      holding({ conid: 7, symbol: 'SGZ', marketValue: 800, companyName: 'SERABI GOLD PLC' }),
+    )
+
+    const found = await portfolioService.getPosition('gold', 'EUR')
+    if (found.status !== 'ambiguous') throw new Error('expected an ambiguity')
+    for (const candidate of found.candidates) {
+      expect(Object.keys(candidate).sort()).toEqual(['conid', 'name', 'symbol'])
+    }
+  })
+
+  it('reports an instrument the owner does not hold as not held, with what is held', async () => {
+    book(AAPL, MSFT)
+
+    expect(await portfolioService.getPosition('TSLA', 'EUR')).toEqual({
+      status: 'not_held',
+      query: 'TSLA',
+      heldPositions: 2,
+    })
+  })
+
+  /** An empty book is *not held*, never a match: there is nothing for a query to resolve to. */
+  it('reports not held against an empty account', async () => {
+    book()
+
+    expect(await portfolioService.getPosition('AAPL', 'EUR')).toMatchObject({
+      status: 'not_held',
+      heldPositions: 0,
+    })
+  })
+
+  /**
+   * **The story's central test.** `MAX_LISTED_POSITIONS` is 40 and every report about the live book
+   * lists its largest N — which made the 41st holding invisible to the assistant however it was
+   * asked about. Nothing here truncates, so where a position ranks by size has no bearing on
+   * whether it can be found.
+   */
+  it('finds a position far beyond any report’s listing cap', async () => {
+    book(
+      ...Array.from({ length: 80 }, (_, index) =>
+        holding({
+          conid: 100 + index,
+          symbol: `SYM${index}`,
+          marketValue: 10_000 - index,
+          companyName: `COMPANY ${index} PLC`,
+        }),
+      ),
+    )
+
+    // 79th by value, far past the 40 any list names.
+    expect(await portfolioService.getPosition('SYM78', 'EUR')).toMatchObject({
+      status: 'ok',
+      position: { conid: 178 },
+    })
+  })
+
+  /**
+   * The weight is a share of exactly the total the live holdings report weighs against — the
+   * holdings that could be valued, cash excluded — so the two reports cannot disagree about one
+   * position (DDR-0095's two denominators, kept apart).
+   */
+  it('weighs the position against the valued holdings, in percent', async () => {
+    book(AAPL, MSFT)
+
+    // 1,000 and 400 at 0.5 → 500 of 700.
+    expect(await portfolioService.getPosition('AAPL', 'EUR')).toMatchObject({
+      position: { weight: (500 / 700) * 100, bounded: false },
+    })
+  })
+
+  /**
+   * **Unconvertible is unplaced, not zero** (DDR-0007, Bug #68). There is no rate with which to
+   * compute a percentage, so there is no percentage — and a `0` would be a measurement.
+   */
+  it('gives an unconvertible holding no weight at all', async () => {
+    mockRepo.getExchangeRates.mockResolvedValue({ EUR: 1 })
+    book(holding({ conid: 8, symbol: 'ZWLA', marketValue: 5_000, currency: 'ZWL' }))
+
+    expect(await portfolioService.getPosition('ZWLA', 'EUR')).toMatchObject({
+      position: { weight: null },
+    })
+  })
+
+  /** And a holding beside one that could not be valued carries a weight that is a lower bound. */
+  it('marks the weight as a lower bound when another holding could not be valued', async () => {
+    book(AAPL, holding({ conid: 9, symbol: 'ZWLA', marketValue: 5_000, currency: 'ZWL' }))
+
+    expect(await portfolioService.getPosition('AAPL', 'EUR')).toMatchObject({
+      position: { weight: 100, bounded: true },
+    })
+  })
+
+  /**
+   * **`avgCost` is per share and IBKR's own `unrealizedPnl` beats deriving one** (DDR-0087). Read as
+   * a position total the average cost scales every row by its own quantity and still looks right —
+   * so the cost basis is `averageCost × quantity`, and the numerator is the gateway's own figure
+   * rather than `(price − cost) × quantity`.
+   */
+  it('measures the gain against a per-share cost, from IBKR’s own unrealized figure', async () => {
+    book(AAPL)
+
+    // 125 over 50 × 10 = 25%, and nothing here reaches marketPrice.
+    expect(await portfolioService.getPosition('AAPL', 'EUR')).toMatchObject({
+      position: { gainOnCostPercent: 25 },
+    })
+  })
+
+  /** It is a ratio of two native figures, so it survives a holding that could not be valued. */
+  it('measures the gain with no exchange rate at all', async () => {
+    mockRepo.getExchangeRates.mockResolvedValue({ EUR: 1 })
+    book(
+      holding({
+        conid: 10,
+        symbol: 'ZWLA',
+        marketValue: 5_000,
+        currency: 'ZWL',
+        quantity: 4,
+        averageCost: 250,
+        unrealizedPnl: -100,
+      }),
+    )
+
+    expect(await portfolioService.getPosition('ZWLA', 'EUR')).toMatchObject({
+      position: { weight: null, gainOnCostPercent: -10 },
+    })
+  })
+
+  it.each([
+    ['no unrealized figure', { unrealizedPnl: null, averageCost: 50 }],
+    ['no average cost', { unrealizedPnl: 125, averageCost: null }],
+    ['nothing to have cost', { unrealizedPnl: 125, averageCost: 0 }],
+  ])('reports the gain as absent rather than zero when there is %s', async (_case, over) => {
+    book(holding({ conid: 11, symbol: 'AAA', marketValue: 100, quantity: 10, ...over }))
+
+    expect(await portfolioService.getPosition('AAA', 'EUR')).toMatchObject({
+      position: { gainOnCostPercent: null },
+    })
+  })
+
+  /**
+   * The name is the one imported history knows, resolved by conid — never `formatCompanyName`,
+   * which title-cases `CAD` into a company that does not exist (DDR-0066, DDR-0067, DDR-0088).
+   */
+  it('names the holding from imported history, and leaves a repeated ticker unnamed', async () => {
+    mockFlex.getInstrumentNames.mockReturnValue([
+      { conid: 1, symbol: 'AAPL', description: 'APPLE INC' },
+    ])
+    book(
+      holding({ conid: 1, symbol: 'AAPL', marketValue: 100, companyName: null, description: 'AAPL' }),
+      holding({ conid: 12, symbol: 'CAD', marketValue: 50, companyName: null, description: 'CAD' }),
+    )
+
+    expect(await portfolioService.getPosition('AAPL', 'EUR')).toMatchObject({
+      position: { name: 'Apple' },
+    })
+    expect(await portfolioService.getPosition('CAD', 'EUR')).toMatchObject({
+      position: { name: null },
+    })
+  })
+
+  /** The sector comes out of the local classification cache, and is absent rather than empty. */
+  it('reads the sector from the cache, and reports an uncached one as absent', async () => {
+    mockClassifications.getAll.mockReturnValue([
+      { conid: 1, symbol: 'AAPL', sector: 'Technology', industry: 'Computers', fetchedAt: 0 },
+      { conid: 2, symbol: 'MSFT', sector: '', industry: '', fetchedAt: 0 },
+    ])
+    book(AAPL, MSFT)
+
+    expect(await portfolioService.getPosition('AAPL', 'EUR')).toMatchObject({
+      position: { sector: 'Technology' },
+    })
+    expect(await portfolioService.getPosition('MSFT', 'EUR')).toMatchObject({
+      position: { sector: null },
+    })
+  })
+
+  /**
+   * A disconnected gateway **throws** rather than resolving to a state, and that is deliberate: the
+   * caller maps `IbkrNotConnectedError` and `IbkrTimeoutError` into the two states DDR-0022 keeps
+   * apart. A lookup that never ran must not be able to arrive as "you do not hold it".
+   */
+  it('propagates a gateway failure rather than reporting the instrument as unheld', async () => {
+    mockRepo.getHoldings.mockRejectedValue(new IbkrNotConnectedError('gateway down'))
+
+    await expect(portfolioService.getPosition('AAPL', 'EUR')).rejects.toBeInstanceOf(
+      IbkrNotConnectedError,
+    )
   })
 })

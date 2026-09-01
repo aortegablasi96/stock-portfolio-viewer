@@ -1,8 +1,10 @@
+import { classificationRepository } from '@repositories/classification/classificationRepository'
 import { flexReadRepository } from '@repositories/flex/flexReadRepository'
 import {
   portfolioRepository,
   type CashBalance,
 } from '@repositories/portfolio/portfolioRepository'
+import { holdingName } from '@shared/format'
 import type {
   AccountBalances,
   AllocationSlice,
@@ -18,6 +20,163 @@ import type {
  */
 export interface CashPosition extends CashBalance {
   displayValue: number | null
+}
+
+/**
+ * One held position, measured the way the live book measures every other one (Story #328).
+ *
+ * **No amount of money, and that is the shape rather than an omission.** The assistant's
+ * `get_position` is declared under `holdings` and `weights` — names and percentages — so what a
+ * position is *worth* is not in a category this app discloses (DDR-0098). What is here instead is
+ * the two percentages that answer the questions money would have: how much of the book it is, and
+ * how it has done against what it cost.
+ */
+export interface PositionDetail {
+  /** The identity everything resolved to. A ticker is an input; this is the key (DDR-0088). */
+  conid: number
+  symbol: string
+  /**
+   * The instrument's name, or `null` where local history knows none.
+   *
+   * Resolved through `holdingName` — imported Flex `companyName` first, the gateway's own
+   * `description` second — so a description that merely repeats the ticker comes back `null` rather
+   * than as a name (DDR-0066, DDR-0088). Never `formatCompanyName`, which title-cases `CAD` to
+   * `Cad` and would turn an identifier into a company that does not exist (DDR-0067).
+   */
+  name: string | null
+  currency: string
+  /** The cached sector, or `null` where the local classification cache holds none (DDR-0009). */
+  sector: string | null
+  /**
+   * This position's share of the value of the holdings that could be valued, in percent.
+   *
+   * `null` where **this** holding is one of the ones that could not be valued — DDR-0007's rule
+   * exactly: unconvertible is *unplaced*, not zero, and there is no rate with which to compute a
+   * percentage for it (Bug #68).
+   */
+  weight: number | null
+  /**
+   * The position's unrealized gain or loss as a percentage of what it cost.
+   *
+   * Both halves are DDR-0087's traps. The numerator is **IBKR's own `unrealizedPnl`** rather than
+   * one derived from price minus cost, and the denominator treats **`averageCost` as per share** and
+   * multiplies by the quantity held — read as a position total it would scale every row by its own
+   * size and still look plausible.
+   *
+   * It is a ratio of two figures in the position's *native* currency, so it needs no exchange rate
+   * and exists even for a holding that could not be valued. `null` where the gateway reported no
+   * unrealized figure, no average cost, or a zero cost basis — absent, never zero.
+   */
+  gainOnCostPercent: number | null
+  /**
+   * Whether some **other** holding could not be valued, which makes {@link weight} a lower bound.
+   *
+   * The same qualification the concentration ceiling carries for the same reason: the denominator is
+   * missing whatever those holdings are worth, so this share is at most what it says (Bug #68).
+   */
+  bounded: boolean
+}
+
+/** One of several holdings a query matched: identity only, never a figure. */
+export interface PositionCandidate {
+  conid: number
+  symbol: string
+  name: string | null
+}
+
+/**
+ * What a lookup came to — **the resolution rule's outcomes, named in the service** (DDR-0111).
+ *
+ * `ambiguous` and `not_held` are business rules and live here rather than in the tool layer, which
+ * is the layer least covered by the tests that make ADR-0009's grounding rule true. The gateway's
+ * own failures are **not** in this union: `getOverview` throws them and the caller maps them, which
+ * is where `IbkrTimeoutError` and `IbkrNotConnectedError` stay apart (DDR-0022).
+ */
+export type PositionLookup =
+  | { status: 'ok'; query: string; position: PositionDetail }
+  | { status: 'ambiguous'; query: string; candidates: PositionCandidate[] }
+  | { status: 'not_held'; query: string; heldPositions: number }
+
+/** A holding beside the name it resolves to, so a match is made against the name a view draws. */
+interface NamedHolding {
+  holding: Holding
+  name: string | null
+}
+
+/**
+ * Which holdings a query names, in tiers — **exact before partial, and identity before either**.
+ *
+ * The tiers are what keeps *ambiguous* meaningful. `CAD` is a bare currency identifier IBKR writes
+ * where an instrument has no name (DDR-0066), and it is also a substring of half a dozen Canadian
+ * companies: matched flat, a ticker the owner typed exactly would come back ambiguous against names
+ * that merely contain it. So the first tier that matches anything wins, and the tiers below it are
+ * never consulted.
+ *
+ * A one-character query resolves **only** as an exact ticker. Below that length a substring is a
+ * near-universal match, which would report an ambiguity between everything the owner holds — a
+ * state so wide it says nothing.
+ *
+ * Nothing here folds a *near* match: no trimming to a prefix, no edit distance, no "did you mean".
+ * Two holdings whose names differ by a letter are two instruments, and choosing between them is the
+ * best-guess this story exists to refuse.
+ */
+function matchHoldings(query: string, holdings: readonly NamedHolding[]): NamedHolding[] {
+  const needle = query.trim().toUpperCase()
+  if (needle === '') return []
+
+  // The conid itself, which is what every other tier resolves *to*. A model that read a previous
+  // report has it, and it is the one input that cannot be ambiguous.
+  const byConid = holdings.filter((entry) => String(entry.holding.conid) === needle)
+  if (byConid.length > 0) return byConid
+
+  const bySymbol = holdings.filter((entry) => entry.holding.symbol.trim().toUpperCase() === needle)
+  if (bySymbol.length > 0) return bySymbol
+
+  const byName = holdings.filter((entry) => namesOf(entry).includes(needle))
+  if (byName.length > 0) return byName
+
+  if (needle.length < 2) return []
+  return holdings.filter(
+    (entry) =>
+      entry.holding.symbol.toUpperCase().includes(needle) ||
+      namesOf(entry).some((name) => name.includes(needle)),
+  )
+}
+
+/**
+ * Every string this holding is legitimately called, upper-cased for comparison.
+ *
+ * Two of them, because the shortened name and the exported one are both things an owner types:
+ * `holdingName` gives `Interactive Brokers`, while the Flex export says
+ * `INTERACTIVE BROKERS GROUP INC` and a question may quote either. The gateway's raw `description`
+ * is deliberately **not** a third — on this build it repeats the ticker, which the symbol tier
+ * already matched (DDR-0066, DDR-0087).
+ */
+function namesOf({ holding, name }: NamedHolding): string[] {
+  const names: string[] = []
+  if (name !== null) names.push(name.toUpperCase())
+  const exported = holding.companyName?.trim().toUpperCase()
+  if (exported !== undefined && exported !== '') names.push(exported)
+  return names
+}
+
+/**
+ * A holding's value in the display currency, or `null` where no rate was available.
+ *
+ * `undefined` is the *native* overview, which has no conversion to have failed; `null` is a
+ * conversion that could not be made. The two mean different things and only the second is unplaced
+ * (DDR-0007).
+ */
+function displayValueOf(holding: Holding): number | null {
+  return holding.displayValue === undefined ? holding.marketValue : holding.displayValue
+}
+
+/** IBKR's own unrealized figure over the cost of the position, in percent (DDR-0087). */
+function gainOnCost(holding: Holding): number | null {
+  if (holding.unrealizedPnl === null || holding.averageCost === null) return null
+  const costBasis = Math.abs(holding.averageCost * holding.quantity)
+  if (!Number.isFinite(costBasis) || costBasis === 0) return null
+  return (holding.unrealizedPnl / costBasis) * 100
 }
 
 /**
@@ -170,6 +329,88 @@ export const portfolioService = {
       allocation,
       totalMarketValue: round2(totalMarketValue),
       displayCurrency,
+    }
+  },
+
+  /**
+   * One held position, resolved from whatever the owner called it (Story #328, DDR-0111).
+   *
+   * **The method exists because the tool needed it, which is the expensive route on purpose.** There
+   * was no per-position read before this: `getOverview` returns the whole book, so the assistant's
+   * `get_position` would have been a projection performed in the tool layer — a filter over a
+   * report, and the closest thing in Epic #322 to the general query ADR-0009 forbids. DDR-0111's
+   * rule is that where no service method exists, **the method is added**, so the resolution rule and
+   * its two named states are here, tested where the rest of the app's business rules are tested.
+   *
+   * **The key is the conid, and a ticker or a name is an input to be resolved into one** (DDR-0088).
+   * This build sends no `ticker`, so a live row's `symbol` *and* `description` both fall back to
+   * `contractDesc`, and a description that repeats the symbol is not a name (DDR-0066) — so a string
+   * match is a resolution step with its own outcomes rather than a lookup.
+   *
+   * **It reaches every position, and that is the story.** The reports cap their lists at
+   * `MAX_LISTED_POSITIONS` largest-first, which made the 41st holding invisible to the assistant
+   * however it was asked about. Nothing here truncates: a position is found by identity or it is not
+   * held, and where it ranks by size has no bearing on either.
+   *
+   * It reuses the overview rather than re-reading the gateway — the repository's cache coalesces
+   * both into one round trip (DDR-0024) — so the weight it returns is a share of exactly the
+   * denominator the live holdings report uses: the holdings that could be valued, cash excluded.
+   */
+  async getPosition(query: string, displayCurrency: string): Promise<PositionLookup> {
+    const overview = await portfolioService.getOverview(displayCurrency)
+    const named: NamedHolding[] = overview.holdings.map((holding) => ({
+      holding,
+      name: holdingName(holding.symbol, holding.description, holding.companyName),
+    }))
+
+    // Largest first wherever a list of them is shown, as everything else in this app is; a holding
+    // that could not be valued sorts last rather than as nothing.
+    const matches = matchHoldings(query, named).sort(
+      (a, b) => (displayValueOf(b.holding) ?? -Infinity) - (displayValueOf(a.holding) ?? -Infinity),
+    )
+
+    if (matches.length === 0) {
+      return { status: 'not_held', query, heldPositions: overview.holdings.length }
+    }
+    if (matches.length > 1) {
+      return {
+        status: 'ambiguous',
+        query,
+        candidates: matches.map(({ holding, name }) => ({
+          conid: holding.conid,
+          symbol: holding.symbol,
+          name,
+        })),
+      }
+    }
+
+    const { holding, name } = matches[0] as NamedHolding
+    const own = displayValueOf(holding)
+    // The same total the overview weighs against, computed the same way: unconvertible holdings are
+    // absent from it rather than counted at face value (DDR-0007).
+    const total = overview.holdings.reduce((sum, other) => sum + (displayValueOf(other) ?? 0), 0)
+    const sector = classificationRepository
+      .getAll()
+      .find((row) => row.conid === holding.conid)?.sector
+
+    return {
+      // Carried on every variant, `ok` included: the report quotes what was asked for beside what it
+      // resolved to, so an owner reading the answer can see that "apple" became AAPL rather than
+      // having to trust that it did.
+      status: 'ok',
+      query,
+      position: {
+        conid: holding.conid,
+        symbol: holding.symbol,
+        name,
+        currency: holding.currency,
+        sector: sector === undefined || sector === '' ? null : sector,
+        weight: own === null || total <= 0 ? null : (own / total) * 100,
+        gainOnCostPercent: gainOnCost(holding),
+        bounded: overview.holdings.some(
+          (other) => other.conid !== holding.conid && displayValueOf(other) === null,
+        ),
+      },
     }
   },
 
