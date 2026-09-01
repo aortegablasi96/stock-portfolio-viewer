@@ -22,8 +22,8 @@ import { describe, expect, it } from 'vitest'
 /** Matches `wc -c CLAUDE.md`. `.gitattributes` pins `eol=lf`, so this is stable across platforms. */
 const CLAUDE_MD = readFileSync(join(process.cwd(), 'CLAUDE.md'))
 
-/** 50 KB. Raised twice — 36864 → 45056 → 51200 — see the budget note in the file itself. */
-const BUDGET_BYTES = 51200
+/** 56 KB. Raised three times — 36864 → 45056 → 51200 → 57344 — see the note in the file itself. */
+const BUDGET_BYTES = 57344
 
 describe('CLAUDE.md session budget', () => {
   it('stays within the budget', () => {

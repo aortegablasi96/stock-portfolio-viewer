@@ -242,10 +242,18 @@ arriving through a different door.
 
 **Do not add to the base context, to a tool report, or to a tool description without measuring.**
 `promptBudget.test.ts` measures the **conversation**, not the prompt: the first round is ~16% of
-`MAX_PROMPT_CHARS` (the renderer assembles nothing now), and every report at once ~96%. The **85%
-gate binds the first round plus the largest single report** — ~41% — which is what a real question
-costs and where a new tool's room has to come from. Tool *schemas* are outside the gateway's own
-count — a schema is not a message — so they are measured there too.
+`MAX_PROMPT_CHARS` (the renderer assembles nothing now), and every report at once **98.7%** at nine
+tools. The **85% gate binds the first round plus the largest single report** — ~41% — which is what
+a real question costs and where a new tool's room has to come from. Tool *schemas* are outside the
+gateway's own count — a schema is not a message — so they are measured there too, under a ceiling
+raised twice on the record (4,000 → 8,000 → 12,000).
+
+**The exhaustive fixture is nearly out of room, and that is a decision waiting rather than a
+number to nudge.** Three more reports do not fit in the ~500 characters left. `MAX_PROMPT_CHARS` is
+a constant DDR-0096 made hard to raise **on purpose**, so moving it is a record change; the
+alternative is to stop asserting that a model may call *every* report in one round, a shape no
+question takes and one the round bound already rations. Either way it is decided before it is
+coded, never absorbed by trimming a report until the test goes green.
 
 The loop is **bounded twice** and is not a retry: a retry re-sends the *same* request after a
 **failure**; a round sends a *larger* message array after a **success**, and a failed round is still

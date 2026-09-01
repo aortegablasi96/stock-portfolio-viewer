@@ -554,18 +554,22 @@ describe('the conversation after the model has asked for reports', () => {
   /**
    * **The exhaustive case: every report this app has, in one round.** It fits, and it is measured
    * here without the 85% gate on purpose — the gate is DDR-0103's on what is *assembled* and sent
-   * unasked, and this is a conversation in which the model asked for all eight at once over a
+   * unasked, and this is a conversation in which the model asked for all nine at once over a
    * fixture larger than any real portfolio: forty long-named positions, thirty-three bands every one
    * of them out of range, and twenty years of daily history. At the time of writing it comes to
-   * roughly 96% of the ceiling against a first round at 16%, which is the trade the Epic made: what
+   * **98.7%** of the ceiling against a first round at 16%, which is the trade the Epic made: what
    * used to be sent with every question is now sent only when it is asked for.
    *
-   * **96% is the number a ninth tool has to be measured against**, and it is deliberately not the
-   * gate: a question that calls every report at once is not one anyone asks, and the assertion above
-   * — the largest single report on the largest first round, at ~41% — is what a real question costs.
+   * **That leaves about 500 characters, and #329's three reports do not fit in them.** The number is
+   * recorded here rather than absorbed, because what it costs is a decision and not an edit: either
+   * `MAX_PROMPT_CHARS` moves — a **constant DDR-0096 made hard to raise on purpose**, so a record
+   * change and never an inline one — or this fixture stops asserting that a model may call *every*
+   * report in a single round, which is a shape no question takes and which the round bound and the
+   * `incomplete` state already ration. It is deliberately not the gate: the assertion above — the
+   * largest single report on the largest first round, at ~41% — is what a real question costs.
    *
    * A *second* exhaustive round is what the bounds exist to stop, and it stops as `incomplete` — a
-   * named state, never a partial answer. A model asking for all eight reports twice is the runaway
+   * named state, never a partial answer. A model asking for all nine reports twice is the runaway
    * `MAX_PROMPT_CHARS` rations rather than a question anyone asked.
    */
   it.each(CASES)('fits inside the ceiling with every report in it: %s', (_case, reports) => {
@@ -638,20 +642,24 @@ describe('the conversation after the model has asked for reports', () => {
    * a schema is not a message. What stops them growing is this: a story adding a ninth tool, or a
    * paragraph to a description, measures it here.
    *
-   * **The ceiling was raised from 4,000 to 8,000 in Story #327**, deliberately and once: eight tools
-   * at roughly 830 characters each, where the four of #326 came to about 2,800. The descriptions are
-   * where the four period tools say the key comes from `get_performance_periods` and that no
-   * free-form range exists, which is the sentence that keeps a model from inventing one — so the
-   * growth buys the property DDR-0102 is about rather than padding.
+   * **Raised twice, each time once and on the record**: 4,000 → 8,000 in Story #327, and 8,000 →
+   * 12,000 by the owner in #328. The unit is stable at roughly 900 characters a tool — nine come to
+   * about 7,800 — so the new ceiling is the room for #329's three reports plus a description's worth
+   * of margin, rather than a number picked to clear today's measurement.
    *
-   * **Story #328's ninth tool fits inside it and very nearly does not** — roughly 7,800 of the
-   * 8,000, so the next story raises this number rather than editing a description past it. That is
-   * the ceiling doing its job: `get_position` is the one tool taking free text, so its two
-   * descriptions carry what it is *not* — no filter, no threshold, no list — which is the sentence
-   * standing between an identity argument and the general query ADR-0009 forbids.
+   * **What the growth buys is the property, not padding.** The four period tools spend their
+   * descriptions saying the key comes from `get_performance_periods` and that no free-form range
+   * exists, which is the sentence that keeps a model from inventing one (DDR-0102). `get_position`
+   * spends its two on what it is *not* — no filter, no threshold, no list — which is what stands
+   * between an identity argument and the general query ADR-0009 forbids. A tool description that
+   * only described would be shorter and worse.
+   *
+   * The ceiling stays because the reason for it does: these are sent on **every round**, they are
+   * outside the gateway's own count — a schema is not a message — and nothing else would notice them
+   * growing.
    */
   it('declares tool schemas small enough to be sent on every round', () => {
-    expect(JSON.stringify(assistantToolDefinitions()).length).toBeLessThan(8_000)
+    expect(JSON.stringify(assistantToolDefinitions()).length).toBeLessThan(12_000)
   })
 
   /**
