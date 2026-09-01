@@ -360,6 +360,15 @@ export const assistantAskRequestSchema = z.object({
     .record(z.string(), z.string().max(MAX_CONTEXT_SECTION_CHARS))
     .default({})
     .transform((raw): AssistantContext => pickDisclosedSections(raw)),
+  /**
+   * The app's own currency selection, which every live weight a tool returns is a share of a total
+   * in (Story #326, DDR-0007).
+   *
+   * It crosses with the question rather than being resolved in main, because it is a **view**
+   * selection the shell owns — a tool that picked its own would answer in a currency on no page.
+   * Optional so a caller with no view still asks a valid question; the service names the fallback.
+   */
+  displayCurrency: z.string().trim().min(1).optional(),
 })
 export type AssistantAskRequest = z.input<typeof assistantAskRequestSchema>
 

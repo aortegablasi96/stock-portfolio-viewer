@@ -311,6 +311,13 @@ export function registerIpcHandlers(): void {
   // (DDR-0096) — so the only exception that can reach this `catch` is a rejected payload, which is
   // why `invalid` is what it maps to rather than `error`. There was a third, in the service, and
   // ADR-0011 removed it: the key is the authorization.
+  //
+  // Since Story #326 it is also the one handler that reads *other domains* while it runs: the model
+  // may ask for a report, and the tool that answers reaches the same services every channel below
+  // reaches — including the live IBKR read, whose two failures are mapped inside the tool rather
+  // than here, because a report that could not be produced is a state the model must say out loud
+  // and not a failed question (DDR-0022, DDR-0111). `displayCurrency` crosses with the question for
+  // the same reason `profile:getDrift` takes one: a live weight is a share of a total in it.
   ipcMain.handle(
     IpcChannels.assistantAsk,
     async (_event, rawInput: unknown): Promise<AssistantAskResult> => {
@@ -319,7 +326,11 @@ export function registerIpcHandlers(): void {
         return { status: 'invalid', message: firstIssueMessage(parsed.error) }
       }
       try {
-        return await assistantService.ask(parsed.data.question, parsed.data.context)
+        return await assistantService.ask(
+          parsed.data.question,
+          parsed.data.context,
+          parsed.data.displayCurrency,
+        )
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unexpected error asking the assistant.'
         return { status: 'error', message }

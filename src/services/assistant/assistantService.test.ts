@@ -8,6 +8,7 @@ import {
   SYSTEM_PROMPT_PREAMBLE,
   SYSTEM_PROMPT_SECTIONS,
 } from './assistantService'
+import { assistantToolDefinitions } from './assistantTools'
 import { aiGateway } from '@repositories/assistant/aiGateway'
 import {
   DISCLOSURE_CATEGORIES,
@@ -298,26 +299,27 @@ describe('the prompt is built from the disclosure', () => {
   it('sends the system prompt and the built context through the gateway', async () => {
     await assistantService.ask('How am I doing?', context)
 
-    expect(mockGateway.complete).toHaveBeenCalledWith({
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: buildPrompt('How am I doing?', context) },
-      ],
-    })
+    const sent = mockGateway.complete.mock.calls[0]![0]
+    expect(sent.messages).toEqual([
+      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'user', content: buildPrompt('How am I doing?', context) },
+    ])
   })
 
   /**
-   * **No tool is declared yet**, and the assertion is the story's rather than the shape's: #324
-   * ships the loop, and #326–#329 ship the reports. A tool named here before a service computed one
-   * would be an invitation for the model to ask for a report that does not exist — which the
-   * gateway would report as `invalid`, correctly and uselessly.
+   * **The four reports, declared and executable as a pair** (Story #326, DDR-0111).
+   *
+   * `tools` and `runTool` are two halves of one decision and the gateway checks them together: a
+   * name the model asks for that is not declared here is `invalid` and the executor never runs. So
+   * the assertion is that both arrive, and that what is declared is the registry rather than a list
+   * assembled here — a second inventory is how the two would drift.
    */
-  it('declares no tools, because none is backed by a report yet', async () => {
+  it('declares the tool registry, with the executor that answers it', async () => {
     await assistantService.ask('How am I doing?', context)
 
     const sent = mockGateway.complete.mock.calls[0]![0]
-    expect(sent.tools).toBeUndefined()
-    expect(sent.runTool).toBeUndefined()
+    expect(sent.tools).toEqual(assistantToolDefinitions())
+    expect(typeof sent.runTool).toBe('function')
   })
 })
 
@@ -344,16 +346,17 @@ describe('the absences ride with every question, whatever else does', () => {
   }
 
   /**
-   * No context, no tools, no report — and all seven statements still there. This is the "no tool is
-   * called" conversation the story asks for, at the only boundary where it can be observed: what
-   * actually left for the gateway.
+   * No context, no report — and all eight statements still there. This is the "no tool is called"
+   * conversation the story asks for, at the only boundary where it can be observed: what actually
+   * left for the gateway.
+   *
+   * **The tools being *offered* is what makes it the interesting case** (Story #326): the model may
+   * decline every one of them, so the absences ride in the message rather than in any report, and
+   * nothing about which tools ran can change that. The executor is never invoked here — no round
+   * comes back asking for anything, because the gateway is a mock.
    */
   it('carries every one of them when no context was assembled and no tool was called', async () => {
     await assistantService.ask('How volatile has the ride been?')
-
-    const sent = mockGateway.complete.mock.calls[0]![0]
-    expect(sent.tools).toBeUndefined()
-    expect(sent.runTool).toBeUndefined()
 
     const user = sentUser()
     expect(user).toContain('No portfolio context was assembled')

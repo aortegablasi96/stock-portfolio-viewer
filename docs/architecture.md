@@ -105,12 +105,20 @@ Three architectural rules make that safe, and they replace the former analytics-
   reaches neither the database, the repositories, nor the IBKR gateway.
 
   **How it obtains a report is an implementation choice; what it may compute is not** (ADR-0009).
-  The build today hands it a deterministically assembled context. Epic #322 lets it *select* among
-  reports through tools instead, which the ADR anticipated and permits without amendment, on four
-  conditions: every tool returns a **computed report and never raw data**, no tool is a general
-  query, each is backed by a **service method**, and there is no write tool and no path to one.
-  Many tools may share one method; **no tool may span two** — a join is computation, and computation
-  belongs in a service. ADR-0009's Option E — *let the model compute* — stays rejected (DDR-0111).
+  Epic #322 lets it *select* among reports through tools, which the ADR anticipated and permits
+  without amendment, on four conditions: every tool returns a **computed report and never raw
+  data**, no tool is a general query, each is backed by a **service method**, and there is no write
+  tool and no path to one. Many tools may share one method; **no tool may span two** — a join is
+  computation, and computation belongs in a service. ADR-0009's Option E — *let the model compute* —
+  stays rejected (DDR-0111).
+
+  Story #326 ships the first four (`services/assistant/assistantTools.ts`, with the prose in
+  `toolReports.ts`), executed in **main** against the services and rendered through the app's own
+  formatters. Each declares the `DISCLOSURE_CATEGORIES` category it falls under — a tool result is
+  built in main and never crosses the IPC boundary that drops an undeclared section, so the registry
+  is where that bound is enforced. What stays **assembled and unconditional** is the base context:
+  the absences, which are never a tool, because a prohibition whose supporting fact the model may
+  decline to fetch is not a prohibition (DDR-0101, DDR-0110, DDR-0111).
 - **The app never acts.** No order placement, no broker write, no path to one.
 - **The app never sets the owner's policy.** It proposes moves toward their targets; it never
   proposes the targets, and never suggests one for them to set. Where they have stated nothing, the

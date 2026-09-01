@@ -226,10 +226,18 @@ call would unbind all three and nothing would fail (DDR-0101, DDR-0110, DDR-0111
 holds the prohibitions is the base context, and a tool that carried them *instead* would put them
 back behind a choice.
 
-**Do not add to the base context or to the assembled sections without measuring.**
-`promptBudget.test.ts` sits at **84.8%** of `MAX_PROMPT_CHARS` against an 85% gate — roughly 90
-characters. Epic #322 reclaims that room by moving figures behind tools; until it has, a story that
-adds prose to either fails there.
+**A report says what its percentages are a share of** (Story #326). Two of the four weigh the same
+portfolio against two totals by design — the live overview excludes cash, the rebalancing gaps
+include it (DDR-0095) — and both are right. A model that met them without being told would reconcile
+two right answers by picking one, so each opening line names its own denominator, its store and its
+clock.
+
+**Do not add to the base context, to a tool report, or to a tool description without measuring.**
+`promptBudget.test.ts` measures the **conversation**, not the prompt: the first round is ~36% of
+`MAX_PROMPT_CHARS`, and every report at once ~90%. The **85% gate binds the first round plus the
+largest single report**, which is what a real question costs and where a new tool's room has to come
+from. Tool *schemas* are outside the gateway's own count — a schema is not a message — so they are
+measured there too.
 
 The loop is **bounded twice** and is not a retry: a retry re-sends the *same* request after a
 **failure**; a round sends a *larger* message array after a **success**, and a failed round is still

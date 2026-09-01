@@ -128,6 +128,9 @@ export function AssistantConversation({
       const result = await window.api.askAssistant({
         question: asked,
         context: buildAssistantContext(fresh),
+        // The app's own selection, sent so a report the model asks for is weighed in the currency
+        // on screen (Story #326, DDR-0007). The tools run in main, where no view exists to ask.
+        displayCurrency,
       })
       setTurns((prev) =>
         prev.map((turn) => (turn.id === id ? { ...turn, answer: answerFromResult(result) } : turn)),

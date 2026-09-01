@@ -1,14 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
-  MAX_LISTED_MOVES,
-  MAX_LISTED_POSITIONS,
   buildAssistantContext,
   hasProfile,
-  holdingsSection,
-  measuredDrift,
   performanceSection,
-  profileSection,
-  weightsSection,
   wholeHistory,
   type GroundingReports,
 } from './assistantContext'
@@ -17,30 +11,28 @@ import type { PerformanceReport } from '@shared/domain/performance'
 import { DISCLOSURE_CATEGORY_IDS } from '@shared/domain/assistantDisclosure'
 import { EMPTY_INVESTOR_PROFILE, type InvestorProfile } from '@shared/domain/investorProfileTerms'
 import type { AllocationPosition, AllocationReport } from '@shared/domain/allocation'
-import type {
-  BalanceDriftReport,
-  BaselineReview,
-  DriftBand,
-  DriftMove,
-} from '@shared/domain/balanceDrift'
-import { BASELINE_CHECKS, BASELINE_VERSION } from '@shared/domain/portfolioBaseline'
+import type { BalanceDriftReport, BaselineReview } from '@shared/domain/balanceDrift'
+import { BASELINE_VERSION } from '@shared/domain/portfolioBaseline'
 import { CASH_ASSET_KEY } from '@shared/domain/assetClass'
 
 /**
- * The grounding (Story #284, DDR-0098).
+ * The grounding that is still assembled (Story #284, DDR-0098; narrowed by Story #326).
  *
- * **This file is the Epic's largest correctness risk written down as assertions.** ADR-0009 says
- * the model never produces a figure, and that sentence is only true if something else produces
- * every one of them. Here is that something, and the tests below are less about formatting than
- * about four properties the feature is unsafe without:
+ * **This file was the Epic's largest correctness risk written down as assertions**, and half of it
+ * moved rather than went away: the holdings, weights, profile and drift assertions are
+ * `services/assistant/toolReports.test.ts`'s now, over the same prose in the process that computes
+ * it (DDR-0111). What is left is the performance section and the standard period set, which #327
+ * takes behind its own tools, and the assembly itself — which is now asserted for what it *stops*
+ * carrying as much as for what it carries.
  *
- * 1. A section carries **no more than its disclosure allows** — no money in `holdings`, `weights`
- *    or `profile`, whatever the reports contain.
- * 2. **Absent is absent, never zero** — a report that could not be read produces no section, and
- *    an unconvertible holding is never given a weight (DDR-0007).
+ * The properties are unchanged, and every one of them still has a test on each side of the move:
+ *
+ * 1. A section carries **no more than its disclosure allows** — `performance` is the one category
+ *    that may carry money, and it is the one still assembled here.
+ * 2. **Absent is absent, never zero** — a report that could not be read produces no section.
  * 3. Every figure goes through the **app's own formatters**, so prose and dashboard agree.
- * 4. A section **says which store and which clock it came from**, because the composition sections
- *    read imported Flex history and drift reads the live portfolio.
+ * 4. A section **says which store and which clock it came from** — this one reads imported Flex
+ *    history, and the tools that read live say so themselves.
  */
 
 function position(over: Partial<AllocationPosition> = {}): AllocationPosition {
@@ -170,32 +162,6 @@ function drift(over: Partial<BalanceDriftReport> = {}): BalanceDriftReport {
   }
 }
 
-/** One currency band and its move, for the cases that are about the move alone. */
-function bandOf(band: Partial<DriftBand>, move: DriftMove | null): BalanceDriftReport {
-  return drift({
-    dimensions: [
-      {
-        dimension: 'currency',
-        bands: [
-          {
-            key: 'USD',
-            label: 'USD',
-            actual: 60,
-            low: 30,
-            high: 50,
-            status: 'above',
-            distance: 10,
-            ...band,
-            move,
-          },
-        ],
-        residuals: [],
-        untargeted: 0,
-      },
-    ],
-  })
-}
-
 const PROFILE: InvestorProfile = {
   styleTags: ['dividend_income'],
   currencyTargets: [{ key: 'USD', low: 30, high: 50 }],
@@ -316,13 +282,17 @@ describe('buildAssistantContext', () => {
     }
   })
 
-  it('assembles the four sections an answer is grounded in', () => {
-    expect(Object.keys(buildAssistantContext(inputs())).sort()).toEqual([
-      'holdings',
-      'performance',
-      'profile',
-      'weights',
-    ])
+  /**
+   * **One section, and its three former siblings are tools now** (Story #326, DDR-0111).
+   *
+   * Asserted as an exact list rather than as "contains performance", because the point of the story
+   * is what is *no longer* here: `holdings`, `weights` and `profile` are computed in main when the
+   * model asks for them, and sending them here as well would put every figure in front of it twice
+   * and spend the budget the tool rounds need. A story that re-added one would pass a "contains"
+   * assertion and fail this.
+   */
+  it('assembles the one section the model cannot yet ask for', () => {
+    expect(Object.keys(buildAssistantContext(inputs())).sort()).toEqual(['performance'])
   })
 
   /**
@@ -336,515 +306,29 @@ describe('buildAssistantContext', () => {
     ).not.toHaveProperty('performance')
   })
 
-  /** Absent is absent. A store that has never been imported produces no composition sections. */
-  it('omits both composition sections when nothing has been imported', () => {
+  /**
+   * The composition sections went to the tools, and so did the reads behind them (Story #326).
+   *
+   * Pinned as an absence rather than dropped, because "nothing imported" used to be the case that
+   * removed two of the four sections and it is now the case that changes nothing here at all: the
+   * allocation is `get_allocation`'s to report — as a *state*, not as a missing section — and this
+   * context's only input is the performance report.
+   */
+  it('assembles nothing from the reports the tools now answer', () => {
     const context = buildAssistantContext(inputs({ allocation: { status: 'needs_import' } }))
-    expect(context).not.toHaveProperty('holdings')
-    expect(context).not.toHaveProperty('weights')
-    expect(context).toHaveProperty('profile')
+    expect(Object.keys(context)).toEqual(['performance'])
   })
 
   /**
-   * The inverse of what this asserted before Story #315, and the reversal is the story.
-   *
-   * An owner with no policy used to produce no profile section at all - there was nothing to say,
-   * and a heading over nothing invites a model to fill it in. There is something to say now, and it
-   * is the most important sentence in the section: *they have not written one*. Without it the
-   * app's baseline below is a standard with no owner named, which is exactly how a default becomes
-   * a policy the model attributes to them.
+   * The same, for the profile: an owner who has written nothing used to get the most important
+   * sentence in the section — *they have not set one* — assembled here whether they asked or not.
+   * It is `get_investor_profile`'s now, in the same words, and `toolReports.test.ts` holds it.
    */
-  it('still carries a profile section for an owner who has stated no policy, saying so', () => {
-    const context = buildAssistantContext(
-      inputs({ profile: EMPTY_INVESTOR_PROFILE, drift: { status: 'no_data' } }),
-    )
-    expect(context.profile).toContain('has not set an investor profile at all')
-    expect(context.profile).toContain('Assistant view’s profile section')
-  })
-
-  /**
-   * The disclosure's own promise, enforced. `holdings` is declared as names and `weights` and
-   * `profile` as percentages only, so **no amount of money may appear in any of them** — however
-   * useful one would be to an answer. A currency symbol or a grouped thousands figure in these
-   * sections is the disclosure becoming a lie.
-   */
-  it('puts no amount of money in a section disclosed as names or percentages', () => {
-    const context = buildAssistantContext(inputs())
-    for (const key of ['holdings', 'weights', 'profile'] as const) {
-      const section = context[key] ?? ''
-      expect(section, key).not.toMatch(/[€$£¥]/)
-      // The market values in the fixtures — 12,345.67 and 50,000 — must not have survived.
-      expect(section, key).not.toContain('12,345')
-      expect(section, key).not.toContain('50,000')
-    }
-  })
-})
-
-describe('holdingsSection', () => {
-  it('names the store and the date it is as of, so two clocks are never mixed', () => {
-    expect(holdingsSection(report())).toContain('From imported Flex history, as of 2026-07-31')
-  })
-
-  it('carries the ticker, the name, the currency, the sector and the asset class', () => {
-    const text = holdingsSection(report())
-    expect(text).toContain('AAPL (Apple)')
-    expect(text).toContain('currency USD')
-    expect(text).toContain('sector Technology')
-    expect(text).toContain('asset class STK')
-  })
-
-  /**
-   * DDR-0066's trap, which reaches here like it reaches every view: IBKR writes the identifier
-   * again where an instrument has no name, so a description that only repeats the symbol is not a
-   * name. `instrumentName` is what every view uses, and using it here is what keeps an answer
-   * saying `CAD` rather than `Cad`.
-   */
-  it('drops a description that only repeats the ticker', () => {
-    const text = holdingsSection(report({ positions: [position({ symbol: 'CAD', description: 'CAD' })] }))
-    expect(text).toContain('- CAD · currency')
-    expect(text).not.toContain('Cad')
-  })
-
-  it('says a position is unclassified rather than leaving the field blank', () => {
-    const text = holdingsSection(report({ positions: [position({ sector: '', assetCategory: '' })] }))
-    expect(text).toContain('sector unclassified')
-    expect(text).toContain('asset class unknown')
-  })
-
-  it('reports how many of the book it is holding, and cuts largest-first', () => {
-    const many = Array.from({ length: MAX_LISTED_POSITIONS + 5 }, (_, index) =>
-      position({ symbol: `S${index}`, percentOfNav: index }),
-    )
-    const text = holdingsSection(report({ positions: many }))
-    expect(text).toContain(`The ${MAX_LISTED_POSITIONS} of ${many.length} open positions`.replace(' of ', ' largest of '))
-    // The five smallest are the ones cut.
-    expect(text).toContain('- S44 (Apple) ·')
-    expect(text).not.toContain('- S0 (Apple) ·')
-  })
-
-  it('says so when the whole book is in front of the model', () => {
-    expect(holdingsSection(report())).toContain('All 1 open position(s).')
-  })
-
-  it('reports the classification gap rather than leaving it to be inferred', () => {
-    expect(holdingsSection(report({ unclassifiedCount: 3 }))).toContain(
-      '3 of these have no sector',
-    )
-  })
-})
-
-describe('weightsSection', () => {
-  it('quotes every weight in the app’s own percent format', () => {
-    const text = weightsSection(report())
-    expect(text).toContain('- AAPL: 24.50%')
-    expect(text).toContain('- Stocks: 80.00%')
-    expect(text).toContain('- USD: 60.00%')
-    expect(text).toContain('- Technology: 40.00%')
-    expect(text).toContain('- United States: 60.00%')
-  })
-
-  /** A breakdown the report does not carry is absent, not a heading with nothing under it. */
-  it('omits a breakdown the report has no slices for', () => {
-    const text = weightsSection(report({ bySector: [], byCountry: [] }))
-    expect(text).not.toContain('By sector:')
-    expect(text).not.toContain('By issuer country:')
-    expect(text).toContain('By currency:')
-  })
-
-  /**
-   * A currency weight has two readings and this app computes one (Story #287). Beside the
-   * breakdown rather than once at the top of the section: a breakdown gets quoted on its own, and a
-   * qualification three headings away is one that will not travel with it.
-   */
-  it('says which kind of currency exposure the weights are, beside the weights', () => {
-    const text = weightsSection(report())
-    const noteAt = text.indexOf('currency each position is held and priced in')
-    const currencyAt = text.indexOf('By currency:')
-    expect(noteAt).toBeGreaterThan(currencyAt)
-    expect(text).toContain('not the currency the underlying business earns its revenue in')
-  })
-})
-
-describe('profileSection', () => {
-
-  /**
-   * A target key is not always a label, and asset class is where they part company (DDR-0094).
-   *
-   * The stored key is the one the *allocation report* published, which is what makes a target join
-   * at all — so it is IBKR's `STK` or `BOND`, or the `__cash__` sentinel chosen precisely because it
-   * cannot collide with one of those. This line shipped writing the key raw, so the model was handed
-   * `Asset class __cash__: 2.00%–10.00%`: a sentinel, in the section that is supposed to state the
-   * owner's own policy back to them.
-   */
-  it('writes an asset-class target by its label, never by its stored key', () => {
-    const text = profileSection(
-      {
-        ...PROFILE,
-        assetClassTargets: [
-          { key: 'STK', low: 55, high: 80 },
-          { key: 'BOND', low: 5, high: 20 },
-          { key: CASH_ASSET_KEY, low: 2, high: 10 },
-        ],
-      },
-      { status: 'no_data' },
-    )
-
-    expect(text).toContain('- Asset class Stocks: 55.00%–80.00%')
-    expect(text).toContain('- Asset class Bonds: 5.00%–20.00%')
-    expect(text).toContain('- Asset class Cash: 2.00%–10.00%')
-    expect(text).not.toContain(CASH_ASSET_KEY)
-  })
-
-  /** Currency and sector keys *are* their labels, so the fix must not translate them into anything. */
-  it('leaves a currency or sector target key exactly as the owner stored it', () => {
-    const text = profileSection(
-      { ...PROFILE, sectorTargets: [{ key: 'Diversified Finan Serv', low: 0, high: 5 }] },
-      { status: 'no_data' },
-    )
-
-    expect(text).toContain('- Currency USD: 30.00%–50.00%')
-    expect(text).toContain('- Sector Diversified Finan Serv: 0.00%–5.00%')
-  })
-
-  /**
-   * The whole section, not just the targets list. `__cash__` reaching a model anywhere is the bug;
-   * this is the assertion that does not care which line it came from.
-   */
-  it('never lets the cash sentinel reach the model', () => {
-    const text = profileSection(
-      { ...PROFILE, assetClassTargets: [{ key: CASH_ASSET_KEY, low: 2, high: 10 }] },
-      { status: 'ok', report: drift() },
-    )
-
-    expect(text).not.toContain('__')
-  })
-  it('states the style tags in the words the app shows them in', () => {
-    const text = profileSection(PROFILE, { status: 'no_data' }) ?? ''
-    expect(text).toContain('Investing style the owner states: Dividend income.')
-  })
-
-  it('writes every target as a range, both ends formatted', () => {
-    const text = profileSection(PROFILE, { status: 'no_data' }) ?? ''
-    expect(text).toContain('- Currency USD: 30.00%–50.00%')
-    expect(text).toContain('- Any single position: 0.00%–15.00%')
-  })
-
-  /**
-   * A gateway that is not running produces no weights at all, and none is invented to fill the
-   * gap. The targets still go — the owner's policy is a local fact — but nothing is measured
-   * against them (DDR-0022).
-   */
-  it.each(['no_data', 'not_connected', 'not_responding', 'error'] as const)(
-    'measures nothing when drift came back %s',
-    (status) => {
-      const text = profileSection(PROFILE, { status, message: 'x' } as never) ?? ''
-      expect(text).toContain('- Currency USD:')
-      expect(text).not.toContain('Measured against the live portfolio')
-    },
-  )
-
-  it('says the owner has written nothing, rather than being absent, when they have', () => {
-    const text = profileSection(EMPTY_INVESTOR_PROFILE, { status: 'no_data' })
-    expect(text).toContain('has not set an investor profile at all')
-    // And never as an error: an unwritten profile is a state, not a failure.
-    expect(text).not.toContain('could not')
-  })
-
-  it('does not open with a blank line when the owner set targets but no style', () => {
-    const text = profileSection({ ...PROFILE, styleTags: [] }, { status: 'no_data' })
-    expect(text.startsWith('\n')).toBe(false)
-    expect(text.startsWith('Targets the owner set:')).toBe(true)
-  })
-
-  /**
-   * A dimension with no target is absent from the drift report on purpose — a profile stating
-   * nothing about sectors is not a profile stating that sectors do not matter. That absence is
-   * right in the report and wrong in front of a model, which reads a missing heading as a question
-   * that came back clean (Story #287).
-   */
-  describe('an untargeted dimension is named as untargeted, never as balanced', () => {
-    it('names the dimensions the owner set no target in', () => {
-      const text = profileSection(PROFILE, { status: 'no_data' }) ?? ''
-      expect(text).toContain('the owner has set no target for sector and asset class')
-      expect(text).toContain('neither balanced nor unbalanced')
-      expect(text).toContain('Never report them as balanced')
-      // The line hands the dimension on rather than closing the subject (Story #315): the model may
-      // still invent nothing, and there is now somewhere for it to look instead.
-      expect(text).toContain('invent no standard of your own')
-    })
-
-    it('says so about a missing concentration ceiling too', () => {
-      const text = profileSection({ ...PROFILE, positionSize: null }, { status: 'no_data' }) ?? ''
-      expect(text).toContain('no single-position concentration ceiling')
-    })
-
-    it('says nothing about untargeted dimensions once all three carry a target', () => {
-      const text =
-        profileSection(
-          {
-            ...PROFILE,
-            sectorTargets: [{ key: 'Technology', low: 10, high: 30 }],
-            assetClassTargets: [{ key: 'STK', low: 50, high: 90 }],
-          },
-          { status: 'no_data' },
-        ) ?? ''
-      expect(text).not.toContain('Untargeted: the owner has set no target for')
-    })
-  })
-})
-
-describe('measuredDrift', () => {
-  it('names the live reading and the moment it was taken', () => {
-    expect(measuredDrift(drift())).toContain(
-      'Measured against the live portfolio, read 2026-08-28 09:15 UTC',
-    )
-  })
-
-  it('states the verdict the service computed, rather than leaving it to be derived', () => {
-    expect(measuredDrift(drift())).toContain(
-      'At least one target the owner set is currently outside its range.',
-    )
-    expect(measuredDrift(drift({ balanced: true }))).toContain(
-      'Every target the owner set is currently inside its range.',
-    )
-  })
-
-  /**
-   * `balanced: null` is the state Story #315 created and the one a model would most like to
-   * mis-phrase: no targets is not every target met, and "your portfolio is balanced" is the
-   * sentence a bare `true` would have produced. The service stopped emitting that `true`; this is
-   * the assertion that the section stopped writing it too.
-   */
-  it('refuses to call a portfolio balanced when the owner set nothing to be balanced against', () => {
-    const text = measuredDrift(drift({ balanced: null, dimensions: [] }))
-    expect(text).toContain('The owner has set no targets')
-    expect(text).not.toContain('inside its range')
-  })
-
-  it('writes a band as actual, range, and the signed distance out of it', () => {
-    expect(measuredDrift(drift())).toContain(
-      '- USD: 60.00% against 30.00%–50.00% — above the range by +10.00%',
-    )
-  })
-
-  /**
-   * Surfaced, never redistributed (DDR-0095). A dimension whose bands sum to 60% has to account
-   * for the rest, or the model reads the gap as rounding and explains it away.
-   */
-  it('reports residuals and untargeted weight as their own lines', () => {
-    const text = measuredDrift(drift())
-    expect(text).toContain('- Cash (no target applies): 5.00%')
-    expect(text).toContain('- Held in categories with no target: 35.00%')
-  })
-
-  /**
-   * DDR-0007, at its sharpest. An unconvertible holding has **no percentage** — there is no rate
-   * with which to compute one — so it is reported as a count and a currency, and the text says
-   * outright that no percentage exists for it.
-   */
-  it('reports unplaced holdings as counts and currencies, never as a weight', () => {
-    const text = measuredDrift(
-      drift({
-        unplaced: {
-          positions: 2,
-          cashBalances: 1,
-          currencies: ['CHF', 'JPY'],
-          nativeTotals: [
-            { currency: 'CHF', amount: 1_234 },
-            { currency: 'JPY', amount: 90_000 },
-          ],
-        },
-      }),
-    )
-    expect(text).toContain('2 holding(s) and 1 cash balance(s) could not be valued in EUR (CHF, JPY)')
-    expect(text).toContain('no percentage exists for them')
-    // Never as an amount, either: the native totals are money and this section is percentages.
-    expect(text).not.toContain('1,234')
-    expect(text).not.toContain('90,000')
-  })
-
-  /** The ceiling is a lower bound where something could not be valued, and says so. */
-  it('marks a bounded concentration figure as the lower bound it is', () => {
-    const text = measuredDrift(
-      drift({
-        position: {
-          symbol: 'AAPL',
-          name: 'Apple Inc',
-          actual: 24.5,
-          low: 0,
-          high: 15,
-          status: 'above',
-          distance: 9.5,
-          bounded: true,
-        },
-      }),
-    )
-    expect(text).toContain('Largest single position: AAPL (Apple Inc) at 24.50%')
-    expect(text).toContain('This is a lower bound')
-  })
-
-  /**
-   * The arithmetic that closes a drift (Story #287, DDR-0103).
-   *
-   * **Sized by the app so that a proposal narrates arithmetic rather than generating one.** #281
-   * gave the model the gap; a model asked to close a gap will size the move itself, and spreading
-   * percentage points across positions is exactly the calculation that reads as prose. Computing it
-   * first is also what retires #289's post-hoc check on the model's answer: there is nothing
-   * produced by the model to verify.
-   */
-  describe('the move that closes a band', () => {
-    it('states the size of the move, its direction and the edge it reaches', () => {
-      const text = measuredDrift(drift())
-      expect(text).toContain('Move: trim 10.00 percentage points out of USD to reach 50.00%')
-      expect(text).toContain('the nearer edge of its range')
-    })
-
-    it('names the positions that carry it, and how many of how many they are', () => {
-      const text = measuredDrift(drift())
-      expect(text).toContain('Positions carrying it (the 2 largest of 4 held in USD)')
-      expect(text).toContain(
-        '· AAPL (Apple Inc): 40.00% of the portfolio now, giving up 8.00 percentage points, leaving it at 32.00%',
-      )
-      // A position the live reading has no name for is still nameable by its ticker (DDR-0088).
-      expect(text).toContain('· MSFT: 10.00% of the portfolio now')
-    })
-
-    it('states the end state, which is why nothing has to check the answer afterwards', () => {
-      expect(measuredDrift(drift())).toContain('After this move USD sits at 50.00%, inside its range')
-    })
-
-    it('says the moves are the app’s own and assume the portfolio keeps its total', () => {
-      const text = measuredDrift(drift())
-      expect(text).toContain('never size a move of your own')
-      expect(text).toContain('assumes the portfolio keeps its current total')
-      expect(text).toContain('No amount of money is available for any of them')
-    })
-
-    it('offers no move for a band already inside its range', () => {
-      const text = measuredDrift(
-        drift({
-          balanced: true,
-          dimensions: [
-            {
-              dimension: 'currency',
-              bands: [
-                {
-                  key: 'USD',
-                  label: 'USD',
-                  actual: 40,
-                  low: 30,
-                  high: 50,
-                  status: 'inside',
-                  distance: 0,
-                  move: null,
-                },
-              ],
-              residuals: [],
-              untargeted: 60,
-            },
-          ],
-        }),
-      )
-      expect(text).not.toContain('Move:')
-      expect(text).not.toContain('HOW TO CLOSE THE GAPS')
-    })
-
-    /**
-     * "I want 10% in utilities and hold none" is not a smaller move; it is a different action, and
-     * one only the owner can take. The section says so rather than naming a position from the list
-     * above, which is exactly what a model with a gap in front of it will do.
-     */
-    it('says a band the owner holds nothing in cannot be closed by anything held', () => {
-      const text = measuredDrift(bandOf({ actual: 0, status: 'below', distance: -10 }, {
-        direction: 'add',
-        points: 10,
-        contributors: [],
-        uncovered: 10,
-        ceilingLimited: false,
-        candidates: 0,
-      }))
-      expect(text).toContain('No position currently held sits in USD')
-      expect(text).toContain('buying an instrument the owner does not hold')
-      expect(text).toContain('do not name one from the positions above')
-    })
-
-    /**
-     * The one interaction between two targets this app models: closing a sector gap must not push
-     * a position through the owner's own concentration ceiling. The remainder is surfaced, never
-     * spread over the positions that had no room for it (DDR-0052).
-     */
-    it('names the ceiling as what stopped a move, and leaves the rest uncovered', () => {
-      const text = measuredDrift(bandOf({ actual: 20, status: 'below', distance: -15 }, {
-        direction: 'add',
-        points: 15,
-        contributors: [{ symbol: 'AAPL', name: null, weight: 12, points: 3, resultingWeight: 15 }],
-        uncovered: 12,
-        ceilingLimited: true,
-        candidates: 1,
-      }))
-      expect(text).toContain('12.00 percentage points of this move is still not carried')
-      expect(text).toContain('single-position ceiling is what stops it')
-      expect(text).toContain('do not place it on a position yourself')
-      expect(text).toContain('still outside its range')
-    })
-
-    /** The cap states itself, so a target whose move is not sized still carries its verdict. */
-    it('sizes the largest gaps and says how many bands went without one', () => {
-      const bands = Array.from({ length: MAX_LISTED_MOVES + 3 }, (_, index) => ({
-        key: `C${index}`,
-        label: `C${index}`,
-        actual: 10 + index,
-        low: 0,
-        high: 5,
-        status: 'above' as const,
-        distance: 5 + index,
-        move: {
-          direction: 'trim' as const,
-          points: 5 + index,
-          contributors: [
-            { symbol: `S${index}`, name: null, weight: 20, points: 5 + index, resultingWeight: 15 },
-          ],
-          uncovered: 0,
-          ceilingLimited: false,
-          candidates: 1,
-        },
-      }))
-      const text = measuredDrift(
-        drift({ dimensions: [{ dimension: 'currency', bands, residuals: [], untargeted: 0 }] }),
-      )
-
-      expect(text).toContain(`${bands.length} band(s) are outside their range; the ${MAX_LISTED_MOVES} with the largest gaps`)
-      // Every band still has its verdict; only the smallest gaps go without a sized move.
-      expect(text).toContain('- C0: 10.00% against')
-      expect(text).toContain('- C8: 18.00% against')
-      expect(text.match(/ {2}Move: /g)).toHaveLength(MAX_LISTED_MOVES)
-      expect(text).toContain('trim 13.00 percentage points out of C8')
-      expect(text).not.toContain('out of C0 ')
-    })
-  })
-
-  /** The same qualification the weights section carries, beside the same kind of breakdown. */
-  it('says which kind of currency exposure the drift measured', () => {
-    expect(measuredDrift(drift())).toContain('currency each position is held and priced in')
-  })
-
-  it('says nothing about a lower bound when everything could be valued', () => {
-    const text = measuredDrift(
-      drift({
-        position: {
-          symbol: 'AAPL',
-          name: null,
-          actual: 10,
-          low: 0,
-          high: 15,
-          status: 'inside',
-          distance: 0,
-          bounded: false,
-        },
-      }),
-    )
-    expect(text).toContain('AAPL at 10.00%')
-    expect(text).toContain('inside the range')
-    expect(text).not.toContain('lower bound')
+  it('assembles no profile section, for an owner with a policy or without one', () => {
+    expect(buildAssistantContext(inputs())).not.toHaveProperty('profile')
+    expect(
+      buildAssistantContext(inputs({ profile: EMPTY_INVESTOR_PROFILE, drift: { status: 'no_data' } })),
+    ).not.toHaveProperty('profile')
   })
 })
 
@@ -1292,129 +776,5 @@ describe('hasProfile', () => {
   it('is true once any policy is stated, targets or style alone', () => {
     expect(hasProfile(PROFILE)).toBe(true)
     expect(hasProfile({ ...EMPTY_INVESTOR_PROFILE, styleTags: ['dividend_income'] })).toBe(true)
-  })
-})
-
-// ---- the app's own standard, and saying so ----------------------------------
-
-/**
- * The baseline block (Story #315, ADR-0012).
- *
- * The record traded ADR-0009's clean claim - *the standard is only ever the owner's* - for the
- * capability, and what it bought back is the **marking**: a judgement against a target the owner
- * wrote and a judgement against a default the app ships read identically once they are prose, and
- * only one of them carries the owner's authority. Every assertion here is about that distinction
- * surviving into the text, because the prompt is the only line of defence for phrasing (DDR-0104)
- * and a rule can be asserted present but never asserted obeyed.
- */
-describe('the app’s baseline is marked apart from the owner’s own standard', () => {
-  it('names whose standard it is, beside the claim rather than once at the end', () => {
-    const text = profileSection(PROFILE, { status: 'ok', report: drift() })
-
-    expect(text).toContain('The app’s default baseline, version 1')
-    expect(text).toContain('say the standard is the app’s default and not theirs')
-    expect(text).toContain('against the app’s default 30%')
-  })
-
-  /**
-   * ADR-0012's central line in the text: the owner's own ceiling governs positions here, so the
-   * baseline says it is standing aside rather than adding a second opinion about the same
-   * dimension.
-   */
-  it('says which checks the owner’s own targets govern, and stands aside on them', () => {
-    const text = profileSection(PROFILE, { status: 'ok', report: drift() })
-
-    expect(text).toContain('Not applied, the owner’s own targets govern them: single-position size')
-    expect(text).toContain('Judge those against their targets above, never against a default')
-    expect(text).not.toContain('Largest single position:')
-  })
-
-  /**
-   * The record's own stated risk: a default becoming a recommended profile. *"Consider setting a
-   * 10% ceiling"* is proposing the policy in the baseline's clothes, and this is the sentence in
-   * the grounding that forbids it - beside the rule that says the same thing in the prompt.
-   */
-  it('forbids the baseline being offered as a profile to adopt', () => {
-    const text = profileSection(PROFILE, { status: 'ok', report: drift() })
-
-    expect(text).toContain('not a profile for them to adopt')
-    expect(text).toContain('never suggest they set one')
-  })
-
-  /**
-   * Currency's absence is a decision, not an omission. The app knows where a position is priced and
-   * not where its business earns, so a default there would assert an exposure it cannot see - and
-   * an absent verdict reads as a clean one unless it is named (DDR-0101).
-   */
-  it('states that currency is covered by no default at all', () => {
-    const text = profileSection(PROFILE, { status: 'ok', report: drift() })
-
-    expect(text).toContain('The baseline covers no currency')
-    expect(text).toContain('Judge currency against the owner’s targets or not at all')
-  })
-
-  /**
-   * The user-facing half of ADR-0012's Option D. The app's "sector" is IBKR's `industry` field, an
-   * open vocabulary - so it holds no universe to subtract a portfolio from, and a model asked which
-   * sectors are missing will answer from training data unless the grounding says the list does not
-   * exist.
-   */
-  it('gives the sector count and forbids naming a sector as missing', () => {
-    const text = profileSection(PROFILE, { status: 'ok', report: drift() })
-
-    expect(text).toContain('Holdings carry 3 distinct sector name(s)')
-    expect(text).toContain('never name a missing sector')
-    expect(text).toContain('not something this app computes')
-  })
-
-  /** The one absence the app *will* name, because that vocabulary is fixed and the app owns it. */
-  it('names an absent asset class as a fact about shape rather than a fault', () => {
-    const text = profileSection(PROFILE, { status: 'ok', report: drift() })
-
-    expect(text).toContain('holds no weight at all in Bonds')
-    expect(text).toContain('absence is a fact about shape, not a fault')
-    expect(text).toContain('Never say what to buy to close it')
-  })
-
-  /**
-   * A fully-targeted profile gets one sentence rather than a section. There is no baseline figure on
-   * offer, so there is nothing to mark, nothing to misapply to currency and no headings to earn -
-   * and this is the longest prompt the app assembles, so the saving lands where the budget binds
-   * (DDR-0103).
-   */
-  it('shrinks to a single sentence when the owner has targeted everything', () => {
-    const text = profileSection(
-      PROFILE,
-      {
-        status: 'ok',
-        report: drift({
-          baseline: baseline({ applied: [], deferred: [...BASELINE_CHECKS], ceilings: [] }),
-        }),
-      },
-    )
-
-    expect(text).toContain('None of the app’s default baseline applies here')
-    expect(text).not.toContain('against the app’s default')
-    expect(text).not.toContain('The baseline covers no currency')
-  })
-
-  /** No baseline without a reading: a gateway that is not running produces no weights to judge. */
-  it('offers no baseline at all when the live portfolio could not be read', () => {
-    const text = profileSection(PROFILE, { status: 'not_connected', message: 'x' })
-
-    expect(text).not.toContain('default baseline')
-    expect(text).toContain('- Currency USD:')
-  })
-
-  /**
-   * The disclosure's promise, over the section this story grew. `profile` is declared as
-   * percentages only, so a baseline figure in euros would make the disclosure a lie about the one
-   * category that must not carry money (DDR-0098).
-   */
-  it('puts no amount of money in the baseline', () => {
-    const text = profileSection(EMPTY_INVESTOR_PROFILE, { status: 'ok', report: drift() })
-
-    expect(text).not.toMatch(/[€$£]/)
-    expect(text).not.toMatch(/\d{1,3}(,\d{3})+(\.\d+)?(?!%)/)
   })
 })
