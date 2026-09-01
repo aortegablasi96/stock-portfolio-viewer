@@ -19,6 +19,17 @@ import {
   performanceReport,
   portfolioHistoryReport,
 } from './performanceReports'
+import {
+  MAX_LISTED_INCOME_SYMBOLS,
+  MAX_LISTED_REALIZED,
+  MAX_LISTED_UPCOMING,
+  dataCoverageReport,
+  dividendIncomeReport,
+  realizedGainsReport,
+} from './storeReports'
+import type { DataCoverage } from '@services/dataCoverage/dataCoverageService'
+import type { DividendEvent, DividendReport } from '@shared/domain/dividends'
+import type { RealizedGainsReport } from '@shared/domain/realizedGains'
 import { MAX_LISTED_QUARTERS, MAX_LISTED_YEARS } from '@shared/domain/standardPeriods'
 import { MAX_PROMPT_CHARS, MAX_TOOL_ROUNDS } from '@repositories/assistant/aiGateway'
 import { ABSENCE_DISCLOSURES } from '@shared/domain/assistantAbsences'
@@ -412,6 +423,118 @@ const AMBIGUOUS: LivePositionResult = {
 }
 
 /**
+ * Twenty years of dividends, every list past its cap (Story #329).
+ *
+ * Both caps have to be the thing that cuts: more instruments than the income breakdown names, more
+ * accruals than the upcoming list names, and every name as long as IBKR writes them. The events run
+ * monthly across the whole history so the `all` window holds every one of them, which is the widest
+ * window the set has.
+ */
+function longDividends(): DividendReport {
+  const events: DividendEvent[] = []
+  for (let month = 0; month < 20 * 12; month++) {
+    for (let symbol = 0; symbol < MAX_LISTED_INCOME_SYMBOLS + 3; symbol++) {
+      const date = Date.UTC(2006, month, 15)
+      events.push({
+        date,
+        symbol: `SYMBOL${symbol}`,
+        description: `${LONG_NAME} ${symbol}`,
+        type: 'Dividends',
+        currency: 'USD',
+        amountNative: 1_234.56,
+        amountBase: 1_111.11,
+        sharesHeld: 1_000,
+        perShareNative: 1.23,
+      })
+      events.push({
+        date,
+        symbol: `SYMBOL${symbol}`,
+        description: `${LONG_NAME} ${symbol}`,
+        type: 'Withholding Tax',
+        currency: 'USD',
+        amountNative: -185.18,
+        amountBase: -166.67,
+        sharesHeld: 1_000,
+        perShareNative: -0.19,
+      })
+    }
+  }
+  // Undated rows exist in real exports, and they add a sentence the report must carry.
+  events.push({
+    date: null,
+    symbol: 'SYMBOL0',
+    description: `${LONG_NAME} 0`,
+    type: 'Dividends',
+    currency: 'USD',
+    amountNative: 100,
+    amountBase: 90,
+    sharesHeld: null,
+    perShareNative: null,
+  })
+
+  return {
+    baseCurrency: 'EUR',
+    totalGrossBase: 2_666_664,
+    totalWithholdingBase: 400_008,
+    totalNetBase: 2_266_656,
+    bySymbol: [],
+    byMonth: [],
+    events,
+    upcoming: {
+      asOf: Date.UTC(2026, 5, 30),
+      sectionPresent: true,
+      totalGrossBase: 12_345.67,
+      totalWithholdingBase: 1_851.85,
+      totalNetBase: 10_493.82,
+      items: Array.from({ length: MAX_LISTED_UPCOMING + 4 }, (_, index) => ({
+        symbol: `SYMBOL${index}`,
+        description: `${LONG_NAME} ${index}`,
+        currency: 'USD',
+        exDate: Date.UTC(2026, 6, 1 + index),
+        payDate: Date.UTC(2026, 6, 20 + index),
+        quantity: 1_000,
+        grossRate: 1.23,
+        netNative: 1_045.67,
+        grossBase: 1_234.56,
+        withholdingBase: 185.18,
+        netBase: 1_049.38,
+      })),
+    },
+  }
+}
+
+/** More instruments than either end of the realised list names, with the totals far above them. */
+const REALIZED: RealizedGainsReport = {
+  baseCurrency: 'EUR',
+  totalRealized: 345_678.9,
+  totalRealizedShortTerm: 234_567.89,
+  totalRealizedLongTerm: 111_111.01,
+  totalUnrealized: 234_567.89,
+  bySymbol: Array.from({ length: (MAX_LISTED_REALIZED + 4) * 2 }, (_, index) => ({
+    conid: index,
+    symbol: `SYMBOL${index}`,
+    description: `${LONG_NAME} ${index}`,
+    realizedShortTerm: 50_000 - index * 1_000,
+    realizedLongTerm: 20_000 - index * 1_000,
+    totalRealized: 70_000 - index * 5_000,
+  })),
+  trades: [],
+}
+
+/** Coverage at its longest: two base currencies, both stores populated. */
+const COVERAGE: DataCoverage = {
+  flex: {
+    statements: 24,
+    from: Date.UTC(2006, 0, 1),
+    to: Date.UTC(2026, 5, 30),
+    latestImportedAt: Date.UTC(2026, 6, 2),
+    baseCurrencies: ['EUR', 'USD'],
+  },
+  snapshots: { captures: 480, earliest: Date.UTC(2024, 0, 1), latest: Date.UTC(2026, 5, 30) },
+  readAt: Date.UTC(2026, 5, 30, 14, 22),
+}
+
+/**
  * The first round: the system prompt, the base context and the question.
  *
  * Two turns, as they always were — what shrank is the second of them. #326 took three of the four
@@ -444,6 +567,8 @@ const firstRound = (): AiMessage[] => [
 const HISTORY = longHistory()
 const PERFORMANCE: PerformanceResult = { status: 'ok', report: HISTORY }
 
+const DIVIDENDS = longDividends()
+
 const toolAnswers = (reports: GroundingReports): string[] => [
   portfolioOverviewReport(LIVE),
   positionReport(AMBIGUOUS),
@@ -454,6 +579,9 @@ const toolAnswers = (reports: GroundingReports): string[] => [
   performanceReport(PERFORMANCE, 'all'),
   dailyReturnsReport(PERFORMANCE, 'all'),
   portfolioHistoryReport(PERFORMANCE, 'all', 'composition'),
+  dividendIncomeReport({ status: 'ok', report: DIVIDENDS }, 'all'),
+  realizedGainsReport({ status: 'ok', report: REALIZED }),
+  dataCoverageReport(COVERAGE),
 ]
 
 /** The calls that produce {@link toolAnswers}, index-aligned with it. */
@@ -471,6 +599,9 @@ const TOOL_CALLS = [
     name: 'get_portfolio_history',
     argumentsJson: '{"period":"all","series":"composition"}',
   },
+  { id: 'call_10', name: 'get_dividend_income', argumentsJson: '{"period":"all"}' },
+  { id: 'call_11', name: 'get_realized_gains', argumentsJson: '{}' },
+  { id: 'call_12', name: 'get_data_coverage', argumentsJson: '{}' },
 ]
 
 const afterOneToolRound = (reports: GroundingReports): AiMessage[] => {
@@ -521,8 +652,8 @@ describe('the first round at the worst case the caps allow', () => {
     // ceiling with roughly 90 characters to spare, which is why nothing could be added to the
     // assembled context — and why a tool result appended to it would have ended the question as
     // `incomplete` rather than answering it. Every section is a tool now and the renderer assembles
-    // nothing, so the first round is ~15.9% at the time of writing, and the rest of the budget is
-    // what reports spend.
+    // nothing, so the first round is ~10.6% at the time of writing (6,379 characters, and it does
+    // not grow with the portfolio at all), and the rest of the budget is what reports spend.
     expect(first).toBeLessThan(MAX_PROMPT_CHARS * 0.25)
   })
 
@@ -552,24 +683,51 @@ describe('the conversation after the model has asked for reports', () => {
   })
 
   /**
+   * **The row that decided the ceiling** (Story #329, DDR-0112).
+   *
+   * Between the one-report question and the exhaustive round sits the shape an owner actually
+   * reaches: *how did I do, what do I hold, what does it pay me, am I balanced* — half a dozen
+   * reports over a few rounds. At `MAX_PROMPT_CHARS` of 40,000 that came to **92.7%**, so a seventh
+   * report ended the question as `incomplete`: answered by nothing, after every round was paid for.
+   * That is the ceiling rationing a *question* rather than a bug, which is what DDR-0096 never
+   * wanted and DDR-0103 raised it the first time to avoid.
+   *
+   * Held to the 85% gate rather than to the ceiling, because unlike the exhaustive round this is a
+   * question — and a question that fits only just is one the next story breaks.
+   */
+  it.each(CASES)('leaves the gate intact for a real multi-part question: %s', (_case, reports) => {
+    const sixLargest = [...toolAnswers(reports)]
+      .sort((a, b) => b.length - a.length)
+      .slice(0, 6)
+      .reduce((total, answer) => total + answer.length, 0)
+
+    expect(size(firstRound()) + sixLargest).toBeLessThan(MAX_PROMPT_CHARS * 0.85)
+  })
+
+  /**
    * **The exhaustive case: every report this app has, in one round.** It fits, and it is measured
    * here without the 85% gate on purpose — the gate is DDR-0103's on what is *assembled* and sent
-   * unasked, and this is a conversation in which the model asked for all nine at once over a
+   * unasked, and this is a conversation in which the model asked for all twelve at once over a
    * fixture larger than any real portfolio: forty long-named positions, thirty-three bands every one
-   * of them out of range, and twenty years of daily history. At the time of writing it comes to
-   * **98.7%** of the ceiling against a first round at 16%, which is the trade the Epic made: what
-   * used to be sent with every question is now sent only when it is asked for.
+   * of them out of range, twenty years of daily history, and twenty years of monthly dividends
+   * across thirteen instruments. At the time of writing it comes to **79.6%** of the ceiling against
+   * a first round at 10.6%, which is the trade the Epic made: what used to be sent with every
+   * question is now sent only when it is asked for.
    *
-   * **That leaves about 500 characters, and #329's three reports do not fit in them.** The number is
-   * recorded here rather than absorbed, because what it costs is a decision and not an edit: either
-   * `MAX_PROMPT_CHARS` moves — a **constant DDR-0096 made hard to raise on purpose**, so a record
-   * change and never an inline one — or this fixture stops asserting that a model may call *every*
-   * report in a single round, which is a shape no question takes and which the round bound and the
-   * `incomplete` state already ration. It is deliberately not the gate: the assertion above — the
-   * largest single report on the largest first round, at ~41% — is what a real question costs.
+   * **`MAX_PROMPT_CHARS` was raised to 60,000 to keep this assertion, and the raise is DDR-0112.**
+   * At 40,000 these twelve reports came to 119.4%, and the honest question was which half to give
+   * up. What decided it was not this row — twelve reports in one round is a shape no question takes,
+   * and the round bound rations it — but the row beneath it: the **six largest reports on one
+   * conversation was 92.7%** of the old ceiling, a shape a multi-part question really reaches, where
+   * a seventh ended the question as `incomplete`. A ceiling that rations a bug is the constant
+   * DDR-0096 wanted; one that rations a question is not, and DDR-0103 raised it the first time for
+   * exactly that reason.
+   *
+   * It is deliberately still not the gate: the assertion above — the largest single report on the
+   * largest first round, at ~28% — is what a real question costs.
    *
    * A *second* exhaustive round is what the bounds exist to stop, and it stops as `incomplete` — a
-   * named state, never a partial answer. A model asking for all nine reports twice is the runaway
+   * named state, never a partial answer. A model asking for all twelve reports twice is the runaway
    * `MAX_PROMPT_CHARS` rations rather than a question anyone asked.
    */
   it.each(CASES)('fits inside the ceiling with every report in it: %s', (_case, reports) => {
@@ -591,8 +749,9 @@ describe('the conversation after the model has asked for reports', () => {
     const answers = toolAnswers(reports)
     expect(answers).toHaveLength(TOOL_CALLS.length)
     // Spread as evenly as they go, over `MAX_TOOL_ROUNDS` exactly — the most rounds a conversation
-    // carrying every report can be spread over. It stopped dividing evenly at nine tools, and the
-    // remainder is not worth a fixture: what is being measured is that every report is in the array.
+    // carrying every report can be spread over. Twelve reports over four rounds divides evenly
+    // again; where it does not, the remainder is not worth a fixture, since what is being measured
+    // is that every report is in the array however the rounds fell.
     const perRound = Math.ceil(answers.length / MAX_TOOL_ROUNDS)
 
     const messages: AiMessage[] = [...firstRound()]
@@ -634,6 +793,15 @@ describe('the conversation after the model has asked for reports', () => {
     )
     expect(positionReport(AMBIGUOUS)).toContain(
       `The ${MAX_LISTED_CANDIDATES} largest of ${MAX_LISTED_CANDIDATES + 5} matches`,
+    )
+    // Story #329's three: both income caps cut, and realised gains lists each end of a longer list.
+    const income = dividendIncomeReport({ status: 'ok', report: DIVIDENDS }, 'all')
+    expect(income).toContain(
+      `The ${MAX_LISTED_INCOME_SYMBOLS} largest of ${MAX_LISTED_INCOME_SYMBOLS + 3} instruments`,
+    )
+    expect(income).toContain(`The ${MAX_LISTED_UPCOMING} soonest of them`)
+    expect(realizedGainsReport({ status: 'ok', report: REALIZED })).toContain(
+      `${(MAX_LISTED_REALIZED + 4) * 2} instrument(s) have realised profit or loss`,
     )
   })
 

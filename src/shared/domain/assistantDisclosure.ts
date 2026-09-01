@@ -102,6 +102,19 @@ export const DISCLOSURE_CATEGORIES = [
       'Returns over the period you choose, as percentages, and your portfolio value, deposits and withdrawals, dividend income, costs and realised gains as amounts in the base currency of your imported statements.',
     granularity: 'figures',
   },
+  {
+    // **Added by Story #329, which is the mechanism working exactly as designed.** `get_data_coverage`
+    // sends how many Flex statements are imported, the span they cover, when the last import ran,
+    // their base currency, and how many local snapshots exist — and no category above names any of
+    // it. The list is *"the only keys an assistant context may carry"*, so a story that needed to
+    // send something new had one honest move: declare it. Deliberately `names` rather than
+    // `weights`: there is no percentage in it and no amount of money, which its own text says.
+    id: 'coverage',
+    title: 'What data this app holds',
+    detail:
+      'How many Flex statements you have imported, the period they cover, when you last imported one, the base currency they are in, and how many portfolio snapshots have been captured and when. No positions, no weights and no amounts of money.',
+    granularity: 'names',
+  },
 ] as const satisfies readonly DisclosureCategory[]
 
 export type DisclosureCategoryId = (typeof DISCLOSURE_CATEGORIES)[number]['id']

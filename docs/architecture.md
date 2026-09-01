@@ -112,17 +112,24 @@ Three architectural rules make that safe, and they replace the former analytics-
   computation, and computation belongs in a service. ADR-0009's Option E — *let the model compute* —
   stays rejected (DDR-0111).
 
-  Story #326 ships the first four, #327 the four performance reports and #328 `get_position`
-  (`services/assistant/assistantTools.ts`, with the prose in `toolReports.ts` and
-  `performanceReports.ts`), executed in **main** against the services and rendered through the app's
+  Story #326 ships the first four, #327 the four performance reports, #328 `get_position` and #329
+  dividend income, realised gains and data coverage — **twelve**
+  (`services/assistant/assistantTools.ts`, with the prose in `toolReports.ts`,
+  `performanceReports.ts` and `storeReports.ts`), executed in **main** against the services and
+  rendered through the app's
   own formatters. The four period tools are the *many tools, one method* half of the rule: they
   narrow `analytics:getPerformance` and add no arithmetic and no join. `get_position` is the other
   half's cost: there was no per-position read, so `portfolioService` **gained the method** rather
   than the tool layer filtering a report — the resolution by conid and its *ambiguous* and *not
-  held* states are business rules, tested where business rules are tested (DDR-0111). Each tool
-  declares the
+  held* states are business rules, tested where business rules are tested (DDR-0111).
+  `get_data_coverage` cost the same thing again: sketched over `flex:listStatements` *plus*
+  `snapshot:list`, it gained `dataCoverageService` instead, because *"only metadata"* is not a line
+  anyone can hold. It is also the one report with **no `needs_import`** — nothing imported is not a
+  failure to report coverage, it is the coverage. Each tool declares the
   `DISCLOSURE_CATEGORIES` category it falls under — a tool result is built in main and never crosses
   the IPC boundary that drops an undeclared section, so the registry is where that bound is enforced.
+  #329 **added a category** rather than borrowing one: `coverage` names statement counts, spans and
+  import dates, which no existing entry described, and the list is the only thing that may be sent.
 
   **The renderer assembles nothing.** `lib/assistantContext.ts` returns an empty context and the
   arithmetic its sections were built on moved to `@shared/domain/standardPeriods.ts` and

@@ -62,8 +62,9 @@ Each exists end-to-end and is the reference pattern for its shape.
   `DISCLOSURE_CATEGORIES` *types* `AssistantContext` **and every tool declares one** — a result
   built in main never crosses the boundary that drops an undeclared section, so the registry test
   is that half. The key field shows **only with no working key**; there is **no remove, replace or
-  rotate, not even a channel**. `assistant:ask` is the **one outbound channel**. **Nine tools run
-  in main** (`assistantTools.ts`; prose in `toolReports.ts`, `performanceReports.ts`): one
+  rotate, not even a channel**. `assistant:ask` is the **one outbound channel**. **Twelve tools run
+  in main** (`assistantTools.ts`; prose in `toolReports.ts`, `performanceReports.ts`,
+  `storeReports.ts`): one
   read-only method each — many share one, **none spans two** — **no argument is a
   predicate** (`limit` a *count*, `period` a *key*, `series` a *choice*, `query` an *identity*), a
   state is **never an empty report**, gaps carry targets *and* baseline in one payload (DDR-0111).
@@ -95,7 +96,16 @@ Each exists end-to-end and is the reference pattern for its shape.
   trailing year is **"Last 12 months"**: "Last year" beside a row named
   `2025` is the ambiguity. Only **consecutive same-kind** differences are computed; every other is
   forbidden in the text. `get_portfolio_history` returns **value or composition, never both**
-  (DDR-0013), downsampled to a stated cap. A drift-closing **move** hangs off `DriftBand.move`
+  (DDR-0013), downsampled to a stated cap. `get_dividend_income`'s windows come off the **dividend
+  history's own extent** (`dividendPeriods.ts` over `standardWindows`) — one method per tool, so it
+  cannot borrow the performance set: a key that exists there may **not** exist here, and an
+  **undated** cash event is in no window, `all` included, and is counted out loud (#329).
+  `get_realized_gains` quotes the **service's** totals, never a sum of its capped rows, and lists
+  **both ends** — a top-N by realised P&L is all winners. `get_data_coverage` **always answers**
+  (nothing imported *is* the coverage, never `needs_import`), is **one service** because a tool may
+  not span two, and reads snapshots with **no display currency** so it needs no gateway. `coverage`
+  is a **sixth disclosure category**: something new to send is declared, never squeezed under an
+  existing one. A drift-closing **move** hangs off `DriftBand.move`
   (`driftMoves.ts`), non-`null` **exactly** when the band is outside its range: **proportional, not
   greedy**, capacity-capped by the owner's ceiling, the shortfall **`uncovered` and never
   redistributed, and percentage points never money**.
@@ -110,8 +120,9 @@ Each exists end-to-end and is the reference pattern for its shape.
   `no_profile`/`no_targets` are **gone**, `balanced` is **nullable** (vacuous `true` is what a model calls balanced).
   `promptBudget.test.ts` measures the **conversation**, over **two** fixtures since a profile that
   lengthens the drift shortens the baseline (DDR-0103). The **85% gate binds the first round plus
-  the largest single report**, not the exhaustive case — all four at once is ~90% and fits; a
+  the largest single report** (~28%), not the exhaustive case — all twelve at once is ~80% and fits; a
   *repeated* report is what the ceiling rations, and crossing it mid-loop is `incomplete`.
+  **Measure before adding to a report, a description or the base context** (DDR-0112).
   The prompt is **eight `##` sections the owner wrote** (`SYSTEM_PROMPT_SECTIONS`, DDR-0110) — a
   **declared array**, never one template string, the count asserted three ways: sharpen a section,
   don't add a ninth. Tests pin **the guarantees the records make**, never the owner's wording:
@@ -269,8 +280,9 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
   `not_responding` absorbs stall, unreachable host **and 5xx**, because DDR-0022 divides by
   *recovery*; a `200` with no answer is `invalid`, never an empty `ok`. `MAX_PROMPT_CHARS` is a
   **constant, not an env var**, and counts characters — a tokenizer is a dependency for a ceiling
-  that only has to stop runaway growth. It is **40,000**; the ceiling rations a *bug*,
-  never the grounding (DDR-0103 amends DDR-0096). A refusal is **redacted** before it leaves the file: a wrong
+  that only has to stop runaway growth. It is **60,000**, raised twice on measurement; the ceiling
+  rations a *bug*, never the grounding — at twelve tools it had begun rationing a *question*
+  (DDR-0103 and DDR-0112 amend DDR-0096). A refusal is **redacted** before it leaves the file: a wrong
   key comes back quoting a masked fragment of itself.
 - **A question is a bounded tool loop, and no round is a retry** (#324, DDR-0111): a round sends a
   *larger* array after a **success**, and a failed round ends the question. `AiRequest` is a

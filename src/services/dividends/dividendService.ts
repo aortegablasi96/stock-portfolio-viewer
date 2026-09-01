@@ -2,6 +2,7 @@ import {
   flexReadRepository,
   type CashTransactionRow,
 } from '@repositories/flex/flexReadRepository'
+import { WITHHOLDING_TYPE } from '@shared/domain/dividendPeriods'
 import type {
   DividendEvent,
   DividendGroup,
@@ -22,8 +23,6 @@ import type {
  *
  * Reaches data only through `flexReadRepository`, so it is a pure unit-test target.
  */
-
-const WITHHOLDING_TYPE = 'Withholding Tax'
 
 /**
  * Resolve a clean instrument display name ("GOEASY LTD") by conid, falling back to

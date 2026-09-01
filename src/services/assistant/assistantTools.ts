@@ -27,6 +27,14 @@ import {
   portfolioHistoryReport,
   type HistorySeries,
 } from './performanceReports'
+import {
+  dataCoverageReport,
+  dividendIncomeReport,
+  realizedGainsReport,
+} from './storeReports'
+import { dividendService } from '@services/dividends/dividendService'
+import { realizedGainsService } from '@services/analytics/realizedGainsService'
+import { dataCoverageService } from '@services/dataCoverage/dataCoverageService'
 
 /**
  * The reports the model may ask for, and the one place a tool name meets a service (#326–#328).
@@ -43,7 +51,10 @@ import {
  *    a service is where the app's business rules already are.
  * 3. **One backing service method per tool.** Many tools may share a method; none may span two,
  *    because a join is computation performed in the layer least covered by service tests. Both
- *    halves of that rule are visible here. `get_rebalance_gaps` is the *may not span two* half — the
+ *    halves of that rule are visible here, and it has now cost a method **twice**: `get_position`
+ *    (#328) and `get_data_coverage` (#329), which was sketched over `flex:listStatements` *plus*
+ *    `snapshot:list` and gained `dataCoverageService` instead — *"only metadata"* being a line
+ *    nobody can hold. `get_rebalance_gaps` is the *may not span two* half — the
  *    owner's targets and ADR-0012's baseline arrive in one payload, off one reading and one
  *    denominator, because splitting them is the second answer that record refused. The four
  *    performance tools are the *may share one* half: they are four narrowings of
@@ -51,7 +62,7 @@ import {
  *    argument would be a discriminated tool wearing a disguise (Story #327). `get_position` is where
  *    the rule cost something: there was no per-position read, so **the method was added** rather than
  *    the projection being done here, in the layer least covered by service tests (Story #328).
- * 4. **No write tool, and no path to one.** Nine reads. `assistantTools.test.ts` asserts the
+ * 4. **No write tool, and no path to one.** Twelve reads. `assistantTools.test.ts` asserts the
  *    registry against the read-only methods it is allowed to name, so a future entry that mutated
  *    anything fails there rather than being caught by review.
  *
@@ -72,13 +83,19 @@ import {
  * cross that boundary — they are built here, in main, and go straight to the gateway. So each tool
  * **declares the category it falls under**, the categories are asserted to be a subset of
  * `DISCLOSURE_CATEGORIES`, and the granularity that category declares is what the report may carry.
- * The line runs between the two halves of this registry: the five portfolio tools fall under
+ * The line runs between the halves of this registry: the five portfolio tools fall under
  * `holdings`, `weights` or `profile`, which are names and percentages, so **no amount of money
- * appears in any of them**; the four performance tools declare `performance`, which is the one
- * category disclosed at `figures` and the only place an amount is allowed (DDR-0098, DDR-0111
+ * appears in any of them**; the six over the imported statements declare `performance`, which is the
+ * one category disclosed at `figures` and the only place an amount is allowed (DDR-0098, DDR-0111
  * decision 6). `get_position` is where that bites hardest and is the reason it answers *how far
  * above or below its cost* rather than by how much: a percentage is what the category permits, and
  * it is also the figure that needs no exchange rate (Story #328).
+ *
+ * **`coverage` is a category this Epic added, which is the list working rather than a hole in it**
+ * (Story #329). `get_data_coverage` sends statement counts, spans and import dates, and no existing
+ * category named any of that — so the honest move was to declare one, since the categories are the
+ * only keys anything the assistant sends may fall under. It is declared at `names`: there is no
+ * weight and no amount of money in it, and the report says so itself.
  *
  * ## The absences are not here, and that is deliberate
  *
@@ -201,6 +218,30 @@ const PERIOD_ARGUMENT: Record<string, unknown> = {
 const PERIOD_PARAMETERS: Record<string, unknown> = {
   type: 'object',
   properties: { period: PERIOD_ARGUMENT },
+  required: ['period'],
+  additionalProperties: false,
+}
+
+/**
+ * The same enumerated key over a **different history** — `get_dividend_income`'s one argument (#329).
+ *
+ * Not `PERIOD_ARGUMENT`, and the difference is a fact rather than a wording preference. The income
+ * tool reaches one service method (DDR-0111) and that method is the dividend service, which knows
+ * nothing about the value series — so its windows are cut from the first and last dated *dividend*,
+ * and an account whose last payment predates its last statement has a shorter set here. The keys are
+ * the same vocabulary on purpose, because a model that has just read `get_performance_periods` will
+ * reuse one; what this description adds is that a key may exist there and not here, and that the miss
+ * is a state listing the periods this history really holds.
+ */
+const INCOME_PERIOD_PARAMETERS: Record<string, unknown> = {
+  type: 'object',
+  properties: {
+    period: {
+      type: 'string',
+      description:
+        'Which period, as one of the exact keys get_performance_periods lists (for example "all", "trailing:1y", "year:2025", "quarter:Q3 2025"). The same key names a window over the dividend history here, which can end on a different day from the value history, so a key that exists there may not exist here — the report says so and lists the periods it does hold. There is no free-form date range.',
+    },
+  },
   required: ['period'],
   additionalProperties: false,
 }
@@ -338,6 +379,39 @@ export const ASSISTANT_TOOLS: readonly AssistantTool[] = [
         periodArgument(args),
         seriesArgument(args),
       )
+    },
+  },
+  {
+    name: 'get_dividend_income',
+    description:
+      'The dividend income the portfolio actually received over one period of the imported statement history: gross income and withholding tax as two separate amounts, what they net to, and which instruments paid. Also the dividends declared but not yet paid as of the latest statement, which belong to no period. Amounts are in the base currency of the imported statements. It concludes nothing about tax. Takes one of get_performance_periods’ exact keys; these windows are cut from the dividend history, so a key that exists there may not exist here and the report lists the ones that do.',
+    parameters: INCOME_PERIOD_PARAMETERS,
+    categories: ['performance'],
+    backedBy: 'dividendService.getDividends',
+    async run(args): Promise<string> {
+      return dividendIncomeReport(dividendService.getDividends(), periodArgument(args))
+    },
+  },
+  {
+    name: 'get_realized_gains',
+    description:
+      'What closing trades came to over the whole imported statement history — realised profit and loss with IBKR’s own short- and long-term split — beside what open positions were worth above or below cost as of the latest statement alone. The two are different kinds of figure and are never totalled. Also the instruments with the largest realised gains and the largest realised losses. Amounts are in the base currency of the imported statements. It holds no period and no individual trades, and it concludes nothing about tax.',
+    parameters: NO_PARAMETERS,
+    categories: ['performance'],
+    backedBy: 'realizedGainsService.getRealizedGains',
+    async run(): Promise<string> {
+      return realizedGainsReport(realizedGainsService.getRealizedGains())
+    },
+  },
+  {
+    name: 'get_data_coverage',
+    description:
+      'How current this app’s data is: how many Flex statements are imported, the span they cover, when the last import ran and in which base currency, how many local snapshots exist, and that the live portfolio is read at the moment it is asked for. Use it to say how up to date an answer is, or when a report says nothing has been imported. It always answers — nothing imported is itself the coverage — and it carries no amount of money and no portfolio figure.',
+    parameters: NO_PARAMETERS,
+    categories: ['coverage'],
+    backedBy: 'dataCoverageService.getCoverage',
+    async run(): Promise<string> {
+      return dataCoverageReport(await dataCoverageService.getCoverage())
     },
   },
 ]

@@ -10,6 +10,9 @@ import { HISTORY_SERIES } from './performanceReports'
 import { portfolioService } from '@services/portfolio/portfolioService'
 import { allocationService } from '@services/analytics/allocationService'
 import { performanceService } from '@services/analytics/performanceService'
+import { dividendService } from '@services/dividends/dividendService'
+import { realizedGainsService } from '@services/analytics/realizedGainsService'
+import { dataCoverageService } from '@services/dataCoverage/dataCoverageService'
 import { investorProfileService } from '@services/profile/investorProfileService'
 import { balanceDriftService } from '@services/profile/balanceDriftService'
 import { DISCLOSURE_CATEGORIES, DISCLOSURE_CATEGORY_IDS } from '@shared/domain/assistantDisclosure'
@@ -42,6 +45,15 @@ vi.mock('@services/profile/balanceDriftService', () => ({
 vi.mock('@services/analytics/performanceService', () => ({
   performanceService: { getPerformance: vi.fn() },
 }))
+vi.mock('@services/dividends/dividendService', () => ({
+  dividendService: { getDividends: vi.fn() },
+}))
+vi.mock('@services/analytics/realizedGainsService', () => ({
+  realizedGainsService: { getRealizedGains: vi.fn() },
+}))
+vi.mock('@services/dataCoverage/dataCoverageService', () => ({
+  dataCoverageService: { getCoverage: vi.fn() },
+}))
 
 const overview = vi.mocked(portfolioService.getOverview)
 const position = vi.mocked(portfolioService.getPosition)
@@ -49,6 +61,9 @@ const allocation = vi.mocked(allocationService.getAllocation)
 const profile = vi.mocked(investorProfileService.get)
 const gaps = vi.mocked(balanceDriftService.getBalanceDrift)
 const history = vi.mocked(performanceService.getPerformance)
+const dividends = vi.mocked(dividendService.getDividends)
+const realized = vi.mocked(realizedGainsService.getRealizedGains)
+const coverage = vi.mocked(dataCoverageService.getCoverage)
 
 const CONTEXT = { displayCurrency: 'EUR' } as const
 
@@ -77,12 +92,19 @@ beforeEach(() => {
   profile.mockReturnValue(EMPTY_INVESTOR_PROFILE)
   gaps.mockResolvedValue({ status: 'no_data' })
   history.mockReturnValue({ status: 'needs_import' })
+  dividends.mockReturnValue({ status: 'needs_import' })
+  realized.mockReturnValue({ status: 'needs_import' })
+  coverage.mockResolvedValue({
+    flex: { statements: 0, from: null, to: null, latestImportedAt: null, baseCurrencies: [] },
+    snapshots: { captures: 0, earliest: null, latest: null },
+    readAt: Date.UTC(2026, 5, 30, 14, 22),
+  })
 })
 
 // ---- the inventory ADR-0009 permits -----------------------------------------
 
 describe('the registry is the contract ADR-0009 wrote', () => {
-  it('is the nine reports the Epic ships so far, named as the record names them', () => {
+  it('is the twelve reports the Epic ships, named as the record names them', () => {
     expect(ASSISTANT_TOOLS.map((tool) => tool.name)).toEqual([
       'get_portfolio_overview',
       'get_position',
@@ -93,6 +115,9 @@ describe('the registry is the contract ADR-0009 wrote', () => {
       'get_performance',
       'get_daily_returns',
       'get_portfolio_history',
+      'get_dividend_income',
+      'get_realized_gains',
+      'get_data_coverage',
     ])
   })
 
@@ -129,10 +154,30 @@ describe('the registry is the contract ADR-0009 wrote', () => {
       'performanceService.getPerformance',
       'performanceService.getPerformance',
       'performanceService.getPerformance',
+      'dividendService.getDividends',
+      'realizedGainsService.getRealizedGains',
+      'dataCoverageService.getCoverage',
     ])
     for (const tool of ASSISTANT_TOOLS) {
       expect(tool.backedBy, tool.name).toMatch(/\.(get|list)[A-Za-z]*$/)
     }
+  })
+
+  /**
+   * **`get_data_coverage` is where the one-method rule cost a service** (Story #329, DDR-0111).
+   *
+   * It was sketched over `flex:listStatements` **plus** `snapshot:list`, which the rule forbids: a
+   * join is computation performed in the layer least covered by service tests, and *"it is only
+   * metadata"* was weighed and rejected as a line nobody can hold. So the join is a service, and the
+   * assertion that matters is that the tool names **it** rather than either of the two underneath.
+   */
+  it('reaches a coverage service rather than joining two stores in the tool layer', () => {
+    const coverage = ASSISTANT_TOOLS.find((tool) => tool.name === 'get_data_coverage')!
+    expect(coverage.backedBy).toBe('dataCoverageService.getCoverage')
+    expect(ASSISTANT_TOOLS.map((tool) => tool.backedBy)).not.toContain(
+      'flexStatementsService.listStatements',
+    )
+    expect(ASSISTANT_TOOLS.map((tool) => tool.backedBy)).not.toContain('snapshotService.getHistory')
   })
 
   /**
@@ -184,12 +229,36 @@ describe('the registry is the contract ADR-0009 wrote', () => {
       'get_investor_profile',
       'get_allocation',
       'get_rebalance_gaps',
+      // Coverage counts statements and dates them; it carries no weight and no money, and says so
+      // in its own text (Story #329).
+      'get_data_coverage',
     ]) {
       expect(granularity(name), name).not.toContain('figures')
     }
-    for (const name of ['get_performance_periods', 'get_performance', 'get_daily_returns', 'get_portfolio_history']) {
+    for (const name of [
+      'get_performance_periods',
+      'get_performance',
+      'get_daily_returns',
+      'get_portfolio_history',
+      'get_dividend_income',
+      'get_realized_gains',
+    ]) {
       expect(granularity(name), name).toEqual(['figures'])
     }
+  })
+
+  /**
+   * **A category was added rather than a report squeezed under an existing one** (Story #329).
+   *
+   * `DISCLOSURE_CATEGORIES` is *"the only keys an assistant context may carry"*, and no entry named
+   * statement counts, spans or import dates. Declaring `get_data_coverage` under `holdings` would
+   * have been the cheap move and the dishonest one: the disclosure would then describe something the
+   * app does not send and omit something it does.
+   */
+  it('declares coverage under a category of its own, at names', () => {
+    const coverage = DISCLOSURE_CATEGORIES.find((category) => category.id === 'coverage')
+    expect(coverage?.granularity).toBe('names')
+    expect(coverage?.detail).toContain('No positions, no weights and no amounts of money')
   })
 })
 
@@ -228,6 +297,10 @@ describe('the definitions the gateway declares', () => {
     expect(properties('get_daily_returns')).toEqual(['period'])
     expect(properties('get_portfolio_history')).toEqual(['period', 'series'])
     expect(properties('get_position')).toEqual(['query'])
+    // Story #329: income takes the one enumerated key, and the other two take nothing at all.
+    expect(properties('get_dividend_income')).toEqual(['period'])
+    expect(properties('get_realized_gains')).toEqual([])
+    expect(properties('get_data_coverage')).toEqual([])
   })
 
   /**
@@ -259,7 +332,12 @@ describe('the definitions the gateway declares', () => {
    * period picker that record removed would arrive in.
    */
   it('offers no way to describe a window it did not compute', () => {
-    for (const name of ['get_performance', 'get_daily_returns', 'get_portfolio_history']) {
+    for (const name of [
+      'get_performance',
+      'get_daily_returns',
+      'get_portfolio_history',
+      'get_dividend_income',
+    ]) {
       expect(properties(name), name).not.toContain('from')
       expect(properties(name), name).not.toContain('to')
       expect(properties(name), name).not.toContain('range')
@@ -334,6 +412,47 @@ describe('running a call', () => {
     expect(overview).not.toHaveBeenCalled()
     expect(allocation).not.toHaveBeenCalled()
     expect(gaps).not.toHaveBeenCalled()
+  })
+
+  /**
+   * The three reports #329 added reach their own service and nothing else — coverage especially,
+   * since the two stores it describes each have a service the tool must not be reaching directly.
+   */
+  it('routes the three store reports to their own methods', async () => {
+    await runAssistantTool(call('get_dividend_income', '{"period":"all"}'), CONTEXT)
+    expect(dividends).toHaveBeenCalledTimes(1)
+
+    await runAssistantTool(call('get_realized_gains'), CONTEXT)
+    expect(realized).toHaveBeenCalledTimes(1)
+
+    await runAssistantTool(call('get_data_coverage'), CONTEXT)
+    expect(coverage).toHaveBeenCalledTimes(1)
+
+    expect(overview).not.toHaveBeenCalled()
+    expect(history).not.toHaveBeenCalled()
+    expect(allocation).not.toHaveBeenCalled()
+  })
+
+  /**
+   * **Coverage always answers**, and this is where that stops being prose (Story #329). Every other
+   * report over the imported store returns `needs_import` when nothing is there; an empty store *is*
+   * this report's subject, so a state in its place would be the inverted failure.
+   */
+  it('answers coverage from an empty store rather than with a needs-import state', async () => {
+    const answer = await runAssistantTool(call('get_data_coverage'), CONTEXT)
+
+    expect(answer).toContain('Nothing has been imported at all')
+    expect(answer).toContain('This is the coverage, not a failure to report it')
+    expect(answer).not.toContain('needs_import')
+  })
+
+  /** The two that read the imported store keep theirs, because an empty report is not a state. */
+  it.each([
+    ['get_dividend_income', '{"period":"all"}'],
+    ['get_realized_gains', ''],
+  ])('answers %s from an empty store as a state', async (name, args) => {
+    const answer = await runAssistantTool(call(name, args), CONTEXT)
+    expect(answer).toContain('no Flex statement has been imported')
   })
 
   /**
