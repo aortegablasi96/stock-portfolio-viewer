@@ -6,8 +6,10 @@ import {
   runAssistantTool,
 } from './assistantTools'
 import { ALLOCATION_DIMENSIONS, MAX_LISTED_POSITIONS } from './toolReports'
+import { HISTORY_SERIES } from './performanceReports'
 import { portfolioService } from '@services/portfolio/portfolioService'
 import { allocationService } from '@services/analytics/allocationService'
+import { performanceService } from '@services/analytics/performanceService'
 import { investorProfileService } from '@services/profile/investorProfileService'
 import { balanceDriftService } from '@services/profile/balanceDriftService'
 import { DISCLOSURE_CATEGORIES, DISCLOSURE_CATEGORY_IDS } from '@shared/domain/assistantDisclosure'
@@ -37,11 +39,15 @@ vi.mock('@services/profile/investorProfileService', () => ({
 vi.mock('@services/profile/balanceDriftService', () => ({
   balanceDriftService: { getBalanceDrift: vi.fn() },
 }))
+vi.mock('@services/analytics/performanceService', () => ({
+  performanceService: { getPerformance: vi.fn() },
+}))
 
 const overview = vi.mocked(portfolioService.getOverview)
 const allocation = vi.mocked(allocationService.getAllocation)
 const profile = vi.mocked(investorProfileService.get)
 const gaps = vi.mocked(balanceDriftService.getBalanceDrift)
+const history = vi.mocked(performanceService.getPerformance)
 
 const CONTEXT = { displayCurrency: 'EUR' } as const
 
@@ -68,17 +74,22 @@ beforeEach(() => {
   allocation.mockReturnValue({ status: 'needs_import' })
   profile.mockReturnValue(EMPTY_INVESTOR_PROFILE)
   gaps.mockResolvedValue({ status: 'no_data' })
+  history.mockReturnValue({ status: 'needs_import' })
 })
 
 // ---- the inventory ADR-0009 permits -----------------------------------------
 
 describe('the registry is the contract ADR-0009 wrote', () => {
-  it('is the four reports this story ships, named as the record names them', () => {
+  it('is the eight reports the Epic ships so far, named as the record names them', () => {
     expect(ASSISTANT_TOOLS.map((tool) => tool.name)).toEqual([
       'get_portfolio_overview',
       'get_investor_profile',
       'get_allocation',
       'get_rebalance_gaps',
+      'get_performance_periods',
+      'get_performance',
+      'get_daily_returns',
+      'get_portfolio_history',
     ])
   })
 
@@ -93,30 +104,47 @@ describe('the registry is the contract ADR-0009 wrote', () => {
     // Folded into `get_allocation`'s largest-N and the baseline's own ceiling, deliberately: a
     // third path would compute concentration off a third denominator (DDR-0111).
     expect(names).not.toContain('get_concentration')
+    // `get_daily_extremes` was renamed to `get_daily_returns` before it was built (Story #327): its
+    // example question was "how volatile has the ride been?", and a tool whose *name* promises
+    // volatility reads as the supply DDR-0110's risk-statistic prohibition is conditional on.
+    expect(names).not.toContain('get_daily_extremes')
   })
 
   /**
    * **Read-only, and asserted as a list rather than reviewed.** ADR-0009's *never acts* is what a
    * write tool would break, and nothing in the toolchain would notice one being added — so the
-   * backing methods are pinned to the four reads they are allowed to be.
+   * backing methods are pinned to the reads they are allowed to be.
    */
-  it('is backed by four read-only service methods and nothing else', () => {
+  it('is backed by read-only service methods and nothing else', () => {
     expect(ASSISTANT_TOOLS.map((tool) => tool.backedBy)).toEqual([
       'portfolioService.getOverview',
       'investorProfileService.get',
       'allocationService.getAllocation',
       'balanceDriftService.getBalanceDrift',
+      'performanceService.getPerformance',
+      'performanceService.getPerformance',
+      'performanceService.getPerformance',
+      'performanceService.getPerformance',
     ])
     for (const tool of ASSISTANT_TOOLS) {
       expect(tool.backedBy, tool.name).toMatch(/\.(get|list)[A-Za-z]*$/)
     }
   })
 
-  /** One backing method each. Many tools may share one; none may span two (DDR-0111). */
+  /**
+   * One backing method each. **Many tools may share one; none may span two** (DDR-0111), and the
+   * four performance tools are the sharing half of that rule made visible: they are four narrowings
+   * of `analytics:getPerformance` and add no arithmetic and no join. A tool spanning two methods
+   * would be joining in the layer least covered by the service tests, which is where the assertion
+   * below would fail it.
+   */
   it('gives every tool exactly one backing method', () => {
     for (const tool of ASSISTANT_TOOLS) {
       expect(tool.backedBy.split(','), tool.name).toHaveLength(1)
     }
+    expect(new Set(ASSISTANT_TOOLS.map((tool) => tool.backedBy)).size).toBeLessThan(
+      ASSISTANT_TOOLS.length,
+    )
   })
 
   /**
@@ -132,19 +160,39 @@ describe('the registry is the contract ADR-0009 wrote', () => {
   })
 
   /**
-   * And none of the four declares the one category that may carry money. `performance` is where
-   * amounts are disclosed, and no tool in this story returns any — which is what
-   * `toolReports.test.ts` asserts over the prose itself.
+   * **Money is licensed by exactly one category, and only the four tools that need it declare it.**
+   *
+   * `performance` is the sole entry disclosed at `figures`, and it is the sole entry under which an
+   * amount of money may be written (DDR-0098). The line runs between the two halves of the registry:
+   * the live book, the profile, the allocation and the gaps are names and percentages and return no
+   * amount at all — which `toolReports.test.ts` asserts over the prose itself — while the four
+   * performance reports carry portfolio values, deposits and costs and say so on the tin.
    */
-  it('declares no category that would license an amount of money', () => {
-    const granularities = DECLARED_TOOL_CATEGORIES.map(
-      (id) => DISCLOSURE_CATEGORIES.find((category) => category.id === id)!.granularity,
-    )
-    expect(granularities).not.toContain('figures')
+  it('licenses an amount of money for the performance reports and for no others', () => {
+    const granularity = (name: string): string[] =>
+      ASSISTANT_TOOLS.find((tool) => tool.name === name)!.categories.map(
+        (id) => DISCLOSURE_CATEGORIES.find((category) => category.id === id)!.granularity,
+      )
+
+    for (const name of ['get_portfolio_overview', 'get_investor_profile', 'get_allocation', 'get_rebalance_gaps']) {
+      expect(granularity(name), name).not.toContain('figures')
+    }
+    for (const name of ['get_performance_periods', 'get_performance', 'get_daily_returns', 'get_portfolio_history']) {
+      expect(granularity(name), name).toEqual(['figures'])
+    }
   })
 })
 
 // ---- what the model is offered ----------------------------------------------
+
+/** One tool's declared JSON Schema, as the gateway sends it. */
+const schema = (name: string): { properties: Record<string, unknown> } =>
+  assistantToolDefinitions().find((tool) => tool.name === name)!.parameters as {
+    properties: Record<string, unknown>
+  }
+
+/** The argument names one tool takes, in declaration order. */
+const properties = (name: string): string[] => Object.keys(schema(name).properties)
 
 describe('the definitions the gateway declares', () => {
   it('carries a name, a description and a schema for each tool, and nothing else', () => {
@@ -157,19 +205,44 @@ describe('the definitions the gateway declares', () => {
   /**
    * **No argument is a predicate** (DDR-0111). A filter, a sort, a comparison, a threshold or a
    * free-form range is ADR-0009's general query arriving as a parameter rather than as a tool, so
-   * the whole parameter surface is pinned: three tools take nothing, and the fourth takes a
-   * dimension and a count.
+   * the whole parameter surface is pinned: four tools take nothing, and the four that take something
+   * take a dimension, a count, an enumerated period key or a choice between two series.
    */
   it('offers no argument that could be a predicate', () => {
-    const properties = (name: string): string[] => {
-      const parameters = assistantToolDefinitions().find((tool) => tool.name === name)!.parameters
-      return Object.keys((parameters as { properties: Record<string, unknown> }).properties)
-    }
-
     expect(properties('get_portfolio_overview')).toEqual([])
     expect(properties('get_investor_profile')).toEqual([])
     expect(properties('get_rebalance_gaps')).toEqual([])
+    expect(properties('get_performance_periods')).toEqual([])
     expect(properties('get_allocation')).toEqual(['dimension', 'limit'])
+    expect(properties('get_performance')).toEqual(['period'])
+    expect(properties('get_daily_returns')).toEqual(['period'])
+    expect(properties('get_portfolio_history')).toEqual(['period', 'series'])
+  })
+
+  /**
+   * **A period is a key, not a range** (DDR-0102). The schema cannot `enum` the keys — the set is a
+   * function of the imported history, so the valid ones differ per account — and what it must never
+   * do instead is offer a window anyone can describe. `from`, `to` and `range` are the shapes the
+   * period picker that record removed would arrive in.
+   */
+  it('offers no way to describe a window it did not compute', () => {
+    for (const name of ['get_performance', 'get_daily_returns', 'get_portfolio_history']) {
+      expect(properties(name), name).not.toContain('from')
+      expect(properties(name), name).not.toContain('to')
+      expect(properties(name), name).not.toContain('range')
+      expect(schema(name).properties['period']).toMatchObject({ type: 'string' })
+    }
+  })
+
+  /**
+   * The two series the model may choose between, offered as the same array the report reads — so a
+   * tool cannot advertise a series it then refuses. The split is DDR-0013's: value and return may
+   * not arrive in one payload, and there is no `return` member here at all.
+   */
+  it('offers exactly the two series the history report can produce', () => {
+    const series = schema('get_portfolio_history').properties['series'] as { enum: string[] }
+    expect(series.enum).toEqual([...HISTORY_SERIES])
+    expect(series.enum).not.toContain('return')
   })
 
   /**
@@ -209,6 +282,67 @@ describe('running a call', () => {
     await runAssistantTool(call('get_rebalance_gaps'), CONTEXT)
     expect(gaps).toHaveBeenCalledWith('EUR')
   })
+
+  /**
+   * The four performance tools share one method and reach nothing else — the *many tools, one
+   * method* half of DDR-0111's rule, asserted at the call rather than only in the registry.
+   */
+  it('routes all four performance tools to the one method behind them', async () => {
+    for (const name of [
+      'get_performance_periods',
+      'get_performance',
+      'get_daily_returns',
+      'get_portfolio_history',
+    ]) {
+      await runAssistantTool(call(name, '{"period":"all","series":"value"}'), CONTEXT)
+    }
+
+    expect(history).toHaveBeenCalledTimes(4)
+    expect(overview).not.toHaveBeenCalled()
+    expect(allocation).not.toHaveBeenCalled()
+    expect(gaps).not.toHaveBeenCalled()
+  })
+
+  /**
+   * **A period key is passed through unaltered, and a miss is a state** (DDR-0102).
+   *
+   * The opposite of `get_allocation`'s fallback, deliberately: a dimension outside a five-name enum
+   * is a model that has not read the schema, where an unknown period key is a question about a
+   * *window*, and answering it from the nearest one is the substitution the precomputed set exists
+   * to prevent. A missing key takes the same route rather than quietly becoming the whole history.
+   */
+  it.each(['{"period":"march to july"}', '{}', '', '{"period":42}'])(
+    'answers a period it did not compute as a state rather than as another period: %s',
+    async (args) => {
+      history.mockReturnValue({
+        status: 'ok',
+        report: {
+          baseCurrency: 'EUR',
+          valueSeries: [
+            { date: Date.UTC(2026, 0, 1), value: 100 },
+            { date: Date.UTC(2026, 5, 1), value: 120 },
+          ],
+          returnSeries: [
+            { date: Date.UTC(2026, 0, 1), value: 0 },
+            { date: Date.UTC(2026, 5, 1), value: 5 },
+          ],
+          compositionSeries: { bands: [], points: [] },
+          periods: [],
+          startingValue: 100,
+          endingValue: 120,
+          cumulativeTwr: 5,
+          totalDepositsWithdrawals: 0,
+          totalRealizedPnl: 0,
+          totalUnrealizedPnl: 0,
+        },
+      })
+
+      const answer = await runAssistantTool(call('get_performance', args), CONTEXT)
+      expect(answer).toContain('this app holds no period called')
+      expect(answer).toContain('- all — Full history')
+      expect(answer).not.toContain('%')
+    },
+  )
 
   /** The app's currency selection reaches the live reads, so an answer is weighed in it. */
   it('weighs a live report in the currency the question carried', async () => {

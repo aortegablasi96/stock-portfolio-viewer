@@ -112,13 +112,20 @@ Three architectural rules make that safe, and they replace the former analytics-
   computation, and computation belongs in a service. ADR-0009's Option E — *let the model compute* —
   stays rejected (DDR-0111).
 
-  Story #326 ships the first four (`services/assistant/assistantTools.ts`, with the prose in
-  `toolReports.ts`), executed in **main** against the services and rendered through the app's own
-  formatters. Each declares the `DISCLOSURE_CATEGORIES` category it falls under — a tool result is
-  built in main and never crosses the IPC boundary that drops an undeclared section, so the registry
-  is where that bound is enforced. What stays **assembled and unconditional** is the base context:
-  the absences, which are never a tool, because a prohibition whose supporting fact the model may
-  decline to fetch is not a prohibition (DDR-0101, DDR-0110, DDR-0111).
+  Story #326 ships the first four and #327 the four performance reports
+  (`services/assistant/assistantTools.ts`, with the prose in `toolReports.ts` and
+  `performanceReports.ts`), executed in **main** against the services and rendered through the app's
+  own formatters. The four period tools are the *many tools, one method* half of the rule: they
+  narrow `analytics:getPerformance` and add no arithmetic and no join. Each tool declares the
+  `DISCLOSURE_CATEGORIES` category it falls under — a tool result is built in main and never crosses
+  the IPC boundary that drops an undeclared section, so the registry is where that bound is enforced.
+
+  **The renderer assembles nothing.** `lib/assistantContext.ts` returns an empty context and the
+  arithmetic its sections were built on moved to `@shared/domain/standardPeriods.ts` and
+  `performanceWindow.ts`, where main can reach it and the renderer's chart libs re-export it — one
+  implementation of a window, not two (DDR-0098, DDR-0111). What stays **unconditional** is the base
+  context: the absences, which are never a tool, because a prohibition whose supporting fact the
+  model may decline to fetch is not a prohibition (DDR-0101, DDR-0110, DDR-0111).
 - **The app never acts.** No order placement, no broker write, no path to one.
 - **The app never sets the owner's policy.** It proposes moves toward their targets; it never
   proposes the targets, and never suggests one for them to set. Where they have stated nothing, the

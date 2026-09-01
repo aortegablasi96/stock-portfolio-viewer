@@ -17,13 +17,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 M0–M9 are delivered: live IBKR holdings/balances/allocation in a display currency, immutable
 snapshots, Flex statement import, and four analytics views over it, behind a vertical sidebar.
-M10 is delivered — the investor profile, the assistant's **surface** (grounded Q&A), a period
-explained, a performance summary, the widened grounding (#287), the prompt's phrasing rules and the
+M10 is delivered — the investor profile, the assistant's **surface**, the widened grounding and the
 in-app OpenAI key. #289 is closed as superseded by #287's computed moves — read its closing comment
 before re-proposing an end-state check on model output.
-**M11 is delivered — the assistant is one view**: ADR-0011 removed the consent gate, on the record
-and from the code, and #310 folded the profile in, taking the seventh sidebar row with it
-(DDR-0108); ADR-0012 then gave the app **a baseline of its own**. Not built: multi-broker,
+**M11 is delivered — the assistant is one view**: no consent gate (ADR-0011), the profile folded
+in (DDR-0108), and the app's own **baseline** (ADR-0012). Not built: multi-broker,
 benchmarks, tax.
 
 **Which Epics are open is deliberately not recorded here** — read the backlog (*Current Priority*).
@@ -61,30 +59,33 @@ Each exists end-to-end and is the reference pattern for its shape.
   `DISCLOSURE_CATEGORIES` *types* `AssistantContext` **and every tool declares one** — a result
   built in main never crosses the boundary that drops an undeclared section, so the registry test
   is that half. The key field shows **only with no working key**; there is **no remove, replace or
-  rotate, not even a channel**. `assistant:ask` is the **one outbound channel**. **Four tools run
-  in main** (`assistantTools.ts`, prose in `toolReports.ts`): one read-only method each, **no
-  argument is a predicate** (`limit` is a *count*), a state is **never an empty report**, gaps
-  carry targets *and* baseline in one payload (DDR-0111). Only `performance` is still assembled, in
-  the renderer. **Two denominators**: the overview's weights **exclude cash**, drift's **include
+  rotate, not even a channel**. `assistant:ask` is the **one outbound channel**. **Eight tools run
+  in main** (`assistantTools.ts`; prose in `toolReports.ts`, `performanceReports.ts`): one
+  read-only method each — many share one, **none spans two** — **no argument is a
+  predicate** (`limit` a *count*, `period` a *key*, `series` a *choice*), a state is
+  **never an empty report**, gaps carry targets *and* baseline in one payload (DDR-0111). The
+  renderer assembles **nothing**; the empty context and its bound stay.
+  **Two denominators**: the overview's weights **exclude cash**, drift's **include
   it** — each says which. Figures go through **`@shared/format`** so main can write one too
   (DDR-0111); its locale is **`APP_LOCALE`, never the host's** — two processes resolve `undefined`
   differently, in silence. A section is **absent, never empty**; no money goes in one declared as
   names or percentages; each names its store *and clock* — composition is Flex, drift live
-  (DDR-0098). An **explained period** keeps return and value apart, return first — the curve is
+  (DDR-0098). A **period report** keeps return and value apart, return first — the curve is
   TWR, so a deposit moves value alone; the period is anchored to `extent.to`, an overlapping
   statement row is summed **whole** and names its span, an empty window is a *state* not a flat
   period, and no cause is ever offered (DDR-0099). What the app **does not** compute leads
   **every** prompt, **never a tool**: a fact the model may decline to fetch holds no rule
   (`BASE_CONTEXT`, `assistantAbsences.ts`): no annualised figure, no benchmark, no risk statistic,
   the baseline's silences, the currency reading, **two stores, two clocks**. A report restates its
-  own — belt-and-braces, not the binding (DDR-0101). There is **no period control**: free text
-  already carries a period; a picker asks twice. Grounding is `wholeHistory()`; the `empty_period`
-  **notice** is gone, the **state** stays (DDR-0102). **Every standard period is precomputed**
-  (`periodSet.ts`): a question about a window the set does not hold is a **named state with
-  alternatives**, not the adjacent row. A
-  trailing year is **"Last 12 months"** on purpose: `PERIOD_LABELS`' "Last year" beside a row named
+  own — belt-and-braces, not the binding (DDR-0101). There is **no period control**: a picker asks
+  what free text already said (DDR-0102). **Every standard period is precomputed**
+  (`@shared/domain/standardPeriods`, windowing in `performanceWindow`; the renderer's libs
+  re-export both): a window the set does not hold is a **named state with alternatives**, never the
+  adjacent row, and `findPeriod` matches **exactly**. A
+  trailing year is **"Last 12 months"**: "Last year" beside a row named
   `2025` is the ambiguity. Only **consecutive same-kind** differences are computed; every other is
-  forbidden in the text. A drift-closing **move** hangs off `DriftBand.move`
+  forbidden in the text. `get_portfolio_history` returns **value or composition, never both**
+  (DDR-0013), downsampled to a stated cap. A drift-closing **move** hangs off `DriftBand.move`
   (`driftMoves.ts`), non-`null` **exactly** when the band is outside its range: **proportional, not
   greedy**, capacity-capped by the owner's ceiling, the shortfall **`uncovered` and never
   redistributed, and percentage points never money**.

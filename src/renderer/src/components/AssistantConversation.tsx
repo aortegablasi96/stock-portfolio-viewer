@@ -127,7 +127,10 @@ export function AssistantConversation({
       setReports(fresh)
       const result = await window.api.askAssistant({
         question: asked,
-        context: buildAssistantContext(fresh),
+        // Empty since Story #327 — every figure is behind a tool now, and `fresh` is read for the
+        // notices beside the box rather than for anything sent. The field and the boundary that
+        // bounds it stay, so a story that assembles a section again meets the guard (DDR-0098).
+        context: buildAssistantContext(),
         // The app's own selection, sent so a report the model asks for is weighed in the currency
         // on screen (Story #326, DDR-0007). The tools run in main, where no view exists to ask.
         displayCurrency,
