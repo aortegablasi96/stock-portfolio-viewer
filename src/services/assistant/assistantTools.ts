@@ -13,9 +13,11 @@ import {
   allocationReport,
   investorProfileReport,
   portfolioOverviewReport,
+  positionReport,
   rebalanceGapsReport,
   type AllocationDimension,
   type LivePortfolioResult,
+  type LivePositionResult,
 } from './toolReports'
 import {
   HISTORY_SERIES,
@@ -27,7 +29,7 @@ import {
 } from './performanceReports'
 
 /**
- * The reports the model may ask for, and the one place a tool name meets a service (#326, #327).
+ * The reports the model may ask for, and the one place a tool name meets a service (#326–#328).
  *
  * ## What a tool is allowed to be
  *
@@ -46,19 +48,23 @@ import {
  *    denominator, because splitting them is the second answer that record refused. The four
  *    performance tools are the *may share one* half: they are four narrowings of
  *    `analytics:getPerformance`, adding no arithmetic and no join, where one tool with a `section`
- *    argument would be a discriminated tool wearing a disguise (Story #327).
- * 4. **No write tool, and no path to one.** Eight reads. `assistantTools.test.ts` asserts the
+ *    argument would be a discriminated tool wearing a disguise (Story #327). `get_position` is where
+ *    the rule cost something: there was no per-position read, so **the method was added** rather than
+ *    the projection being done here, in the layer least covered by service tests (Story #328).
+ * 4. **No write tool, and no path to one.** Nine reads. `assistantTools.test.ts` asserts the
  *    registry against the read-only methods it is allowed to name, so a future entry that mutated
  *    anything fails there rather than being caught by review.
  *
  * **No argument is a predicate** (DDR-0111). No filter, sort, comparison, threshold or free-form
- * range: those are the general query arriving as a parameter rather than as a tool. Three arguments
+ * range: those are the general query arriving as a parameter rather than as a tool. Four arguments
  * exist and none of them is one. `get_allocation`'s `limit` is a **count, not a condition** —
  * largest-N by weight, a shape the allocation report already computes. A `period` is an
  * **enumerated key** out of the precomputed set, so a window this app did not measure is a named
- * state with the alternatives rather than a range anyone can describe (DDR-0102). And
+ * state with the alternatives rather than a range anyone can describe (DDR-0102).
  * `get_portfolio_history`'s `series` **selects between two answers**, which is the split DDR-0013
- * requires rather than a filter over one.
+ * requires rather than a filter over one. And `get_position`'s `query` is an **identity** — free
+ * text, which is what makes it the one to watch, but text the *service* resolves to a single conid
+ * or to a named state, so no wording of it returns a list to choose from (Story #328).
  *
  * ## The disclosure has to reach a tool result, or a tool is the way around it
  *
@@ -66,10 +72,13 @@ import {
  * cross that boundary — they are built here, in main, and go straight to the gateway. So each tool
  * **declares the category it falls under**, the categories are asserted to be a subset of
  * `DISCLOSURE_CATEGORIES`, and the granularity that category declares is what the report may carry.
- * The line runs between the two halves of this registry: the first four fall under `holdings`,
- * `weights` or `profile`, which are names and percentages, so **no amount of money appears in any of
- * them**; the four performance tools declare `performance`, which is the one category disclosed at
- * `figures` and the only place an amount is allowed (DDR-0098, DDR-0111 decision 6).
+ * The line runs between the two halves of this registry: the five portfolio tools fall under
+ * `holdings`, `weights` or `profile`, which are names and percentages, so **no amount of money
+ * appears in any of them**; the four performance tools declare `performance`, which is the one
+ * category disclosed at `figures` and the only place an amount is allowed (DDR-0098, DDR-0111
+ * decision 6). `get_position` is where that bites hardest and is the reason it answers *how far
+ * above or below its cost* rather than by how much: a percentage is what the category permits, and
+ * it is also the figure that needs no exchange rate (Story #328).
  *
  * ## The absences are not here, and that is deliberate
  *
@@ -139,6 +148,30 @@ const ALLOCATION_PARAMETERS: Record<string, unknown> = {
   additionalProperties: false,
 }
 
+/**
+ * `get_position`'s one argument: **an identity, and nothing that could narrow a list** (DDR-0111).
+ *
+ * The description does most of the work here, because this is the tool a model is likeliest to
+ * mistake for a search: it is the only one taking free text, and free text is what a query looks
+ * like. So it says what the field is *for* — one instrument, named — and what it is not, since
+ * "positions over 5%" arriving in a `query` string would be the general query ADR-0009 forbids,
+ * wearing an identity's clothes. The refusal is structural as well: whatever is in this string, the
+ * service resolves it to **one conid or to a named state**, so there is no shape of input that
+ * returns a filtered list.
+ */
+const POSITION_PARAMETERS: Record<string, unknown> = {
+  type: 'object',
+  properties: {
+    query: {
+      type: 'string',
+      description:
+        'Which single instrument, as its ticker, its name, or the IBKR contract id a previous report gave. Exactly one instrument, identified — never a description of several and never a condition: there is no way to ask here for the largest positions, the ones above a weight, or the ones in a sector. A name matching more than one holding comes back as an ambiguity listing them, and one the owner does not hold comes back as not held.',
+    },
+  },
+  required: ['query'],
+  additionalProperties: false,
+}
+
 /** A tool that takes nothing. Spelled out rather than omitted: the provider expects a schema. */
 const NO_PARAMETERS: Record<string, unknown> = {
   type: 'object',
@@ -204,6 +237,25 @@ export const ASSISTANT_TOOLS: readonly AssistantTool[] = [
     backedBy: 'portfolioService.getOverview',
     async run(_args, context): Promise<string> {
       return portfolioOverviewReport(await liveOverview(context.displayCurrency))
+    },
+  },
+  {
+    name: 'get_position',
+    description:
+      'One single holding in the live portfolio, resolved from a ticker or a name to the instrument itself: its name, its currency, its sector, its share of the holdings that could be valued, and how far it is above or below what it cost, as a percentage of that cost. It reaches every position the owner holds, including the ones get_portfolio_overview is too long to list — so this is how you answer about a position that report did not name. Names and percentages only: no amounts of money, no price, no market value, no quantity. Ask for one instrument by name; it takes no filter, no threshold and no list.',
+    parameters: POSITION_PARAMETERS,
+    categories: ['holdings', 'weights'],
+    backedBy: 'portfolioService.getPosition',
+    async run(args, context): Promise<string> {
+      const query = queryArgument(args)
+      // Answered without reading anything, because there is nothing to resolve and no state that
+      // means it. A blank query is not a portfolio fact the way an unknown period is (`period_not_
+      // available` is a real answer about a real window) — it is a call the model did not finish
+      // writing, and the honest reply names the argument rather than inventing a subject for it.
+      if (query === '') {
+        return 'The get_position report needs the ticker or name of one instrument, and the call carried none. Ask again naming exactly one. There is no way to ask this report for several positions: the whole live book is get_portfolio_overview, and the largest positions by weight are get_allocation.'
+      }
+      return positionReport(await livePosition(query, context.displayCurrency))
     },
   },
   {
@@ -404,19 +456,46 @@ function seriesArgument(args: unknown): HistorySeries {
   return HISTORY_SERIES.find((candidate) => candidate === value) ?? 'value'
 }
 
+/**
+ * What `get_position` was asked about, trimmed; the empty string where the model named nothing.
+ *
+ * Passed through **unresolved**, like a period key and unlike a dimension: what this string *means*
+ * is the service's business, because resolution has outcomes — ambiguous, not held — that only a
+ * reading of the portfolio can produce. A tool layer that pre-matched it would be performing the
+ * projection DDR-0111 moved into the service.
+ */
+function queryArgument(args: unknown): string {
+  const value = argumentRecord(args)['query']
+  return typeof value === 'string' ? value.trim() : ''
+}
+
 /** Whatever the model sent, as something with keys. A non-object carries no arguments. */
 function argumentRecord(args: unknown): Record<string, unknown> {
   return typeof args === 'object' && args !== null ? (args as Record<string, unknown>) : {}
 }
 
 /**
- * The live overview, with the gateway's two typed errors turned into the states they mean.
+ * The gateway's two typed errors turned into the states they mean — **written once** (DDR-0022).
  *
  * `IbkrTimeoutError` is **not** a subclass of `IbkrNotConnectedError` and the two are not
- * interchangeable (DDR-0022): one means start the gateway, the other means it is running and
- * stalled. The order of the branches is load-bearing for exactly that reason and mirrors the IPC
- * handlers', which are the other place this mapping is written.
+ * interchangeable: one means start the gateway, the other means it is running and stalled. The order
+ * of the branches is load-bearing for exactly that reason — a subclass check written the other way
+ * round would swallow one into the other — and it mirrors the IPC handlers', which are the other
+ * place in the app this mapping is written.
+ *
+ * One function rather than one catch block per live read, because three of them are three chances
+ * for a later story to collapse the two states while everything still compiles and passes.
  */
+function gatewayFailure(
+  err: unknown,
+  fallback: string,
+): { status: 'not_responding' | 'not_connected' | 'error'; message: string } {
+  if (err instanceof IbkrTimeoutError) return { status: 'not_responding', message: err.message }
+  if (err instanceof IbkrNotConnectedError) return { status: 'not_connected', message: err.message }
+  return { status: 'error', message: err instanceof Error ? err.message : fallback }
+}
+
+/** The live overview as a state rather than as a throwing call. */
 async function liveOverview(displayCurrency: string): Promise<LivePortfolioResult> {
   try {
     return {
@@ -426,12 +505,28 @@ async function liveOverview(displayCurrency: string): Promise<LivePortfolioResul
       readAt: Date.now(),
     }
   } catch (err) {
-    if (err instanceof IbkrTimeoutError) return { status: 'not_responding', message: err.message }
-    if (err instanceof IbkrNotConnectedError) return { status: 'not_connected', message: err.message }
+    return gatewayFailure(err, 'Unexpected error reading the portfolio.')
+  }
+}
+
+/**
+ * One position, looked up by identity against the same live reading (Story #328).
+ *
+ * The service's own `ambiguous` and `not_held` ride **inside** the `ok` variant, and the nesting is
+ * the layering: a lookup that ran and found nothing is a fact about the portfolio, where a lookup
+ * that never ran is a fact about the gateway. Flattening them would let "you do not hold it" be the
+ * answer to a gateway that is switched off.
+ */
+async function livePosition(query: string, displayCurrency: string): Promise<LivePositionResult> {
+  try {
     return {
-      status: 'error',
-      message: err instanceof Error ? err.message : 'Unexpected error reading the portfolio.',
+      status: 'ok',
+      lookup: await portfolioService.getPosition(query, displayCurrency),
+      displayCurrency,
+      readAt: Date.now(),
     }
+  } catch (err) {
+    return gatewayFailure(err, 'Unexpected error reading the portfolio.')
   }
 }
 
@@ -440,12 +535,7 @@ async function liveDrift(displayCurrency: string): Promise<BalanceDriftResult> {
   try {
     return await balanceDriftService.getBalanceDrift(displayCurrency)
   } catch (err) {
-    if (err instanceof IbkrTimeoutError) return { status: 'not_responding', message: err.message }
-    if (err instanceof IbkrNotConnectedError) return { status: 'not_connected', message: err.message }
-    return {
-      status: 'error',
-      message: err instanceof Error ? err.message : 'Unexpected error measuring drift.',
-    }
+    return gatewayFailure(err, 'Unexpected error measuring drift.')
   }
 }
 

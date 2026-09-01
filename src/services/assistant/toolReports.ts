@@ -22,6 +22,7 @@ import {
   type InvestorProfile,
   type TargetDimension,
 } from '@shared/domain/investorProfileTerms'
+import type { PositionLookup } from '@services/portfolio/portfolioService'
 import type { AllocationReport, AllocationResult } from '@shared/domain/allocation'
 import type { Holding, PortfolioOverview } from '@shared/domain/portfolio'
 import type {
@@ -35,7 +36,8 @@ import type {
 } from '@shared/domain/balanceDrift'
 
 /**
- * The four reports the model may ask for, written in the app's own prose (Story #326, DDR-0111).
+ * The portfolio reports the model may ask for, in the app's own prose (Stories #326 and #328,
+ * DDR-0111).
  *
  * **A tool result is prose, never JSON.** DDR-0111 decision 5 settles it: a payload the model has to
  * read figures out of is a payload it can recombine, and the whole of ADR-0009's grounding rule is
@@ -68,7 +70,7 @@ import type {
  * ## Two rules every report here obeys
  *
  * **No money, in any of them.** Each tool declares a `DISCLOSURE_CATEGORIES` category
- * (`assistantTools.ts`), and all four fall under `holdings`, `weights` or `profile` — declared as
+ * (`assistantTools.ts`), and every one here falls under `holdings`, `weights` or `profile` — declared as
  * names and percentages, with `weights` saying *"No amounts of money"* in as many words. That is not
  * caution about a leak; it is the disclosure being true. `toolReports.test.ts` reads every report
  * back and fails on a currency-formatted figure, which is `assistantContext.test.ts`'s assertion
@@ -194,7 +196,7 @@ export function portfolioOverviewReport(result: LivePortfolioResult): string {
     const name = holdingName(holding.symbol, holding.description, holding.companyName)
     const weight = total > 0 ? (valueOf(holding) ?? 0) / total : null
     lines.push(
-      `- ${name === null ? holding.symbol : `${holding.symbol} (${name})`} · currency ${holding.currency}: ${
+      `- ${named(holding.symbol, name)} · currency ${holding.currency}: ${
         weight === null ? 'no weight (nothing could be valued, so there is no total to be a share of)' : formatPercentValue(weight * 100)
       }`,
     )
@@ -219,6 +221,128 @@ export function portfolioOverviewReport(result: LivePortfolioResult): string {
 /** A live holding's value in the display currency, or `null` where no rate was available. */
 function valueOf(holding: Holding): number | null {
   return holding.displayValue === undefined ? holding.marketValue : holding.displayValue
+}
+
+// ---- get_position -----------------------------------------------------------
+
+/**
+ * How many of an ambiguity's candidates are named before it says what it left out.
+ *
+ * Far smaller than {@link MAX_LISTED_POSITIONS} because it is a **different kind of list**: a
+ * breakdown is read for its shape, where an ambiguity is read to pick one line out of it. Beyond a
+ * handful the state stops being "which of these did you mean" and becomes a second holdings report
+ * arriving under the wrong heading — and a query that matched thirty positions is one the owner
+ * should narrow rather than one the app should list.
+ */
+export const MAX_LISTED_CANDIDATES = 8
+
+/**
+ * What a position lookup produced, with the gateway's failures beside the service's own states.
+ *
+ * The nesting is the layering: `ambiguous` and `not_held` are **business rules** and belong to
+ * `portfolioService`, while `not_connected` and `not_responding` are the gateway's and are mapped
+ * where every other tool maps them. A lookup that never ran is not a lookup that found nothing —
+ * folding the two would make "you do not hold it" the answer to a gateway that is switched off.
+ */
+export type LivePositionResult =
+  | { status: 'ok'; lookup: PositionLookup; displayCurrency: string; readAt: number }
+  | { status: 'not_connected'; message: string }
+  | { status: 'not_responding'; message: string }
+  | { status: 'error'; message: string }
+
+/**
+ * One holding, by identity — the report that reaches past every cap (Story #328).
+ *
+ * **This is what makes the 41st position answerable.** Every other report about the live book lists
+ * its largest N and says how many of how many; this one takes an identity, so where a holding ranks
+ * by size has nothing to do with whether the model can see it.
+ *
+ * Three states it must never blur, each of which has shipped wrong somewhere in this app:
+ *
+ * - **Ambiguous is not a best guess.** A query naming two holdings comes back naming both, with the
+ *   model told in as many words not to choose. Picking the larger would be right often enough to be
+ *   trusted and wrong silently.
+ * - **Not held is not an unmarked answer.** It is the moment a model is most likely to answer from
+ *   training data, so the state carries the prompt's *External instruments* rule with it rather than
+ *   relying on that rule being remembered eight sections later (ADR-0009).
+ * - **Unconvertible is not zero.** A holding with no rate has no percentage at all — an absent
+ *   weight, which is DDR-0007's rule and Bug #68's lesson.
+ *
+ * **No money, as in every report declared under `holdings` and `weights`.** What replaces it is the
+ * gain *against what the position cost*, as a percentage: a ratio of two native-currency figures,
+ * computed in the service from IBKR's own unrealized figure over a per-share average cost
+ * (DDR-0087). It needs no exchange rate, so it survives a holding the app could not value.
+ */
+export function positionReport(result: LivePositionResult): string {
+  if (result.status === 'not_connected') {
+    return `LIVE POSITION: the IBKR gateway is not running, so no position could be looked up at all. Say the gateway is not running — this is not the owner failing to hold the instrument, and never answer it from the imported statement history, which is a different store on a different clock. (${result.message})`
+  }
+  if (result.status === 'not_responding') {
+    return `LIVE POSITION: the IBKR gateway accepted the connection and then stopped answering, so no position could be looked up. Say it is not responding and that trying again shortly may work — this is neither the gateway being off nor the instrument being unheld. (${result.message})`
+  }
+  if (result.status === 'error') {
+    return `LIVE POSITION: the live portfolio could not be read, so no position could be looked up. Say the lookup failed; never report it as an instrument the owner does not hold. (${result.message})`
+  }
+
+  const { lookup, displayCurrency, readAt } = result
+
+  if (lookup.status === 'not_held') {
+    return [
+      `LIVE POSITION: nothing the owner holds resolves to “${lookup.query}”. The live book holds ${lookup.heldPositions} open position(s), read from the IBKR gateway at ${isoMinute(readAt)}, and none of them is it. Say plainly that they do not hold it.`,
+      'Anything you go on to say about that instrument comes from your own training data and not from this app: mark it as unverified, do not state its price, its fundamentals, its existence or whether it is available at the owner’s broker, and never present it as a holding or fold it into a weight.',
+    ].join('\n')
+  }
+
+  if (lookup.status === 'ambiguous') {
+    const listed = lookup.candidates.slice(0, MAX_LISTED_CANDIDATES)
+    return [
+      `LIVE POSITION: “${lookup.query}” resolves to more than one holding, so this app did not choose between them and neither may you. Never answer about one of these as though it were the one asked for, and never merge two of them into a single figure. Ask the owner which they meant, or ask again with one ticker exactly.`,
+      '',
+      listed.length === lookup.candidates.length
+        ? `All ${lookup.candidates.length} matches, largest first:`
+        : `The ${listed.length} largest of ${lookup.candidates.length} matches; the rest are not in front of you, so do not say these are all of them:`,
+      ...listed.map((candidate) => `- ${named(candidate.symbol, candidate.name)}`),
+    ].join('\n')
+  }
+
+  const position = lookup.position
+  const lines: string[] = [
+    `LIVE POSITION, read from the IBKR gateway at ${isoMinute(readAt)}. This is the live book, not the imported statement history — never mix it with a figure out of the imported store.`,
+    `“${lookup.query}” resolved to exactly one holding. Its share below is of the total value of the holdings that could be valued in ${displayCurrency}; cash is not in that total and has no weight here, while the rebalancing report weighs the same portfolio with cash included, so its percentages are a share of a different total and the two are not comparable.`,
+    '',
+    `- ${named(position.symbol, position.name)} · currency ${position.currency} · sector ${
+      position.sector ?? 'not in the app’s local classification cache, which is an absent attribute rather than an instrument with no sector'
+    }`,
+  ]
+
+  if (position.weight === null) {
+    // Named without a percentage, which is the whole of DDR-0007 in one line: there is no rate with
+    // which to compute one, and inventing it is what Bug #68 was.
+    lines.push(
+      `- Share of the portfolio: none exists. This holding could not be valued in ${displayCurrency}, so it is in no total and carries no percentage at all — an absent weight, never a zero one. It is also why every weight in the live holdings report is a lower bound.`,
+    )
+  } else {
+    lines.push(
+      `- Share of the holdings that could be valued: ${formatPercentValue(position.weight)}${
+        position.bounded
+          ? `. This is a lower bound: some other holding could not be valued in ${displayCurrency}, so the total it is a share of is missing whatever those are worth`
+          : ''
+      }.`,
+    )
+  }
+
+  lines.push(
+    position.gainOnCostPercent === null
+      ? '- Against what it cost: not available. The gateway reported no unrealized figure for this position, or no average cost to measure one against — absent, not zero, and never to be derived from a price.'
+      : `- Against what it cost: ${formatSignedPercent(position.gainOnCostPercent)}. This is the gateway’s own unrealized figure over what the position cost, in the position’s own currency, so it needs no exchange rate. It is a return on that holding’s cost and **not** a share of the portfolio — never add it to, subtract it from or compare it with the weight above.`,
+  )
+
+  lines.push(
+    '',
+    'No amount of money is available for this position: not its market value, not its price, not its cost, and not the gain in currency. Say so if asked, and never estimate one from the percentages here.',
+  )
+
+  return lines.join('\n')
 }
 
 // ---- get_investor_profile ---------------------------------------------------
@@ -421,7 +545,7 @@ function positionLines(report: AllocationReport, limit: number | null): string[]
   for (const position of listed) {
     const name = instrumentName(position.symbol, position.description)
     lines.push(
-      `- ${name === null ? position.symbol : `${position.symbol} (${name})`} · currency ${position.currency} · sector ${
+      `- ${named(position.symbol, name)} · currency ${position.currency} · sector ${
         position.sector === '' ? 'unclassified' : position.sector
       } · asset class ${position.assetCategory === '' ? 'unknown' : position.assetCategory}: ${formatPercentValue(position.percentOfNav)}`,
     )
@@ -534,10 +658,9 @@ export function measuredDrift(report: BalanceDriftReport): string {
 
   if (report.position !== null) {
     const p = report.position
-    const name = p.name === null ? p.symbol : `${p.symbol} (${p.name})`
     lines.push(
       '',
-      `Largest single position: ${name} at ${formatPercentValue(p.actual)} against a ${range(p.low, p.high)} ceiling — ${verdict(p.status, p.distance)}.${
+      `Largest single position: ${named(p.symbol, p.name)} at ${formatPercentValue(p.actual)} against a ${range(p.low, p.high)} ceiling — ${verdict(p.status, p.distance)}.${
         p.bounded
           ? ' This is a lower bound: some holding could not be valued, so a larger one may be hidden among them.'
           : ''
@@ -628,9 +751,9 @@ export function baselineBlock(review: BaselineReview): string | null {
 
 /** One ceiling as a sentence, in percentage points, saying whose ceiling it is. */
 function ceilingLine(ceiling: BaselineCeiling): string {
-  // The same `symbol (name)` shape `measuredDrift` writes, from the same already-resolved field:
-  // `null` there means local history knows no name, not that the name is blank (DDR-0088).
-  const held = ceiling.name === null ? ceiling.key : `${ceiling.key} (${ceiling.name})`
+  // Keyed rather than symbolled: a `sector` or `cash` ceiling has no ticker, and `named` writes the
+  // key alone where there is no name to put beside it (DDR-0088).
+  const held = named(ceiling.key, ceiling.name)
   const subject =
     ceiling.check === 'position'
       ? `Largest single position: ${held}`
@@ -764,10 +887,8 @@ function moveLines(band: DriftBand, move: DriftMove): string[] {
       `  Positions carrying it (the ${move.contributors.length} largest of ${move.candidates} held in ${band.label}):`,
     )
     for (const contributor of move.contributors) {
-      const name =
-        contributor.name === null ? contributor.symbol : `${contributor.symbol} (${contributor.name})`
       lines.push(
-        `    · ${name}: ${formatPercentValue(contributor.weight)} of the portfolio now, ${
+        `    · ${named(contributor.symbol, contributor.name)}: ${formatPercentValue(contributor.weight)} of the portfolio now, ${
           move.direction === 'trim' ? 'giving up' : 'taking on'
         } ${formatPoints(contributor.points)}, leaving it at ${formatPercentValue(contributor.resultingWeight)}`,
       )
@@ -793,6 +914,18 @@ function moveLines(band: DriftBand, move: DriftMove): string[] {
 }
 
 // ---- shared phrasing --------------------------------------------------------
+
+/**
+ * `KEY (Name)`, or the key alone where nothing knows a name for it.
+ *
+ * One shape for every instrument this file names, from an already-resolved field: `null` means no
+ * name is known, never that the name is blank (DDR-0088). It is deliberately not a *resolver* —
+ * `holdingName` and `instrumentName` are that, and they run before this — so a report cannot grow a
+ * second naming path by reaching for the convenient function (DDR-0066).
+ */
+function named(key: string, name: string | null): string {
+  return name === null ? key : `${key} (${name})`
+}
 
 /** How a band reads: inside, or how far out and in which direction. */
 function verdict(status: 'inside' | 'below' | 'above', distance: number): string {

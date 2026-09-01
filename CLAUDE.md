@@ -15,14 +15,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current Repository State
 
-M0–M9 are delivered: live IBKR holdings/balances/allocation in a display currency, immutable
-snapshots, Flex statement import, and four analytics views over it, behind a vertical sidebar.
-M10 is delivered — the investor profile, the assistant's **surface**, the widened grounding and the
-in-app OpenAI key. #289 is closed as superseded by #287's computed moves — read its closing comment
-before re-proposing an end-state check on model output.
-**M11 is delivered — the assistant is one view**: no consent gate (ADR-0011), the profile folded
-in (DDR-0108), and the app's own **baseline** (ADR-0012). Not built: multi-broker,
-benchmarks, tax.
+M0–M11 are delivered: live IBKR holdings/balances/allocation in a display currency, immutable
+snapshots, Flex import, four analytics views, the investor profile, and **the assistant as one
+view** — no consent gate (ADR-0011), the profile folded in (DDR-0108), the app's own **baseline**
+(ADR-0012). Not built: multi-broker, benchmarks, tax. #289 is closed as superseded by #287's
+computed moves — read its closing comment before re-proposing an end-state check on model output.
 
 **Which Epics are open is deliberately not recorded here** — read the backlog (*Current Priority*).
 The **lifecycle** is the rule: an Epic closes with its stories, and refinement opens a *new*
@@ -35,9 +32,9 @@ Each exists end-to-end and is the reference pattern for its shape.
 
 - **portfolio** — live IBKR read. `portfolioService` → `portfolioRepository` → `ibkrGateway`
   (HTTP + Zod). Converts with **live gateway FX**, not Flex `fxRateToBase`; unconvertible rows
-  carry `displayValue === null` and leave totals/allocation (DDR-0007). Its **one** local read is
-  the instrument *name*, joined from `flexReadRepository` by conid — the gateway has none
-  (DDR-0088).
+  carry `displayValue === null` and leave totals/allocation (DDR-0007). Its local reads are the
+  instrument *name*, by conid from `flexReadRepository` — the gateway has none (DDR-0088) — and a
+  position's cached *sector*.
 - **snapshots** — immutable local history. `snapshotService` (12h de-dupe on open, always-write on
   demand) → `snapshotRepository` → SQLite. Reads IBKR only *through* `portfolioService` (DDR-0003).
 - **flex** — imported Flex history, split **write-only** `flexRepository` / **read-only**
@@ -59,11 +56,13 @@ Each exists end-to-end and is the reference pattern for its shape.
   `DISCLOSURE_CATEGORIES` *types* `AssistantContext` **and every tool declares one** — a result
   built in main never crosses the boundary that drops an undeclared section, so the registry test
   is that half. The key field shows **only with no working key**; there is **no remove, replace or
-  rotate, not even a channel**. `assistant:ask` is the **one outbound channel**. **Eight tools run
+  rotate, not even a channel**. `assistant:ask` is the **one outbound channel**. **Nine tools run
   in main** (`assistantTools.ts`; prose in `toolReports.ts`, `performanceReports.ts`): one
   read-only method each — many share one, **none spans two** — **no argument is a
-  predicate** (`limit` a *count*, `period` a *key*, `series` a *choice*), a state is
-  **never an empty report**, gaps carry targets *and* baseline in one payload (DDR-0111). The
+  predicate** (`limit` a *count*, `period` a *key*, `series` a *choice*, `query` an *identity*), a
+  state is **never an empty report**, gaps carry targets *and* baseline in one payload (DDR-0111).
+  `get_position` resolves **in the service, by conid** — identity, exact ticker, exact name, then a
+  2+ char substring, first tier winning — and **ambiguous lists candidates, never guesses** (#328). The
   renderer assembles **nothing**; the empty context and its bound stay.
   **Two denominators**: the overview's weights **exclude cash**, drift's **include
   it** — each says which. Figures go through **`@shared/format`** so main can write one too
@@ -74,9 +73,9 @@ Each exists end-to-end and is the reference pattern for its shape.
   TWR, so a deposit moves value alone; the period is anchored to `extent.to`, an overlapping
   statement row is summed **whole** and names its span, an empty window is a *state* not a flat
   period, and no cause is ever offered (DDR-0099). What the app **does not** compute leads
-  **every** prompt, **never a tool**: a fact the model may decline to fetch holds no rule
-  (`BASE_CONTEXT`, `assistantAbsences.ts`): no annualised figure, no benchmark, no risk statistic,
-  the baseline's silences, the currency reading, **two stores, two clocks**. A report restates its
+  **every** prompt, **never a tool**: a fact the model may decline to fetch holds no rule — the
+  eight are `ABSENCE_DISCLOSURES` (`assistantAbsences.ts`, emitted by `BASE_CONTEXT`), and **two
+  stores, two clocks** is one of them. A report restates its
   own — belt-and-braces, not the binding (DDR-0101). There is **no period control**: a picker asks
   what free text already said (DDR-0102). **Every standard period is precomputed**
   (`@shared/domain/standardPeriods`, windowing in `performanceWindow`; the renderer's libs
@@ -161,8 +160,8 @@ e2e/             Playwright specs launching the built app
 
 ### Reference slices to copy
 
-- **Minimal slice / test style** — `app:ping` and `metaService.getInstallId()`; see
-  `services/meta/metaService.test.ts` for the repository-mocking pattern.
+- **Minimal slice / test style** — `app:ping` and `metaService.getInstallId()`;
+  `metaService.test.ts` is the repository-mocking pattern.
 - **Destructive action** — `flex:clear` / `snapshot:clear`: the in-place `ConfirmAction` control —
   no modal, no `window.confirm`. ADR-0006, DDR-0012.
 
@@ -511,8 +510,8 @@ alternatives this table can only name.
 ## Stack
 
 Node ≥22.12, CI runs 24 — **no `engines` field enforces it**; the requirement lives in `ci.yml`'s
-comment (`@electron/rebuild` / `node-abi` need it). The rest of the stack is `package.json`; the
-one external dependency is the IBKR Client Portal Gateway.
+comment (`@electron/rebuild` / `node-abi` need it). The one external dependency is the IBKR Client
+Portal Gateway.
 
 Runtime dependencies are deliberately few (`mapbox-gl` is the Allocation basemap and nothing
 else). **Avoid adding dependencies without clear long-term value.**
@@ -586,7 +585,7 @@ override an accepted decision.**
 
 ## MCP Servers
 
-Which are enabled is `.claude/settings.local.json`. The `interactive-brokers` entry in `.mcp.json`
+Which are enabled is `.claude/settings.local.json`; the `interactive-brokers` entry in `.mcp.json`
 still has a **placeholder runtime** (`REPLACE_WITH_RUNTIME`), so enabling it does not make it
 functional. A connected
 `Interactive_Brokers_IBKR` MCP has read-only account/market tools allowlisted — **no order-placing

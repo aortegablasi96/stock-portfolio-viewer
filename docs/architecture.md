@@ -112,11 +112,15 @@ Three architectural rules make that safe, and they replace the former analytics-
   computation, and computation belongs in a service. ADR-0009's Option E — *let the model compute* —
   stays rejected (DDR-0111).
 
-  Story #326 ships the first four and #327 the four performance reports
+  Story #326 ships the first four, #327 the four performance reports and #328 `get_position`
   (`services/assistant/assistantTools.ts`, with the prose in `toolReports.ts` and
   `performanceReports.ts`), executed in **main** against the services and rendered through the app's
   own formatters. The four period tools are the *many tools, one method* half of the rule: they
-  narrow `analytics:getPerformance` and add no arithmetic and no join. Each tool declares the
+  narrow `analytics:getPerformance` and add no arithmetic and no join. `get_position` is the other
+  half's cost: there was no per-position read, so `portfolioService` **gained the method** rather
+  than the tool layer filtering a report — the resolution by conid and its *ambiguous* and *not
+  held* states are business rules, tested where business rules are tested (DDR-0111). Each tool
+  declares the
   `DISCLOSURE_CATEGORIES` category it falls under — a tool result is built in main and never crosses
   the IPC boundary that drops an undeclared section, so the registry is where that bound is enforced.
 

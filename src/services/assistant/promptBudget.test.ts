@@ -2,12 +2,15 @@ import { describe, expect, it } from 'vitest'
 import { SYSTEM_PROMPT, buildPrompt } from './assistantService'
 import { assistantToolDefinitions } from './assistantTools'
 import {
+  MAX_LISTED_CANDIDATES,
   MAX_LISTED_POSITIONS,
   allocationReport,
   investorProfileReport,
   portfolioOverviewReport,
+  positionReport,
   rebalanceGapsReport,
   type LivePortfolioResult,
+  type LivePositionResult,
 } from './toolReports'
 import {
   MAX_HISTORY_POINTS,
@@ -386,6 +389,29 @@ const LIVE: LivePortfolioResult = {
 }
 
 /**
+ * A single position at its longest, which is the **ambiguous** state rather than the resolved one.
+ *
+ * A resolved position is one holding and a fixed amount of prose; what grows with a cap is the list
+ * of candidates a query matched, so that is the branch the budget has to see. It is beyond
+ * `MAX_LISTED_CANDIDATES` on purpose — the report must be the thing that cuts, not the fixture —
+ * and every candidate carries a name as long as IBKR writes them (Story #328).
+ */
+const AMBIGUOUS: LivePositionResult = {
+  status: 'ok',
+  lookup: {
+    status: 'ambiguous',
+    query: 'international diversified',
+    candidates: Array.from({ length: MAX_LISTED_CANDIDATES + 5 }, (_, index) => ({
+      conid: index,
+      symbol: `SYMBOL${index}`,
+      name: `${LONG_NAME} ${index}`,
+    })),
+  },
+  displayCurrency: 'EUR',
+  readAt: Date.UTC(2026, 5, 30, 14, 22),
+}
+
+/**
  * The first round: the system prompt, the base context and the question.
  *
  * Two turns, as they always were — what shrank is the second of them. #326 took three of the four
@@ -420,6 +446,7 @@ const PERFORMANCE: PerformanceResult = { status: 'ok', report: HISTORY }
 
 const toolAnswers = (reports: GroundingReports): string[] => [
   portfolioOverviewReport(LIVE),
+  positionReport(AMBIGUOUS),
   investorProfileReport(reports.profile),
   allocationReport({ status: 'ok', report: ALLOCATION }, 'position', MAX_LISTED_POSITIONS),
   rebalanceGapsReport(reports.drift),
@@ -432,14 +459,15 @@ const toolAnswers = (reports: GroundingReports): string[] => [
 /** The calls that produce {@link toolAnswers}, index-aligned with it. */
 const TOOL_CALLS = [
   { id: 'call_1', name: 'get_portfolio_overview', argumentsJson: '{}' },
-  { id: 'call_2', name: 'get_investor_profile', argumentsJson: '{}' },
-  { id: 'call_3', name: 'get_allocation', argumentsJson: '{"dimension":"position","limit":40}' },
-  { id: 'call_4', name: 'get_rebalance_gaps', argumentsJson: '{}' },
-  { id: 'call_5', name: 'get_performance_periods', argumentsJson: '{}' },
-  { id: 'call_6', name: 'get_performance', argumentsJson: '{"period":"all"}' },
-  { id: 'call_7', name: 'get_daily_returns', argumentsJson: '{"period":"all"}' },
+  { id: 'call_2', name: 'get_position', argumentsJson: '{"query":"international diversified"}' },
+  { id: 'call_3', name: 'get_investor_profile', argumentsJson: '{}' },
+  { id: 'call_4', name: 'get_allocation', argumentsJson: '{"dimension":"position","limit":40}' },
+  { id: 'call_5', name: 'get_rebalance_gaps', argumentsJson: '{}' },
+  { id: 'call_6', name: 'get_performance_periods', argumentsJson: '{}' },
+  { id: 'call_7', name: 'get_performance', argumentsJson: '{"period":"all"}' },
+  { id: 'call_8', name: 'get_daily_returns', argumentsJson: '{"period":"all"}' },
   {
-    id: 'call_8',
+    id: 'call_9',
     name: 'get_portfolio_history',
     argumentsJson: '{"period":"all","series":"composition"}',
   },
@@ -549,22 +577,24 @@ describe('the conversation after the model has asked for reports', () => {
    * above a bound rather than one arrangement's measurement.
    *
    * The array only ever grows, so what a conversation costs is the reports in it and not the rounds
-   * they arrived over — one round of four calls and four rounds of one call carry the same reports,
-   * differing only by the assistant turns between them. This is the shape a multi-step question
-   * actually takes, at `MAX_TOOL_ROUNDS` exactly, so the loop ends on its **round count** rather
-   * than on the ceiling. What the ceiling still rations is a model asking for the *same* report
-   * twice, which is the runaway rather than a question.
+   * they arrived over — one round of nine calls and four rounds of two or three carry the same
+   * reports, differing only by the assistant turns between them. This is the shape a multi-step
+   * question actually takes, at `MAX_TOOL_ROUNDS` exactly, so the loop ends on its **round count**
+   * rather than on the ceiling. What the ceiling still rations is a model asking for the *same*
+   * report twice, which is the runaway rather than a question.
    */
-  it.each(CASES)('fits however the eight reports are spread over the rounds: %s', (_case, reports) => {
+  it.each(CASES)('fits however the reports are spread over the rounds: %s', (_case, reports) => {
     const answers = toolAnswers(reports)
-    // Two calls per round, at `MAX_TOOL_ROUNDS` exactly — the shape a multi-step question takes,
-    // and the most rounds a conversation carrying every report can be spread over.
-    const perRound = answers.length / MAX_TOOL_ROUNDS
-    expect(Number.isInteger(perRound)).toBe(true)
+    expect(answers).toHaveLength(TOOL_CALLS.length)
+    // Spread as evenly as they go, over `MAX_TOOL_ROUNDS` exactly — the most rounds a conversation
+    // carrying every report can be spread over. It stopped dividing evenly at nine tools, and the
+    // remainder is not worth a fixture: what is being measured is that every report is in the array.
+    const perRound = Math.ceil(answers.length / MAX_TOOL_ROUNDS)
 
     const messages: AiMessage[] = [...firstRound()]
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
       const calls = TOOL_CALLS.slice(round * perRound, (round + 1) * perRound)
+      if (calls.length === 0) continue
       messages.push({ role: 'assistant', content: '', toolCalls: calls })
       for (const call of calls) {
         const index = TOOL_CALLS.indexOf(call)
@@ -598,6 +628,9 @@ describe('the conversation after the model has asked for reports', () => {
     expect(rebalanceGapsReport(REPORTS.drift)).toContain(
       '33 band(s) are outside their range; the 6 with the largest gaps',
     )
+    expect(positionReport(AMBIGUOUS)).toContain(
+      `The ${MAX_LISTED_CANDIDATES} largest of ${MAX_LISTED_CANDIDATES + 5} matches`,
+    )
   })
 
   /**
@@ -610,6 +643,12 @@ describe('the conversation after the model has asked for reports', () => {
    * where the four period tools say the key comes from `get_performance_periods` and that no
    * free-form range exists, which is the sentence that keeps a model from inventing one — so the
    * growth buys the property DDR-0102 is about rather than padding.
+   *
+   * **Story #328's ninth tool fits inside it and very nearly does not** — roughly 7,800 of the
+   * 8,000, so the next story raises this number rather than editing a description past it. That is
+   * the ceiling doing its job: `get_position` is the one tool taking free text, so its two
+   * descriptions carry what it is *not* — no filter, no threshold, no list — which is the sentence
+   * standing between an identity argument and the general query ADR-0009 forbids.
    */
   it('declares tool schemas small enough to be sent on every round', () => {
     expect(JSON.stringify(assistantToolDefinitions()).length).toBeLessThan(8_000)

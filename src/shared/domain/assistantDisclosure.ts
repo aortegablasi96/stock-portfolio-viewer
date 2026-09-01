@@ -70,10 +70,16 @@ export const DISCLOSURE_CATEGORIES = [
     granularity: 'names',
   },
   {
+    // Re-worded by Story #328, which is the mechanism working rather than a slip in it — the same
+    // way `performance` was re-worded by #285. `get_position` answers about one holding, and the
+    // one figure it adds is how far that holding sits above or below what it cost. It is a
+    // percentage and needs no exchange rate, so it stays inside this category's `weights`
+    // granularity; what it is *not* is a share of the portfolio, so the declaration has to say it
+    // rather than let it hide under "as percentages" (DDR-0098).
     id: 'weights',
     title: 'How your portfolio is divided',
     detail:
-      'The share of your portfolio in each position, currency, sector and asset class, as percentages. No amounts of money.',
+      'The share of your portfolio in each position, currency, sector and asset class, and how far one position is above or below what it cost, all as percentages. No amounts of money.',
     granularity: 'weights',
   },
   {

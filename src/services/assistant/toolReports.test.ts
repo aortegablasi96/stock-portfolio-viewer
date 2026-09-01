@@ -1,14 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import {
+  MAX_LISTED_CANDIDATES,
   MAX_LISTED_MOVES,
   MAX_LISTED_POSITIONS,
   allocationReport,
   investorProfileReport,
   measuredDrift,
   portfolioOverviewReport,
+  positionReport,
   rebalanceGapsReport,
   type LivePortfolioResult,
+  type LivePositionResult,
 } from './toolReports'
+import type { PositionDetail } from '@services/portfolio/portfolioService'
 import { EMPTY_INVESTOR_PROFILE, type InvestorProfile } from '@shared/domain/investorProfileTerms'
 import type { AllocationPosition, AllocationReport } from '@shared/domain/allocation'
 import type { Holding, PortfolioOverview } from '@shared/domain/portfolio'
@@ -324,6 +328,188 @@ describe('the live portfolio report', () => {
     const text = portfolioOverviewReport({ status, message: 'x' })
     expect(text).toContain(phrase)
     // Never a report with nothing in it: the state is what the model must say (DDR-0022).
+    expect(text).not.toContain('- AAPL')
+  })
+})
+
+// ---- get_position -----------------------------------------------------------
+
+const lookup = (over: Partial<PositionDetail> = {}): LivePositionResult => ({
+  status: 'ok',
+  lookup: {
+    status: 'ok',
+    query: 'apple',
+    position: {
+      conid: 1,
+      symbol: 'AAPL',
+      name: 'Apple',
+      currency: 'USD',
+      sector: 'Technology',
+      weight: 12.5,
+      gainOnCostPercent: 25,
+      bounded: false,
+      ...over,
+    },
+  },
+  displayCurrency: 'EUR',
+  readAt: Date.UTC(2026, 7, 28, 9, 15),
+})
+
+describe('the single position report', () => {
+  it('names the store and the minute it was read, so two clocks are never mixed', () => {
+    const text = positionReport(lookup())
+    expect(text).toContain('read from the IBKR gateway at 2026-08-28 09:15 UTC')
+    expect(text).toContain('never mix it with a figure out of the imported store')
+  })
+
+  /** The same trap the live book carries: two reports, two denominators, both right (DDR-0095). */
+  it('says what its percentage is a share of, and that the other report differs', () => {
+    const text = positionReport(lookup())
+    expect(text).toContain('total value of the holdings that could be valued in EUR')
+    expect(text).toContain('the two are not comparable')
+  })
+
+  it('names the holding and weighs it through the app’s own formatter', () => {
+    expect(positionReport(lookup())).toContain('- AAPL (Apple) · currency USD · sector Technology')
+    expect(positionReport(lookup())).toContain(
+      'Share of the holdings that could be valued: 12.50%',
+    )
+  })
+
+  /** A name local history does not know is the ticker alone, never the ticker title-cased. */
+  it('writes a holding with no known name as its ticker', () => {
+    const text = positionReport(lookup({ symbol: 'CAD', name: null }))
+    expect(text).toContain('- CAD · currency USD')
+    expect(text).not.toContain('Cad')
+  })
+
+  /**
+   * **The gain is a return on cost, not a share of the portfolio**, and the report says so — the two
+   * percentages sit two lines apart and a model that added them would produce a figure nothing
+   * computed. It is IBKR's own unrealized figure over a per-share average cost (DDR-0087).
+   */
+  it('keeps the gain against cost apart from the weight, and marks it signed', () => {
+    const text = positionReport(lookup())
+    expect(text).toContain('Against what it cost: +25.00%')
+    expect(text).toContain('not** a share of the portfolio')
+    expect(text).toContain('never add it to')
+  })
+
+  it('reports a gain it does not have as absent rather than as zero', () => {
+    const text = positionReport(lookup({ gainOnCostPercent: null }))
+    expect(text).toContain('Against what it cost: not available')
+    expect(text).toContain('absent, not zero')
+  })
+
+  /**
+   * DDR-0007 and Bug #68 again, on the report that is *about* one holding: unconvertible is an
+   * absent weight rather than a zero one, and it is the reason every other weight is a lower bound.
+   */
+  it('gives an unconvertible holding no percentage at all', () => {
+    const text = positionReport(lookup({ weight: null }))
+    expect(text).toContain('Share of the portfolio: none exists')
+    expect(text).toContain('an absent weight, never a zero one')
+    expect(text).not.toContain('0.00%')
+  })
+
+  it('marks the weight as a lower bound when something else could not be valued', () => {
+    expect(positionReport(lookup({ bounded: true }))).toContain('This is a lower bound')
+    expect(positionReport(lookup())).not.toContain('lower bound')
+  })
+
+  /** Absent, not "no sector": the cache holds nothing for it, which is a different claim. */
+  it('reports an uncached sector as an absent attribute', () => {
+    expect(positionReport(lookup({ sector: null }))).toContain(
+      'not in the app’s local classification cache',
+    )
+  })
+
+  /** The category is names and percentages, so the report says what it cannot answer (DDR-0098). */
+  it('says out loud that no amount of money is available', () => {
+    expect(positionReport(lookup())).toContain('No amount of money is available for this position')
+  })
+
+  /**
+   * **Ambiguous lists the candidates and refuses to choose.** Picking the largest would be right
+   * often enough to be trusted and wrong in silence, which is the whole reason the state exists.
+   */
+  it('names every candidate and forbids picking one', () => {
+    const text = positionReport({
+      status: 'ok',
+      lookup: {
+        status: 'ambiguous',
+        query: 'gold',
+        candidates: [
+          { conid: 7, symbol: 'SGZ', name: 'Serabi Gold' },
+          { conid: 6, symbol: 'GDX', name: 'Vaneck Gold Miners' },
+        ],
+      },
+      displayCurrency: 'EUR',
+      readAt: Date.UTC(2026, 7, 28, 9, 15),
+    })
+
+    expect(text).toContain('resolves to more than one holding')
+    expect(text).toContain('neither may you')
+    expect(text).toContain('- SGZ (Serabi Gold)')
+    expect(text).toContain('- GDX (Vaneck Gold Miners)')
+    expect(text).toContain('All 2 matches')
+  })
+
+  /** A query matching half the book is narrowed by the owner, not listed as a second holdings report. */
+  it('states how many candidates it left out rather than listing them all', () => {
+    const text = positionReport({
+      status: 'ok',
+      lookup: {
+        status: 'ambiguous',
+        query: 'a',
+        candidates: Array.from({ length: MAX_LISTED_CANDIDATES + 4 }, (_, index) => ({
+          conid: index,
+          symbol: `SYM${index}`,
+          name: null,
+        })),
+      },
+      displayCurrency: 'EUR',
+      readAt: Date.UTC(2026, 7, 28, 9, 15),
+    })
+
+    expect(text).toContain(
+      `The ${MAX_LISTED_CANDIDATES} largest of ${MAX_LISTED_CANDIDATES + 4} matches`,
+    )
+    expect(text).toContain('do not say these are all of them')
+    expect(text).not.toContain('- SYM11')
+  })
+
+  /**
+   * **Not held is the moment a model answers from training data**, so the state carries the prompt's
+   * *External instruments* rule with it rather than trusting it to be remembered (ADR-0009).
+   */
+  it('marks an unheld instrument as unverified training data', () => {
+    const text = positionReport({
+      status: 'ok',
+      lookup: { status: 'not_held', query: 'TSLA', heldPositions: 47 },
+      displayCurrency: 'EUR',
+      readAt: Date.UTC(2026, 7, 28, 9, 15),
+    })
+
+    expect(text).toContain('nothing the owner holds resolves to “TSLA”')
+    expect(text).toContain('holds 47 open position(s)')
+    expect(text).toContain('comes from your own training data')
+    expect(text).toContain('mark it as unverified')
+  })
+
+  /**
+   * **A gateway that never answered is not an instrument the owner does not hold**, and the two must
+   * never collapse: one is a fact about the app, the other a fact about the portfolio (DDR-0022).
+   */
+  it.each([
+    ['not_connected', 'the IBKR gateway is not running'],
+    ['not_responding', 'stopped answering'],
+    ['error', 'the live portfolio could not be read'],
+  ] as const)('reports %s as its own state, never as an unheld instrument', (status, phrase) => {
+    const text = positionReport({ status, message: 'x' })
+
+    expect(text).toContain(phrase)
+    expect(text).not.toContain('training data')
     expect(text).not.toContain('- AAPL')
   })
 })
@@ -757,6 +943,7 @@ describe('the app’s baseline is marked apart from the owner’s own standard',
 describe('no report carries an amount of money', () => {
   const reports = (): [string, string][] => [
     ['get_portfolio_overview', portfolioOverviewReport(live())],
+    ['get_position', positionReport(lookup())],
     ['get_investor_profile', investorProfileReport(PROFILE)],
     ['get_allocation (position)', allocationReport({ status: 'ok', report: report() }, 'position', null)],
     ['get_allocation (assetClass)', allocationReport({ status: 'ok', report: report() }, 'assetClass', null)],
