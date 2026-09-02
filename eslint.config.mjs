@@ -8,7 +8,18 @@ export default tseslint.config(
   // never built here. It is untracked and the owner deletes it once M5 lands; linting a
   // vendored prototype fails eight ways and blocks `npm run lint` for every story in the
   // milestone.
-  { ignores: ['out/**', 'dist/**', 'release/**', 'node_modules/**', 'docs/figma_design/**'] },
+  // `.vite/` is gitignored beside the build output and holds scratch configs a harness writes at
+  // run time. CI never sees one, so a stray file there failed `lint` locally and nowhere else.
+  {
+    ignores: [
+      'out/**',
+      'dist/**',
+      'release/**',
+      '.vite/**',
+      'node_modules/**',
+      'docs/figma_design/**',
+    ],
+  },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
