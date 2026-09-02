@@ -24,8 +24,10 @@ M10 is delivered — the investor profile, the assistant's **surface**, the wide
 in-app OpenAI key. #289 is closed as superseded by #287's computed moves — read its closing comment
 before re-proposing an end-state check on model output.
 **M11 is delivered — the assistant is one view**: no consent gate (ADR-0011), the profile folded
-in (DDR-0108), and the app's own **baseline** (ADR-0012). Not built: multi-broker,
-benchmarks, tax.
+in (DDR-0108), and the app's own **baseline** (ADR-0012).
+**M13 is delivered — the model asks for what it needs**: twelve tools over a bounded loop replaced
+the assembled context, and ADR-0009 needed no amendment (DDR-0111, DDR-0112). Milestone order is
+not delivery order — check the record, not the number. Not built: multi-broker, benchmarks, tax.
 
 **Which Epics are open is deliberately not recorded here** — read the backlog (*Current Priority*).
 The **lifecycle** is the rule: an Epic closes with its stories, and refinement opens a *new*
