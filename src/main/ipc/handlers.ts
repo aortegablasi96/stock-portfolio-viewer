@@ -330,6 +330,9 @@ export function registerIpcHandlers(): void {
           parsed.data.question,
           parsed.data.context,
           parsed.data.displayCurrency,
+          // The turns before this one, already reduced to the caps by the schema's own transform —
+          // the shape `context` has, and for the same reason (Story #320, DDR-0113).
+          parsed.data.history,
         )
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unexpected error asking the assistant.'

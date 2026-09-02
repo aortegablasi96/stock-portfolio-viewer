@@ -7,7 +7,9 @@ import {
   type AssistantContext,
   type DisclosureCategoryId,
 } from '@shared/domain/assistantDisclosure'
+import type { AssistantHistoryTurn } from '@shared/domain/assistantHistory'
 import type {
+  AiMessage,
   AssistantAskResult,
   AssistantStatus,
   SaveApiKeyResult,
@@ -275,21 +277,62 @@ export const assistantService = {
    * safe rather than merely legal. A question asked with nothing assembled still carries the base
    * context {@link buildPrompt} puts in front of it, so the prompt's three conditional prohibitions
    * are supported on **every** question, including the ones no report reached.
+   *
+   * **`history` is where the conversation becomes one** (Story #320, DDR-0113), and
+   * {@link historyMessages} is the whole of what it does. The default is `[]`, which is the
+   * single-shot question the assistant asked for its whole life before this story — so a caller that
+   * remembers nothing loses nothing.
    */
   async ask(
     question: string,
     context: AssistantContext = {},
     displayCurrency: string = FALLBACK_DISPLAY_CURRENCY,
+    history: readonly AssistantHistoryTurn[] = [],
   ): Promise<AssistantAskResult> {
     return aiGateway.complete({
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
+        ...historyMessages(history),
         { role: 'user', content: buildPrompt(question, context) },
       ],
       tools: assistantToolDefinitions(),
       runTool: (call) => runAssistantTool(call, { displayCurrency }),
     })
   },
+}
+
+/**
+ * The remembered turns as messages — **two per turn, and the roles are the decision** (DDR-0113).
+ *
+ * A previous answer is model-authored prose containing figures a service computed and the model
+ * phrased. Feeding it back is what makes a follow-up resolve, and it is also the one thing that
+ * could make model-authored text indistinguishable from grounded context on the next turn — the
+ * seam ADR-0009 exists to keep open. Three properties of this function are what keep it open, and
+ * none of them is a sentence the model is asked to honour:
+ *
+ * **The answer is `role: 'assistant'`.** Not a prefix this app invented and hopes is read: the
+ * provider's own vocabulary for *text you wrote*, the same field that separates a `tool` result from
+ * a `user` turn. DDR-0104's finding is why that difference is load-bearing — a passage in the prompt
+ * can be asserted present and never asserted obeyed, and a role in the array needs no obedience.
+ *
+ * **No tool call and no tool result crosses.** The reports behind a remembered answer are gone, so a
+ * figure survives into the next turn only inside a sentence attributed to the model, with nothing
+ * standing behind it. A model that wants it as a **fact** has to ask for the report again — which is
+ * cheap, and always current.
+ *
+ * **A remembered question is the bare text the owner typed**, never {@link buildPrompt}'s. The
+ * grounding block appears exactly **once** in a conversation, on the question being asked. Three
+ * copies of the absences would put the model in the position of deciding which is current, which is
+ * the opposite of what DDR-0101 put them first for.
+ *
+ * The caller has already bounded the list — the renderer as policy, `assistantAskRequestSchema` as
+ * the bound — so there is nothing to cap here and deliberately no second opinion about it.
+ */
+export function historyMessages(history: readonly AssistantHistoryTurn[]): AiMessage[] {
+  return history.flatMap((turn): AiMessage[] => [
+    { role: 'user', content: turn.question },
+    { role: 'assistant', content: turn.answer },
+  ])
 }
 
 /**

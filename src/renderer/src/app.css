@@ -4189,6 +4189,19 @@ html {
   gap: var(--space-5);
 }
 
+/* `ConfirmAction` aligns to its right edge, because it was written for the sources card
+   where it sits at one (DDR-0012). Here it follows the Ask button at the *start* of a
+   left-aligned row, so both axes flip — the same override `.flex-import-actions` already
+   carries, plus the text, which is two sentences here rather than a phrase. Placement
+   only: the control's buttons, tone and confirm behaviour are untouched (DDR-0113). */
+.assistant-ask-actions .confirm-action {
+  align-items: flex-start;
+}
+
+.assistant-ask-actions .confirm-warning {
+  text-align: left;
+}
+
 /* What the assistant cannot see, said before the answer rather than after it.
    Not toned as errors: a missing import and an unset profile are gaps in the
    grounding, not failures, and the panel above already carries the blockers. */

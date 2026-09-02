@@ -11,9 +11,17 @@ import {
   type Turn,
 } from '../lib/assistantAsk'
 import { buildAssistantContext, type GroundingReports } from '../lib/assistantContext'
+import {
+  NEW_CONVERSATION_BUSY_LABEL,
+  NEW_CONVERSATION_CONFIRM_LABEL,
+  NEW_CONVERSATION_LABEL,
+  NEW_CONVERSATION_WARNING,
+  rememberedTurns,
+} from '../lib/assistantHistory'
 import { flexDataVersion } from '../lib/dataVersion'
 import { controlClassName } from '../lib/fieldVariants'
 import type { AssistantStatus } from '@shared/domain/assistant'
+import { ConfirmAction } from './ConfirmAction'
 import { Button } from './ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card'
 import { Field } from './ui/Field'
@@ -112,6 +120,10 @@ export function AssistantConversation({
     if (reports === null || !isAskable(question)) return
 
     const asked = question.trim()
+    // The conversation so far, read **before** this turn joins it (Story #320, DDR-0113). Answered
+    // turns only, stale ones dropped, newest kept to the caps — every rule of that is
+    // `rememberedTurns`, which is where a Node-only suite can reach it.
+    const history = rememberedTurns(turns, version)
     const id = nextId.current++
     setTurns((prev) => [
       { id, question: asked, groundedAt: version, answer: { kind: 'thinking' } },
@@ -134,6 +146,7 @@ export function AssistantConversation({
         // The app's own selection, sent so a report the model asks for is weighed in the currency
         // on screen (Story #326, DDR-0007). The tools run in main, where no view exists to ask.
         displayCurrency,
+        history,
       })
       setTurns((prev) =>
         prev.map((turn) => (turn.id === id ? { ...turn, answer: answerFromResult(result) } : turn)),
@@ -141,7 +154,19 @@ export function AssistantConversation({
     } finally {
       setPending(false)
     }
-  }, [displayCurrency, question, reports, version])
+  }, [displayCurrency, question, reports, turns, version])
+
+  /**
+   * Discard the conversation, so the next question starts one (DDR-0113, decision 7).
+   *
+   * Clearing the turns is the whole of it: the model sees what `rememberedTurns` selects from this
+   * list, so an empty list is a model that sees nothing from the discarded conversation. Nothing is
+   * stored, so nothing is deleted — ADR-0006 does not reach session state — but the owner's own
+   * record of what they asked is gone, which is what the confirmation is for.
+   */
+  const startFresh = useCallback(async (): Promise<void> => {
+    setTurns([])
+  }, [])
 
   const gate = askGate(status, reports)
 
@@ -193,6 +218,17 @@ export function AssistantConversation({
               <Button type="submit" variant="primary" disabled={pending || !isAskable(question)}>
                 {askLabel(pending)}
               </Button>
+              {/* Only once there is a conversation to discard — a control that clears nothing
+                  says the transcript is a thing to manage before the owner has one (DDR-0113). */}
+              {turns.length > 0 && (
+                <ConfirmAction
+                  label={NEW_CONVERSATION_LABEL}
+                  confirmLabel={NEW_CONVERSATION_CONFIRM_LABEL}
+                  busyLabel={NEW_CONVERSATION_BUSY_LABEL}
+                  warning={NEW_CONVERSATION_WARNING}
+                  onConfirm={startFresh}
+                />
+              )}
             </div>
           </form>
         )}
