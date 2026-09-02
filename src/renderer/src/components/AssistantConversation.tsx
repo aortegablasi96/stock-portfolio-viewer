@@ -21,6 +21,7 @@ import {
 import { flexDataVersion } from '../lib/dataVersion'
 import { controlClassName } from '../lib/fieldVariants'
 import type { AssistantStatus } from '@shared/domain/assistant'
+import { AssistantAnswer } from './AssistantAnswer'
 import { ConfirmAction } from './ConfirmAction'
 import { Button } from './ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card'
@@ -292,7 +293,10 @@ function TurnBody({ turn, version }: { turn: Turn; version: number }): React.JSX
       )}
       {turn.answer.kind === 'answered' && (
         <>
-          <p className="assistant-answer">{turn.answer.text}</p>
+          {/* Formatted, not marked up (Story #321, DDR-0114). The string itself is untouched —
+              `rememberedTurns` sends this same `text` back under the model's own role, so the
+              markup is a *render* concern and a later turn carries exactly what came back. */}
+          <AssistantAnswer text={turn.answer.text} />
           {turn.answer.truncated && <p className="assistant-turn-note">{TRUNCATED_NOTE}</p>}
         </>
       )}
