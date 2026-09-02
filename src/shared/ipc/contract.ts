@@ -38,6 +38,12 @@ import {
   pickDisclosedSections,
   type AssistantContext,
 } from '@shared/domain/assistantDisclosure'
+import {
+  MAX_HISTORY_CHARS,
+  MAX_REMEMBERED_TURNS,
+  trimHistory,
+  type AssistantHistoryTurn,
+} from '@shared/domain/assistantHistory'
 import { MAX_API_KEY_CHARS } from '@shared/domain/assistantKey'
 
 /**
@@ -354,12 +360,44 @@ export const MAX_QUESTION_CHARS = 2_000
  */
 export const MAX_CONTEXT_SECTION_CHARS = 8_000
 
+/**
+ * One remembered exchange, as it crosses (Story #320, DDR-0113).
+ *
+ * Bounded per entry here and then **trimmed as a whole** below, which is the same two-step
+ * `context` already has: the renderer selects, and the boundary re-applies the bound rather than
+ * trusting it to have been applied. A single answer is capped at the whole history budget because a
+ * longer one could not be remembered anyway — `trimHistory` drops a turn it cannot fit rather than
+ * carrying half of it.
+ *
+ * `groundedAt` is deliberately **not** on the wire. Staleness is resolved in the renderer, which is
+ * where `flexDataVersion` lives (DDR-0027), and a stale turn is dropped there rather than sent with
+ * a flag for main to re-decide.
+ */
+export const assistantHistoryTurnSchema = z.object({
+  question: z.string().trim().min(1).max(MAX_QUESTION_CHARS),
+  answer: z.string().trim().min(1).max(MAX_HISTORY_CHARS),
+})
+
 export const assistantAskRequestSchema = z.object({
   question: z.string().trim().min(1).max(MAX_QUESTION_CHARS),
   context: z
     .record(z.string(), z.string().max(MAX_CONTEXT_SECTION_CHARS))
     .default({})
     .transform((raw): AssistantContext => pickDisclosedSections(raw)),
+  /**
+   * The turns before this one, oldest first — the whole of what makes a follow-up resolve
+   * (Story #320, DDR-0113).
+   *
+   * `.max` before `.transform` so an obviously runaway array is rejected rather than silently
+   * trimmed, and `trimHistory` after it so what actually reaches the model is inside both bounds
+   * however the caller built it. Default `[]`: a caller that remembers nothing asks the question the
+   * assistant has always asked.
+   */
+  history: z
+    .array(assistantHistoryTurnSchema)
+    .max(MAX_REMEMBERED_TURNS)
+    .default([])
+    .transform(trimHistory),
   /**
    * The app's own currency selection, which every live weight a tool returns is a share of a total
    * in (Story #326, DDR-0007).
@@ -373,7 +411,7 @@ export const assistantAskRequestSchema = z.object({
 export type AssistantAskRequest = z.input<typeof assistantAskRequestSchema>
 
 export { assistantAskResultSchema }
-export type { AssistantAskResult, AssistantContext }
+export type { AssistantAskResult, AssistantContext, AssistantHistoryTurn }
 
 // ---- window.api bridge shape ------------------------------------------------
 

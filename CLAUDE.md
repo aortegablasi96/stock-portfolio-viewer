@@ -125,6 +125,16 @@ Each exists end-to-end and is the reference pattern for its shape.
   the largest single report** (~28%), not the exhaustive case — all twelve at once is ~80% and fits; a
   *repeated* report is what the ceiling rations, and crossing it mid-loop is `incomplete`.
   **Measure before adding to a report, a description or the base context** (DDR-0112).
+  **A question carries the conversation** (DDR-0113): the turns before it, each **two messages** —
+  the owner's `user`, the model's answer `assistant`, and **the role is the marking**, so ADR-0009's
+  seam is the array's shape rather than a prompt rule DDR-0104 says can only be asserted *present*.
+  **No tool call or result ever crosses a turn**, so a figure survives only inside a sentence
+  attributed to the model and must be fetched again to be a *fact*; the grounding block appears
+  **once**, on the question asked, and a remembered question is **bare text**. Three turns and 8,000
+  characters, declared in a **Zod-free** `@shared/domain/assistantHistory` (DDR-0105's trap), trimmed
+  by **whole turns from the oldest end** so memory stays contiguous, and applied twice — renderer
+  policy, schema bound. A **stale** (DDR-0027), failed or pending turn is never remembered.
+  `promptBudget.test.ts` measures every row again with a **full history**.
   The prompt is **eight `##` sections the owner wrote** (`SYSTEM_PROMPT_SECTIONS`, DDR-0110) — a
   **declared array**, never one template string, the count asserted three ways: sharpen a section,
   don't add a ninth. Tests pin **the guarantees the records make**, never the owner's wording:

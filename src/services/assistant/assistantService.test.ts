@@ -10,6 +10,7 @@ import {
 } from './assistantService'
 import { assistantToolDefinitions } from './assistantTools'
 import { aiGateway } from '@repositories/assistant/aiGateway'
+import type { AiMessage } from '@shared/domain/assistant'
 import {
   DISCLOSURE_CATEGORIES,
   type AssistantContext,
@@ -320,6 +321,110 @@ describe('the prompt is built from the disclosure', () => {
     const sent = mockGateway.complete.mock.calls[0]![0]
     expect(sent.tools).toEqual(assistantToolDefinitions())
     expect(typeof sent.runTool).toBe('function')
+  })
+})
+
+/**
+ * **The conversation the model is asked in the light of** (Story #320, DDR-0113).
+ *
+ * This block is the seam. A previous answer is model-authored prose containing figures a service
+ * computed and the model phrased, and carrying it back is what makes a follow-up resolve — it is
+ * also the one thing that could make model-authored text indistinguishable from grounded context on
+ * the next turn, which is what ADR-0009 exists to prevent.
+ *
+ * What keeps them apart is **structural rather than dutiful**, and every assertion here is about the
+ * message array rather than about a passage in the prompt: the answer arrives under the provider's
+ * own `assistant` role, no tool call and no tool result crosses a turn boundary, and the grounding
+ * block appears exactly once. DDR-0104's finding is why that distinction is load-bearing — a rule in
+ * the prompt can be asserted present and never asserted obeyed; a role in the array needs no
+ * obedience.
+ */
+describe('the turns before this one', () => {
+  const history = [
+    { question: 'What do I hold?', answer: 'Rio Tinto, then Serabi Gold.' },
+    { question: 'And the second one?', answer: 'Serabi Gold is 8.4% of your portfolio.' },
+  ]
+
+  const sentTo = async (turns = history): Promise<AiMessage[]> => {
+    await assistantService.ask('Is that over my ceiling?', {}, 'EUR', turns)
+    return mockGateway.complete.mock.calls[0]![0].messages as AiMessage[]
+  }
+
+  it('asks the same single-shot question as ever when there are none', async () => {
+    expect(await sentTo([])).toEqual([
+      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'user', content: buildPrompt('Is that over my ceiling?', {}) },
+    ])
+  })
+
+  it('carries each remembered turn as two messages, after the prompt and before the question', async () => {
+    expect(await sentTo()).toEqual([
+      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'user', content: 'What do I hold?' },
+      { role: 'assistant', content: 'Rio Tinto, then Serabi Gold.' },
+      { role: 'user', content: 'And the second one?' },
+      { role: 'assistant', content: 'Serabi Gold is 8.4% of your portfolio.' },
+      { role: 'user', content: buildPrompt('Is that over my ceiling?', {}) },
+    ])
+  })
+
+  /**
+   * **The marking, and it is the provider's own vocabulary rather than one this app invented.**
+   * A prefix inside the text would be a weaker version of the same claim, in a channel the model may
+   * or may not weigh — and it would put app-authored text inside a message attributed to the model,
+   * which is the confusion this decision exists to prevent, inverted.
+   */
+  it('attributes every remembered answer to the model, and nothing else', async () => {
+    const messages = await sentTo()
+    const authored = messages.filter((message) => message.role === 'assistant')
+
+    expect(authored.map((message) => message.content)).toEqual(history.map((one) => one.answer))
+    for (const answer of history) {
+      const carrying = messages.filter((message) => message.content === answer.answer)
+      expect(carrying).toHaveLength(1)
+      expect(carrying[0]!.role).toBe('assistant')
+    }
+  })
+
+  /**
+   * **The decision with teeth** (DDR-0113, decision 2). The reports that produced the figures in a
+   * remembered answer are gone from the array, so a figure survives into the next turn only inside a
+   * sentence attributed to the model, with nothing standing behind it. A model that needs it as a
+   * *fact* has to ask for the report again — which is cheap, and always current.
+   */
+  it('carries no tool result and no tool call across a turn', async () => {
+    const messages = await sentTo()
+
+    expect(messages.some((message) => message.role === 'tool')).toBe(false)
+    expect(messages.some((message) => message.toolCalls !== undefined)).toBe(false)
+  })
+
+  /**
+   * **The grounding appears once.** Three copies of the absences would put the model in the position
+   * of deciding which is current, which is the opposite of what DDR-0101 put them first for.
+   */
+  it('wraps only the question being asked in the grounding block', async () => {
+    const messages = await sentTo()
+    const grounded = messages.filter((message) => message.content.includes(BASE_CONTEXT_HEADING))
+
+    expect(grounded).toHaveLength(1)
+    expect(grounded[0]).toBe(messages[messages.length - 1])
+    for (const disclosure of ABSENCE_DISCLOSURES) {
+      expect(messages.filter((message) => message.content.includes(disclosure.text))).toHaveLength(1)
+    }
+  })
+
+  it('sends a remembered question as the owner typed it, with no heading of its own', async () => {
+    const messages = await sentTo()
+
+    expect(messages[1]!.content).toBe('What do I hold?')
+    expect(messages[1]!.content).not.toContain('## Question')
+  })
+
+  it('still declares the tools, since a follow-up needs a report as much as a first question does', async () => {
+    await assistantService.ask('Is that over my ceiling?', {}, 'EUR', history)
+
+    expect(mockGateway.complete.mock.calls[0]![0].tools).toEqual(assistantToolDefinitions())
   })
 })
 

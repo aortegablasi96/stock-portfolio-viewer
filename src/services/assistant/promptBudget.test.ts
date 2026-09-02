@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { SYSTEM_PROMPT, buildPrompt } from './assistantService'
+import { SYSTEM_PROMPT, buildPrompt, historyMessages } from './assistantService'
+import {
+  MAX_HISTORY_CHARS,
+  MAX_REMEMBERED_TURNS,
+  trimHistory,
+} from '@shared/domain/assistantHistory'
 import { assistantToolDefinitions } from './assistantTools'
 import {
   MAX_LISTED_CANDIDATES,
@@ -550,6 +555,32 @@ const firstRound = (): AiMessage[] => [
 ]
 
 /**
+ * A history at **both** its caps, which is what Story #320 adds to every row below (DDR-0113).
+ *
+ * `MAX_REMEMBERED_TURNS` turns is the count; `MAX_HISTORY_CHARS` is what they may cost, and this
+ * fixture spends the budget to the character. That is deliberately not a shape a real conversation
+ * takes — a typical exchange here is a ~150-character question and a ~1,500-character answer, so
+ * three real turns is nearer 5,000 — but the whole point of this file is the worst case the caps
+ * allow rather than the case anyone meets.
+ *
+ * It is built through `trimHistory`, not around it: a fixture that hand-rolled the cap would measure
+ * the fixture, and if the trim ever stopped honouring the budget this would keep passing.
+ */
+const FULL_HISTORY = trimHistory(
+  Array.from({ length: MAX_REMEMBERED_TURNS }, (_, index) => ({
+    question: `Follow-up ${index}: `.padEnd(200, 'q'),
+    answer: 'a'.repeat(Math.floor(MAX_HISTORY_CHARS / MAX_REMEMBERED_TURNS) - 200),
+  })),
+)
+
+/** The same first round, asked as a follow-up in a conversation that is already at its cap. */
+const firstRoundRemembering = (): AiMessage[] => [
+  { role: 'system', content: SYSTEM_PROMPT },
+  ...historyMessages(FULL_HISTORY),
+  { role: 'user', content: buildPrompt(QUESTION, buildAssistantContext()) },
+]
+
+/**
  * The worst round a tool loop can produce: **every** report, in one round, at every cap.
  *
  * A real question calls one or two tools. This calls all eight in a single round — which is a shape
@@ -745,6 +776,11 @@ describe('the conversation after the model has asked for reports', () => {
    * rather than on the ceiling. What the ceiling still rations is a model asking for the *same*
    * report twice, which is the runaway rather than a question.
    */
+  it.each(CASES)('fits inside the ceiling with every report and a full history: %s', (_case, reports) => {
+    const messages = afterOneToolRound(reports)
+    expect(size([...historyMessages(FULL_HISTORY), ...messages])).toBeLessThan(MAX_PROMPT_CHARS)
+  })
+
   it.each(CASES)('fits however the reports are spread over the rounds: %s', (_case, reports) => {
     const answers = toolAnswers(reports)
     expect(answers).toHaveLength(TOOL_CALLS.length)
@@ -851,3 +887,70 @@ describe('the conversation after the model has asked for reports', () => {
   })
 })
 
+/**
+ * **What memory costs, measured against the ceiling it spends from** (Story #320, DDR-0113).
+ *
+ * A conversation that remembers its own turns sends more on every question, and the story's binding
+ * criterion is that the worst case **with a full history at the cap** still clears DDR-0103's 85%
+ * gate. So every row above is measured again with {@link FULL_HISTORY} under it — the count at
+ * `MAX_REMEMBERED_TURNS` and the characters at `MAX_HISTORY_CHARS`, which is a shape no real
+ * conversation reaches.
+ *
+ * The two caps were chosen against these numbers rather than against taste. Before the story the
+ * multi-part question stood at 61.8% of 60,000, leaving 13,918 characters under the gate, and the
+ * exhaustive round at 79.6% left 12,225 under the ceiling itself. 8,000 fits inside the smaller of
+ * those with room to spare, which is the property DDR-0103 exists to defend: a history that fits
+ * only just is one the next story breaks.
+ */
+describe('a conversation that remembers itself', () => {
+  it('spends what the caps say it may, and no more', () => {
+    const cost = size(historyMessages(FULL_HISTORY))
+
+    expect(FULL_HISTORY).toHaveLength(MAX_REMEMBERED_TURNS)
+    expect(cost).toBeLessThanOrEqual(MAX_HISTORY_CHARS)
+    // Worth stating as a share: what it takes is what the reports no longer have.
+    expect(cost / MAX_PROMPT_CHARS).toBeLessThan(0.14)
+  })
+
+  it('leaves the first round far inside the ceiling', () => {
+    expect(size(firstRoundRemembering())).toBeLessThan(MAX_PROMPT_CHARS * 0.25)
+  })
+
+  /**
+   * The row that matters day to day: one report answers most questions and two answer nearly all of
+   * them, asked as a follow-up in a conversation already at its cap.
+   */
+  it.each(CASES)('leaves the gate intact for the largest single report: %s', (_case, reports) => {
+    const largest = Math.max(...toolAnswers(reports).map((answer) => answer.length))
+
+    expect(size(firstRoundRemembering()) + largest).toBeLessThan(MAX_PROMPT_CHARS * 0.85)
+  })
+
+  /**
+   * **The row DDR-0112 says decides the ceiling, asked as a follow-up.** *How did I do, what do I
+   * hold, what does it pay me, am I balanced* — six reports over a few rounds, on top of three
+   * remembered turns. This is the assertion the two caps were sized against.
+   */
+  it.each(CASES)('leaves the gate intact for a real multi-part question: %s', (_case, reports) => {
+    const sixLargest = [...toolAnswers(reports)]
+      .sort((a, b) => b.length - a.length)
+      .slice(0, 6)
+      .reduce((total, answer) => total + answer.length, 0)
+
+    expect(size(firstRoundRemembering()) + sixLargest).toBeLessThan(MAX_PROMPT_CHARS * 0.85)
+  })
+
+  /**
+   * The grounding block is emitted **once** however long the conversation is, which is the property
+   * that keeps memory linear in the turns rather than in the turns times the absences (DDR-0113,
+   * decision 3). Measured rather than asserted structurally: a remembered turn that carried its own
+   * `buildPrompt` would show up here as a multiple of the base context, not as a failing shape.
+   */
+  it('does not restate the grounding once per remembered turn', () => {
+    const grounding = size(firstRound()) - QUESTION.length
+    const remembered = size(firstRoundRemembering())
+
+    expect(remembered - size(firstRound())).toBeLessThanOrEqual(MAX_HISTORY_CHARS)
+    expect(remembered).toBeLessThan(size(firstRound()) + MAX_REMEMBERED_TURNS * grounding)
+  })
+})

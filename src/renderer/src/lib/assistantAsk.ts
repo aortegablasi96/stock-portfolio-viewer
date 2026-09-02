@@ -221,9 +221,16 @@ export function isStale(turn: Turn, version: number): boolean {
   return turn.groundedAt < version
 }
 
-/** What a stale turn says about itself, beside the answer rather than instead of it. */
+/**
+ * What a stale turn says about itself, beside the answer rather than instead of it.
+ *
+ * The second sentence arrived with Story #320 (DDR-0113). Once the conversation is remembered, a
+ * stale turn is **dropped from what the model is sent** — it is not a record any more but an
+ * assertion made again, to a model that cannot see this note. That is a rule the owner should be
+ * told rather than left to infer from a follow-up that no longer resolves.
+ */
 export const STALE_NOTE =
-  'Your imported history changed after this answer, so the figures in it are no longer current. Ask again for an answer grounded in what is there now.'
+  'Your imported history changed after this answer, so the figures in it are no longer current. The assistant no longer remembers this turn. Ask again for an answer grounded in what is there now.'
 
 /** The note under an answer the model was cut off in the middle of. */
 export const TRUNCATED_NOTE = 'The answer reached its length limit and stops mid-thought.'
