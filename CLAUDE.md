@@ -143,6 +143,18 @@ Each exists end-to-end and is the reference pattern for its shape.
   has **no context half** (DDR-0104). Cause, risk statistic and benchmark are **conditional**
   on the absence blocks; each is bound to its sentence by test, so trimming one fails rather than
   unbinding a rule in silence. **A forecast is the model's only where the app computed one.**
+  **An answer is rendered, never quoted** (DDR-0114): `lib/assistantMarkdown.ts` parses it to
+  blocks and `AssistantAnswer.tsx` switches over them — every markdown library emits **HTML**, so
+  `dangerouslySetInnerHTML` is guarded across **all of `src/`**, and a block kind with no `case`
+  renders as nothing. **Nothing is dropped**: an unterminated marker is its own characters, a short
+  table row is padded and a long one's surplus **folded into the last cell**, a bare `#` is a
+  paragraph. Marks are a **set**, not an inline tree; emphasis opens on neither a following space
+  (`5 * 3` is arithmetic) nor mid-word, and the closer tracks **what the opener left behind**.
+  `.assistant-answer code` **joins the figure role** (a second `--font-figure` rule throws) and its
+  chip sits on `--bg`, never `--surface-raised`'s three counted adopters. A `#` starts at **`h3`**
+  and the type step falls between **`h4`/`h5`**, because the prompt's own register is `##`/`###`.
+  The alignment classes are **scoped** or `.assistant-answer th` out-specifies them. What the next
+  turn remembers is the **raw** string (DDR-0113): formatting is a render concern.
 - **classification** — sector/industry. `classificationRepository` fronts *both* the mutable
   SQLite cache and `ibkrGateway`; `analytics:classifyInstruments` is the only analytics channel
   reaching IBKR. Refreshes are **resumable, not transactional** — a run that dies at 30 of 40 keeps

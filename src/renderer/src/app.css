@@ -399,8 +399,15 @@ body {
 
    The four SVG selectors are here for the family and the tracking only. Both are relative — a
    `viewBox` unit is still a `viewBox` unit — so DDR-0018 is intact: no chart label acquires a page
-   type step, and `lib/figureRole.test.ts` fails if one does. */
+   type step, and `lib/figureRole.test.ts` fails if one does.
+
+   Story #321 adds the thirteenth, and it is the first that is not the app's own figure:
+   `.assistant-answer code` is what the *model* put in backticks, which in this app is a ticker, a
+   currency code or a figure. It joins the list rather than declaring `--font-figure` beside it,
+   because a second rule applying the family is exactly what `figureRole.ts` throws on (DDR-0053,
+   DDR-0114). The prose around it stays out of the role, unchanged. */
 .stat-value,
+.assistant-answer code,
 .data-table .data-table-num,
 .snapshot-value,
 .highlight-value,
@@ -4266,18 +4273,190 @@ html {
   white-space: pre-wrap;
 }
 
-/* The answer. `pre-wrap` because the model writes in paragraphs and lists, and
-   collapsing its newlines turns a structured answer into one block of text.
-   Deliberately NOT in the figure role: a figure quoted inside prose is prose,
-   and a second rule applying `--font-figure` is what `figureRole.ts` throws on
-   (DDR-0053). */
+/* The answer, rendered rather than quoted (Story #321, DDR-0114).
+
+   It was one `pre-wrap` paragraph, which kept the model's layout and printed
+   its syntax — the `**`, the `## `, the pipes. It is a tree now, and the rules
+   below are the whole of what the tree looks like.
+
+   `pre-wrap` **stays**, and now means one thing rather than two: inside a
+   block, a newline the model wrote is a line break the reader sees. Between
+   blocks it has nothing left to do, because the parser consumed those newlines
+   into structure. A code block overrides it to `pre` — a listing does not
+   re-wrap, it scrolls.
+
+   The prose is still deliberately NOT in the figure role: a figure quoted
+   inside a sentence is prose. What *is* in the role is `code`, one selector
+   further down — see the note there.
+
+   Spacing is the column's `gap` and nothing else. Every block below zeroes its
+   own margin, so there is one number to change and no margin collapsing to
+   reason about. */
 .assistant-answer {
-  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
   max-width: 68ch;
   font-size: var(--text-sm);
   line-height: var(--leading-normal);
   color: var(--text);
   white-space: pre-wrap;
+}
+
+.assistant-answer p,
+.assistant-answer h3,
+.assistant-answer h4,
+.assistant-answer h5,
+.assistant-answer h6,
+.assistant-answer ul,
+.assistant-answer ol,
+.assistant-answer pre,
+.assistant-answer table,
+.assistant-answer blockquote {
+  margin: 0;
+}
+
+/* A model-authored heading is a heading *inside a card*: the view's own is the
+   `<h1>` and the card's title is the `<h2>`, so the component starts these at
+   `h3` and steps down.
+
+   Two sizes cover four levels, and where the line falls is decided by what the
+   model actually writes. `SYSTEM_PROMPT_SECTIONS` is written in `##` and `###`
+   (DDR-0110) and the answers mirror that register, so those two — arriving here
+   as `h4` and `h5` — are the pair that has to be told apart. Putting the step
+   between `h3` and `h4` instead would render the app's most common heading at
+   body size, which is a section title nobody sees. */
+.assistant-answer h3,
+.assistant-answer h4 {
+  font-size: var(--text-md);
+  line-height: var(--leading-tight);
+  font-weight: 600;
+}
+
+.assistant-answer h5,
+.assistant-answer h6 {
+  font-size: var(--text-sm);
+  line-height: var(--leading-tight);
+  font-weight: 600;
+}
+
+/* A heading opens a section, so it sits closer to what follows it than to what
+   came before — the one place the uniform column gap is not enough. */
+.assistant-answer h3:not(:first-child),
+.assistant-answer h4:not(:first-child),
+.assistant-answer h5:not(:first-child),
+.assistant-answer h6:not(:first-child) {
+  margin-top: var(--space-3);
+}
+
+/* Lists keep the browser's own markers and its `list-item` layout. A flex
+   column here would be tidier to write and would blockify the items, which is
+   how a bullet list quietly loses its bullets. */
+.assistant-answer ul,
+.assistant-answer ol {
+  padding-left: var(--space-6);
+}
+
+.assistant-answer li + li,
+.assistant-answer li > ul,
+.assistant-answer li > ol {
+  margin-top: var(--space-3);
+}
+
+/* The same device the question above it wears, one step in: a rule down the
+   leading edge, never a surface. */
+.assistant-answer blockquote {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding-left: var(--space-5);
+  border-left: 2px solid var(--border);
+  color: var(--muted);
+}
+
+.assistant-answer hr {
+  margin: 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+}
+
+/* Inline code is a chip; the same `code` inside a listing is not, so the block
+   takes the box back off it. Both are in the figure role for their family —
+   what an assistant puts in backticks is a ticker, a currency or a figure, and
+   the role's `tabular-nums` and tracking are what those want. The role
+   declares no size, so the step down to `--text-xs` is here: JetBrains Mono
+   runs larger than Inter at one size, and a chip should not outweigh the
+   sentence around it. */
+.assistant-answer code {
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  font-size: var(--text-xs);
+}
+
+.assistant-answer pre code {
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: inherit;
+}
+
+.assistant-code {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.assistant-code-language {
+  font-size: var(--text-2xs);
+  color: var(--muted);
+}
+
+.assistant-answer pre {
+  overflow-x: auto;
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  font-size: var(--text-xs);
+  white-space: pre;
+}
+
+/* The scroller is the wrapper, never the table: a wide grid must not widen the
+   card it sits in, and a `<table>` cannot scroll itself. */
+.assistant-table {
+  overflow-x: auto;
+}
+
+.assistant-answer table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.assistant-answer th,
+.assistant-answer td {
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.assistant-answer th {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+/* Scoped, and that is load-bearing: `.assistant-answer th` is a class and a
+   type, so an unscoped `.assistant-cell-right` loses to it and every alignment
+   the model declared reads as left. DDR-0039 records the same trap on the
+   linked row's lift. */
+.assistant-answer .assistant-cell-center {
+  text-align: center;
+}
+
+.assistant-answer .assistant-cell-right {
+  text-align: right;
 }
 
 /* A fact about the answer rather than part of it: that it was cut off, or that
