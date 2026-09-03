@@ -132,6 +132,31 @@ export function formatUpdatedAt(
   return `${new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short' }).format(at)}, ${time}`
 }
 
+/**
+ * Format a clock time alone — no date — for the marking above a chat bubble (Story #344,
+ * DDR-0115 decision 7).
+ *
+ * It is **here** rather than in the component that draws it for this module's whole reason: the
+ * design writes `toLocaleTimeString("en-GB", …)` inline, and a formatter at a call site is a
+ * locale this app has not declared. Passing `undefined` resolves the *host's* default, which two
+ * processes resolve differently and in silence (DDR-0111) — so the time beside a question is
+ * written by the same rule as every figure in it.
+ *
+ * Two-digit on both fields, which is the design's own option set and what gives `17:31` rather
+ * than `5:31 pm`. The design's demo literals show `5:31 PM`; its `sendMessage` formats `en-GB`
+ * two-digit, so the literals are the stale half and the code is the specification.
+ *
+ * A **clock time only**, deliberately: the transcript is session state and cannot outlive the
+ * window, so there is no day boundary for it to cross and nothing for {@link formatUpdatedAt}'s
+ * date fallback to answer. It is not a figure either — it names *when*, and nothing above it is a
+ * quantity to line up with — so it stays out of the figure role (DDR-0053).
+ */
+export function formatTimeOfDay(epochMs: number, locale = APP_LOCALE): string {
+  return new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit' }).format(
+    new Date(epochMs),
+  )
+}
+
 /** Format a plain date (epoch milliseconds, UTC) — no time — for Flex statement ranges. */
 export function formatDate(epochMs: number, locale = APP_LOCALE): string {
   return new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(epochMs))

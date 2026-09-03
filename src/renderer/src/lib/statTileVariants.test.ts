@@ -171,7 +171,15 @@ describe('the stylesheet backs every declared part and tone', () => {
    * that fails if the second tracking #187 already declined is ever pasted back in.
    */
   it('sets the label as the app-wide micro-label, and the table head to match', () => {
-    for (const selector of ['.stat-label', '.data-table thead th', '.app-nav-label']) {
+    // Story #344 adds the fourth: the transcript's `WHO · TIME` marking. The design draws it at
+    // 10px/700 and it ships as the app's existing 11.5px/600 — the register is the same, and the
+    // rule this test exists for is that there is one micro-label rather than one per surface.
+    for (const selector of [
+      '.stat-label',
+      '.data-table thead th',
+      '.app-nav-label',
+      '.assistant-turn-role',
+    ]) {
       const body = ruleBody(selector)
       expect(body, selector).toContain('font-size: var(--text-2xs)')
       expect(body, selector).toContain('letter-spacing: 0.06em')

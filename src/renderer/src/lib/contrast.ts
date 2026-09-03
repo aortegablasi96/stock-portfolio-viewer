@@ -348,11 +348,17 @@ export const PAIRINGS: readonly Pairing[] = [
     reason: 'The counterpart of the on-card pairing; the page ground is the darker of the two.',
   },
   {
-    where: 'muted labels on the page ground — tab labels, the nav strip, page hints',
+    where:
+      'muted labels on the page ground — tab labels, the nav strip, page hints, and the ' +
+      'transcript’s WHO · TIME markings',
     foreground: { token: '--muted' },
     background: { token: '--bg' },
     minimum: AA_NORMAL,
-    reason: 'An inactive tab label is --muted on the translucent nav over --bg.',
+    reason:
+      'An inactive tab label is --muted on the translucent nav over --bg. Story #344 widens the ' +
+      'reach rather than adding an entry beside it: a chat bubble’s role label is the same ink on ' +
+      'the same ground, so a copy would measure identical arithmetic under a second name and ' +
+      'could never fail on its own (the argument the Trades side badge is named under, below).',
   },
   {
     where: '--accent as text — the active tab, a sorted header, an active toggle, an accent badge',
@@ -673,6 +679,45 @@ export const PAIRINGS: readonly Pairing[] = [
     reason:
       'The fill half of the loss split as a graphic: 3.94:1, which clears 1.4.11 and would not ' +
       'clear AA as text. Unmeasured since the daily-return bars shipped in Story #170.',
+  },
+  /**
+   * The two pairings Story #344 added: the Assistant's two chat bubbles (DDR-0115 decision 7).
+   *
+   * The owner's bubble is the one worth reading twice. The design fills it with its own
+   * `--accent` (#6366f1) and puts white on it; this app's `--accent` is a *different colour for a
+   * different job* — #818cf8, chosen because seven of its call sites are a `color` and the
+   * proposal's indigo failed AA as text (DDR-0054). White on this app's `--accent` is **4.47:1**,
+   * which is below AA and is precisely why `--accent-strong` exists. So the bubble takes the fill
+   * half of the split, exactly as a loss mark takes `--neg` and a loss figure takes `--neg-text`
+   * (DDR-0046) — and picking the wrong half here would have been silent, because a bubble filled
+   * with the text token looks perfectly deliberate.
+   *
+   * It is listed separately from `.btn-primary`'s two entries although the arithmetic is the same
+   * at rest, for the reason the display-currency field is listed separately from the gateway chip:
+   * it is a different rule, and deleting the button must not take the bubble's measurement with
+   * it. The button's *hover* entry has no counterpart here — a bubble is not a control and
+   * lightens under nothing.
+   */
+  {
+    where: '.assistant-bubble-you — the owner’s question, white on the filled accent',
+    foreground: { literal: '#ffffff' },
+    background: { token: '--accent-strong' },
+    minimum: AA_NORMAL,
+    reason:
+      'The design fills this with an indigo this app declined as --accent because it is a text ' +
+      'token: white on --accent is 4.47:1. The fill half of the split is 6.29:1 and is what ships.',
+  },
+  {
+    where: '.assistant-bubble-model’s border — the answer’s edge against the transcript’s ground',
+    foreground: { token: '--border' },
+    background: { token: '--bg' },
+    minimum: SURFACE_EDGE,
+    reason:
+      'A card-surfaced bubble on the page ground, which is a boundary --border has never been ' +
+      'measured against: every card in the app is measured the other way round, --border on ' +
+      '--card (1.25:1). This is the lighter pairing at 1.32:1, and it is the one a bubble rests ' +
+      'on — the fill step from --card to --bg is 1.06:1, so the edge is what says a bubble is ' +
+      'a box rather than a paragraph.',
   },
   {
     where: '.chart-axis-label — SVG <text> on a chart card',

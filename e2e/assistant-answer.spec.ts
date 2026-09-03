@@ -122,6 +122,22 @@ test.beforeAll(async () => {
   await expect(view().locator('.assistant-thinking')).toHaveCount(0)
 })
 
+/**
+ * The ground the answer renders on moved (Story #344, DDR-0115 decision 7): it was the page's own
+ * background, and it is the model's bubble now. That is a cascade, so it is proved here rather
+ * than by a text scan — and it is what every ink inside the answer is measured against in
+ * `contrast.ts`, including the code chip's own recessed well.
+ */
+test('the answer renders inside the model’s bubble, on the card surface', async () => {
+  const bubble = view().locator('.assistant-bubble-model').first()
+
+  await expect(bubble.locator('.assistant-answer')).toHaveCount(1)
+  await expect(bubble).toHaveCSS('background-color', 'rgb(15, 19, 32)')
+  // The asymmetric corner points at the speaker: flat top-left, `--radius-lg` on the other three.
+  await expect(bubble).toHaveCSS('border-top-left-radius', '2px')
+  await expect(bubble).toHaveCSS('border-bottom-right-radius', '12px')
+})
+
 test('no marker character survives where it was markup', async () => {
   const text = (await answer().innerText()).trim()
 

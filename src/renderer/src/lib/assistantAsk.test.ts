@@ -335,6 +335,8 @@ describe('isStale', () => {
     id: 1,
     question: 'q',
     groundedAt,
+    askedAt: 0,
+    answeredAt: 0,
     answer: { kind: 'answered', text: 'a', truncated: false },
   })
 

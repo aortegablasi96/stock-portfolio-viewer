@@ -17,6 +17,7 @@ import {
   formatSignedCurrency,
   formatSignedPercent,
   formatSignedPoints,
+  formatTimeOfDay,
   formatUpdatedAt,
   holdingName,
   instrumentName,
@@ -339,6 +340,36 @@ describe('holdingName', () => {
   /** An imported name that is itself just the ticker — a bare currency row — is no better. */
   it('rejects an imported name that repeats the symbol too', () => {
     expect(holdingName('CAD', 'CAD', 'CAD')).toBeNull()
+  })
+})
+
+describe('formatTimeOfDay', () => {
+  /**
+   * Local-time constructors rather than `Date.UTC`, because the assertion is about the *locale*
+   * and not about the host's zone: `new Date(…, 17, 31)` is 17:31 wherever it runs, so a machine
+   * outside UTC cannot make this pass or fail for the wrong reason.
+   */
+  it('writes a 24-hour clock time, two digits on both fields', () => {
+    expect(formatTimeOfDay(new Date(2026, 8, 3, 17, 31).getTime())).toBe('17:31')
+  })
+
+  it('pads the hour, which is the half a one-digit clock would lose', () => {
+    expect(formatTimeOfDay(new Date(2026, 8, 3, 9, 4).getTime())).toBe('09:04')
+  })
+
+  it('names no date, because a transcript cannot outlive the window it is in', () => {
+    const out = formatTimeOfDay(new Date(2026, 8, 3, 17, 31).getTime())
+
+    expect(out).not.toMatch(/sep/i)
+    expect(out).not.toMatch(/2026/)
+  })
+
+  /** The declared locale, not the host's — the property DDR-0111 exists for. */
+  it('takes the locale as an argument, defaulting to the one the app declares', () => {
+    const at = new Date(2026, 8, 3, 17, 31).getTime()
+
+    expect(formatTimeOfDay(at, APP_LOCALE)).toBe(formatTimeOfDay(at))
+    expect(formatTimeOfDay(at, 'en-US')).not.toBe(formatTimeOfDay(at))
   })
 })
 
