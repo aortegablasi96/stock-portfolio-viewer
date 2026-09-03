@@ -232,3 +232,33 @@ test('offers nothing to clear once the conversation is one turn old again', asyn
   await expect(view().locator('.assistant-turn')).toHaveCount(0)
   await expect(view().getByRole('button', { name: 'New conversation' })).toHaveCount(0)
 })
+
+/**
+ * **Enter sends** (Story #345), and this is the only suite that can prove it: pressing Enter asks a
+ * real question, so it needs the local stub listening on `127.0.0.1`. `assistant-ask.spec.ts` owns
+ * the two branches that send nothing — Shift+Enter, and Enter on a blank box — because its own
+ * premise is that no question ever leaves it.
+ *
+ * The assertion is on the **wire**, not the screen: the key press goes through the form's
+ * `onSubmit`, so what arrives is a question shaped exactly like the button's, in a conversation
+ * the New conversation control has just emptied.
+ */
+test('Enter sends the question, through the same path the button uses', async () => {
+  sent = []
+  replies = ['Answered from a keystroke.']
+
+  await questionBox().fill('Does Enter send this?')
+  await questionBox().press('Enter')
+  await expect(view().locator('.assistant-thinking')).toHaveCount(0)
+
+  expect(sent).toHaveLength(1)
+  const turns = conversation(0)
+  expect(turns).toHaveLength(1)
+  expect(turns[0]!.role).toBe('user')
+  expect(turns[0]!.content).toContain('Does Enter send this?')
+
+  // And the newline the key would otherwise have inserted is not in the box or the question —
+  // `preventDefault` is load-bearing, and its absence would show up as both.
+  await expect(questionBox()).toHaveValue('')
+  expect(turns[0]!.content).not.toContain('Does Enter send this?\n')
+})

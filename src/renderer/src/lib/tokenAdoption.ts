@@ -58,6 +58,13 @@
  * with the selector list. Still eight, and the count stays a fact about the list rather than a
  * target: a key carries the whole selector context, so a rule that quietly gains a member fails
  * here until someone comes and looks at it.
+ *
+ * **Story #345 widened a second, the same way and for the same reason.** The Assistant's composer
+ * draws no visible label — the design lets the placeholder name the box — so `Field`'s label is
+ * clipped rather than dropped, and it joined `.sr-only`'s own rule instead of copying its nine
+ * declarations. The `-1px` entry's key moved with that selector list. **Still nine**, and the
+ * mechanism is the point: the widening was invisible on screen and this list is what sent someone
+ * to look at it (DDR-0115 keeps the list itself free of new entries).
  */
 import { scanDeclarations, type CssDeclaration } from './cssDeclarations'
 
@@ -200,9 +207,10 @@ export interface ExemptEntry extends GuardEntry {
  */
 export const EXEMPTIONS: readonly ExemptEntry[] = [
   {
-    key: '.sr-only | margin',
+    key: '.sr-only, .assistant-ask-field > .field-label | margin',
     value: '-1px',
-    reason: 'The visually-hidden clip pattern: -1px pairs with the 1px box, and is not spacing.',
+    reason:
+      'The visually-hidden clip pattern: -1px pairs with the 1px box, and is not spacing. The key gained a second selector in Story #345, when the composer’s label was clipped rather than dropped — see the module note on Story #188, which is the precedent for widening a key rather than adding an entry.',
   },
   {
     key: '.chart-axis-label | font-size',

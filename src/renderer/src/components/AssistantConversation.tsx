@@ -19,6 +19,12 @@ import {
   rememberedTurns,
 } from '../lib/assistantHistory'
 import {
+  COMPOSER_PLACEHOLDER,
+  sendsOnEnter,
+  SUGGESTIONS_LABEL,
+  THINKING_NOTE,
+} from '../lib/assistantComposer'
+import {
   blockClassName,
   bubbleClassName,
   EMPTY_TRANSCRIPT_DETAIL,
@@ -320,28 +326,71 @@ export function AssistantConversation({
               void ask()
             }}
           >
-            {/* No period control, deliberately (DDR-0102). A question names its own period, and a
-                picker beside it asks for the same fact twice in two vocabularies — one typed, one
-                clicked — with the click silently winning whenever they disagree. */}
-            <Field label="Your question">
-              {(id) => (
-                <textarea
-                  id={id}
-                  className={controlClassName('prose')}
-                  value={question}
-                  rows={3}
-                  disabled={pending}
-                  placeholder="What is my largest position, and how does it sit against my profile?"
-                  onChange={(event) => setQuestion(event.target.value)}
-                />
-              )}
-            </Field>
+            {/* The box and the two square controls, on one row (Story #345). No period control,
+                deliberately (DDR-0102): a question names its own period, and a picker beside it
+                asks for the same fact twice in two vocabularies — one typed, one clicked — with
+                the click silently winning whenever they disagree. */}
+            <div className="assistant-ask-row">
+              {/* The label is `Field`'s, kept and clipped rather than dropped. The design draws
+                  none and lets the placeholder name the box, which is a *visible* naming and not
+                  an accessible one — so the label joins `.sr-only`'s own rule (Story #343 made the
+                  same move for the eyebrow) and `Field` still owns the id through `useId()`, which
+                  is the half DDR-0035 exists for. */}
+              <Field label="Your question" className="assistant-ask-field">
+                {(id) => (
+                  <textarea
+                    id={id}
+                    className={controlClassName('prose')}
+                    value={question}
+                    rows={3}
+                    disabled={pending}
+                    placeholder={COMPOSER_PLACEHOLDER}
+                    onChange={(event) => setQuestion(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (!sendsOnEnter(event.nativeEvent)) return
+                      // Through the form's own submit, never straight to `ask()`: the button and
+                      // the key press must be one path with one set of guards, or a later story
+                      // adding a check to one leaves the other behind. `preventDefault` is
+                      // load-bearing — without it the newline lands as well as the question.
+                      event.preventDefault()
+                      event.currentTarget.form?.requestSubmit()
+                    }}
+                  />
+                )}
+              </Field>
+
+              {/* Stacked to the right of the box, at the design's 44px square. Both are named:
+                  `size="icon"` is a shape, not an exemption from having a name (DDR-0032), and
+                  neither declares a focus ring — the `:where()` base rings them (DDR-0026). */}
+              <div className="assistant-composer-actions">
+                <Button
+                  type="submit"
+                  variant="primary"
+                  aria-label={askLabel(pending)}
+                  title={askLabel(pending)}
+                  disabled={pending || !isAskable(question)}
+                >
+                  <SendGlyph />
+                </Button>
+                {/* Inert until #348 gives it chips to open, and `disabled` is the honest form of
+                    that: the one state a control can be in that does not invite a click it will
+                    not answer. #348 removes the attribute and nothing else. */}
+                <Button
+                  variant="secondary"
+                  aria-label={SUGGESTIONS_LABEL}
+                  title={SUGGESTIONS_LABEL}
+                  disabled
+                >
+                  <SuggestionsGlyph />
+                </Button>
+              </div>
+            </div>
+
             <div className="assistant-ask-actions">
-              <Button type="submit" variant="primary" disabled={pending || !isAskable(question)}>
-                {askLabel(pending)}
-              </Button>
               {/* Only once there is a conversation to discard — a control that clears nothing
-                  says the transcript is a thing to manage before the owner has one (DDR-0113). */}
+                  says the transcript is a thing to manage before the owner has one (DDR-0113).
+                  #346 moves it into the chat header's chip row; until then it sits under the box
+                  rather than beside a send control that is now a 44px glyph. */}
               {turns.length > 0 && (
                 <ConfirmAction
                   label={NEW_CONVERSATION_LABEL}
@@ -356,6 +405,54 @@ export function AssistantConversation({
         )}
       </div>
     </>
+  )
+}
+
+/**
+ * The two composer glyphs, drawn as the design draws them
+ * (`figma_design/src/App.tsx:2436` and `2456`).
+ *
+ * `aria-hidden` and `focusable="false"` on both: the button beside them carries the name, and a
+ * glyph that joined the accessibility tree would say it twice. Sized in `em` rather than px, for
+ * the reason `.assistant-toggle-glyph` is — an icon picked in px is the one thing that would not
+ * move with the type scale (DDR-0048).
+ */
+function SendGlyph(): React.JSX.Element {
+  return (
+    <svg
+      className="assistant-composer-glyph"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <line x1="22" y1="2" x2="11" y2="13" />
+      <polygon points="22 2 15 22 11 13 2 9 22 2" />
+    </svg>
+  )
+}
+
+function SuggestionsGlyph(): React.JSX.Element {
+  return (
+    <svg
+      className="assistant-composer-glyph"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="10" />
+      <line x1="12" y1="8" x2="12" y2="16" />
+      <line x1="8" y1="12" x2="16" y2="12" />
+    </svg>
   )
 }
 
@@ -407,7 +504,19 @@ function TurnBody({ turn, version }: { turn: Turn; version: number }): React.JSX
         <p className="assistant-turn-role">{roleLabel('model', turn.answeredAt)}</p>
         <div className={bubbleClassName('model')}>
           {turn.answer.kind === 'thinking' && (
-            <p className="assistant-thinking">Asking the assistant…</p>
+            // In place of the answer on the turn just asked, never a banner outside the list:
+            // the `aria-live` region announces the turn's insertion and then its answer as two
+            // changes, and a separate element would collapse those into one (DDR-0107, #344).
+            // The dots are `aria-hidden` and the sentence beside them is what is announced —
+            // three pulsing circles say nothing without sight.
+            <p className="assistant-thinking">
+              <span className="sr-only">{THINKING_NOTE}</span>
+              <span className="assistant-thinking-dots" aria-hidden="true">
+                <span className="assistant-thinking-dot" />
+                <span className="assistant-thinking-dot" />
+                <span className="assistant-thinking-dot" />
+              </span>
+            </p>
           )}
           {turn.answer.kind === 'answered' && (
             <>

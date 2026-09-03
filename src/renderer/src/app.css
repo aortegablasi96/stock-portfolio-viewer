@@ -216,6 +216,13 @@
      speakers rather than as two paragraphs. */
   --assistant-bubble-corner: 2px;
   --assistant-bubble-max: 82%;
+  /* The composer's two controls (Story #345, DDR-0115 amendment 8). 44px is the square the
+     design draws them at — `.btn-icon` is 30.4px, a shape for a control tucked into a dense
+     row, and these stand beside a three-row box. 10px is the corner they and the box share,
+     and it is neither `--radius-md` (8px) nor `--radius-lg` (12px); named rather than snapped,
+     for the reason 420 and 48 above are. */
+  --assistant-composer-button: 44px;
+  --assistant-composer-radius: 10px;
   /* The Portfolio view's data-sources card (Story #266), the third of these and the successor
      to Story #189's `--rail-width: 260px`. The rail is gone — the holdings table takes the
      page — and the card it carried now sits beside Stored statements, so the measure is no
@@ -406,6 +413,15 @@
   .assistant-transcript.assistant-transcript {
     scroll-behavior: auto;
   }
+
+  /* The waiting dots (Story #345, DDR-0115 amendment 4). `animation: none` and **not** a zeroed
+     duration: a zero-duration animation holds the 0% keyframe, so the dots would settle at 0.3
+     opacity and 0.85 scale — frozen mid-pulse rather than at rest, which is three faint shrunken
+     circles a reader cannot tell from a rendering fault. With no animation the element's own
+     values apply. Doubled for the reason the two rules above are. */
+  .assistant-thinking-dot.assistant-thinking-dot {
+    animation: none;
+  }
 }
 
 /* The focus ring as a base rule rather than a class, so an interactive element
@@ -520,7 +536,17 @@ html {
    reversal: `.assistant-eyebrow` names the *view*, on the one view with no `PageHeader` to name
    it, so it is that view's `<h1>` rather than the app's name a fourth time (DDR-0115 amendment 1). */
 
-.sr-only {
+/* The visually-hidden clip, as **one rule listing its selectors** — the shape the figure role and
+   the motion scale both take, and for the same reason: these nine declarations only work as a set,
+   and a second copy of them is a second chance for one to drift.
+
+   The composer's label is the member that is not a class (Story #345). The design draws no label
+   over the question box and lets the placeholder name it, which is a *visible* naming and not an
+   accessible one — so `Field` keeps the label and the id it owns through `useId()` (DDR-0035) and
+   the text is clipped here. `Field` renders the label itself, so the call site cannot pass it a
+   class; joining this selector list is what avoids writing the clip out a second time. */
+.sr-only,
+.assistant-ask-field > .field-label {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -4463,13 +4489,22 @@ html {
 
 /* ---- Assistant: the question and what came back (M10, Story #284) --------- */
 
-/* The box and its action, stacked. A question is prose, so the control takes
-   the card's full width rather than sitting in a row beside its button — the
-   shape `.profile-target-key` uses for a term, one measure up (DDR-0098). */
+/* The box and whatever sits under it, stacked. A question is prose, so the
+   control takes the band's full width (DDR-0098). */
 .assistant-ask {
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
+}
+
+/* The design's own row: the box, and the two square controls beside it
+   (Story #345, `figma_design` App.tsx:2388). `flex-end` is what aligns the
+   button stack to the *bottom* of a box that is three rows tall and may be
+   dragged taller — the send control belongs beside the last line typed. */
+.assistant-ask-row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-4);
 }
 
 /* Placement, never restyling (DDR-0032's rule, applied to a `Field`). `.field`
@@ -4479,15 +4514,49 @@ html {
    and wraps it. Stacking is the only thing this changes: the label, its colour
    and the control's own box are all untouched.
 
-   The child combinator was load-bearing while #285's `RangeFilter` sat above the
-   box, bringing two `DateInput` fields that had to stay compact. DDR-0102 removed
-   that control, so the form now holds one `.field` and the combinator scopes
-   nothing it did not already scope. It stays because the rule means "the question
-   itself", not "every field under here" — and #287 may put a nested field back. */
-.assistant-ask > .field {
+   `min-width: 0` is the load-bearing half of `flex: 1`, exactly as on
+   `.assistant-chat`: without it the field's intrinsic width would push the two
+   buttons off the band rather than the box narrowing. */
+.assistant-ask-field {
+  flex: 1;
+  min-width: 0;
   flex-direction: column;
   align-items: stretch;
   gap: var(--space-3);
+}
+
+/* The corner is the design's 10px on the box as well as on the buttons, which
+   is one of the two measurements this story names. Scoped to this call site: it
+   is the composer's own shape, not a change to what `prose` means anywhere
+   (DDR-0035). `resize` stays `vertical` — see the note in `.control-prose`. */
+.assistant-ask-field .control-prose {
+  border-radius: var(--assistant-composer-radius);
+}
+
+/* The two square controls, stacked. The icon button's box is overridden rather
+   than parameterised, which is the shape `.titlebar-controls .btn` already
+   uses: 44px is this band's geometry and the primitive has no business knowing
+   it (DDR-0032). Colour, hover, `:disabled` and the focus ring are all still
+   the shared rules' — nothing here touches them. */
+.assistant-composer-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  flex-shrink: 0;
+}
+
+.assistant-composer-actions .btn {
+  inline-size: var(--assistant-composer-button);
+  block-size: var(--assistant-composer-button);
+  border-radius: var(--assistant-composer-radius);
+}
+
+/* Sized off the button's own type step rather than in px, for the reason
+   `.assistant-toggle-glyph` is: an icon picked in px is the one thing that
+   would not move with the type scale (DDR-0048). */
+.assistant-composer-glyph {
+  width: 1em;
+  height: 1em;
 }
 
 .assistant-ask-actions {
@@ -4849,34 +4918,69 @@ html {
   color: var(--muted);
 }
 
-/* The wait, made perceivable without watching for a reader who can see. The
-   announcement is the live region's job; this is its counterpart on screen. */
+/* The wait, made perceivable without watching for a reader who can see
+   (Story #345, `figma_design` App.tsx:2299). It was one dot and the words
+   "Asking the assistant…"; it is three pulsing dots now, and the sentence moved
+   into `.sr-only` beside them — the announcement is the live region's job and
+   three circles say nothing without sight. It replaces the answer *in place*,
+   inside the model's own bubble, so the region still announces the wait and the
+   answer as two changes rather than one (DDR-0107, Story #344). */
 .assistant-thinking {
   display: flex;
   align-items: center;
-  gap: var(--space-4);
   margin: 0;
-  font-size: var(--text-sm);
-  color: var(--muted);
 }
 
-.assistant-thinking::before {
-  content: '';
-  inline-size: 8px;
-  block-size: 8px;
+.assistant-thinking-dots {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* 6px is `--space-2`, so the dot draws from the scale even though the timing
+   below cannot. `--accent` is a *mark* here rather than a label, and it renders
+   on the model's bubble — `contrast.ts` measures it there. */
+.assistant-thinking-dot {
+  inline-size: var(--space-2);
+  block-size: var(--space-2);
   border-radius: var(--radius-pill);
   background: var(--accent);
-  animation: assistant-thinking-pulse var(--duration-base) var(--ease-out) infinite alternate;
+  animation: assistant-thinking-pulse 1.2s ease-in-out infinite;
 }
 
-/* One of the app's five animations, and inside the reduced-motion rule's reach
-   by construction: the duration is a token, and the `prefers-reduced-motion`
-   block zeroes the tokens rather than naming what moves (DDR-0044). */
+/* The stagger. Two rules because the two values differ, and both are raw for
+   the same reason the duration above is. */
+.assistant-thinking-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.assistant-thinking-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+/* The design's own 1.2s, ease-in-out, staggered 0.2s per dot — **raw on
+   purpose** (DDR-0115 amendment 4). None of the three is on DDR-0044's budget
+   of two durations and two easings, and that budget's one documented way out is
+   a raw value declared with its reason rather than a third token existing for
+   one rule. Being raw puts all three outside the mechanism that zeroes
+   `--duration-*`, so the dots are stopped **by name** in the reduced-motion
+   block at the top of this file, and all four declarations are listed in
+   `lib/motionTokens.ts`'s EXEMPTIONS as a set.
+
+   The reduced-motion rule is `animation: none` and not a zeroed duration, which
+   is the difference between *settled* and *frozen*: a zero-duration animation
+   holds the 0% keyframe, so the dots would sit at 0.3 opacity and 0.85 scale —
+   a reader who asked for less motion would get three faint, shrunken dots and
+   no way to tell them from a rendering fault. With no animation at all the
+   element's own values apply, which is full opacity and no transform. */
 @keyframes assistant-thinking-pulse {
-  from {
-    opacity: 0.35;
+  0%,
+  100% {
+    opacity: 0.3;
+    transform: scale(0.85);
   }
-  to {
+  50% {
     opacity: 1;
+    transform: scale(1);
   }
 }
