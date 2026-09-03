@@ -17,18 +17,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current Repository State
 
-M0–M9 are delivered: live IBKR holdings/balances/allocation in a display currency, immutable
-snapshots, Flex statement import, and four analytics views over it, behind a vertical sidebar.
-M10 is delivered — the investor profile, the assistant's **surface**, the widened grounding and the
-in-app OpenAI key. #289 is closed as superseded by #287's computed moves — read its closing comment
-before re-proposing an end-state check on model output.
-**M11 is delivered — the assistant is one view**: no consent gate (ADR-0011), the profile folded
-in (DDR-0108), and the app's own **baseline** (ADR-0012).
-**M13 is delivered — the model asks for what it needs**: twelve tools over a bounded loop replaced
-the assembled context, and ADR-0009 needed no amendment (DDR-0111, DDR-0112).
-**M12 is delivered after it — the assistant holds a conversation**: a question carries the turns
-before it and the **role is the marking** (DDR-0113), and an answer is **rendered, never quoted**
-(DDR-0114). Milestone order is not delivery order — check the record, not the number.
+M0–M13 are delivered: live IBKR holdings/balances/allocation in a display currency, immutable
+snapshots, Flex import and four analytics views behind a vertical sidebar; then the investor
+profile and the assistant — no consent gate (ADR-0011), the profile folded in (DDR-0108), the app's
+own **baseline** (ADR-0012), twelve tools over a bounded loop in place of an assembled context
+(DDR-0111, DDR-0112), a question carrying the turns before it with the **role as the marking**
+(DDR-0113), and an answer **rendered, never quoted** (DDR-0114). Milestone order is not delivery
+order — check the record, not the number. #289 is closed as superseded by #287's computed moves —
+read its closing comment before re-proposing an end-state check on model output.
 Not built: multi-broker, benchmarks, tax.
 
 **Which Epics are open is deliberately not recorded here** — read the backlog (*Current Priority*).
@@ -82,9 +78,9 @@ Each exists end-to-end and is the reference pattern for its shape.
   that has no weight — because no money may appear in a `holdings`/`weights` report (#328). The
   renderer assembles **nothing**; the empty context and its bound stay.
   **Two denominators**: the overview's weights **exclude cash**, drift's **include
-  it** — each says which. Figures go through **`@shared/format`** so main can write one too
-  (DDR-0111); its locale is **`APP_LOCALE`, never the host's** — two processes resolve `undefined`
-  differently, in silence. A section is **absent, never empty**; no money goes in one declared as
+  it** — each says which. Figures go through **`@shared/format`** at **`APP_LOCALE`, never the
+  host's** — two processes resolve `undefined` differently, in silence (DDR-0111).
+  A section is **absent, never empty**; no money goes in one declared as
   names or percentages; each names its store *and clock* — composition is Flex, drift live
   (DDR-0098). A **period report** keeps return and value apart, return first — the curve is
   TWR, so a deposit moves value alone; the period is anchored to `extent.to`, an overlapping
@@ -137,7 +133,6 @@ Each exists end-to-end and is the reference pattern for its shape.
   characters, declared in a **Zod-free** `@shared/domain/assistantHistory` (DDR-0105's trap), trimmed
   by **whole turns from the oldest end** so memory stays contiguous, and applied twice — renderer
   policy, schema bound. A **stale** (DDR-0027), failed or pending turn is never remembered.
-  `promptBudget.test.ts` measures every row again with a **full history**.
   The prompt is **eight `##` sections the owner wrote** (`SYSTEM_PROMPT_SECTIONS`, DDR-0110) — a
   **declared array**, never one template string, the count asserted three ways: sharpen a section,
   don't add a ninth. Tests pin **the guarantees the records make**, never the owner's wording:
@@ -146,36 +141,40 @@ Each exists end-to-end and is the reference pattern for its shape.
   has **no context half** (DDR-0104). Cause, risk statistic and benchmark are **conditional**
   on the absence blocks; each is bound to its sentence by test, so trimming one fails rather than
   unbinding a rule in silence. **A forecast is the model's only where the app computed one.**
-  **An answer is rendered, never quoted** (DDR-0114): `lib/assistantMarkdown.ts` parses it to
-  blocks and `AssistantAnswer.tsx` switches over them — every markdown library emits **HTML**, so
-  `dangerouslySetInnerHTML` is guarded across **all of `src/`**, and a block kind with no `case`
-  renders as nothing. **Nothing is dropped**: an unterminated marker is its own characters, a short
+  **An answer is rendered, never quoted** (DDR-0114): `assistantMarkdown.ts` parses to blocks and
+  `AssistantAnswer.tsx` switches over them — `dangerouslySetInnerHTML` is guarded across **all of
+  `src/`**, and a block kind with no `case` renders as nothing. **Nothing is dropped**: an unterminated marker is its own characters, a short
   table row is padded and a long one's surplus **folded into the last cell**, a bare `#` is a
   paragraph. Marks are a **set**, not an inline tree; emphasis opens on neither a following space
   (`5 * 3` is arithmetic) nor mid-word, and the closer tracks **what the opener left behind**.
-  `.assistant-answer code` **joins the figure role** (a second `--font-figure` rule throws); its
-  chip is `--bg`, not the raised surface's three counted adopters. A `#` starts at **`h3`**
+  `.assistant-answer code` **joins the figure role** (a second `--font-figure` rule throws) on
+  `--bg`, not the raised surface. A `#` starts at **`h3`**
   and the type step falls between **`h4`/`h5`**, because the prompt's own register is `##`/`###`.
   The alignment classes are **scoped** or `.assistant-answer th` out-specifies them. What the next
   turn remembers is the **raw** string (DDR-0113): formatting is a render concern.
-  **The view is two columns, not a page** (#343, DDR-0115): the profile at
-  `--assistant-profile-width` (420px), folding to `--assistant-profile-rail-width` (48px) —
-  **never** the nav's 56px; two edges, two constants — beside a chat column of three bands with
-  only the transcript scrolling. No `PageHeader`, and the eyebrow is the `<h1>`, taking
-  **`.sr-only`** rather than leaving the tree when the column folds.
+  **The view is two columns, not a page** (#343, DDR-0115): the profile at **420px**, folding to a
+  **48px** rail — **never** the nav's 56px; two edges, two constants — beside a chat column of
+  three bands with only the transcript scrolling. No `PageHeader`, and the eyebrow is the `<h1>`,
+  taking **`.sr-only`** rather than leaving the tree when the column folds.
   **`.profile-column-body[hidden]` is load-bearing** — its own `display` defeats the attribute
   (DDR-0106's trap again), and without it the folded form stays laid out and tabbable behind a
-  48px rail. Two rules escape the duration scale — the column's **raw 0.22s** and the transcript's
-  **`scroll-behavior`** (motion with *no* time in it, so nothing zeroes it; `scrollIntoView`
-  therefore names no `behavior`). Each is a `motionTokens.ts` exemption **paired** with a
-  reduced-motion rule whose selector is **doubled**: that block sits ~4,000 lines above them and
-  loses on source order otherwise.
+  48px rail. **Three rules escape the duration scale** — the column's raw 0.22s, the transcript's
+  `scroll-behavior` (motion with *no* time in it, so `scrollIntoView` names no `behavior`), and the
+  dots' raw 1.2s. Each is a `motionTokens.ts` exemption **paired** with a reduced-motion rule whose
+  selector is **doubled**: that block sits ~4,000 lines above them and loses on source order. The
+  dots stop with **`animation: none`, never a zeroed duration** — zero holds the 0% keyframe, which
+  is *frozen* (0.3 opacity, 0.85 scale), not settled.
   **A turn is two bubbles, and the two orders are not one order** (#344): the array stays
   **newest-first** — `rememberedTurns` walks it backwards, the trim drops from the oldest end — and
   only `transcriptOrder` reverses it for drawing; reversing the stored array inverts the memory in
   silence. The `WHO · TIME` marking is **new state that reaches no request**. The owner's bubble is
   **`--accent-strong`**, never `--accent` — white on the text half is 4.47:1, DDR-0046's split
   applied to the accent; the model's is `--card`, adding no raised adopter.
+  **The composer is one path** (#345): Enter submits the **form**, so the key and the button share
+  `isAskable`/`pending`; `preventDefault` stops the newline too, and a **composing** IME's Enter is
+  not a send. 44px and 10px are tokens; the `.btn` box is overridden at the call site. The clipped
+  label made `.sr-only` a **selector list**, moving `tokenAdoption`'s `-1px` key. The suggestions
+  toggle ships **disabled** (#348).
 - **classification** — sector/industry. `classificationRepository` fronts *both* the mutable
   SQLite cache and `ibkrGateway`; `analytics:classifyInstruments` is the only analytics channel
   reaching IBKR. Refreshes are **resumable, not transactional** — a run that dies at 30 of 40 keeps
@@ -528,9 +527,9 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
   and it is a boxed chip too — its `<select>` giving up its resting `border-color` and
   `padding-inline`, and **nothing else** (amends DDR-0035; DDR-0075). The badge is a **boxed chip**
   on `--surface-raised`, one of **three** users (the hover card and that currency field are the
-  others) — so every tone is measured **there**, not on `--card`, and `SURFACE_EDGE` is not a WCAG
-  bar (DDR-0069). `sidebarRail.test.ts` **counts** its uses — a fourth adopter measures its own inks
-  (DDR-0070). The nav's **"Views" title is the tablist's `aria-labelledby`** (DDR-0075).
+  others), so every tone is measured **there**, not on `--card`; `SURFACE_EDGE` is not a WCAG bar,
+  and `sidebarRail.test.ts` **counts** the uses — a fourth adopter measures its own inks (DDR-0069,
+  DDR-0070). The nav's **"Views" title is the tablist's `aria-labelledby`** (DDR-0075).
 - **One sector, one hue, everywhere.** `pie-series-1` — the palette's only blue — is reserved for
   the map's country-weight donut, so the *sector* dimension starts at slot 2 (`SECTOR_SLOT_OFFSET`
   in `lib/pie`) wherever a sector appears. Only sectors pay it; asset class, currency and country

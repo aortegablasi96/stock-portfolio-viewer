@@ -16,7 +16,7 @@
  *
  * It is the same shape as `tokenAdoption.ts` minus the ratchet: there is no `BASELINE` here,
  * because the whole stylesheet was converted in this story rather than over two. {@link EXEMPTIONS}
- * is the permanent list, and it has **five** entries in **three kinds** — see its own note.
+ * is the permanent list, and it has **nine** entries in **three kinds** — see its own note.
  */
 import { scanDeclarations, type CssDeclaration } from './cssDeclarations'
 
@@ -193,5 +193,29 @@ export const EXEMPTIONS: readonly ExemptEntry[] = [
     value: 'auto',
     reason:
       'The explicit half of the entry above (Story #344). Nothing about `scroll-behavior` responds to zeroing `--duration-*`, so the band is stopped by name and the scroll becomes a jump. Doubled to out-specify the rule it overrides, for the reason the column’s entry gives. `e2e/reduced-motion.spec.ts` proves the cascade actually resolves; a text scan can only see that both halves are written.',
+  },
+  {
+    key: '.assistant-thinking-dot | animation',
+    value: 'assistant-thinking-pulse 1.2s ease-in-out infinite',
+    reason:
+      'The waiting dots, at the Figma design’s own 1.2s and easing (Story #345, DDR-0115 amendment 4). Neither is on DDR-0044’s budget of two durations and two easings, and 1.2s is six times the slower step — a breathing rhythm rather than the feedback the scale is cut for, so widening the scale to hold it would loosen every transition in the app. The documented way out is a raw value declared with its reason, and the three entries below complete the set.',
+  },
+  {
+    key: '.assistant-thinking-dot:nth-child(2) | animation-delay',
+    value: '0.2s',
+    reason:
+      'The stagger that makes three dots read as a wave rather than a blink (Story #345). Listed separately from the entry below because the two values differ and an exemption matches on its value: changing one without the other fails here rather than drifting.',
+  },
+  {
+    key: '.assistant-thinking-dot:nth-child(3) | animation-delay',
+    value: '0.4s',
+    reason:
+      'The second half of the stagger (Story #345). See the entry above.',
+  },
+  {
+    key: '@media (prefers-reduced-motion: reduce) >> .assistant-thinking-dot.assistant-thinking-dot | animation',
+    value: 'none',
+    reason:
+      'The explicit half of the three entries above (Story #345). `animation: none` and **not** a zeroed duration, which is the difference between settled and frozen: a zero-duration animation holds the 0% keyframe, so the dots would rest at 0.3 opacity and 0.85 scale — three faint, shrunken circles a reader cannot tell from a rendering fault. With no animation the element’s own values apply. `none` names no duration and is therefore a violation like any other, which is why it is listed rather than special-cased.',
   },
 ]

@@ -239,6 +239,77 @@ test('will not send an empty question', async () => {
 })
 
 /**
+ * The composer's keyboard, in the half that can be proved **without sending anything** (Story
+ * #345). This suite has no stub server and its premise is that no question ever leaves it, so
+ * Enter-*sends* lives in `assistant-memory.spec.ts` where a local stub is listening. What can be
+ * proved here is the other branch and the guard, and both are where the bugs would be.
+ *
+ * These tests type into the shared box, and a later test asserts that what was typed survives
+ * leaving the view — so each restores what it found. That coupling is the file's own, and running
+ * these without the restore is how it was discovered.
+ */
+test.describe('the composer’s keyboard', () => {
+  const TYPED = 'Am I balanced?'
+
+  test.afterEach(async () => {
+    await questionBox().fill(TYPED)
+  })
+
+  test('Shift+Enter inserts a newline instead of sending', async () => {
+    await questionBox().fill('First line')
+    await questionBox().press('Shift+Enter')
+    await questionBox().pressSequentially('second line')
+
+    await expect(questionBox()).toHaveValue('First line\nsecond line')
+    // Nothing was sent: the transcript is still empty, and this suite would have no stub to
+    // answer if it had been.
+    await expect(view().locator('.assistant-turn')).toHaveCount(0)
+  })
+
+  /**
+   * Enter goes through the form's `onSubmit`, so it meets the same `isAskable` guard the button
+   * does — a key press that bypassed it would be a second way to ask with one set of checks.
+   */
+  test('Enter on a blank question sends nothing', async () => {
+    await questionBox().fill('   ')
+    await questionBox().press('Enter')
+
+    await expect(view().locator('.assistant-turn')).toHaveCount(0)
+  })
+
+  /** The binding is invisible otherwise, so the box discloses it (DDR-0083's rule, one scope in). */
+  test('the placeholder says how to send', async () => {
+    await expect(questionBox()).toHaveAttribute(
+      'placeholder',
+      'Ask about your portfolio… (Enter to send, Shift+Enter for new line)',
+    )
+  })
+})
+
+/**
+ * The two square controls the design puts beside the box (Story #345). Both are named, because
+ * `size="icon"` is a shape and not an exemption from having one (DDR-0032), and both are drawn at
+ * the design's own 44px — a measurement, so it is measured rather than read off the stylesheet.
+ */
+test('the composer offers a named send control and a named suggestions toggle', async () => {
+  const send = view().getByRole('button', { name: 'Ask' })
+  const suggest = view().getByRole('button', { name: 'Show suggested questions' })
+
+  await expect(send).toBeVisible()
+  await expect(suggest).toBeVisible()
+
+  for (const control of [send, suggest]) {
+    const box = await control.boundingBox()
+    expect(box?.width).toBeCloseTo(44, 0)
+    expect(box?.height).toBeCloseTo(44, 0)
+  }
+
+  // The toggle ships inert until #348 gives it chips to open, and `disabled` is that state said
+  // out loud rather than a control that swallows a click.
+  await expect(suggest).toBeDisabled()
+})
+
+/**
  * The merge's own criteria, and the half no text guard can reach (Story #310, DDR-0108): five
  * disclosures that do not coordinate, and a form that is hidden rather than unmounted — so what
  * has been typed into a section survives folding it away, and survives leaving the view, exactly

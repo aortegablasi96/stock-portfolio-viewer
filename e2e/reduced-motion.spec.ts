@@ -88,6 +88,20 @@ const animationDuration = (className: string): Promise<string> =>
  * zeroing `--duration-*` and has to be answered by name — and why this is the assertion that would
  * fail if that rule were deleted or lost its doubled selector (`motionTokens.ts`'s EXEMPTIONS).
  */
+/** Any computed property for a real rule, via the same throwaway element. */
+const computedValue = (className: string, property: string): Promise<string> =>
+  page.evaluate(([name, prop]) => {
+    const probe = document.createElement('div')
+    probe.className = name!
+    document.body.append(probe)
+    const value = getComputedStyle(probe).getPropertyValue(prop!)
+    probe.remove()
+    return value
+  }, [className, property] as const)
+
+const animationName = (className: string): Promise<string> =>
+  computedValue(className, 'animation-name')
+
 const scrollBehavior = (className: string): Promise<string> =>
   page.evaluate((name) => {
     const probe = document.createElement('div')
@@ -152,6 +166,27 @@ test('the two rules off the duration scale are stopped by name', async () => {
   // preference can be honoured: a `behavior: 'smooth'` option in the component would be outside
   // every mechanism the app has.
   expect(await scrollBehavior('assistant-transcript'), 'the transcript').toBe('auto')
+})
+
+/**
+ * The waiting dots settle rather than freeze (Story #345, DDR-0115 amendment 4).
+ *
+ * This is the assertion the story turns on, and a text scan cannot make it: `animation: none` and
+ * `animation-duration: 0s` both read as "stopped" in the stylesheet and are completely different on
+ * screen. A zeroed duration holds the 0% keyframe, so the dots would rest at 0.3 opacity and 0.85
+ * scale — three faint, shrunken circles a reader cannot tell from a rendering fault. Only the
+ * computed style says which one shipped.
+ */
+test('the waiting dots settle under reduced motion rather than freezing mid-pulse', async () => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' })
+  expect(await animationName('assistant-thinking-dot')).toBe('assistant-thinking-pulse')
+
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  expect(await animationName('assistant-thinking-dot')).toBe('none')
+  // Settled, not frozen: full opacity, no transform. The keyframe's own resting values are 0.3
+  // and scale(0.85), so these two are what separate the right fix from the plausible one.
+  expect(await computedValue('assistant-thinking-dot', 'opacity')).toBe('1')
+  expect(await computedValue('assistant-thinking-dot', 'transform')).toBe('none')
 })
 
 test('the three animations that used to escape are covered', async () => {

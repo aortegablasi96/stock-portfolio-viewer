@@ -171,7 +171,10 @@ describe('the view is a frame, not a page', () => {
    */
   it('clips the h1 rather than removing it when the column collapses', () => {
     expect(VIEW).toContain('className="assistant-eyebrow sr-only"')
-    expect(BARE_CSS).toContain('\n.sr-only {')
+    // The clip is one rule listing its selectors, and Story #345 gave it a second member (the
+    // composer's label). `.sr-only` still heads the list, which is what "the app's existing clip"
+    // means; a second rule declaring the same nine properties is what this would catch.
+    expect(BARE_CSS).toContain('\n.sr-only,')
   })
 
   /** Two columns, and the profile is the first of them — the design's own order. */
