@@ -18,17 +18,21 @@ export const LIVE_SOURCE = 'Live from Interactive Brokers'
 export const IMPORTED_SOURCE = 'From imported Flex Query data'
 
 /**
- * The Profile view's provenance (Story #280), and the app's third — the first that names no data
- * source at all, because there isn't one.
+ * There were three (Story #280). `OWNER_SOURCE` was the Assistant's, and the
+ * app's only provenance value naming no data source, because that view has none: it holds the
+ * owner's own policy statement rather than a reading.
  *
- * The other five views report figures the app read from somewhere, and the line says where. The
- * profile is the one page whose content the app cannot read from anywhere: it is the owner's own
- * policy statement, and stating that in the same slot the other views state their source is the
- * point rather than a formality. The whole Epic's authority rests on the app measuring against a
- * standard the owner set instead of one it invented (ADR-0009), and this is where the page says
- * which of the two it is holding.
+ * **Story #343 deleted it** (DDR-0115 amendment 1). The Figma design gives the Assistant no page
+ * header at all, so the constant's one call site went and a constant nothing renders is a dead
+ * export — the third failure mode `tokenAdoption.ts`'s ratchet exists to prevent elsewhere,
+ * applied here by hand.
+ *
+ * DDR-0094's claim — *the header slot is where a page says whether its standard is the owner's or
+ * the app's* — is amended with an exception rather than withdrawn. On that one view the **column**
+ * says it: an eyebrow, a title, and an intro paragraph that states in full sentences what three
+ * words in a provenance slot could only gesture at. The rule still holds for the five views below,
+ * which do have a source to name.
  */
-export const OWNER_SOURCE = 'Set by you'
 
 /**
  * The freshness line: what was read, and when.

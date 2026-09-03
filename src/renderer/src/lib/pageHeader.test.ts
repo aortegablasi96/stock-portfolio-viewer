@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { IMPORTED_SOURCE, LIVE_SOURCE, OWNER_SOURCE, readingLine } from './pageHeader'
+import { IMPORTED_SOURCE, LIVE_SOURCE, readingLine } from './pageHeader'
 
 /**
  * The shared page header (Story #185, DDR-0058).
@@ -49,22 +49,22 @@ describe('readingLine', () => {
  * written out in a component before this story — one in `PortfolioDashboard`, one in `App` —
  * which is two chances for a view to claim a source it does not read.
  */
-describe('the three provenance sentences', () => {
+describe('the two provenance sentences', () => {
   it('names the live source and the imported source distinctly', () => {
     expect(LIVE_SOURCE).toBe('Live from Interactive Brokers')
     expect(IMPORTED_SOURCE).toBe('From imported Flex Query data')
   })
 
   /**
-   * The third names no data source, because the Profile page has none (Story #280). It is the
-   * owner's own policy statement, and saying so in the slot the other five use for their source
-   * is where the page states which of "a standard the owner set" and "a standard the app
-   * invented" it is holding (ADR-0009).
+   * There was a third — `OWNER_SOURCE`, `'Set by you'` — and Story #343 deleted it with the
+   * Assistant's page header (DDR-0115 amendment 1). This asserts the *deletion*, because a
+   * constant nothing renders is exactly what the module's note says it must not become: the
+   * sentence is gone from the module, not merely unexported or left unused.
    */
-  it('names the profile as the owner’s own rather than as a reading', () => {
-    expect(OWNER_SOURCE).toBe('Set by you')
-    expect(OWNER_SOURCE).not.toBe(LIVE_SOURCE)
-    expect(OWNER_SOURCE).not.toBe(IMPORTED_SOURCE)
+  it('carries no third sentence, and no dead one', () => {
+    const module = readFileSync(new URL('./pageHeader.ts', import.meta.url), 'utf8')
+    expect(module).not.toContain('OWNER_SOURCE =')
+    expect(module).not.toContain("'Set by you'")
   })
 
   /** Comments stripped first, the trap DDR-0042 and DDR-0047 both record. */
@@ -89,6 +89,5 @@ describe('the three provenance sentences', () => {
     const code = source(path)
     expect(code).not.toContain(LIVE_SOURCE)
     expect(code).not.toContain(IMPORTED_SOURCE)
-    expect(code).not.toContain(`'${OWNER_SOURCE}'`)
   })
 })

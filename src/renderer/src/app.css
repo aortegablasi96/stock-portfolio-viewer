@@ -189,6 +189,19 @@
      column's --space-3 gutter on each side is exactly 48px of content in a 56px rail with
      8px to spare for the focus ring. Narrower clips the tile; wider stops reading as a rail. */
   --sidebar-width-collapsed: 56px;
+  /* The Assistant's profile column and its rail (Story #343, DDR-0115 amendments 2 and 8).
+     The design's own measurements, and deliberately not rounded to a `--space-*` step:
+     420px is what the profile's target rows need to keep a term beside a percentage on
+     one line, and 48px is what the design draws around a 32px expander.
+
+     **Not `--sidebar-width-collapsed`.** Two collapsing edges now exist with two widths
+     and two toggles, and 48 and 56 are different numbers for different reasons — the nav
+     rail holds a 32px brand tile plus its two --space-3 gutters and 8px for the focus
+     ring (DDR-0057), this one holds a centred 32px button. Unifying them would make
+     either impossible to tune without moving the other and the two Performance
+     breakpoints that take --sidebar-width as an input (DDR-0068). */
+  --assistant-profile-width: 420px;
+  --assistant-profile-rail-width: 48px;
   /* The Portfolio view's data-sources card (Story #266), the third of these and the successor
      to Story #189's `--rail-width: 260px`. The rail is gone — the holdings table takes the
      page — and the card it carried now sits beside Stored statements, so the measure is no
@@ -343,11 +356,31 @@
    The one animation this cannot reach is the capped table's scroll-driven fade,
    which has no duration to zero — it is a function of scroll position, not of
    time. Recorded as an exemption in `lib/motionTokens.ts` rather than left
-   silent. */
+   silent.
+
+   Story #343 adds the second kind of thing this block cannot reach: a rule that
+   deliberately does *not* draw from the scale. The Assistant's profile column
+   animates at the design's own `0.22s`, which is neither step, and a raw duration
+   is by construction outside the mechanism above (DDR-0115 amendment 4). So it is
+   zeroed by name, here rather than beside the component — the block has to stay
+   directly under `:root` for source order to win it, and `designTokens.test.ts`
+   fails if it moves. A rule joining it must be an entry in `motionTokens.ts`'s
+   EXEMPTIONS, which is what keeps "explicit" from becoming "wherever anyone
+   liked". */
 @media (prefers-reduced-motion: reduce) {
   :root {
     --duration-fast: 0ms;
     --duration-base: 0ms;
+  }
+
+  /* Doubled to out-specify the rule it overrides, which is the app's existing idiom for exactly
+     this (DDR-0059, shipped once on the chart dots). The token redefinition above needs no such
+     thing — a custom property is re-read wherever it is used, so source order cannot beat it —
+     but this is a property override, and `.assistant-profile-column` is declared ~4,000 lines
+     below at the same specificity. Written singly it loses, in silence, and the column keeps
+     sliding for a reader who asked it not to. */
+  .assistant-profile-column.assistant-profile-column {
+    transition-duration: 0s;
   }
 }
 
@@ -457,7 +490,11 @@ html {
    was dropped in Story #185. The redesign's prototype keeps it, and that is the one part of its
    header this app cannot take: the title bar is the window's banner and carries the app name, and
    the sidebar's brand tile carries it again, so an eyebrow would name the app three times on
-   every screen and the view once. */
+   every screen and the view once.
+
+   Story #343 brings the shape back on exactly one view, and the argument above is why it is not a
+   reversal: `.assistant-eyebrow` names the *view*, on the one view with no `PageHeader` to name
+   it, so it is that view's `<h1>` rather than the app's name a fourth time (DDR-0115 amendment 1). */
 
 .sr-only {
   position: absolute;
@@ -3971,19 +4008,26 @@ html {
 }
 
 /* ---- Investor profile (M10, Story #280; folded in by M11, Story #310) -----
-   Since Story #310 the profile is a collapsed section of the Assistant view
-   rather than a page of its own (DDR-0108). Nothing here needed to change for
-   that — the rules describe a stack of cards and their prose, and a stack of
-   cards is what a `.collapsible-panel` encloses — except the one below, which
-   gives the group back the page's own rhythm. */
+   Since Story #310 the profile is a section of the Assistant view rather than a
+   page of its own (DDR-0108), and since Story #343 it is that view's left
+   *column* (DDR-0115). Nothing here needed to change for either — the rules
+   describe a stack of cards and their prose, and a stack of cards is a stack of
+   cards in a panel or in a column.
 
-/* The profile's five cards sit on the page ground, so they keep the page's
-   spacing rather than the panel's. `.collapsible-panel` gaps its contents at
-   `--space-5`, which is the measure between one card's head and its body; a
-   stack of five cards is `.analytics-view`'s own `--space-7`, and taking the
-   default here would tighten the profile alone. */
-.profile-group > .collapsible-panel {
-  gap: var(--space-7);
+   What did change is where the rhythm between the cards is set.
+   `.profile-group > .collapsible-panel` gave the group back the page's own
+   `--space-7` where `.collapsible-panel`'s default `--space-5` was too tight for
+   a stack of five cards. The group `Collapsible` is gone, so that rule went with
+   it and `.profile-column-body` carries the same gap in the Assistant section
+   below. */
+
+/* The column's title row: the name, and what the stored profile currently says
+   under it. Tighter than the gap between the blocks below, because the two lines
+   are one statement — the same reason `.profile-intro-block` is. */
+.profile-column-title-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
 }
 
 /* What the section is, what it offers to do, and how the last write went —
@@ -4045,9 +4089,10 @@ html {
 
 /* What the stored profile currently says, counted rather than listed. It was in
    the first card's header for one round and read as a fact about *investing
-   style*; it is a fact about the profile as a whole. Since Story #310 it is
-   what the head row keeps saying while the section is folded away, which is why
-   it sits beside the trigger rather than under it. */
+   style*; it is a fact about the profile as a whole. It sat beside the group's
+   trigger while the profile was a disclosure, so that a folded section still
+   said what it held; since Story #343 the column folds instead and the line sits
+   under the column's title, where the design draws it. */
 .profile-summary {
   margin: 0;
   font-size: var(--text-xs);
@@ -4118,6 +4163,200 @@ html {
 }
 
 /* ---- Assistant view (M10, Story #283; M11, Story #309) ------------------- */
+
+/* ---- The two columns (Story #343, DDR-0115) ------------------------------
+   The Assistant stopped being a page that scrolls and became a frame. Every
+   other view is a `.dashboard` inside a document that scrolls as a whole; this
+   one claims the viewport and lets each of its two columns scroll itself, so the
+   standard on the left and the answers on the right move independently and the
+   composer stays where the reader left it.
+
+   `100vh` less the title bar is the whole of the arithmetic, and it needs no
+   guard for the four hidden views: `.tab-panel[hidden]` is `display: none`, so a
+   panel that is not on screen contributes no height and the document is exactly
+   the viewport whenever this view is the one showing. That is the scoping the
+   design achieves by naming the view on the shell (`figma_design` App.tsx:2483) —
+   here the panel already does it (DDR-0027). */
+.assistant-view {
+  display: flex;
+  height: calc(100vh - var(--titlebar-height));
+  overflow: hidden;
+}
+
+/* The standard, at the design's own 420px. `flex-shrink: 0` because this is the
+   column that does *not* give: the conversation reflows, the form beside it has
+   two-column rows that would start wrapping.
+
+   The transition is the design's `0.22s cubic-bezier(0.4,0,0.2,1)` and is a raw
+   duration on purpose — neither the scale's 90ms nor its 120ms, and DDR-0044's
+   one documented way off the budget is a raw value declared with its reason
+   (DDR-0115 amendment 4). Recorded in `lib/motionTokens.ts`'s EXEMPTIONS, and
+   zeroed by name in the reduced-motion block at the top of this file, because a
+   raw duration is by construction outside the mechanism that zeroes the tokens. */
+.assistant-profile-column {
+  flex-shrink: 0;
+  width: var(--assistant-profile-width);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+  overflow-y: auto;
+  transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* The rail. Wins on source order at equal specificity, which is the same
+   mechanism the reduced-motion block relies on — reordering these two rules
+   silently stops the column narrowing. `overflow-y: hidden` because a 48px
+   column has nothing to scroll and a scrollbar in it would be most of it. */
+.assistant-profile-collapsed {
+  width: var(--assistant-profile-rail-width);
+  overflow-y: hidden;
+}
+
+/* The column's own head: the view's `<h1>` drawn as the design's accent eyebrow,
+   with the control that folds the column beside it. No rule under it — the
+   design draws none, and the profile's own title starts the block below. */
+.assistant-column-head {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-7) var(--space-7) var(--space-5);
+}
+
+/* The eyebrow (Story #343, DDR-0115 amendment 1). Story #185 dropped `.eyebrow`
+   because the prototype printed the *app's* name above every page title, which
+   named the app three times a screen. This names the *view*, on the one view
+   that has no page header to name it, so it is a heading rather than a repeat. */
+.assistant-eyebrow {
+  margin: 0;
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+/* The collapsed strip: the expander, and the completeness dot under it. Centred
+   in the rail, and the only thing drawn in it. */
+.assistant-rail-strip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  padding-top: var(--space-5);
+}
+
+/* Sized off the button's own type step, for the reason `.app-sidebar-toggle-glyph`
+   is: an icon picked in px is the one thing that would not move with the type
+   scale (DDR-0048). */
+.assistant-toggle-glyph {
+  width: 1em;
+  height: 1em;
+}
+
+/* Whether the profile says anything at all, at a glance. `--pos` is a *fill*
+   here, which is the half of the split this token carries (DDR-0046), and it is
+   never the mark's only channel — the count is in the `title` in both states
+   (DDR-0021). The glow is `box-shadow`, so it costs the dot no layout and the
+   two states are the same 8px box. */
+.assistant-profile-dot {
+  flex-shrink: 0;
+  width: var(--space-3);
+  height: var(--space-3);
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.assistant-profile-dot-stated {
+  background: var(--pos);
+  box-shadow: 0 0 6px var(--pos);
+}
+
+/* The column's name, which the group `Collapsible`'s trigger used to carry. The
+   column is the disclosure now, so the heading is a plain one at the same level
+   the trigger rendered (DDR-0106, DDR-0115). */
+.profile-column-title {
+  margin: 0;
+  font-size: var(--text-md);
+  line-height: var(--leading-tight);
+}
+
+/* Everything the profile draws, inside the scrolling column rather than inside a
+   disclosure panel. The gap is `.profile-group`'s, which moved here with it. */
+.profile-column-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-7);
+  padding: 0 var(--space-7) var(--space-7);
+}
+
+/* Load-bearing, and the same trap `.collapsible-panel[hidden]` records (DDR-0106): the block's
+   own `display` out-specifies the UA's `[hidden]` rule, so without this the fold leaves the whole
+   form laid out and clipped by a 48px column — visible to a screen reader, reachable by Tab, and
+   drawn over the rail's two controls. It shipped exactly once, in this story, and was caught by
+   `e2e/assistant-layout.spec.ts` rather than by anything a text scan could see. */
+.profile-column-body[hidden] {
+  display: none;
+}
+
+/* ---- The chat column (Story #343) ----------------------------------------
+   Three bands, and only the middle one scrolls: the header and the composer are
+   `flex-shrink: 0` so a long transcript scrolls *under* them rather than
+   squeezing the box the reader types into out of the window. `min-width: 0` is
+   the load-bearing half of `flex: 1`, exactly as on `.app-content`: a flex item's
+   default minimum is its content's intrinsic width, and one wide table in an
+   answer would otherwise push the column past the window. */
+.assistant-chat {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.assistant-chat-head {
+  flex-shrink: 0;
+  padding: var(--space-6) var(--space-8) var(--space-5);
+  border-bottom: 1px solid var(--border);
+}
+
+.assistant-chat-title {
+  margin: 0;
+  font-size: var(--text-md);
+  line-height: var(--leading-tight);
+}
+
+/* The one band with a scrollbar. `min-height: 0` for the same reason the width
+   needs `min-width: 0`: a flex item will not shrink below its content unless
+   told to, so without it the transcript grows the column and the composer leaves
+   the window instead of the list scrolling. */
+.assistant-transcript {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-7) var(--space-8);
+}
+
+/* Pinned to the bottom (Story #343; #345 gives it Enter-to-send and its icon
+   buttons). Ruled off from the transcript above rather than floating over it —
+   the boundary is where the reading stops and the writing starts. */
+.assistant-composer {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  padding: var(--space-6) var(--space-8);
+  border-top: 1px solid var(--border);
+}
+
+/* The key card and the two states that stand in for the whole column, kept off
+   the column's edges now that there is no page padding around them. */
+.assistant-chat-block {
+  flex-shrink: 0;
+  padding: var(--space-7) var(--space-8) 0;
+}
 
 /* The key card's own prose, at the body step rather than the small one: on the
    one run where it is drawn it is the paragraph the whole feature turns on, and
@@ -4241,16 +4480,11 @@ html {
   gap: var(--space-6);
 }
 
-/* Ruled off from the box above it, and only once there is something to rule
-   off. The list is in the document from mount so that its `aria-live` is there
-   before the first answer, which means an empty rule would otherwise sit under
-   every unused assistant. `:empty` is exact here: React renders no whitespace
-   into a list with no turns. */
-.assistant-turns:not(:empty) {
-  margin-top: var(--space-6);
-  padding-top: var(--space-6);
-  border-top: 1px solid var(--border);
-}
+/* `.assistant-turns:not(:empty)` ruled the list off from the question box that
+   used to sit above it. Story #343 moved the box to the bottom of its own band
+   and put a rule under the chat header, so the same declaration now draws a
+   second line directly beneath that one, above the first turn. Removed rather
+   than re-pointed: the band boundary is the rule now. */
 
 .assistant-turn {
   display: flex;

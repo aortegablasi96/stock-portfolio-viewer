@@ -261,13 +261,63 @@ describe('motion scale', () => {
     const inside = scanDeclarations(CSS).filter((d) =>
       d.context.startsWith('@media (prefers-reduced-motion: reduce)'),
     )
-    expect([...new Set(inside.map((d) => d.context))]).toEqual([
-      '@media (prefers-reduced-motion: reduce) >> :root',
-    ])
+    const root = inside.filter(
+      (d) => d.context === '@media (prefers-reduced-motion: reduce) >> :root',
+    )
     // Every duration the scale declares is zeroed, and nothing else is touched — an easing with
     // no time to run is already inert.
-    expect(inside.map((d) => d.property)).toEqual(durationTokens())
-    expect([...new Set(inside.map((d) => d.value))]).toEqual(['0ms'])
+    expect(root.map((d) => d.property)).toEqual(durationTokens())
+    expect([...new Set(root.map((d) => d.value))]).toEqual(['0ms'])
+    // The `:root` redefinition comes first: it is the mechanism, and the rules under it are the
+    // documented exceptions to it rather than a second way of doing the same thing.
+    expect(inside.slice(0, root.length)).toEqual(root)
+  })
+
+  /**
+   * The block gained selectors in Story #343 (DDR-0115 amendment 4), and this is the rule that
+   * keeps that from becoming a second mechanism.
+   *
+   * Zeroing `--duration-*` reaches a rule exactly when the rule draws from the scale, so a rule
+   * that deliberately does not — the Assistant's profile column, at the Figma design's own
+   * `0.22s` — has to be stopped **by name**. Naming one is therefore allowed only where
+   * `motionTokens.ts` already records the raw duration as an exemption with a reason. Anything
+   * else in here is a selector list growing back, which is what `0044` chose the token
+   * redefinition to avoid.
+   */
+  it('names a selector only where motionTokens.ts exempts one', () => {
+    const named = scanDeclarations(CSS)
+      .filter(
+        (d) =>
+          d.context.startsWith('@media (prefers-reduced-motion: reduce)') &&
+          d.context !== '@media (prefers-reduced-motion: reduce) >> :root',
+      )
+      .map((d) => d.context.replace('@media (prefers-reduced-motion: reduce) >> ', ''))
+
+    // A doubled selector is the same selector: `.x.x` is how a rule out-specifies one declared
+    // later in the file at equal specificity, which is what an override *inside* this block needs
+    // and what the token redefinition above it does not (DDR-0059).
+    const single = (selector: string): string =>
+      [...new Set(selector.split('.').filter(Boolean))].map((part) => `.${part}`).join('')
+
+    const exempted = new Set(
+      EXEMPTIONS.filter((entry) => !entry.key.startsWith('@media')).map((entry) =>
+        single(entry.key.split(' | ')[0]!),
+      ),
+    )
+    for (const selector of named) expect([...exempted], selector).toContain(single(selector))
+
+    // And the other direction: the reduced-motion rule and the raw duration it stops are a pair,
+    // so an exemption inside this block must itself be listed. A raw duration with no rule here
+    // is an animation that keeps running for a reader who asked it not to.
+    for (const entry of EXEMPTIONS.filter((e) => e.key.startsWith('@media'))) {
+      const [context, property] = entry.key.split(' | ')
+      expect(
+        scanDeclarations(CSS).some(
+          (d) => d.context === context && d.property === property && d.value === entry.value,
+        ),
+        entry.key,
+      ).toBe(true)
+    }
   })
 
   it('declares the override after the scale, which is the only reason it wins', () => {
@@ -277,7 +327,7 @@ describe('motion scale', () => {
     )
   })
 
-  it('keeps the one exemption honest', () => {
+  it('keeps every exemption honest', () => {
     // The ratchet half of `tokenAdoption.ts`, applied to a list of one: an exemption that stopped
     // matching is a decision that has quietly expired.
     const declarations = new Map(findMotionDeclarations(CSS).map((d) => [d.key, d.value]))

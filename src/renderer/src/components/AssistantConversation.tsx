@@ -24,7 +24,6 @@ import type { AssistantStatus } from '@shared/domain/assistant'
 import { AssistantAnswer } from './AssistantAnswer'
 import { ConfirmAction } from './ConfirmAction'
 import { Button } from './ui/Button'
-import { Card, CardContent, CardHeader, CardTitle } from './ui/Card'
 import { Field } from './ui/Field'
 import { StatePanel } from './ui/StatePanel'
 
@@ -174,17 +173,55 @@ export function AssistantConversation({
   // Loading its grounding: `ready` is false and there is nothing to say about why, which is the
   // one state that is a wait rather than a blocker.
   if (!gate.ready && gate.blocker === null) {
-    return <StatePanel variant="loading">Reading what the assistant can see…</StatePanel>
+    return (
+      <div className="assistant-chat-block">
+        <StatePanel variant="loading">Reading what the assistant can see…</StatePanel>
+      </div>
+    )
   }
 
   const notices = reports === null ? [] : groundingNotices(reports)
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Ask about your portfolio</CardTitle>
-      </CardHeader>
-      <CardContent>
+    /* Three bands, and only the middle one scrolls (Story #343, DDR-0115). The card is gone: the
+       column *is* the surface now, so a card inside it would be a box drawn around the whole of
+       one. What is inside the bands is untouched — the header is still this title, the composer is
+       still today's form and submit button, and the transcript is still today's stacked turns.
+       #346, #345 and #344 fill each band in turn. */
+    <>
+      <div className="assistant-chat-head">
+        <h2 className="assistant-chat-title">Ask about your portfolio</h2>
+      </div>
+
+      {/* Rendered from mount, empty or not. An `aria-live` region that arrives together with its
+          first content announces nothing, so the list has to already be here when the first
+          question is asked. `aria-atomic="false"` keeps the announcement to what changed — the
+          turn just inserted, then that turn's answer — rather than re-reading the transcript on
+          every question. Moving it into a scrolling band moved neither the region nor its rules
+          (DDR-0107, DDR-0115 decision 9). */}
+      <div className="assistant-transcript">
+        <ol className="assistant-turns" aria-live="polite" aria-atomic="false">
+          {turns.map((turn) => (
+            <li key={turn.id} className="assistant-turn">
+              <TurnBody turn={turn} version={version} />
+            </li>
+          ))}
+        </ol>
+      </div>
+
+      <div className="assistant-composer">
+        {/* What the assistant cannot see, above the box rather than below it — which is where the
+            design puts the gateway's own line, and #346 folds this list into it. */}
+        {notices.length > 0 && (
+          <ul className="assistant-notices">
+            {notices.map((notice) => (
+              <li key={notice.id} className="assistant-notice">
+                {notice.text}
+              </li>
+            ))}
+          </ul>
+        )}
+
         {gate.blocker !== null ? (
           // Named, calm, and never toned as a failure: none of the four is something that went
           // wrong (DDR-0022). `notice` is the variant that paints nothing.
@@ -233,31 +270,8 @@ export function AssistantConversation({
             </div>
           </form>
         )}
-
-        {notices.length > 0 && (
-          <ul className="assistant-notices">
-            {notices.map((notice) => (
-              <li key={notice.id} className="assistant-notice">
-                {notice.text}
-              </li>
-            ))}
-          </ul>
-        )}
-
-        {/* Rendered from mount, empty or not. An `aria-live` region that arrives together with
-            its first content announces nothing, so the list has to already be here when the first
-            question is asked. `aria-atomic="false"` keeps the announcement to what changed — the
-            turn just inserted, then that turn's answer — rather than re-reading the transcript on
-            every question. */}
-        <ol className="assistant-turns" aria-live="polite" aria-atomic="false">
-          {turns.map((turn) => (
-            <li key={turn.id} className="assistant-turn">
-              <TurnBody turn={turn} version={version} />
-            </li>
-          ))}
-        </ol>
-      </CardContent>
-    </Card>
+      </div>
+    </>
   )
 }
 

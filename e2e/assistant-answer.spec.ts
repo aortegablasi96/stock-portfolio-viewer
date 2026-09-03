@@ -111,8 +111,7 @@ test.beforeAll(async () => {
   // A profile is the one grounding that needs neither a gateway nor an import, and it is what opens
   // the question box (`askGate`'s `no_grounding`).
   await page.getByRole('tab', { name: /^Assistant/ }).click()
-  await expect(view().getByRole('heading', { level: 1, name: 'Assistant' })).toBeVisible()
-  await view().getByRole('button', { name: 'Your investor profile' }).click()
+  await expect(view().getByRole('heading', { level: 1, name: 'AI Assistant' })).toBeVisible()
   await view().getByRole('button', { name: 'Dividend income' }).click()
   await view().getByRole('button', { name: 'Save profile' }).click()
 

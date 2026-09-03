@@ -41,12 +41,13 @@ test.afterAll(async () => {
 /**
  * The views, and the title each one's header carries.
  *
- * Six, and the sixth is why the `source` column is worth reading rather than skimming: the
- * Assistant names **no data source**, because it has none. It holds the owner's own policy
- * statement and a conversation about it, and stating that in the slot the other five use for their
- * provenance is where the page says which of "a standard the owner set" and "a standard the app
- * invented" it holds (ADR-0009, DDR-0094). Story #310 folded the seventh row — the profile's own
- * page, which carried the same sentence — into it (DDR-0108).
+ * **Five, not six.** The Assistant had a row here — it named no data source, because it has none,
+ * and `OWNER_SOURCE` ("Set by you") said so in the slot the others use for provenance (DDR-0094).
+ * Story #343 took the Figma design's Assistant, which has no page header at all, so the row and
+ * the constant are both gone (DDR-0115 amendment 1). DDR-0094's rule is amended with an exception
+ * rather than withdrawn: on that one view the *column* says whose standard it is, in an eyebrow, a
+ * title and an intro paragraph, which is more than a three-word slot could. It still holds for the
+ * five below, which do have a source to name — and this spec is now exactly those five.
  */
 const VIEWS = [
   { tab: 'Portfolio', title: 'Portfolio', source: 'Live from Interactive Brokers' },
@@ -54,7 +55,6 @@ const VIEWS = [
   { tab: 'Allocation', title: 'Allocation', source: 'From imported Flex Query data' },
   { tab: 'Dividends', title: 'Dividends', source: 'From imported Flex Query data' },
   { tab: 'Trades', title: 'Trades & realized gains', source: 'From imported Flex Query data' },
-  { tab: 'Assistant', title: 'Assistant', source: 'Set by you' },
 ] as const
 
 /** The header of whichever panel is currently exposed. Hidden panels are out of the tree. */
@@ -77,10 +77,8 @@ test('every view opens with the same header, naming itself and its source', asyn
  * needs-import state — the branch with no report at all — and the title still has to be there.
  */
 test('the title survives a branch with no report', async () => {
-  // The four analytics views only — the Assistant has no needs-import branch, because it holds a
-  // form the owner can fill in with nothing imported at all and a conversation that names its own
-  // missing grounding (DDR-0094, DDR-0108).
-  for (const view of VIEWS.slice(1, 5)) {
+  // The four analytics views only — Portfolio holds one header over all five of its own states.
+  for (const view of VIEWS.slice(1)) {
     await page.getByRole('tab', { name: view.tab }).click()
     await expect(page.locator('.tab-panel:not([hidden])').getByText('No imported data yet')).toBeVisible()
     await expect(header().locator('h1')).toHaveText(view.title)
