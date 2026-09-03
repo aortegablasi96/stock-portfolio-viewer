@@ -144,6 +144,29 @@ test('a follow-up carries the turns before it, the answer under the model’s ow
 })
 
 /**
+ * The transcript's own half of the same story (Story #344, DDR-0115 decision 7).
+ *
+ * The wire assertions above prove the conversation reaches the model oldest-first. This proves the
+ * screen reads the same way — and the two are produced by *different* code over an array held in
+ * the opposite order, which is exactly why both are worth asserting. A `reverse()` in the wrong
+ * place makes one of them wrong and the other still right.
+ */
+test('the transcript reads oldest-first, each bubble marked with who said it and when', async () => {
+  const turns = view().locator('.assistant-turn')
+  await expect(turns).toHaveCount(2)
+
+  await expect(turns.first().locator('.assistant-bubble-you')).toHaveText('What do I hold?')
+  await expect(turns.last().locator('.assistant-bubble-you')).toHaveText('And the second one?')
+
+  // `WHO · TIME`, one above each of a turn's two bubbles. The time is `APP_LOCALE`'s 24-hour
+  // clock, never the host's — `format.test.ts` pins the string, this pins that it is drawn.
+  const roles = turns.first().locator('.assistant-turn-role')
+  await expect(roles).toHaveCount(2)
+  await expect(roles.first()).toHaveText(/^You · \d\d:\d\d$/)
+  await expect(roles.last()).toHaveText(/^Assistant · \d\d:\d\d$/)
+})
+
+/**
  * The grounding block appears **once** in a conversation, on the question being asked — a remembered
  * question is the bare text the owner typed (DDR-0113, decision 3). Restating the absences per turn
  * would leave the model deciding which copy is current.

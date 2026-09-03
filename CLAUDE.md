@@ -5,9 +5,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > **Budget: keep this file under 56 KB** (`wc -c CLAUDE.md` ≤ 57344) — it is loaded into every
 > session, so its cost is paid before any work starts. **`src/claudeMdBudget.test.ts` enforces it**
 > — unenforced, it was overrun for six commits unnoticed. Raised three times, deliberately:
-> 36 → 44 → 50 → 56. The raise is the owner's call and is **not** how a story makes room: #328 came
-> within one byte of the old ceiling and paid for its trap in cuts first, which is the order that
-> stays right whatever the number is.
+> 36 → 44 → 50 → 56. The raise is the owner's call and is **not** how a story makes room: a story
+> pays for its trap in cuts first, whatever the number is.
 >
 > Every ADR and DDR is 8–20 KB and carries its own reasoning, and
 > `docs/design-decisions/README.md` indexes each in one line. So when a story lands, add *the
@@ -29,8 +28,8 @@ in (DDR-0108), and the app's own **baseline** (ADR-0012).
 the assembled context, and ADR-0009 needed no amendment (DDR-0111, DDR-0112).
 **M12 is delivered after it — the assistant holds a conversation**: a question carries the turns
 before it and the **role is the marking** (DDR-0113), and an answer is **rendered, never quoted**
-(DDR-0114). Milestone order is not delivery order — check the record, not the number, and M12 after
-M13 is the example. Not built: multi-broker, benchmarks, tax.
+(DDR-0114). Milestone order is not delivery order — check the record, not the number.
+Not built: multi-broker, benchmarks, tax.
 
 **Which Epics are open is deliberately not recorded here** — read the backlog (*Current Priority*).
 The **lifecycle** is the rule: an Epic closes with its stories, and refinement opens a *new*
@@ -154,8 +153,8 @@ Each exists end-to-end and is the reference pattern for its shape.
   table row is padded and a long one's surplus **folded into the last cell**, a bare `#` is a
   paragraph. Marks are a **set**, not an inline tree; emphasis opens on neither a following space
   (`5 * 3` is arithmetic) nor mid-word, and the closer tracks **what the opener left behind**.
-  `.assistant-answer code` **joins the figure role** (a second `--font-figure` rule throws) and its
-  chip sits on `--bg`, never `--surface-raised`'s three counted adopters. A `#` starts at **`h3`**
+  `.assistant-answer code` **joins the figure role** (a second `--font-figure` rule throws); its
+  chip is `--bg`, not the raised surface's three counted adopters. A `#` starts at **`h3`**
   and the type step falls between **`h4`/`h5`**, because the prompt's own register is `##`/`###`.
   The alignment classes are **scoped** or `.assistant-answer th` out-specifies them. What the next
   turn remembers is the **raw** string (DDR-0113): formatting is a render concern.
@@ -166,9 +165,17 @@ Each exists end-to-end and is the reference pattern for its shape.
   **`.sr-only`** rather than leaving the tree when the column folds.
   **`.profile-column-body[hidden]` is load-bearing** — its own `display` defeats the attribute
   (DDR-0106's trap again), and without it the folded form stays laid out and tabbable behind a
-  48px rail. The 0.22s width transition is a **raw duration**, exempt in `motionTokens.ts` **as a
-  pair** with its reduced-motion rule, whose selector is **doubled**: that block sits ~4,000 lines
-  above the rule it overrides and loses on source order otherwise.
+  48px rail. Two rules escape the duration scale — the column's **raw 0.22s** and the transcript's
+  **`scroll-behavior`** (motion with *no* time in it, so nothing zeroes it; `scrollIntoView`
+  therefore names no `behavior`). Each is a `motionTokens.ts` exemption **paired** with a
+  reduced-motion rule whose selector is **doubled**: that block sits ~4,000 lines above them and
+  loses on source order otherwise.
+  **A turn is two bubbles, and the two orders are not one order** (#344): the array stays
+  **newest-first** — `rememberedTurns` walks it backwards, the trim drops from the oldest end — and
+  only `transcriptOrder` reverses it for drawing; reversing the stored array inverts the memory in
+  silence. The `WHO · TIME` marking is **new state that reaches no request**. The owner's bubble is
+  **`--accent-strong`**, never `--accent` — white on the text half is 4.47:1, DDR-0046's split
+  applied to the accent; the model's is `--card`, adding no raised adopter.
 - **classification** — sector/industry. `classificationRepository` fronts *both* the mutable
   SQLite cache and `ibkrGateway`; `analytics:classifyInstruments` is the only analytics channel
   reaching IBKR. Refreshes are **resumable, not transactional** — a run that dies at 30 of 40 keeps
@@ -441,10 +448,9 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
   `refreshing`. **Portfolio is deliberately excluded** and re-reads on every visit — it shows live
   data that changes with no event to signal it.
 - **The page header's `source` has two values and five views** — `LIVE_SOURCE` and
-  `IMPORTED_SOURCE`. There was a third, `OWNER_SOURCE` ("Set by you"), naming **no** data source
-  because the Assistant has none; that view lost its header in #343 and the constant was
-  **deleted**, so DDR-0094's "the slot says whose standard it is" now holds for the five views
-  with a source and the Assistant's *column* says it instead (DDR-0115).
+  `IMPORTED_SOURCE`. A third, `OWNER_SOURCE` ("Set by you"), named **no** data source and was
+  **deleted** with the Assistant's header in #343, so DDR-0094's "the slot says whose standard it
+  is" holds for those five and the Assistant's *column* says it instead (DDR-0115).
 - **`AnalyticsShell` owns the four-branch guard, the `<main>`, and the page header** (DDR-0043,
   DDR-0058). Children are a **function of the report, not elements**, and **the shell holds no
   state**, which is what keeps DDR-0027 intact. The status
@@ -576,8 +582,7 @@ Node ≥22.12, CI runs 24 — **no `engines` field enforces it**; the requiremen
 comment (`@electron/rebuild` / `node-abi` need it). The rest of the stack is `package.json`; the
 one external dependency is the IBKR Client Portal Gateway.
 
-Runtime dependencies are deliberately few (`mapbox-gl` is the Allocation basemap and nothing
-else). **Avoid adding dependencies without clear long-term value.**
+**Avoid adding dependencies without clear long-term value.**
 
 ## Commands
 

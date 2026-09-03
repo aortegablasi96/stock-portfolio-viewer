@@ -80,6 +80,24 @@ const transitionDuration = (className: string): Promise<string> =>
 const animationDuration = (className: string): Promise<string> =>
   computedMotion(className, 'animation')
 
+/**
+ * `scroll-behavior` as computed for a real rule, the same way (Story #344).
+ *
+ * It needs its own reader because it is neither a transition nor an animation: it carries no time
+ * at all, so nothing about it appears in a duration. That is exactly why it cannot be reached by
+ * zeroing `--duration-*` and has to be answered by name — and why this is the assertion that would
+ * fail if that rule were deleted or lost its doubled selector (`motionTokens.ts`'s EXEMPTIONS).
+ */
+const scrollBehavior = (className: string): Promise<string> =>
+  page.evaluate((name) => {
+    const probe = document.createElement('div')
+    probe.className = name
+    document.body.append(probe)
+    const value = getComputedStyle(probe).scrollBehavior
+    probe.remove()
+    return value
+  }, className)
+
 test('the scale is live when no preference is stated', async () => {
   await page.emulateMedia({ reducedMotion: 'no-preference' })
   expect(await duration('--duration-fast')).toBe('90ms')
@@ -112,6 +130,28 @@ test('every view is still reachable and still renders with reduced motion', asyn
     await expect(panel).toBeVisible()
     await expect(panel).not.toBeEmpty()
   }
+})
+
+/**
+ * The two rules that deliberately do **not** draw from the scale, and are therefore stopped by name
+ * (DDR-0115 amendment 4; Story #343 and Story #344).
+ *
+ * Both are declared ~4,000 lines below the media query at equal specificity, so each carries a
+ * doubled selector to win on more than source order. That is the half a text scan cannot check —
+ * `designTokens.test.ts` can see that the rule is written, not that it resolves — and it is the
+ * failure mode DDR-0059 records having shipped once already.
+ */
+test('the two rules off the duration scale are stopped by name', async () => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' })
+  expect(await transitionDuration('assistant-profile-column'), 'the profile column').toBe('0.22s')
+  expect(await scrollBehavior('assistant-transcript'), 'the transcript').toBe('smooth')
+
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  expect(await transitionDuration('assistant-profile-column'), 'the profile column').toBe('0s')
+  // The transcript's scroll is motion with no duration in it, so this is the only place the
+  // preference can be honoured: a `behavior: 'smooth'` option in the component would be outside
+  // every mechanism the app has.
+  expect(await scrollBehavior('assistant-transcript'), 'the transcript').toBe('auto')
 })
 
 test('the three animations that used to escape are covered', async () => {

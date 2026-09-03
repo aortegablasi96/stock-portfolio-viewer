@@ -136,13 +136,30 @@ export function groundingNotices(grounding: GroundingReports): GroundingNotice[]
   return notices
 }
 
-/** One question and whatever became of it. */
+/**
+ * One question and whatever became of it.
+ *
+ * The two clock times are **drawn and never sent** (Story #344, DDR-0115 decision 7). A remembered
+ * turn is a question and an answer under a role and nothing else (DDR-0113), so a time in a bubble
+ * is a render concern in exactly the way DDR-0114 made formatting one — and the failure is silent
+ * if it is not: a time in the prompt is a fact the model may reason from, and no absence block
+ * covers it. `rememberedTurns` is where that is asserted directly.
+ *
+ * They are two fields rather than one because they answer different questions. `askedAt` is when
+ * the owner sent it; `answeredAt` is when something came back, which is `null` for as long as
+ * nothing has. A single field would have to lie about one of the two while a turn is in flight,
+ * and the design draws the waiting bubble with no time at all.
+ */
 export interface Turn {
   /** Monotonic within the session; the key a list renders on. */
   id: number
   question: string
   /** The value `lib/dataVersion` held when this turn was grounded (DDR-0027). */
   groundedAt: number
+  /** Epoch ms, when the owner sent the question. Drawn beside `You`, never remembered. */
+  askedAt: number
+  /** Epoch ms, when the result arrived — `null` while the turn is still `thinking`. */
+  answeredAt: number | null
   answer: TurnAnswer
 }
 

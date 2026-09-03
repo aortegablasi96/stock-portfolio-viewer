@@ -16,7 +16,7 @@
  *
  * It is the same shape as `tokenAdoption.ts` minus the ratchet: there is no `BASELINE` here,
  * because the whole stylesheet was converted in this story rather than over two. {@link EXEMPTIONS}
- * is the permanent list, and it has **three** entries in **two kinds** — see its own note.
+ * is the permanent list, and it has **five** entries in **three kinds** — see its own note.
  */
 import { scanDeclarations, type CssDeclaration } from './cssDeclarations'
 
@@ -36,6 +36,12 @@ const MOTION_PROPERTIES = [
   'animation-duration',
   'animation-delay',
   'animation-timing-function',
+  // `scroll-behavior: smooth` animates and carries **no time at all** — the user agent picks how
+  // long the scroll takes (Story #344). It is therefore a motion declaration that can never draw
+  // from the scale, which makes it a violation by construction and an {@link EXEMPTIONS} entry
+  // with a reduced-motion partner the only way to ship one. Listing it is what stops a smooth
+  // scroll being the way around a rule every other animation in this app obeys.
+  'scroll-behavior',
 ] as const
 
 export function isMotionProperty(property: string): boolean {
@@ -119,11 +125,16 @@ export interface ExemptEntry {
 }
 
 /**
- * The animations the scale cannot express, in the two kinds there are.
+ * The animations the scale cannot express, in the three kinds there are.
  *
  * **The first kind cannot draw from the scale.** The capped table's bottom fade (Story #67) is
  * driven by `animation-timeline: scroll(self block)`. Its note is below and it is the entry this
  * list was written for.
+ *
+ * **The third kind has no duration to draw.** `scroll-behavior: smooth` (Story #344) animates and
+ * names no time anywhere — the user agent picks one — so it is outside the mechanism for a
+ * different reason from a raw duration: not because someone chose a value off the scale, but
+ * because there is no value to choose. It arrives as the same **pair**, and for the same reason.
  *
  * **The second kind deliberately does not.** Story #343 takes the Figma design's `0.22s` for the
  * Assistant's profile column, which is neither of the scale's two durations — and DDR-0044's one
@@ -170,5 +181,17 @@ export const EXEMPTIONS: readonly ExemptEntry[] = [
     value: '0s',
     reason:
       'The explicit half of the entry above (Story #343, DDR-0115 amendment 4). A raw duration cannot be reached by redefining `--duration-*`, so the column is stopped by name; `0s` is a raw time and therefore a violation like any other, which is why it is listed rather than special-cased. The selector is doubled to out-specify the rule it overrides — the token redefinition beside it needs no such thing, because a custom property is re-read where it is used, but this is a property override 4,000 lines above the rule it fights. Delete this and the column keeps sliding for a reader who asked it not to.',
+  },
+  {
+    key: '.assistant-transcript | scroll-behavior',
+    value: 'smooth',
+    reason:
+      'The transcript scrolls a new turn into view (Story #344, DDR-0115 decision 7). `scroll-behavior` is the third kind of thing this list holds: motion with **no time in it at all** — the user agent decides how long a smooth scroll takes — so unlike a raw duration it could not draw from the scale even if someone wanted it to. That is exactly why it is exempted rather than special-cased: it is a real escape from the mechanism, and the escape is paid for by the entry below. The component calls `scrollIntoView` with no `behavior` option, so this declaration is the whole of the app’s answer and a branch in the component would put that answer out of the media query’s reach.',
+  },
+  {
+    key: '@media (prefers-reduced-motion: reduce) >> .assistant-transcript.assistant-transcript | scroll-behavior',
+    value: 'auto',
+    reason:
+      'The explicit half of the entry above (Story #344). Nothing about `scroll-behavior` responds to zeroing `--duration-*`, so the band is stopped by name and the scroll becomes a jump. Doubled to out-specify the rule it overrides, for the reason the column’s entry gives. `e2e/reduced-motion.spec.ts` proves the cascade actually resolves; a text scan can only see that both halves are written.',
   },
 ]

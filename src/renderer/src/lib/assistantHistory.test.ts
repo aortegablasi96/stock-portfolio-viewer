@@ -19,11 +19,22 @@ import { MAX_HISTORY_CHARS, MAX_REMEMBERED_TURNS } from '@shared/domain/assistan
 
 let nextId = 1
 
-/** A turn as the view holds one. `groundedAt` defaults to the current version: not stale. */
+/**
+ * A turn as the view holds one. `groundedAt` defaults to the current version: not stale.
+ *
+ * The two clock times are real values rather than zeroes, and that is deliberate: they exist so
+ * the assertions below can look for them in what goes out. A fixture carrying `0` would let a
+ * timestamp reach the wire and still pass, which is the failure this story has to make loud.
+ */
+const ASKED_AT = new Date(2026, 8, 3, 17, 31).getTime()
+const ANSWERED_AT = new Date(2026, 8, 3, 17, 32).getTime()
+
 const answered = (question: string, text: string, groundedAt = 5): Turn => ({
   id: nextId++,
   question,
   groundedAt,
+  askedAt: ASKED_AT,
+  answeredAt: ANSWERED_AT,
   answer: { kind: 'answered', text, truncated: false },
 })
 
@@ -31,6 +42,8 @@ const thinking = (question: string, groundedAt = 5): Turn => ({
   id: nextId++,
   question,
   groundedAt,
+  askedAt: ASKED_AT,
+  answeredAt: null,
   answer: { kind: 'thinking' },
 })
 
@@ -38,6 +51,8 @@ const failed = (question: string, groundedAt = 5): Turn => ({
   id: nextId++,
   question,
   groundedAt,
+  askedAt: ASKED_AT,
+  answeredAt: ANSWERED_AT,
   answer: { kind: 'failed', heading: 'No answer came back', text: 'The assistant did not reply.' },
 })
 
@@ -70,6 +85,61 @@ describe('what the model is told about the turns before this one', () => {
     const turns = transcript(answered('What do I hold?', 'Rio Tinto, then Serabi Gold.'))
 
     expect(rememberedTurns(turns, 5)[0]?.answer).toContain('Serabi Gold')
+  })
+})
+
+/**
+ * **What the transcript gained in Story #344, and what the model may never see** (DDR-0115
+ * decision 7).
+ *
+ * A turn now carries two clock times, drawn above its two bubbles. They are a render concern in
+ * exactly the way formatting is (DDR-0114), and the failure if they leak is silent: a time in the
+ * prompt is a fact the model may reason from, no absence block covers it, and nothing on screen
+ * would look wrong. So it is asserted directly rather than inferred from the shape of the type —
+ * `AssistantHistoryTurn` is Zod-free by design (DDR-0105's trap), so nothing strips a field at
+ * this end.
+ */
+describe('a remembered turn carries two fields and no others', () => {
+  it('emits exactly `question` and `answer`, with no timestamp among them', () => {
+    const [remembered] = rememberedTurns(transcript(answered('What do I hold?', 'Eight.')), 5)
+
+    expect(Object.keys(remembered!).sort()).toEqual(['answer', 'question'])
+    expect(remembered).toEqual({ question: 'What do I hold?', answer: 'Eight.' })
+  })
+
+  /**
+   * The same claim from the other side, over a whole conversation: the times the fixtures carry
+   * are real and distinct, so a leak of either — under any key, at any depth — shows up here.
+   */
+  it('lets no clock time reach the wire, whatever the conversation', () => {
+    const turns = transcript(
+      answered('One', '1'),
+      failed('Two'),
+      answered('Three', '3'),
+      thinking('Four'),
+    )
+
+    const wire = JSON.stringify(rememberedTurns(turns, 5))
+
+    expect(wire).not.toContain(String(ASKED_AT))
+    expect(wire).not.toContain(String(ANSWERED_AT))
+    expect(wire).not.toContain('askedAt')
+    expect(wire).not.toContain('answeredAt')
+    // And the guard is looking at something: the conversation it measured is not empty.
+    expect(wire).toContain('Three')
+  })
+
+  /**
+   * **The array's order is the wire's; the transcript's order is the transcript's** (DDR-0115
+   * decision 7). #344 draws the transcript oldest-first, and the trap it walks past is getting
+   * that by reversing the *stored* array — which would make this function emit the conversation
+   * backwards and `trimHistory` drop the **newest** turns, with nothing on screen looking wrong.
+   * The reversal lives in `transcriptOrder`; this asserts that it did not move here.
+   */
+  it('still reads a newest-first array and emits oldest-first', () => {
+    const newestFirst = [answered('Second', 'B'), answered('First', 'A')]
+
+    expect(rememberedTurns(newestFirst, 5).map((one) => one.question)).toEqual(['First', 'Second'])
   })
 })
 

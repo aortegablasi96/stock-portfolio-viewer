@@ -202,6 +202,20 @@
      breakpoints that take --sidebar-width as an input (DDR-0068). */
   --assistant-profile-width: 420px;
   --assistant-profile-rail-width: 48px;
+  /* The chat bubbles' two design measurements (Story #344, DDR-0115 amendment 8). Named rather
+     than snapped, for the reason 420 and 48 above are: each *is* the specification.
+
+     The 2px corner is the one that carries meaning — a bubble's asymmetric corner points at the
+     speaker, and the three round corners are `--radius-lg`, which is 12px and therefore already
+     the design's own number. DDR-0031 puts sub-6px radii off the scale on purpose, so this is a
+     token with a name rather than an entry in `tokenAdoption.ts`'s exemption list: that list is
+     for values the scale refuses, not for a design's own dimensions.
+
+     82% is not a length at all and so is on no scale to join. It is what keeps a bubble from
+     filling the column edge to edge, which is the whole reason the two sides read as two
+     speakers rather than as two paragraphs. */
+  --assistant-bubble-corner: 2px;
+  --assistant-bubble-max: 82%;
   /* The Portfolio view's data-sources card (Story #266), the third of these and the successor
      to Story #189's `--rail-width: 260px`. The rail is gone — the holdings table takes the
      page — and the card it carried now sits beside Stored statements, so the measure is no
@@ -381,6 +395,16 @@
      sliding for a reader who asked it not to. */
   .assistant-profile-column.assistant-profile-column {
     transition-duration: 0s;
+  }
+
+  /* The second of the same kind (Story #344). `scroll-behavior` is motion with no duration
+     anywhere in it — the user agent picks how long a smooth scroll takes — so redefining
+     `--duration-*` cannot reach it and there is nothing for the mechanism above to zero. It is
+     therefore stopped by name, and listed in `motionTokens.ts`'s EXEMPTIONS as a pair with the
+     `smooth` it overrides, exactly as the column above is. Doubled for the same reason: the rule
+     it fights is declared ~4,000 lines below at equal specificity. */
+  .assistant-transcript.assistant-transcript {
+    scroll-behavior: auto;
   }
 }
 
@@ -4337,6 +4361,44 @@ html {
   min-height: 0;
   overflow-y: auto;
   padding: var(--space-7) var(--space-8);
+  /* The newest turn is at the foot now, so a new one has to be scrolled to (Story #344). The
+     component calls `scrollIntoView` with no `behavior`, which resolves to this — so the answer
+     to `prefers-reduced-motion` is a rule in the block under `:root` rather than a branch in a
+     component, which is where this app answers it (DDR-0044). */
+  scroll-behavior: smooth;
+}
+
+/* Nothing asked yet (`figma_design/src/App.tsx:2245-2252`). Centred and dropped down the band
+   rather than pinned to its top: the composer is at the foot, so a message flush against the
+   header would be as far from the box it is about as the column allows. */
+.assistant-transcript-empty {
+  padding-top: calc(var(--space-8) * 2);
+  text-align: center;
+  color: var(--muted);
+}
+
+/* Sized from the scale rather than the design's 40px, which is the trade `.app-tab` already made
+   with the proposal's own lengths: the *rhythm* is what is adopted, and one step is 32px. The 0.4
+   is the design's, and it is decoration under two lines that say the same thing in words — the
+   glyph is `aria-hidden`, so nothing rests on it being read. */
+.assistant-transcript-empty-glyph {
+  width: var(--space-8);
+  height: var(--space-8);
+  margin: 0 auto var(--space-5);
+  display: block;
+  opacity: 0.4;
+}
+
+.assistant-transcript-empty-heading {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.assistant-transcript-empty-detail {
+  margin: 0;
+  font-size: var(--text-xs);
 }
 
 /* Pinned to the bottom (Story #343; #345 gives it Enter-to-send and its icon
@@ -4468,9 +4530,10 @@ html {
   color: var(--muted);
 }
 
-/* The transcript, newest first — the answer to the question just typed is the
-   one adjacent to the box that typed it, and a hidden-but-mounted panel has no
-   scroll position to manage (DDR-0027, DDR-0098). */
+/* The transcript, oldest first — a conversation read downward, with the newest
+   turn at the foot beside the composer that produced it (Story #344, DDR-0115).
+   The *array* is still newest-first; only the drawing is reversed, and
+   `lib/assistantTranscript.ts` records what reversing the other one would cost. */
 .assistant-turns {
   list-style: none;
   margin: 0;
@@ -4486,25 +4549,98 @@ html {
    second line directly beneath that one, above the first turn. Removed rather
    than re-pointed: the band boundary is the rule now. */
 
+/* The same gap as between two turns, and that is the point (Story #344). The design draws a flat
+   stream of messages at one rhythm; this app groups a question and its answer into one `<li>`,
+   because the `<li>` is the document structure and the live region's child. Equal gaps are what
+   make the grouping invisible, so the reader sees the design's stream and a screen reader still
+   gets a list of turns. Raise one and the pairing becomes a visual claim nothing else supports. */
 .assistant-turn {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-6);
 }
 
-/* The question as it was asked, quoted back. A reader scanning a transcript
-   needs to know which question an answer belongs to, and the rule down its
-   leading edge is the same device the active sidebar row uses at a smaller
-   scale — a marker, never a surface. */
-.assistant-question {
+/* ---- A turn is two blocks, each marked with who said it (Story #344) -------
+   `.assistant-question` stood here: one paragraph with a rule down its leading
+   edge, which said *this is a quotation* and left the answer under it to be told
+   apart by its typography alone. The design says it with two bubbles instead, and
+   the `<li>` is still the document structure — the alignment is layout on top of
+   it (DDR-0115 decision 7).
+
+   The block is what aligns; the bubble is what is painted. Two elements rather
+   than one because the role label above the bubble aligns with it and is not in
+   it: it sits on the transcript's own ground, where `--muted` is measured. */
+.assistant-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.assistant-block-you {
+  align-items: flex-end;
+}
+
+.assistant-block-model {
+  align-items: flex-start;
+}
+
+/* `WHO · 17:31`. The app's **one** micro-label, not a second one at the design's
+   10px: the same four declarations `.stat-label`, `.data-table thead th` and
+   `.app-nav-label` carry, asserted together in `statTileVariants.test.ts`. The
+   design draws 10px/700 and this is 11.5px/600 — the register is the same and
+   the app already refused to grow a second treatment for it (DDR-0034). */
+.assistant-turn-role {
   margin: 0;
-  padding-left: var(--space-5);
-  border-left: 2px solid var(--border);
-  max-width: 62ch;
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Both bubbles. The cap is the design's 82% of the column, which is what keeps
+   the two sides reading as two speakers; `--leading-normal` and `--text-sm` are
+   the app's own steps rather than the design's 1.7/13px, the same trade
+   `.app-tab` made with the proposal's lengths.
+
+   `pre-wrap` is the owner's half doing the work — a question typed across three
+   lines is three lines — and it is what `.assistant-question` carried before.
+   The answer overrides nothing: `.assistant-answer` declares its own. */
+.assistant-bubble {
+  max-width: var(--assistant-bubble-max);
   font-size: var(--text-sm);
   line-height: var(--leading-normal);
-  color: var(--muted);
   white-space: pre-wrap;
+}
+
+/* The owner's, filled and aligned right. `--accent-strong` and **not**
+   `--accent`, which is the accent split doing exactly what DDR-0046's does for
+   the loss tone: `--accent` is the app's *text* indigo (#818cf8) and white on it
+   is 4.47:1, below AA — `--accent-strong` is the fill half, at 6.29:1. The
+   design's own `--accent` is #6366f1, a fill-grade indigo this app declined as a
+   text token for that very reason (DDR-0054), so taking the fill half here is
+   the faithful reading of the design rather than a departure from it.
+   `contrast.ts` measures the pairing on the bubble's own fill.
+
+   The corner points at the speaker: three at `--radius-lg`, the fourth at the
+   design's 2px, on the bottom-*right* because this bubble is on the right. */
+.assistant-bubble-you {
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-lg) var(--radius-lg) var(--assistant-bubble-corner) var(--radius-lg);
+  background: var(--accent-strong);
+  color: #ffffff;
+}
+
+/* The model's, on the app's card surface with the card's own edge, aligned left
+   and roomier — it holds rendered prose rather than one typed sentence, which is
+   the relationship the design draws with 14/18 against 10/15 and this reproduces
+   one scale step up. The mirrored corner: 2px on the top-left. */
+.assistant-bubble-model {
+  padding: var(--space-5) var(--space-6);
+  border: 1px solid var(--border);
+  border-radius: var(--assistant-bubble-corner) var(--radius-lg) var(--radius-lg) var(--radius-lg);
+  background: var(--card);
+  color: var(--text);
 }
 
 /* The answer, rendered rather than quoted (Story #321, DDR-0114).
@@ -4620,7 +4756,17 @@ html {
    the role's `tabular-nums` and tracking are what those want. The role
    declares no size, so the step down to `--text-xs` is here: JetBrains Mono
    runs larger than Inter at one size, and a chip should not outweigh the
-   sentence around it. */
+   sentence around it.
+
+   **The ground is stated, and it is `--bg`** (Story #344). Until this story the
+   answer sat directly on the page ground, so a `--bg` chip was fill against
+   identical fill and its border was the whole mark. It is inside a `--card`
+   bubble now, which makes the same declaration a recessed well — the shape
+   `card-nested` already uses for an inset (DDR-0033). Deliberately **not**
+   `--surface-raised`: that surface has exactly three adopters and
+   `sidebarRail.test.ts` counts them, and a fourth owes its own measured
+   pairings (DDR-0069, DDR-0070). Everything this chip renders — `--text` on
+   `--bg`, its edge on `--card` — is already enumerated in `contrast.ts`. */
 .assistant-answer code {
   padding: var(--space-1) var(--space-2);
   border: 1px solid var(--border);
