@@ -55,7 +55,7 @@ async function launch(
   const page = await app.firstWindow()
   await page.waitForLoadState('domcontentloaded')
   await page.getByRole('tab', { name: 'Assistant' }).click()
-  await expect(page.getByRole('heading', { level: 1, name: 'Assistant' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1, name: 'AI Assistant' })).toBeVisible()
   return { app, page }
 }
 

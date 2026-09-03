@@ -47,18 +47,25 @@ import { ToggleGroup } from './ui/ToggleGroup'
  * position-size ceiling, so dropping a table would silently narrow the drift report rather than
  * simplify the page.
  *
- * **Collapsed by default, and each section independently** (DDR-0106). One `Collapsible` at
- * `group` level holds the profile as a whole and five at `section` level hold its parts, which is
- * exactly the six surfaces #308 built the primitive for. Closed means `hidden` and never
- * unmounted, so folding a section away does not discard what has been typed into it — the same
- * decision the tab shell makes for a view (DDR-0027), applied one level down.
+ * **It is a column now, and the column is the disclosure** (Story #343, DDR-0115). Until #343 an
+ * outer `group` `Collapsible` held the profile as a whole, closed on arrival, inside a scrolling
+ * page. The design gives the standard its own 420px column that folds to a 48px rail, so that
+ * outer fold is gone: two nested ones would be a fold inside a fold, and the rail's expander is
+ * the same gesture the trigger was. The heading the trigger carried is a plain `<h2>` at the same
+ * level, and the summary beside it moved under it.
  *
- * **What stays visible when it is folded is the head row**: the name, and what the stored profile
- * currently says. Everything the owner can *do* to the profile — Discard, Save, and the notice
- * that answers them — sits inside the panel with the form it acts on, so a write can only be
- * started from a place where its reply can be read. `role="status"` inside a `hidden` subtree
- * announces nothing, and a Save button pressable while its answer was hidden would make exactly
- * that.
+ * **Its five `section` `Collapsible`s are untouched** (DDR-0106) — the parts of the profile still
+ * open and close one at a time, `hidden` and never unmounted, so folding one away does not
+ * discard what has been typed into it. That is the same decision the tab shell makes for a view
+ * (DDR-0027), and the fold of the whole column now makes it a third time: `hidden` on this
+ * block, so the form survives and its controls leave the tab order together.
+ *
+ * **Everything the owner can *do* to the profile sits with the form it acts on**, so a write can
+ * only be started from a place where its reply can be read. `role="status"` inside a `hidden`
+ * subtree announces nothing, and a Save button pressable while its answer was hidden would make
+ * exactly that — which is why the fold takes the buttons with it rather than leaving a head row
+ * that can still be pressed. (#347 moves Save and Discard to the top of the column, where the
+ * design puts them and where they are still inside the same `hidden` subtree.)
  *
  * The five cards lose the ruled header strip they carried as static cards, and that follows
  * DDR-0059's own rule rather than departing from it: the strip divides a head from the body under
@@ -84,6 +91,8 @@ type Notice = { tone: 'ok' | 'error'; message: string }
 
 export function ProfileSection({
   onWritten,
+  onStored,
+  hidden,
 }: {
   /**
    * A save or a clear landed, and the stored profile is now something else.
@@ -95,6 +104,24 @@ export function ProfileSection({
    * view share (DDR-0056, DDR-0108).
    */
   onWritten: () => void
+  /**
+   * What the stored profile now *says*, which is a different question from whether it changed.
+   *
+   * The column's rail draws a completeness dot while it is folded (Story #343), and the count
+   * behind it is this section's `stored`. It is reported up rather than read a second time in the
+   * view: two reads of one `app_meta` value are two answers waiting to disagree, and the one that
+   * matters is the one the form beside it is seated on. Called on arrival as well as on a write —
+   * the dot has to be right before anything is saved.
+   */
+  onStored: (profile: InvestorProfile) => void
+  /**
+   * The column is folded, so nothing here may be seen *or reached*.
+   *
+   * `hidden`, never unmounted, which is the tab shell's rule one level down (DDR-0027): a
+   * half-finished profile survives the fold, and the attribute is what takes the form's controls
+   * out of the tab order — a 48px rail must not be a column of invisible Tab stops.
+   */
+  hidden: boolean
 }): React.JSX.Element {
   const [stored, setStored] = useState<InvestorProfile | null>(null)
   const [form, setForm] = useState<ProfileFormState>(() => formFromProfile(EMPTY_INVESTOR_PROFILE))
@@ -123,11 +150,12 @@ export function ProfileSection({
       if (!live) return
       setStored(profile)
       setForm(formFromProfile(profile))
+      onStored(profile)
     })
     return () => {
       live = false
     }
-  }, [])
+  }, [onStored])
 
   /** Take the profile the write returned as the new truth, and tell the view above. */
   const seat = useCallback(
@@ -136,8 +164,9 @@ export function ProfileSection({
       setForm(formFromProfile(profile))
       setNotice({ tone: 'ok', message })
       onWritten()
+      onStored(profile)
     },
-    [onWritten],
+    [onWritten, onStored],
   )
 
   const save = async (): Promise<void> => {
@@ -180,7 +209,11 @@ export function ProfileSection({
   // Nothing may be edited before the stored profile arrives, or the first keystroke would be
   // overwritten by the read that is still in flight.
   if (stored === null) {
-    return <StatePanel variant="loading">Loading your profile…</StatePanel>
+    return (
+      <div className="profile-column-body" hidden={hidden}>
+        <StatePanel variant="loading">Loading your profile…</StatePanel>
+      </div>
+    )
   }
 
   const dirty = isFormDirty(form, stored)
@@ -189,18 +222,20 @@ export function ProfileSection({
   const bandIssue = positionIssue(band)
 
   return (
-    <Collapsible
-      level="group"
-      /* Placement, never colour (ADR-0008): it gives the stack of cards inside the panel the
-         page's own `--space-7` rhythm rather than the panel's default measure. */
-      className="profile-group"
-      label="Your investor profile"
-      /* Closed on arrival: the owner came to this view to ask a question, and the standard they
-         set is a thing to glance at or adjust rather than the first form on the page. What the
-         head row keeps saying while it is shut is what the profile currently holds. */
-      defaultOpen={false}
-      action={<p className="profile-summary">{profileSummary(stored)}</p>}
-    >
+    /* The column *is* the disclosure now (Story #343, DDR-0115), so the outer `group`
+       `Collapsible` is gone and this is a plain block. What it keeps is the class it wore for
+       placement — the `--space-7` rhythm between the cards below — plus the padding the panel used
+       to supply, and the `hidden` the fold sets. Its five `section` `Collapsible`s are untouched:
+       a fold inside a fold is what two nested ones would be. */
+    <div className="profile-column-body" hidden={hidden}>
+      {/* The name the group's trigger used to carry, at the level it rendered. The design draws
+          it under the eyebrow with what the stored profile currently says beneath (#347 gives the
+          row its style-tag count badge). */}
+      <div className="profile-column-title-block">
+        <h2 className="profile-column-title">Investor Profile</h2>
+        <p className="profile-summary">{profileSummary(stored)}</p>
+      </div>
+
       {/* What this section is, what it offers to do, and how the last write went — one block,
           because all three are statements about the profile as a whole rather than about any
           section below. */}
@@ -379,6 +414,6 @@ export function ProfileSection({
           </CardContent>
         </Collapsible>
       </Card>
-    </Collapsible>
+    </div>
   )
 }

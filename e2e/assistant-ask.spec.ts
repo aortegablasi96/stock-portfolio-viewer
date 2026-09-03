@@ -59,8 +59,17 @@ const focusedId = (): Promise<string | undefined> => page.evaluate(() => documen
 
 const questionBox = () => view().getByLabel('Your question')
 
-/** The disclosure that holds the investor profile, folded above the conversation (Story #310). */
-const profileTrigger = () => view().getByRole('button', { name: 'Your investor profile' })
+/**
+ * The control that folds the investor profile's column away (Story #343, DDR-0115).
+ *
+ * It was a disclosure trigger above the conversation until #343 — the profile is the view's left
+ * *column* now, and the column itself is what folds, so the profile is open on arrival and this
+ * button shuts it rather than opening it.
+ */
+const profileToggle = (collapsed: boolean) =>
+  view().getByRole('button', {
+    name: collapsed ? 'Expand investor profile' : 'Collapse investor profile',
+  })
 
 test('Ctrl+6 reaches the Assistant from a focus outside the sidebar', async () => {
   await page.locator('#panel-portfolio').focus()
@@ -70,7 +79,7 @@ test('Ctrl+6 reaches the Assistant from a focus outside the sidebar', async () =
   // Focus lands on the destination row: a roving `tabindex` has just taken focusability off the
   // row being left, and the panel focus was standing in is now `hidden` (DDR-0083).
   expect(await focusedId()).toBe('tab-assistant')
-  await expect(view().getByRole('heading', { level: 1, name: 'Assistant' })).toBeVisible()
+  await expect(view().getByRole('heading', { level: 1, name: 'AI Assistant' })).toBeVisible()
 })
 
 test('the row is a full member of the tabs pattern, not a styled button', async () => {
@@ -100,14 +109,21 @@ test('puts nothing in front of the chat once there is a key', async () => {
 })
 
 /**
- * The profile is on this page and folded shut (Story #310, DDR-0108). What the head row keeps
- * saying while it is shut is what the profile currently holds — nothing, on a fresh store — and
- * the form itself is `hidden`, which is what keeps its controls out of the tab order.
+ * The profile is on this page, in its own column, open (Story #310, DDR-0108; Story #343,
+ * DDR-0115). It was folded shut on arrival while it was a disclosure inside a scrolling page; the
+ * design gives it a column that is open by default, so what this asserts is what the column says
+ * about a fresh store, and that folding it takes the form's controls out of the tab order.
  */
-test('carries the investor profile above the chat, collapsed', async () => {
-  await expect(profileTrigger()).toHaveAttribute('aria-expanded', 'false')
+test('carries the investor profile beside the chat, open', async () => {
+  await expect(profileToggle(false)).toHaveAttribute('aria-expanded', 'true')
   await expect(view().getByText(/^No profile set/)).toBeVisible()
+  await expect(view().getByRole('button', { name: 'Dividend income' })).toBeVisible()
+
+  await profileToggle(false).click()
+  await expect(profileToggle(true)).toHaveAttribute('aria-expanded', 'false')
   await expect(view().getByRole('button', { name: 'Dividend income' })).toBeHidden()
+  await profileToggle(true).click()
+  await expect(view().getByRole('button', { name: 'Dividend income' })).toBeVisible()
 })
 
 /**
@@ -130,8 +146,6 @@ test('with nothing to ground an answer in, says so instead of offering the box',
 test('opens the box once there is something to ground an answer in', async () => {
   // Stated and saved without leaving the view, which is the merge's own criterion: a profile
   // written here reaches the grounding beside it with no restart and no trip through a second row.
-  await profileTrigger().click()
-  await expect(profileTrigger()).toHaveAttribute('aria-expanded', 'true')
   await view().getByRole('button', { name: 'Dividend income' }).click()
   await view().getByRole('button', { name: 'Save profile' }).click()
   await expect(view().getByText(/^Profile saved/)).toBeVisible()

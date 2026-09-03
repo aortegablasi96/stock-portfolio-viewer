@@ -45,11 +45,10 @@ async function launch(userDataDir: string): Promise<{ app: ElectronApplication; 
   const page = await app.firstWindow()
   await page.waitForLoadState('domcontentloaded')
   await page.getByRole('tab', { name: 'Assistant' }).click()
-  await expect(page.getByRole('heading', { level: 1, name: 'Assistant' })).toBeVisible()
-  // Closed on arrival, and closed again on every launch: the disclosure is uncontrolled and holds
-  // its state for the life of the component, not in `app_meta` (DDR-0106). Opening it is how a
-  // reader reaches the form, so it is how these tests do.
-  await page.getByRole('button', { name: 'Your investor profile' }).click()
+  await expect(page.getByRole('heading', { level: 1, name: 'AI Assistant' })).toBeVisible()
+  // Open on arrival since Story #343: the profile is the view's left column now, and the column
+  // is the disclosure (DDR-0115). There is nothing to unfold before the form is reachable, which
+  // is why the click that used to be here is gone rather than re-pointed at the new toggle.
   return { app, page }
 }
 
@@ -75,16 +74,22 @@ test.describe('within one launch', () => {
   })
 
   /**
-   * The page states what it is and where its content comes from. The provenance line is the one
-   * that matters: it names no data source, because neither half of this page has one — the profile
-   * is the owner's own policy statement, and the conversation below it talks about that statement
-   * (ADR-0009, DDR-0108).
+   * The page states what it is and whose standard it holds. It did that in a `PageHeader` whose
+   * provenance line read *"Set by you"* — the one value naming no data source, because neither
+   * half of this page has one (ADR-0009, DDR-0094, DDR-0108).
+   *
+   * Story #343 took the Figma design's Assistant, which has no page header at all, so the header
+   * and `OWNER_SOURCE` are both gone (DDR-0115 amendment 1). The claim is not withdrawn, it moved:
+   * the **column** says it now, in an eyebrow, its own title and an intro paragraph that states in
+   * full sentences what three words in a slot could only gesture at. This asserts that — and that
+   * the profile still brings no second `<main>` or `<h1>` of its own, which is the half of the
+   * original that was really about the merge.
    */
-  test('sits on a page sourced to the owner rather than to a reading', async () => {
-    await expect(view(page).locator('.page-header .source-note')).toHaveText('Set by you')
-    // One header for the merged view, not two: the profile brought neither a `<main>` nor an
-    // `<h1>` with it.
-    await expect(view(page).locator('.page-header')).toHaveCount(1)
+  test('says whose standard it holds in the column, not in a provenance slot', async () => {
+    await expect(view(page).locator('.page-header')).toHaveCount(0)
+    await expect(view(page).getByRole('heading', { level: 1 })).toHaveCount(1)
+    await expect(view(page).getByRole('heading', { level: 2, name: 'Investor Profile' })).toBeVisible()
+    await expect(view(page).getByText(/^Your own policy for how this portfolio should be invested/)).toBeVisible()
     await expect(view(page).getByText('No profile set')).toBeVisible()
   })
 

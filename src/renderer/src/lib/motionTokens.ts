@@ -16,7 +16,7 @@
  *
  * It is the same shape as `tokenAdoption.ts` minus the ratchet: there is no `BASELINE` here,
  * because the whole stylesheet was converted in this story rather than over two. {@link EXEMPTIONS}
- * is the permanent list, and it has one entry — see its own note.
+ * is the permanent list, and it has **three** entries in **two kinds** — see its own note.
  */
 import { scanDeclarations, type CssDeclaration } from './cssDeclarations'
 
@@ -119,7 +119,21 @@ export interface ExemptEntry {
 }
 
 /**
- * The one animation the scale cannot express, and the one this story decided to leave running.
+ * The animations the scale cannot express, in the two kinds there are.
+ *
+ * **The first kind cannot draw from the scale.** The capped table's bottom fade (Story #67) is
+ * driven by `animation-timeline: scroll(self block)`. Its note is below and it is the entry this
+ * list was written for.
+ *
+ * **The second kind deliberately does not.** Story #343 takes the Figma design's `0.22s` for the
+ * Assistant's profile column, which is neither of the scale's two durations — and DDR-0044's one
+ * documented way off the budget is a raw value declared with its reason rather than a third token
+ * existing for one rule (DDR-0115 amendment 4). It arrives as a **pair**: the rule, and the
+ * explicit reduced-motion rule that stops it, because a raw duration is by construction outside
+ * the mechanism that zeroes `--duration-*`. Both are listed. An entry of this kind with no
+ * reduced-motion partner is an animation that keeps running for a reader who asked it not to,
+ * which is the exact failure the whole module exists to prevent — so a raw duration added here
+ * without one is the thing to refuse in review.
  *
  * The capped table's bottom fade (Story #67) is driven by `animation-timeline: scroll(self block)`.
  * Its progress is the reader's own scroll position, so it has no duration to draw from the scale
@@ -144,5 +158,17 @@ export const EXEMPTIONS: readonly ExemptEntry[] = [
     value: 'table-rows-fade var(--ease-linear) both',
     reason:
       'Scroll-driven (Story #67): its progress is the scroll range, so it has no duration to draw from the scale or for the reduced-motion rule to zero. It cannot play by itself, it translates nothing, and it is the "more rows below" affordance.',
+  },
+  {
+    key: '.assistant-profile-column | transition',
+    value: 'width 0.22s cubic-bezier(0.4, 0, 0.2, 1)',
+    reason:
+      'The Assistant profile column, at the Figma design’s own 0.22s and easing (Story #343, DDR-0115 amendment 4). Neither is on the scale, and DDR-0044’s one way off the budget is a raw value declared with its reason rather than a third token existing for one rule. Being raw puts it outside the mechanism that zeroes the tokens, so it is zeroed by name inside the same reduced-motion block — the entry below is that rule, and the two move together.',
+  },
+  {
+    key: '@media (prefers-reduced-motion: reduce) >> .assistant-profile-column.assistant-profile-column | transition-duration',
+    value: '0s',
+    reason:
+      'The explicit half of the entry above (Story #343, DDR-0115 amendment 4). A raw duration cannot be reached by redefining `--duration-*`, so the column is stopped by name; `0s` is a raw time and therefore a violation like any other, which is why it is listed rather than special-cased. The selector is doubled to out-specify the rule it overrides — the token redefinition beside it needs no such thing, because a custom property is re-read where it is used, but this is a property override 4,000 lines above the rule it fights. Delete this and the column keeps sliding for a reader who asked it not to.',
   },
 ]

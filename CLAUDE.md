@@ -53,7 +53,8 @@ Each exists end-to-end and is the reference pattern for its shape.
   (`flexImportService` / `flexStatementsService`). See ADR-0005, DDR-0004, DDR-0026.
 - **analytics / dividends** — read-only over Flex through `flexReadRepository`, converting to base
   (EUR) **in the service**, each returning `ok | needs_import`. See DDR-0005, DDR-0010, DDR-0015.
-- **profile** — the investor profile (a **section of the Assistant view**, DDR-0108), and how far
+- **profile** — the investor profile (a **section of the Assistant view**, DDR-0108, its left
+  **column** since DDR-0115), and how far
   the portfolio sits from it and from the app's baseline (DDR-0109).
   `investorProfileService` → `metaRepository` → **one overwritten `app_meta` value**: a profile is a
   *setting*, not history, so ADR-0006 does not reach it and `metaRepository.remove` is not its
@@ -158,6 +159,16 @@ Each exists end-to-end and is the reference pattern for its shape.
   and the type step falls between **`h4`/`h5`**, because the prompt's own register is `##`/`###`.
   The alignment classes are **scoped** or `.assistant-answer th` out-specifies them. What the next
   turn remembers is the **raw** string (DDR-0113): formatting is a render concern.
+  **The view is two columns, not a page** (#343, DDR-0115): the profile at
+  `--assistant-profile-width` (420px), folding to `--assistant-profile-rail-width` (48px) —
+  **never** the nav's 56px; two edges, two constants — beside a chat column of three bands with
+  only the transcript scrolling. No `PageHeader`, and the eyebrow is the `<h1>`, taking
+  **`.sr-only`** rather than leaving the tree when the column folds.
+  **`.profile-column-body[hidden]` is load-bearing** — its own `display` defeats the attribute
+  (DDR-0106's trap again), and without it the folded form stays laid out and tabbable behind a
+  48px rail. The 0.22s width transition is a **raw duration**, exempt in `motionTokens.ts` **as a
+  pair** with its reduced-motion rule, whose selector is **doubled**: that block sits ~4,000 lines
+  above the rule it overrides and loses on source order otherwise.
 - **classification** — sector/industry. `classificationRepository` fronts *both* the mutable
   SQLite cache and `ibkrGateway`; `analytics:classifyInstruments` is the only analytics channel
   reaching IBKR. Refreshes are **resumable, not transactional** — a run that dies at 30 of 40 keeps
@@ -429,9 +440,11 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
   **`loading` means the first load only**; a reload reports through
   `refreshing`. **Portfolio is deliberately excluded** and re-reads on every visit — it shows live
   data that changes with no event to signal it.
-- **The page header's `source` has three values, not two** — `LIVE_SOURCE`, `IMPORTED_SOURCE` and
-  `OWNER_SOURCE` ("Set by you"), the last naming **no** data source because the Assistant has
-  none. That slot is where a page says whether its standard is the owner's or the app's (DDR-0094).
+- **The page header's `source` has two values and five views** — `LIVE_SOURCE` and
+  `IMPORTED_SOURCE`. There was a third, `OWNER_SOURCE` ("Set by you"), naming **no** data source
+  because the Assistant has none; that view lost its header in #343 and the constant was
+  **deleted**, so DDR-0094's "the slot says whose standard it is" now holds for the five views
+  with a source and the Assistant's *column* says it instead (DDR-0115).
 - **`AnalyticsShell` owns the four-branch guard, the `<main>`, and the page header** (DDR-0043,
   DDR-0058). Children are a **function of the report, not elements**, and **the shell holds no
   state**, which is what keeps DDR-0027 intact. The status

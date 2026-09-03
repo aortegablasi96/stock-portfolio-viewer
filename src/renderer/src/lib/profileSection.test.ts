@@ -82,9 +82,14 @@ describe('the profile is a section of the Assistant view, not a row of its own',
     expect(APP).not.toMatch(/tab === 'assistant' &&/)
   })
 
-  /** The profile is drawn above the conversation, which is the whole shape of the merge. */
-  it('draws the profile above the conversation, inside the one view', () => {
-    expect(ASSISTANT).toContain('<ProfileSection onWritten={onProfileWritten} />')
+  /**
+   * The profile comes first, which is the whole shape of the merge. It was *above* the
+   * conversation until Story #343 and is *beside* it now — the design's left column (DDR-0115) —
+   * and the ordering claim survives the change because the columns are in the same source order
+   * the stack was.
+   */
+  it('draws the profile before the conversation, inside the one view', () => {
+    expect(ASSISTANT).toMatch(/<ProfileSection\s+onWritten=\{onProfileWritten\}/)
     expect(ASSISTANT.indexOf('<ProfileSection')).toBeLessThan(
       ASSISTANT.indexOf('<AssistantConversation'),
     )
@@ -104,10 +109,18 @@ describe('the section brings no page of its own', () => {
     expect(SECTION).not.toContain('<AnalyticsShell')
   })
 
-  /** And the view above it still does, with the provenance that names no data source. */
-  it('leaves the view holding the main, the h1 and OWNER_SOURCE', () => {
-    expect(ASSISTANT).toContain('<main className="dashboard">')
-    expect(ASSISTANT).toMatch(/<PageHeader title="Assistant" source=\{OWNER_SOURCE\} \/>/)
+  /**
+   * And the view around it still holds the `<main>` and the `<h1>`. What it no longer holds is a
+   * `PageHeader`: Story #343 took the design's, which has none, and deleted `OWNER_SOURCE` with
+   * it (DDR-0115 amendment 1). The heading is the design's eyebrow now, and
+   * `assistantLayout.test.ts` owns that pair — asserted here only as the absence, which is the
+   * half this file was already about.
+   */
+  it('leaves the view holding the main and the h1, and no page header', () => {
+    expect(ASSISTANT).toContain('<main className="assistant-view">')
+    expect(ASSISTANT).toContain('<h1')
+    expect(ASSISTANT).not.toContain('<PageHeader')
+    expect(ASSISTANT).not.toContain('OWNER_SOURCE')
   })
 
   /**
@@ -122,40 +135,47 @@ describe('the section brings no page of its own', () => {
 
 describe('it folds through the one disclosure primitive', () => {
   /**
-   * Six surfaces: the profile as a whole, and each of its five sections — which is exactly the
-   * count #308 built `Collapsible` for rather than have written inline six times (DDR-0106).
+   * Five surfaces, and they are the profile's five *sections*.
+   *
+   * There were six: an outer `group` `Collapsible` held the profile as a whole, which is what
+   * #308 built the `level` axis for (DDR-0106). Story #343 gave the profile its own column, and
+   * that column folds — so the group's fold is the column's now, and keeping both would be a fold
+   * inside a fold (DDR-0115). The axis keeps its two values; only this call site stopped reaching
+   * the second one.
    */
-  it('uses a Collapsible for the group and for every section', () => {
+  it('uses a Collapsible for every section, and none for the whole', () => {
     const inSection = [...SECTION.matchAll(/<Collapsible\b/g)].length
     const inTargets = [...TARGETS.matchAll(/<Collapsible\b/g)].length
     // Three of the five sections are the one `ProfileTargets` component, drawn three times.
-    expect(inSection).toBe(4)
+    expect(inSection).toBe(3)
     expect(inTargets).toBe(1)
+    expect(SECTION).not.toContain('level="group"')
   })
 
   /**
-   * The group is the only one closed on arrival: the owner came to ask a question, and the
-   * standard they set is a thing to glance at. Its sections keep the primitive's own default,
-   * whose stated reason is that a section hiding its content unasked is lost.
+   * Every section keeps the primitive's own default, whose stated reason is that a section hiding
+   * its content unasked is lost. Nothing here opts out of it any more: the one `defaultOpen` in
+   * this file closed the group, and the group is gone.
    */
-  it('closes the group and leaves its sections at the primitive’s default', () => {
-    expect(SECTION).toMatch(/level="group"[\s\S]{0,400}?defaultOpen=\{false\}/)
-    expect([...SECTION.matchAll(/defaultOpen=/g)]).toHaveLength(1)
+  it('leaves every section at the primitive’s default', () => {
+    expect(SECTION).not.toContain('defaultOpen')
     expect(TARGETS).not.toContain('defaultOpen')
   })
 
-  /** Both levels the primitive declares are in use, which is what makes the axis earn its keep. */
-  it.each(COLLAPSIBLE_LEVELS)('reaches the "%s" level', (level) => {
-    const used = level === 'group' ? SECTION.includes(`level="${level}"`) : true
-    // `section` is the default and is therefore never named — its use is the four unnamed calls.
-    expect(used).toBe(true)
+  /**
+   * The `level` axis still declares both values and `app.css` still backs both, which is the half
+   * that matters: `group` is the level a future call site takes, and a value with no rule renders
+   * as an unstyled heading with nothing in the toolchain noticing (DDR-0106).
+   */
+  it.each(COLLAPSIBLE_LEVELS)('backs the "%s" level with a stylesheet rule', (level) => {
     expect(CSS).toContain(`\n.collapsible-${level} .collapsible-heading {`)
   })
 
   /**
    * A control belonging to a section goes in the slot beside the trigger, never inside it: a
    * button within a button is invalid markup that renders and then swallows one of the two
-   * clicks (DDR-0106). Two of the five sections carry one, and so does the group.
+   * clicks (DDR-0106). Two of the five sections carry one; the group did too until #343 removed
+   * it, and the two that remain are the reason the slot still has to exist.
    */
   it('puts each section’s own control in the action slot', () => {
     expect(TARGETS).toMatch(/action=\{\s*<Button size="sm"/)
@@ -166,13 +186,22 @@ describe('it folds through the one disclosure primitive', () => {
   })
 
   /**
-   * Everything the owner can *do* to the profile sits inside the panel with the form it acts on.
-   * A live region inside a `hidden` subtree announces nothing, so a Save that could be pressed
-   * from the closed head row would be a press whose answer could not be read (DDR-0108).
+   * Everything the owner can *do* to the profile sits with the form it acts on, inside whatever
+   * the current fold is. A live region inside a `hidden` subtree announces nothing, so a Save
+   * pressable while its answer was hidden would be a press whose reply could not be read
+   * (DDR-0108).
+   *
+   * That was the group panel until Story #343 and is the whole column now, which makes the claim
+   * *stronger* rather than weaker: the fold takes the buttons and their notice together, so there
+   * is no head row left that stays pressable while the panel under it is shut. What the summary
+   * loses is its `action` slot — it sits under the column's title, where the design draws it —
+   * and what it keeps is being ahead of the controls it describes.
    */
-  it('keeps Save, Discard and the notice inside the panel, and only the summary beside the trigger', () => {
-    expect(SECTION).toMatch(/action=\{<p className="profile-summary">/)
+  it('folds Save, Discard and the notice away with the form, the summary above them', () => {
+    expect(SECTION).toMatch(/<div className="profile-column-body" hidden=\{hidden\}>/)
+    expect(SECTION).not.toMatch(/action=\{<p className="profile-summary">/)
     const head = SECTION.indexOf('className="profile-summary"')
+    expect(head).toBeGreaterThan(0)
     expect(SECTION.indexOf('className="profile-actions"')).toBeGreaterThan(head)
     expect(SECTION).toMatch(/className=\{`profile-notice[\s\S]{0,120}?role="status"/)
   })
