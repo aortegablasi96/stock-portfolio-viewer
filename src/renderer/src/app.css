@@ -4368,6 +4368,15 @@ html {
 
 .assistant-chat-head {
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  /* The chip row wraps under the title in a narrow window rather than squeezing it: the
+     design draws one line because its frame is wide, and the row is five controls at their
+     own intrinsic width. Wrapping is the only degradation that keeps every one of them
+     reachable. */
+  flex-wrap: wrap;
+  gap: var(--space-4);
   padding: var(--space-6) var(--space-8) var(--space-5);
   border-bottom: 1px solid var(--border);
 }
@@ -4376,6 +4385,138 @@ html {
   margin: 0;
   font-size: var(--text-md);
   line-height: var(--leading-tight);
+}
+
+/* The corrected sentence (Story #346, DDR-0115 amendment 10). The design's slot, register
+   and size; this app's claim, because #327 emptied the assembled context and the model
+   fetches what it needs through tools (DDR-0111). */
+.assistant-chat-subtitle {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+/* The header's chip row: two chips that report and two that act
+   (`figma_design/src/App.tsx:2143-2240`). */
+.assistant-chip-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+/* A pill chip, whether it reports or acts (Story #346, DDR-0115 amendment 6).
+
+   **The corner is `--radius-pill`, not the design's 20px**, and the two are the same shape
+   here: at this chip's height a 20px corner is already past half of it, so both draw a
+   stadium. That is ADR-0008's rule about taking the shape rather than the stylesheet — a
+   named 20px token would be a second way to say what `--radius-pill` says, and the app's
+   other stadium (the active tab's marker, DDR-0031) would not move with it. What amendment 6
+   settled is what the corner *means*: a small standalone control. Multi-selection is carried
+   by `aria-pressed` and a checkmark, which is where a screen reader was always reading it.
+
+   **The fill is `--surface-raised`, and this is that token's fourth adopter** (DDR-0069,
+   DDR-0070). `sidebarRail.test.ts` counts them, and the toll is paid in `lib/contrast.ts`:
+   every ink this row renders — the muted label, the two toned states, the three dots and the
+   negative hover — is enumerated there on this fill rather than on `--card`.
+
+   `--control-pad-sm` is the design's own 5px/12px on the scale, and `--text-2xs` its 11px.
+   No focus rule: the `:where(...)` base at the top of this file rings the two that are
+   buttons (DDR-0026). */
+.assistant-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--control-pad-sm);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface-raised);
+  /* Named rather than `inherit`, which is what the design writes: two of these five chips are
+     `<button>`s, and a button that inherits nothing lands on the UA's own font. The role is
+     tokenised either way, which `figureRole.test.ts` requires of every family in this file
+     (DDR-0053). */
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  line-height: var(--leading-tight);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* The tone, as the sidebar's badge declares it: a mark colour and an ink, so a state is one
+   rule rather than three (DDR-0056). `idle` is the resting ink above and needs no rule of
+   its own — **neutral is the absence of a rule**, which is `StatTile`'s reading of the same
+   problem (DDR-0034) — but its mark still needs a colour, so that half is declared.
+
+   `warn` tones the mark alone. A chip whose *label* went red would report a gateway that is
+   merely quiet as a failure, and the wording is what tells the five states apart
+   (DDR-0022, DDR-0038). */
+.assistant-chip-idle {
+  --assistant-chip-mark: var(--muted);
+}
+
+.assistant-chip-live {
+  --assistant-chip-mark: var(--pos);
+  color: var(--pos);
+}
+
+.assistant-chip-warn {
+  --assistant-chip-mark: var(--neg);
+}
+
+/* The dot and its glow, drawn exactly as the rail's is — `currentColor` diluted rather than a
+   second colour, so a tone stays one declaration (DDR-0056). 6px is `--space-2`, and the mark
+   is never the chip's only channel: the label beside it says the state in words (DDR-0021). */
+.assistant-chip-dot {
+  flex-shrink: 0;
+  width: var(--space-2);
+  height: var(--space-2);
+  color: var(--assistant-chip-mark);
+  background: currentColor;
+  border-radius: var(--radius-pill);
+  box-shadow: 0 0 var(--space-2) color-mix(in srgb, currentColor 60%, transparent);
+}
+
+/* Sized off the chip's own type step rather than in px, for the reason every other glyph in
+   this view is (DDR-0048). */
+.assistant-chip-glyph {
+  flex-shrink: 0;
+  width: 1em;
+  height: 1em;
+  color: var(--assistant-chip-mark, currentColor);
+}
+
+/* The design's 1px × 20px rule between what reports and what acts. Sized in `--space-6`,
+   which is its 20px on the scale. */
+.assistant-chip-divider {
+  width: 1px;
+  height: var(--space-6);
+  background: var(--border);
+}
+
+/* The two chips that are controls. They take the pointer and the app's one disabled
+   treatment — the same `opacity` and cursor `.btn:disabled` and `.control:disabled` use, so a
+   disabled chip means what a disabled control means everywhere else. */
+.assistant-chip-action {
+  cursor: pointer;
+  transition:
+    border-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.assistant-chip-action:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* Clear chat's hover, and the one place a chip goes negative (`App.tsx:2205-2207`). The ink is
+   `--neg-text` and the edge is `--neg`: the loss split, applied the way DDR-0046 requires and
+   never the other way round. Both are measured on this chip's own fill in `contrast.ts`,
+   hover included — a hover is where this app has been caught before, because axe tests the
+   resting state only (DDR-0064). */
+.assistant-chip-danger:hover:not(:disabled) {
+  border-color: var(--neg);
+  color: var(--neg-text);
 }
 
 /* The one band with a scrollbar. `min-height: 0` for the same reason the width
@@ -4559,44 +4700,35 @@ html {
   height: 1em;
 }
 
-.assistant-ask-actions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-5);
-}
+/* What an answer will be missing, in one line directly above the box
+   (`figma_design/src/App.tsx:2371-2386`, Story #346).
 
-/* `ConfirmAction` aligns to its right edge, because it was written for the sources card
-   where it sits at one (DDR-0012). Here it follows the Ask button at the *start* of a
-   left-aligned row, so both axes flip — the same override `.flex-import-actions` already
-   carries, plus the text, which is two sentences here rather than a phrase. Placement
-   only: the control's buttons, tone and confirm behaviour are untouched (DDR-0113). */
-.assistant-ask-actions .confirm-action {
+   It replaces `.assistant-notices`, the `<ul>` of the same facts in a third wording, and
+   three rules went with it: that list plus `.assistant-ask-actions`' two `ConfirmAction`
+   overrides, whose control is now a chip in the header (DDR-0115 amendments 3 and 5).
+
+   Not toned as an error, and never `--neg`: a missing import, an unset profile and a quiet
+   gateway are gaps in the grounding rather than failures, and the blocker panel above is
+   where a state that stops a question is drawn (DDR-0038). The glyph is `align-self: start`
+   so a wrapped sentence keeps it beside the first line rather than centred against three. */
+.assistant-grounding-line {
+  display: flex;
   align-items: flex-start;
-}
-
-.assistant-ask-actions .confirm-warning {
-  text-align: left;
-}
-
-/* What the assistant cannot see, said before the answer rather than after it.
-   Not toned as errors: a missing import and an unset profile are gaps in the
-   grounding, not failures, and the panel above already carries the blockers. */
-.assistant-notices {
-  list-style: none;
-  margin: var(--space-5) 0 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-}
-
-.assistant-notice {
+  gap: var(--space-2);
   margin: 0;
   max-width: 62ch;
   font-size: var(--text-xs);
   line-height: var(--leading-normal);
   color: var(--muted);
+}
+
+.assistant-grounding-glyph {
+  flex-shrink: 0;
+  width: 1em;
+  height: 1em;
+  /* Optically centred on the first line's cap height rather than on its box, which a 1em
+     square sitting on a 1.45 line is not. */
+  margin-top: calc((1em * var(--leading-normal) - 1em) / 2);
 }
 
 /* The transcript, oldest first — a conversation read downward, with the newest
