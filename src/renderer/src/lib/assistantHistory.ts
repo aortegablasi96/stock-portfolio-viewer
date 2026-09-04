@@ -57,18 +57,19 @@ export function rememberedTurns(turns: readonly Turn[], version: number): Assist
 }
 
 /**
- * The control that discards a conversation, and what it says before it does.
+ * **The control that discards a conversation is not here any more** (Story #346, DDR-0115
+ * amendment 5).
  *
- * A `ConfirmAction` rather than a plain button (DDR-0012, DDR-0113 decision 7): the transcript is
- * not recoverable, and this app's rule for an irreversible action is an in-place confirmation and
- * never a modal. Nothing is *stored*, so nothing is deleted — this is session state and ADR-0006
- * does not reach it — but "irreversible" is about the owner's work, not about the disk.
+ * `NEW_CONVERSATION_LABEL` and its three companions — the confirm label, the busy label and the
+ * warning — described a `ConfirmAction` (DDR-0012, DDR-0113 decision 7). The design draws a bare
+ * **Clear chat** button in the chat header whose only guard is being disabled when there is
+ * nothing to lose, and DDR-0115 takes the design's answer. The wording that survives is
+ * `lib/assistantHeader.ts`'s, beside the rest of the header it now belongs to.
  *
- * The warning states both halves of what happens, because they are separate facts and only one of
- * them is visible: the transcript goes, **and** the assistant stops remembering it.
+ * Recorded as an absence rather than deleted silently, because the *reasoning* it carried is still
+ * live and is what a later story would need before reinstating one: **nothing stored is touched**.
+ * ADR-0006 governs rows in the database and this clears a React array, which is the line between
+ * this control and *Clear the profile*, where `ConfirmAction` stays (#347). The half of the old
+ * warning that was a real fact — the assistant stops remembering the turns — did not go with it:
+ * it is on the button's `title` (`CLEAR_CHAT_TITLE`).
  */
-export const NEW_CONVERSATION_LABEL = 'New conversation'
-export const NEW_CONVERSATION_CONFIRM_LABEL = 'Yes, start a new conversation'
-export const NEW_CONVERSATION_BUSY_LABEL = 'Starting…'
-export const NEW_CONVERSATION_WARNING =
-  'This clears the questions and answers below and is not undoable. The assistant will stop remembering them, and your next question starts a fresh conversation.'

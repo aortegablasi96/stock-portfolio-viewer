@@ -19,12 +19,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 M0–M13 are delivered: live IBKR holdings/balances/allocation in a display currency, immutable
 snapshots, Flex import and four analytics views behind a vertical sidebar; then the investor
-profile and the assistant — no consent gate (ADR-0011), the profile folded in (DDR-0108), the app's
-own **baseline** (ADR-0012), twelve tools over a bounded loop in place of an assembled context
-(DDR-0111, DDR-0112), a question carrying the turns before it with the **role as the marking**
-(DDR-0113), and an answer **rendered, never quoted** (DDR-0114). Milestone order is not delivery
-order — check the record, not the number. #289 is closed as superseded by #287's computed moves —
-read its closing comment before re-proposing an end-state check on model output.
+profile and the assistant, whose every decision the **assistant** bullet below carries.
+Milestone order is not delivery order — check the record, not the number. #289 is closed as
+superseded by #287's computed moves — read its closing comment before re-proposing an
+end-state check on model output.
 Not built: multi-broker, benchmarks, tax.
 
 **Which Epics are open is deliberately not recorded here** — read the backlog (*Current Priority*).
@@ -169,12 +167,18 @@ Each exists end-to-end and is the reference pattern for its shape.
   only `transcriptOrder` reverses it for drawing; reversing the stored array inverts the memory in
   silence. The `WHO · TIME` marking is **new state that reaches no request**. The owner's bubble is
   **`--accent-strong`**, never `--accent` — white on the text half is 4.47:1, DDR-0046's split
-  applied to the accent; the model's is `--card`, adding no raised adopter.
+  applied to the accent.
   **The composer is one path** (#345): Enter submits the **form**, so the key and the button share
   `isAskable`/`pending`; `preventDefault` stops the newline too, and a **composing** IME's Enter is
-  not a send. 44px and 10px are tokens; the `.btn` box is overridden at the call site. The clipped
-  label made `.sr-only` a **selector list**, moving `tokenAdoption`'s `-1px` key. The suggestions
-  toggle ships **disabled** (#348).
+  not a send. The clipped label made `.sr-only` a **selector list**, moving `tokenAdoption`'s
+  `-1px` key. The suggestions toggle ships **disabled** (#348).
+  **The header says the state and one line says the cost** (#346): `groundingNotices`' `<ul>` is
+  gone, folded into a chip row and one line above the composer, **both from that function** so they
+  cannot disagree. Its reading is the **drift** report's, never the rail's `getOverview` (DDR-0056
+  vs DDR-0095) — two clocks, each right; don't unify them, and nothing polls. The chips are
+  `--surface-raised`'s **fourth** adopter (the count moves, seven pairings join `contrast.ts`, the
+  **hover** among them); a control chip is a `<button>`, and **Clear chat has no confirm** —
+  nothing is stored, so `disabled` is the whole guard.
 - **classification** — sector/industry. `classificationRepository` fronts *both* the mutable
   SQLite cache and `ibkrGateway`; `analytics:classifyInstruments` is the only analytics channel
   reaching IBKR. Refreshes are **resumable, not transactional** — a run that dies at 30 of 40 keeps
@@ -226,8 +230,7 @@ e2e/             Playwright specs launching the built app
 
 ### Reference slices to copy
 
-- **Minimal slice / test style** — `app:ping` and `metaService.getInstallId()`; see
-  `services/meta/metaService.test.ts` for the repository-mocking pattern.
+- **Minimal slice / test style** — `app:ping`, `metaService.getInstallId()` and its test.
 - **Destructive action** — `flex:clear` / `snapshot:clear`: the in-place `ConfirmAction` control —
   no modal, no `window.confirm`. ADR-0006, DDR-0012.
 
@@ -589,15 +592,11 @@ one external dependency is the IBKR Client Portal Gateway.
 # package.json lists the scripts, and they do what their names say. What it does NOT tell you:
 
 npm install            # postinstall: electron-rebuild for better-sqlite3 (native)
-npm test               # vitest run — Node env, *.test.ts under src/
 npm run test:e2e       # builds first, then Playwright launches the built app
 npm run db:migrate     # applies to ./local.dev.db, NOT the app's DB (override: DATABASE_URL)
-
-npm run build && npx playwright test e2e/tab-navigation.spec.ts   # a single e2e spec
 ```
 
-There is no lint-fix or aggregate `check` script. **CI** runs exactly `lint`, `typecheck`, `test`
-and `build` on every push to `main` and every PR (Node 24, Ubuntu); Playwright is **intentionally
+**CI** runs exactly `lint`, `typecheck`, `test` and `build` on every push to `main` and every PR (Node 24, Ubuntu); Playwright is **intentionally
 excluded** (needs a display server). Run all four, plus `test:e2e` locally, before opening a PR.
 
 ## Testing

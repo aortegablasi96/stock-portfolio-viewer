@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  NEW_CONVERSATION_CONFIRM_LABEL,
-  NEW_CONVERSATION_LABEL,
-  NEW_CONVERSATION_WARNING,
-  rememberedTurns,
-} from './assistantHistory'
+import { rememberedTurns } from './assistantHistory'
 import { STALE_NOTE, type Turn } from './assistantAsk'
 import { MAX_HISTORY_CHARS, MAX_REMEMBERED_TURNS } from '@shared/domain/assistantHistory'
 
@@ -235,18 +230,20 @@ describe('the caps bind, and the newest turns win', () => {
   })
 })
 
-describe('starting a fresh conversation', () => {
-  it('names the action rather than the mechanism', () => {
-    expect(NEW_CONVERSATION_LABEL).toBe('New conversation')
-    expect(NEW_CONVERSATION_CONFIRM_LABEL).toContain(NEW_CONVERSATION_LABEL.toLowerCase())
-  })
-
-  /**
-   * Two facts, and only one of them is visible: the transcript goes, **and** the assistant stops
-   * remembering it. An owner who reads only the first would not know the second happened.
-   */
-  it('warns about both halves of what it does', () => {
-    expect(NEW_CONVERSATION_WARNING).toContain('not undoable')
-    expect(NEW_CONVERSATION_WARNING).toContain('stop remembering')
+/**
+ * The control that discards a conversation moved out of this module (Story #346, DDR-0115
+ * amendment 5), and the four constants describing its `ConfirmAction` went with it.
+ *
+ * Pinned as an **absence** rather than deleted quietly, which is this suite's own idiom for a
+ * removal that could be undone by accident (see `assistantAsk.test.ts` on `empty_period`). What
+ * must not come back here is a second wording for a control the header now owns: two labels for
+ * one button is how the app's two surfaces start disagreeing about what it does. The wording is
+ * `assistantHeader.test.ts`'s, and the fact the warning carried — the assistant stops remembering
+ * the turns — is asserted there, on the `title` that now carries it.
+ */
+describe('clearing a conversation is not this module’s wording any more', () => {
+  it('exports no label, confirm, busy label or warning for it', async () => {
+    const module: Record<string, unknown> = await import('./assistantHistory')
+    expect(Object.keys(module).filter((name) => name.startsWith('NEW_CONVERSATION'))).toEqual([])
   })
 })

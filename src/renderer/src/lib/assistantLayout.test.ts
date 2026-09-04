@@ -227,9 +227,17 @@ describe('the chat column is three bands', () => {
    * The order is the design's: the header, the transcript, then the composer at the bottom. It is
    * also what #345 depends on this story for — a composer pinned below a scrolling transcript is
    * a *position*, and it has to exist before Enter can send from it.
+   *
+   * **The first band is `{head}` rather than its own class name** since Story #346. The header
+   * grew a subtitle, a chip row and two controls, so it became a component — and a component
+   * declared below the one that renders it puts `className="assistant-chat-head"` at the *end* of
+   * this file, where a text scan reads it as the last band rather than the first. What is
+   * asserted is therefore where the header is **rendered**, which is the fact the order is about;
+   * the element it renders is pinned separately above, and the geometry that actually results is
+   * `e2e/assistant-layout.spec.ts`'s, which has a layout engine to measure it with.
    */
   it('puts the composer below the transcript', () => {
-    expect(CONVERSATION.indexOf('className="assistant-chat-head"')).toBeLessThan(
+    expect(CONVERSATION.indexOf('{head}')).toBeLessThan(
       CONVERSATION.indexOf('className="assistant-transcript"'),
     )
     expect(CONVERSATION.indexOf('className="assistant-transcript"')).toBeLessThan(

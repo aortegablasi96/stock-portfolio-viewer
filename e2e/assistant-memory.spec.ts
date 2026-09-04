@@ -22,8 +22,8 @@ const mainEntry = join(__dirname, '..', 'out', 'main', 'index.js')
  * `lib/assistantHistory.test.ts` holds every selection rule and `assistantService.test.ts` holds the
  * message array's shape. Neither can see the one thing this story is actually about: that a question
  * typed into a real window carries the turns before it **all the way through IPC to the request
- * body** — and that the New conversation control, whose confirm expands in place, empties what the
- * next question would carry.
+ * body** — and that Clear chat, in the chat header's chip row, empties what the next question would
+ * carry.
  *
  * ## Nothing leaves this machine, and that is enforced rather than promised
  *
@@ -193,23 +193,23 @@ test('carries no report from an earlier turn', () => {
 })
 
 /**
- * The control expands in place rather than opening a modal (DDR-0012), which is a cascade no text
- * scan can resolve, and clearing the transcript is what makes the *next* question a first one.
+ * **One click, no confirmation** (Story #346, DDR-0115 amendment 5). The `ConfirmAction` that used
+ * to stand in front of this went with the design's answer: nothing stored is touched, so ADR-0006
+ * does not reach it, and the design's own guard is the *disabled* state asserted below. What is
+ * under test here is the part no unit test can see — that the click empties the transcript, and
+ * that the *next* question therefore goes to the wire as a first one.
  */
-test('New conversation confirms in place, and the next question starts fresh', async () => {
+test('Clear chat empties the conversation in one click, and the next question starts fresh', async () => {
   await expect(view().locator('.assistant-turn')).toHaveCount(2)
 
-  await view().getByRole('button', { name: 'New conversation' }).click()
-  const confirm = view().getByRole('group', { name: 'Confirm: New conversation' })
-  await expect(confirm).toBeVisible()
-  await expect(confirm.getByText(/stop remembering/)).toBeVisible()
+  // The fact the old warning carried, on the control that carries it now.
+  await expect(view().getByRole('button', { name: 'Clear chat' })).toHaveAttribute(
+    'title',
+    /stops remembering/,
+  )
+  await expect(view().getByRole('group', { name: /^Confirm:/ })).toHaveCount(0)
 
-  // Cancel first: an in-place confirm that cannot be backed out of is a modal with extra steps.
-  await confirm.getByRole('button', { name: 'Cancel' }).click()
-  await expect(view().locator('.assistant-turn')).toHaveCount(2)
-
-  await view().getByRole('button', { name: 'New conversation' }).click()
-  await view().getByRole('button', { name: 'Yes, start a new conversation' }).click()
+  await view().getByRole('button', { name: 'Clear chat' }).click()
   await expect(view().locator('.assistant-turn')).toHaveCount(0)
 
   replies = ['A fresh answer.']
@@ -222,15 +222,21 @@ test('New conversation confirms in place, and the next question starts fresh', a
   expect(turns[0]!.content).not.toContain('Serabi Gold')
 })
 
-/** The control is about a conversation, so it is not offered before there is one. */
-test('offers nothing to clear once the conversation is one turn old again', async () => {
-  await expect(view().getByRole('button', { name: 'New conversation' })).toBeVisible()
+/**
+ * The control is about a conversation, and with none it is **disabled rather than absent**
+ * (Story #346). That is the design's own guard and the whole of the protection now — and it is
+ * drawn in both states on purpose: a control appearing the moment the first answer lands moves the
+ * chip row under the pointer.
+ */
+test('is disabled, not withdrawn, once there is nothing left to clear', async () => {
+  const clear = view().getByRole('button', { name: 'Clear chat' })
+  await expect(clear).toBeEnabled()
 
-  await view().getByRole('button', { name: 'New conversation' }).click()
-  await view().getByRole('button', { name: 'Yes, start a new conversation' }).click()
+  await clear.click()
 
   await expect(view().locator('.assistant-turn')).toHaveCount(0)
-  await expect(view().getByRole('button', { name: 'New conversation' })).toHaveCount(0)
+  await expect(clear).toBeVisible()
+  await expect(clear).toBeDisabled()
 })
 
 /**
@@ -241,7 +247,7 @@ test('offers nothing to clear once the conversation is one turn old again', asyn
  *
  * The assertion is on the **wire**, not the screen: the key press goes through the form's
  * `onSubmit`, so what arrives is a question shaped exactly like the button's, in a conversation
- * the New conversation control has just emptied.
+ * Clear chat has just emptied.
  */
 test('Enter sends the question, through the same path the button uses', async () => {
   sent = []

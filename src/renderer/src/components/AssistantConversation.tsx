@@ -3,7 +3,6 @@ import {
   askGate,
   askLabel,
   answerFromResult,
-  groundingNotices,
   isAskable,
   isStale,
   STALE_NOTE,
@@ -12,12 +11,16 @@ import {
 } from '../lib/assistantAsk'
 import { buildAssistantContext, type GroundingReports } from '../lib/assistantContext'
 import {
-  NEW_CONVERSATION_BUSY_LABEL,
-  NEW_CONVERSATION_CONFIRM_LABEL,
-  NEW_CONVERSATION_LABEL,
-  NEW_CONVERSATION_WARNING,
-  rememberedTurns,
-} from '../lib/assistantHistory'
+  CHAT_SUBTITLE,
+  CHAT_TITLE,
+  chipClassName,
+  CLEAR_CHAT_LABEL,
+  CLEAR_CHAT_TITLE,
+  EDIT_PROFILE_LABEL,
+  groundingLine,
+  headerChips,
+} from '../lib/assistantHeader'
+import { rememberedTurns } from '../lib/assistantHistory'
 import {
   COMPOSER_PLACEHOLDER,
   sendsOnEnter,
@@ -36,7 +39,6 @@ import { flexDataVersion } from '../lib/dataVersion'
 import { controlClassName } from '../lib/fieldVariants'
 import type { AssistantStatus } from '@shared/domain/assistant'
 import { AssistantAnswer } from './AssistantAnswer'
-import { ConfirmAction } from './ConfirmAction'
 import { Button } from './ui/Button'
 import { Field } from './ui/Field'
 import { StatePanel } from './ui/StatePanel'
@@ -99,17 +101,30 @@ import { StatePanel } from './ui/StatePanel'
  * new one is scrolled into view. That scroll is `scroll-behavior` on the band rather than a
  * `behavior` option here, because a reader who asked for less motion has to be able to turn it off
  * and CSS is where this app answers that (DDR-0044, DDR-0115 amendment 4).
+ *
+ * **The header says the state and the composer's own line says the cost** (Story #346, DDR-0115
+ * amendment 3). The `assistant-notices` `<ul>` that used to sit above the box was a *third* wording
+ * of facts the design already draws twice; it is gone, and `lib/assistantHeader.ts` builds both
+ * surfaces from `groundingNotices` so the two cannot disagree. The gateway reading behind the chip
+ * is the **drift report's** and not the sidebar badge's — see that module for why the two are
+ * allowed to differ and why neither may be made to read the other (DDR-0056, DDR-0095).
  */
 export function AssistantConversation({
   status,
   displayCurrency,
   profileVersion,
+  profileCollapsed,
+  onExpandProfile,
 }: {
   status: AssistantStatus
   /** The app's own currency selection, which every drift weight is a share of a total in. */
   displayCurrency: string
   /** How many times the profile beside this conversation has been written (DDR-0108). */
   profileVersion: number
+  /** Whether the profile column beside this one is folded to its rail — the view's state (#343). */
+  profileCollapsed: boolean
+  /** Unfolds that column, which is the whole of what the header's *Edit profile* chip does. */
+  onExpandProfile: () => void
 }): React.JSX.Element {
   const version = useSyncExternalStore(flexDataVersion.subscribe, flexDataVersion.get)
   const [reports, setReports] = useState<GroundingReports | null>(null)
@@ -222,41 +237,63 @@ export function AssistantConversation({
   }, [displayCurrency, question, reports, turns, version])
 
   /**
-   * Discard the conversation, so the next question starts one (DDR-0113, decision 7).
+   * Discard the conversation, so the next question starts one (DDR-0113 decision 7, amended by
+   * DDR-0115 amendment 5).
    *
    * Clearing the turns is the whole of it: the model sees what `rememberedTurns` selects from this
    * list, so an empty list is a model that sees nothing from the discarded conversation. Nothing is
-   * stored, so nothing is deleted — ADR-0006 does not reach session state — but the owner's own
-   * record of what they asked is gone, which is what the confirmation is for.
+   * stored, so nothing is deleted — ADR-0006 does not reach session state.
+   *
+   * **No confirmation, and that is the design's decision taken rather than softened.** #320 put a
+   * `ConfirmAction` here; the design draws a bare button whose only guard is being *disabled* when
+   * there is nothing to lose, and DDR-0115 amendment 5 takes it. `ConfirmAction` stays the app's
+   * pattern wherever a control clears **stored** data — *Clear the profile* keeps it in #347 — and
+   * that is the line between the two: one clears an overwritten `app_meta` value, this clears a
+   * React array. What the owner loses in one click is their own record of what they asked, and the
+   * second half of the old warning — that the assistant stops remembering it — is on the button's
+   * `title` rather than nowhere.
    */
-  const startFresh = useCallback(async (): Promise<void> => {
+  const clearChat = useCallback((): void => {
     setTurns([])
   }, [])
 
   const gate = askGate(status, reports)
 
+  /* The header band, drawn in every branch below (Story #346). It is the column's fixed top and
+     does not scroll (DDR-0115), so a state that replaces the transcript replaces what is *under*
+     it rather than the header with it — and while the reading is still in flight its chips are
+     absent rather than guessed, which `headerChips` decides. */
+  const head = (
+    <ChatHeader
+      reports={reports}
+      turnCount={turns.length}
+      onClearChat={clearChat}
+      profileCollapsed={profileCollapsed}
+      onExpandProfile={onExpandProfile}
+    />
+  )
+
   // Loading its grounding: `ready` is false and there is nothing to say about why, which is the
   // one state that is a wait rather than a blocker.
   if (!gate.ready && gate.blocker === null) {
     return (
-      <div className="assistant-chat-block">
-        <StatePanel variant="loading">Reading what the assistant can see…</StatePanel>
-      </div>
+      <>
+        {head}
+        <div className="assistant-chat-block">
+          <StatePanel variant="loading">Reading what the assistant can see…</StatePanel>
+        </div>
+      </>
     )
   }
 
-  const notices = reports === null ? [] : groundingNotices(reports)
+  const line = groundingLine(reports)
 
   return (
     /* Three bands, and only the middle one scrolls (Story #343, DDR-0115). The card is gone: the
        column *is* the surface now, so a card inside it would be a box drawn around the whole of
-       one. What is inside the bands is untouched — the header is still this title, the composer is
-       still today's form and submit button, and the transcript is still today's stacked turns.
-       #346, #345 and #344 fill each band in turn. */
+       one. #344, #345 and #346 have each filled a band in turn, and this is the last of them. */
     <>
-      <div className="assistant-chat-head">
-        <h2 className="assistant-chat-title">Ask about your portfolio</h2>
-      </div>
+      {head}
 
       {/* Rendered from mount, empty or not. An `aria-live` region that arrives together with its
           first content announces nothing, so the list has to already be here when the first
@@ -300,16 +337,16 @@ export function AssistantConversation({
       </div>
 
       <div className="assistant-composer">
-        {/* What the assistant cannot see, above the box rather than below it — which is where the
-            design puts the gateway's own line, and #346 folds this list into it. */}
-        {notices.length > 0 && (
-          <ul className="assistant-notices">
-            {notices.map((notice) => (
-              <li key={notice.id} className="assistant-notice">
-                {notice.text}
-              </li>
-            ))}
-          </ul>
+        {/* What an answer will be missing, in one line directly above the box that types the
+            question (`figma_design/src/App.tsx:2371-2386`). The header's chips carry the *state*;
+            this carries the *consequence*, and both are built from `groundingNotices` so they read
+            one computation (DDR-0115 amendment 3). Absent when nothing is missing — a line saying
+            everything is fine is a line the eye learns to skip (DDR-0038). */}
+        {line !== null && (
+          <p className="assistant-grounding-line">
+            <InfoGlyph />
+            {line}
+          </p>
         )}
 
         {gate.blocker !== null ? (
@@ -386,25 +423,183 @@ export function AssistantConversation({
               </div>
             </div>
 
-            <div className="assistant-ask-actions">
-              {/* Only once there is a conversation to discard — a control that clears nothing
-                  says the transcript is a thing to manage before the owner has one (DDR-0113).
-                  #346 moves it into the chat header's chip row; until then it sits under the box
-                  rather than beside a send control that is now a 44px glyph. */}
-              {turns.length > 0 && (
-                <ConfirmAction
-                  label={NEW_CONVERSATION_LABEL}
-                  confirmLabel={NEW_CONVERSATION_CONFIRM_LABEL}
-                  busyLabel={NEW_CONVERSATION_BUSY_LABEL}
-                  warning={NEW_CONVERSATION_WARNING}
-                  onConfirm={startFresh}
-                />
-              )}
-            </div>
+            {/* Nothing follows the row. *New conversation* stood here until #346 and is now
+                *Clear chat* in the header's chip row, which is where the design puts it — and an
+                empty actions row left behind is a strip of padding under the box that reports
+                nothing (DDR-0038). */}
           </form>
         )}
       </div>
     </>
+  )
+}
+
+/**
+ * The chat column's fixed header (Story #346, `figma_design/src/App.tsx:2126-2241`).
+ *
+ * The title and its corrected subtitle on the left; on the right a row of pill chips — two that
+ * *report* and two that *act*, told apart by the element rather than by the corner (DDR-0115
+ * amendment 6). **A chip that is a control is a `<button>`**, so Clear chat and Edit profile are
+ * buttons and the two state chips are `<span>`s that nothing can focus.
+ *
+ * None of the four writes a focus rule. The zero-specificity `:where(a[href], button, …)` base at
+ * the top of `app.css` rings every one of them, which is the mechanism that makes a control
+ * shipped without a ring impossible rather than merely unlikely (DDR-0026).
+ *
+ * **Neither state chip is a `Badge`.** `Badge` is never a background and never a box (DDR-0037),
+ * and these are boxed chips on a raised fill — the same reading `.gateway-badge` already took one
+ * column over (DDR-0069). What the pill corner marks here is DDR-0115 amendment 6's *small
+ * standalone control*; `ToggleGroup` keeps `aria-pressed` and stays never a tablist.
+ *
+ * **Nothing polls.** Every state drawn here comes from the standing `readReports` call, re-read on
+ * the same two version dependencies as everything else in this view (DDR-0027, DDR-0108). There is
+ * no interval, no timer and no channel of its own — and the reading is the *drift report's*, which
+ * is why it may legitimately differ from the sidebar's badge (DDR-0056, DDR-0095).
+ */
+function ChatHeader({
+  reports,
+  turnCount,
+  onClearChat,
+  profileCollapsed,
+  onExpandProfile,
+}: {
+  reports: GroundingReports | null
+  turnCount: number
+  onClearChat: () => void
+  profileCollapsed: boolean
+  onExpandProfile: () => void
+}): React.JSX.Element {
+  return (
+    <div className="assistant-chat-head">
+      <div>
+        <h2 className="assistant-chat-title">{CHAT_TITLE}</h2>
+        <p className="assistant-chat-subtitle">{CHAT_SUBTITLE}</p>
+      </div>
+
+      <div className="assistant-chip-row">
+        {/* Absent while the reading is in flight, rather than a chip asserting a state nothing has
+            reported yet. The controls beside them stay: *clear this* and *reopen that* are true
+            things to offer whatever the gateway is doing. */}
+        {headerChips(reports).map((chip) => (
+          <span key={chip.id} className={chipClassName(chip.tone)}>
+            {chip.id === 'gateway' ? (
+              // Colour and a glow, and never the chip's only channel — the label beside it names
+              // the state in words, which is the reading DDR-0021 requires and DDR-0056 already
+              // takes for the rail's own dot.
+              <span className="assistant-chip-dot" aria-hidden="true" />
+            ) : (
+              <PersonGlyph />
+            )}
+            {chip.label}
+          </span>
+        ))}
+
+        {/* The design's 1px × 20px rule between what reports and what acts. Decoration only: the
+            two groups either side of it are told apart by being buttons. */}
+        <span className="assistant-chip-divider" aria-hidden="true" />
+
+        {/* No confirmation, and disabled when there is nothing to lose — the design's own guard,
+            and the whole of the protection now (DDR-0115 amendment 5). Rendered in both states
+            rather than hidden at zero turns: a control that appears the moment the first answer
+            lands moves the row under the pointer, and `disabled` is the honest form of "not yet". */}
+        <button
+          type="button"
+          className="assistant-chip assistant-chip-action assistant-chip-danger"
+          onClick={onClearChat}
+          disabled={turnCount === 0}
+          title={CLEAR_CHAT_TITLE}
+        >
+          <TrashGlyph />
+          {CLEAR_CHAT_LABEL}
+        </button>
+
+        {/* The second of the two collapsing affordances, and only while the column is shut
+            (DDR-0115 amendment 2): the rail's expander is the gesture at the edge, this is the
+            labelled one where the owner is already looking. `aria-controls` names the same column
+            the rail's own toggle does. */}
+        {profileCollapsed && (
+          <button
+            type="button"
+            className="assistant-chip assistant-chip-action"
+            onClick={onExpandProfile}
+            aria-controls="assistant-profile-column"
+            aria-expanded={false}
+          >
+            <PersonGlyph />
+            {EDIT_PROFILE_LABEL}
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * The three header glyphs and the composer line's, drawn as the design draws them
+ * (`figma_design/src/App.tsx:2176`, `2205`, `2233`, `2382`).
+ *
+ * `aria-hidden` and `focusable="false"` on every one: each sits beside its own words, and a glyph
+ * that joined the accessibility tree would say the same thing twice. Sized in `em` for the reason
+ * the composer's two are — an icon picked in px is the one thing that would not move with the type
+ * scale (DDR-0048).
+ */
+function PersonGlyph(): React.JSX.Element {
+  return (
+    <svg
+      className="assistant-chip-glyph"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
+    </svg>
+  )
+}
+
+function TrashGlyph(): React.JSX.Element {
+  return (
+    <svg
+      className="assistant-chip-glyph"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6l-1 14H6L5 6" />
+      <path d="M10 11v6M14 11v6" />
+      <path d="M9 6V4h6v2" />
+    </svg>
+  )
+}
+
+function InfoGlyph(): React.JSX.Element {
+  return (
+    <svg
+      className="assistant-grounding-glyph"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="10" />
+      <line x1="12" y1="8" x2="12" y2="12" />
+      <line x1="12" y1="16" x2="12.01" y2="16" />
+    </svg>
   )
 }
 

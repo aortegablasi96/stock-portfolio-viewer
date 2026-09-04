@@ -719,6 +719,91 @@ export const PAIRINGS: readonly Pairing[] = [
       'on — the fill step from --card to --bg is 1.06:1, so the edge is what says a bubble is ' +
       'a box rather than a paragraph.',
   },
+  /**
+   * The seven pairings Story #346 added: the chat header's pill chips, on `--surface-raised`'s
+   * **fourth** adoption (DDR-0069, DDR-0070, DDR-0115 amendment 6).
+   *
+   * The toll `sidebarRail.test.ts` counts for, paid. Two of the seven repeat arithmetic already in
+   * this list — `--muted` and `--pos` on that fill are the gateway chip's label and its live
+   * detail — and they are listed anyway for the reason the display-currency field is listed
+   * separately from the chip beside it: these are different rules in a different view, and
+   * deleting the sidebar must not take the chat header's measurement with it.
+   *
+   * The one that is genuinely new is the **hover**. Clear chat moves its ink and its edge to the
+   * loss split on hover, and a hover is where this app has been caught before: axe tests the
+   * resting state only (DDR-0064), so the state a pointer produces is measured here or nowhere.
+   * Both halves are listed, because the split's whole point is that picking the wrong one is
+   * silent — `--neg` as the label would look perfectly deliberate at 3.63:1.
+   *
+   * The chips' resting **edge** is not listed: `--border` on `--bg` is the bubble's entry above,
+   * at 1.32:1, and this row renders on the same ground.
+   */
+  {
+    where: '.assistant-chip — the header chip’s label, muted on the raised fill',
+    foreground: { token: '--muted' },
+    background: { token: '--surface-raised' },
+    minimum: AA_NORMAL,
+    reason:
+      'The row’s resting ink at --text-2xs, the smallest step the app has: 5.35:1, the same ' +
+      'arithmetic as the gateway chip’s micro-label and a different rule from it.',
+  },
+  {
+    where: '.assistant-chip-live — “IBKR live” and “Profile active”, the toned state’s label',
+    foreground: { token: '--pos' },
+    background: { token: '--surface-raised' },
+    minimum: AA_NORMAL,
+    reason:
+      'The gain tone as text at 6.73:1. The design fills this chip with a --positive-dim wash ' +
+      'this app does not have; the ink carries the tone instead, on the fill every chip shares, ' +
+      'so a tint nobody measured never enters the row (DDR-0037’s “never a background”).',
+  },
+  {
+    where: '.assistant-chip-dot in .assistant-chip-live — the answering mark',
+    foreground: { token: '--pos' },
+    background: { token: '--surface-raised' },
+    minimum: NON_TEXT,
+    reason: 'A graphic carrying state, held to 1.4.11 rather than to AA: 6.73:1.',
+  },
+  {
+    where: '.assistant-chip-dot in .assistant-chip-warn — offline, not responding, or failed',
+    foreground: { token: '--neg' },
+    background: { token: '--surface-raised' },
+    minimum: NON_TEXT,
+    reason:
+      'The fill half of the loss split against its surface at 3.63:1 — the least headroom of ' +
+      'anything in this list, tied with the rail’s own warn dot, and the first thing a lighter ' +
+      'chip fill would break. The label beside it is deliberately left --muted: a red word ' +
+      'would report a gateway that is merely quiet as a failure (DDR-0022, DDR-0038).',
+  },
+  {
+    where: '.assistant-chip-dot in .assistant-chip-idle — a gateway with nothing to value',
+    foreground: { token: '--muted' },
+    background: { token: '--surface-raised' },
+    minimum: NON_TEXT,
+    reason:
+      'The quietest mark in the row and the one most often on screen, since a fresh clone has ' +
+      'no gateway running: 5.35:1, and the first casualty of a future dimming of --muted.',
+  },
+  {
+    where: '.assistant-chip-danger:hover — Clear chat’s ink under the pointer',
+    foreground: { token: '--neg-text' },
+    background: { token: '--surface-raised' },
+    minimum: AA_NORMAL,
+    reason:
+      'The text half of the split, which has to stay balanced against --pos on whatever surface ' +
+      'renders it (DDR-0046): 6.34:1 against 6.73:1, inside the 0.5 the guard enforces. Measured ' +
+      'because it is a hover, which is the state axe never reaches.',
+  },
+  {
+    where: '.assistant-chip-danger:hover — its edge, against the header’s ground',
+    foreground: { token: '--neg' },
+    background: { token: '--bg' },
+    minimum: NON_TEXT,
+    reason:
+      'A control’s boundary where the boundary is what says the control has turned destructive, ' +
+      'so 1.4.11 rather than SURFACE_EDGE: 4.17:1. The fill half of the split is right here — ' +
+      'this is a border, not a word.',
+  },
   {
     where: '.chart-axis-label — SVG <text> on a chart card',
     foreground: { token: '--chart-axis' },

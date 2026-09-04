@@ -151,8 +151,54 @@ test('opens the box once there is something to ground an answer in', async () =>
   await expect(view().getByText(/^Profile saved/)).toBeVisible()
 
   await expect(questionBox()).toBeVisible()
+  // One line above the box, not a list under it (Story #346, DDR-0115 amendment 3): the header's
+  // chips carry the state and this carries what it costs an answer.
+  await expect(view().locator('.assistant-grounding-line')).toHaveCount(1)
   await expect(view().getByText(/No Flex statements are imported/)).toBeVisible()
+  await expect(view().locator('.assistant-notices')).toHaveCount(0)
   await expect(view().getByText(/nothing for an answer to be grounded in/)).toHaveCount(0)
+})
+
+/**
+ * The chat header (Story #346, `figma_design/src/App.tsx:2126-2241`).
+ *
+ * The states are `lib/assistantHeader.test.ts`'s; what needs a real window is that the row is in
+ * the document, that its two controls are the only focusable things in it, and that the gateway
+ * chip reports *this* view's reading. No gateway is running under this suite, so the chip is in
+ * one of its two quiet states — the assertion is that it names one of them rather than that it
+ * names a particular one, because which of the five arrives is the gateway's business.
+ */
+test('draws the chip row, and reads the gateway from the drift report rather than the rail', async () => {
+  const chips = view().locator('.assistant-chip')
+  await expect(chips.first()).toBeVisible()
+
+  // The state chips are not controls: only Clear chat and Edit profile are buttons (DDR-0115
+  // amendment 6), and Edit profile is absent while the column is open.
+  await expect(view().locator('button.assistant-chip')).toHaveCount(1)
+  await expect(view().getByRole('button', { name: 'Clear chat' })).toBeDisabled()
+  await expect(view().getByRole('button', { name: 'Edit profile' })).toHaveCount(0)
+
+  // The corrected subtitle: the design's slot, this app's claim (DDR-0115 amendment 10, DDR-0111).
+  await expect(view().getByText(/fetches your figures and your profile as it needs them/)).toBeVisible()
+  await expect(view().getByText(/included with every question/)).toHaveCount(0)
+
+  await expect(chips.first()).toContainText(/^IBKR/)
+})
+
+/**
+ * The second of the two collapsing affordances (DDR-0115 amendment 2): the rail's expander is the
+ * gesture at the edge, this is the labelled one where the owner is already looking. It exists only
+ * while the column is shut, which is the design's own condition.
+ */
+test('offers Edit profile only while the profile column is folded, and expands it', async () => {
+  await profileToggle(false).click()
+
+  const edit = view().getByRole('button', { name: 'Edit profile' })
+  await expect(edit).toBeVisible()
+  await edit.click()
+
+  await expect(profileToggle(false)).toHaveAttribute('aria-expanded', 'true')
+  await expect(view().getByRole('button', { name: 'Edit profile' })).toHaveCount(0)
 })
 
 /**

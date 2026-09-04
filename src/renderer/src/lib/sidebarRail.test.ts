@@ -145,15 +145,21 @@ describe('the status dot is a second channel, and a tokenised one', () => {
     // ground. `lib/contrast.ts`'s dot entries were re-pointed to match; this is the half of that
     // pairing the contrast guard cannot see, since it reads tokens and not which rule uses them.
     expect(rule('.gateway-badge')).toMatch(/background:\s*var\(--surface-raised\)/)
-    /* Three rules stand on that surface now, and each one came here and said so, which is what
+    /* Four rules stand on that surface now, and each one came here and said so, which is what
        this count is for. Not a style rule: every ink measured against `--surface-raised` is an
-       ink one of these three renders, so a rule adopting it brings inks nobody has measured
+       ink one of these four renders, so a rule adopting it brings inks nobody has measured
        there. Story #220 floated the chart hover card on it (DDR-0070) and added four pairings to
        `lib/contrast.ts` plus nine for the series ink ramp — the card's own `--text` and `--muted`
        had only ever been measured on `--card`. Story #234 boxed the display currency at the far
        end of this column and paid the same toll: two pairings, the field's label and its value,
-       both re-pointed off `--card`. A fourth adopter owes it too. */
-    expect(CSS.match(/var\(--surface-raised\)/g)).toHaveLength(3)
+       both re-pointed off `--card`.
+
+       **Story #346 is the fourth, and it is the first outside this column**: the Assistant's chat
+       header draws a row of pill chips on the same raised fill (DDR-0115 amendment 6), and it
+       owes seven pairings — the muted label, the positive state's ink, the three dots at
+       `NON_TEXT`, and Clear chat's negative **hover**, which is the state axe never tests
+       (DDR-0064). A fifth adopter owes its own too. */
+    expect(CSS.match(/var\(--surface-raised\)/g)).toHaveLength(4)
   })
 
   it('is not announced as a live region', () => {

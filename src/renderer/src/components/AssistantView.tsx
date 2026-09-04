@@ -165,11 +165,20 @@ export function AssistantView({ displayCurrency }: { displayCurrency: string }):
             <AssistantKeyCard status={status} onStatus={setStatus} />
 
             {/* The question. It draws its own blocker where there is no key rather than being
-                hidden: a box that is not there says nothing about why. */}
+                hidden: a box that is not there says nothing about why.
+
+                The column's fold goes down as a **prop**, not as a second source of truth (Story
+                #346): the design's *Edit profile* chip is the second of the two collapsing
+                affordances (DDR-0115 amendment 2), drawn in the chat header while the column is
+                shut, and the state it reports is the same `profileCollapsed` the rail is drawn
+                from. A conversation that kept its own copy would be a fold that two components
+                could disagree about. */}
             <AssistantConversation
               status={status}
               displayCurrency={displayCurrency}
               profileVersion={profileVersion}
+              profileCollapsed={profileCollapsed}
+              onExpandProfile={() => setProfileCollapsed(false)}
             />
           </>
         )}
