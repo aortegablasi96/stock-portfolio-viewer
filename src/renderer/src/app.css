@@ -4071,34 +4071,30 @@ html {
    it and `.profile-column-body` carries the same gap in the Assistant section
    below. */
 
-/* The column's title row: the name, and what the stored profile currently says
-   under it. Tighter than the gap between the blocks below, because the two lines
-   are one statement — the same reason `.profile-intro-block` is. */
-.profile-column-title-block {
+/* The column's title row: the name, and the count of what the *stored* profile
+   says beside it (Story #347). A row rather than a stack, because the design
+   puts the pill at the far end of the title's own line and the two are one
+   statement — the profile, and how much of one it is. */
+.profile-column-title-row {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-
-/* What the section is, what it offers to do, and how the last write went —
-   three lines about the profile as a whole, tighter than the `--space-7` that
-   separates the cards below, because they are one statement rather than three
-   sections. */
-.profile-intro-block {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
 }
 
 /* The page's lede and each card's. Both are `--muted` prose at the small step,
    which is the treatment `.source-note` and `.table-notice` already carry — a
    sentence explaining what is below it, rather than a label naming a figure
    (DDR-0060). The measure is capped so a paragraph does not run the full width
-   of a 1400px window; `.confirm-warning` caps itself the same way. */
+   of a 1400px window; `.confirm-warning` caps itself the same way.
+
+   `--text-xs` since Story #347, which is the design's own 12px: this is a
+   420px column now rather than a page, and the step above it turned four lines
+   into six before the first section came into view. */
 .profile-intro {
   margin: 0;
   max-width: 60ch;
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
   line-height: var(--leading-normal);
   color: var(--muted);
 }
@@ -4113,10 +4109,27 @@ html {
 
 /* What a dimension with no targets says. Deliberately not a `StatePanel`:
    nothing failed and nothing is missing — an unset dimension is a valid
-   profile, so it reads as a statement rather than as a prompt (DDR-0038). */
+   profile, so it reads as a statement rather than as a prompt (DDR-0038).
+
+   Since Story #347 it is the design's boxed, italic line rather than a bare
+   sentence, and the box is what makes the claim visible in a closed section's
+   panel: an empty dimension now looks like an empty dimension rather than like
+   a section that failed to draw.
+
+   **The fill makes it `--surface-raised`'s fifth adopter** (DDR-0069,
+   DDR-0070). `sidebarRail.test.ts` counts them, and the toll is paid in
+   `lib/contrast.ts`: the muted ink this box renders is measured on this fill
+   rather than on the `--card` behind it. This rule is *grown* rather than
+   joined by a second one, which is what keeps the four call sites drawing one
+   box (Story #188's precedent). */
 .profile-empty {
   margin: 0;
+  padding: var(--control-pad-sm);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
   font-size: var(--text-xs);
+  font-style: italic;
   color: var(--muted);
 }
 
@@ -4137,27 +4150,40 @@ html {
   color: var(--neg-text);
 }
 
-/* What the stored profile currently says, counted rather than listed. It was in
-   the first card's header for one round and read as a fact about *investing
-   style*; it is a fact about the profile as a whole. It sat beside the group's
-   trigger while the profile was a disclosure, so that a folded section still
-   said what it held; since Story #343 the column folds instead and the line sits
-   under the column's title, where the design draws it. */
-.profile-summary {
-  margin: 0;
-  font-size: var(--text-xs);
-  color: var(--muted);
-}
+/* Save, then Discard. They sit in the column's **head** since Story #347 —
+   always in reach, so a target typed three sections down is stored without
+   scrolling back for the button that stores it — and the `role="status"` notice
+   moved with them. That pairing is load-bearing rather than tidy: a live region
+   inside a `hidden` subtree announces nothing, so a Save pressable while its
+   answer was out of view is exactly the bug Story #310 fixed by putting both
+   inside the panel (DDR-0108). The head keeps them together; the fold still
+   takes both.
 
-/* Discard beside Save. They sit *inside* the panel, with the form they act on,
-   rather than in the head row beside the trigger: a `role="status"` live region
-   inside a `hidden` subtree announces nothing, so a Save that could be pressed
-   while the section was closed would be a press whose answer could not be read
-   (Story #310, DDR-0108). */
+   Save first here, where the panel had Discard first. In the head the two are
+   at the top of the column rather than under the form, and the design reads
+   left to right from the action that stores. */
 .profile-actions {
   display: flex;
   align-items: center;
   gap: var(--space-3);
+}
+
+/* Sized off the button's own type step, for the reason every other glyph in
+   this view is: an icon picked in px is the one thing that would not move with
+   the type scale (DDR-0048). Drawn only in Save's resting half, where it is the
+   answer to "did that land" rather than a decoration on an offer. */
+.profile-save-glyph {
+  width: 1em;
+  height: 1em;
+}
+
+/* The design's `+` in front of an add control. `aria-hidden` in the markup, so
+   this is decoration in both channels — the button's name is the word beside
+   it. Toned like the marker on a disclosure's trigger, which is the other mark
+   in this column that says a control does something. */
+.profile-add-mark {
+  margin-right: var(--space-1);
+  color: var(--muted);
 }
 
 .profile-targets {
@@ -4237,6 +4263,13 @@ html {
    column that does *not* give: the conversation reflows, the form beside it has
    two-column rows that would start wrapping.
 
+   **The column itself no longer scrolls** (Story #347). It is three bands the
+   way the chat column beside it is: the view's eyebrow row, the profile's own
+   head, and the sections — and only the last of the three has a scrollbar, so
+   Save stays where the owner left it while a target three sections down is
+   typed. `overflow: hidden` is what makes the inner scroller possible at all; a
+   column that scrolls itself gives its children no height to be bounded by.
+
    The transition is the design's `0.22s cubic-bezier(0.4,0,0.2,1)` and is a raw
    duration on purpose — neither the scale's 90ms nor its 120ms, and DDR-0044's
    one documented way off the budget is a raw value declared with its reason
@@ -4249,30 +4282,33 @@ html {
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  overflow-x: hidden;
-  overflow-y: auto;
+  overflow: hidden;
   transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* The rail. Wins on source order at equal specificity, which is the same
    mechanism the reduced-motion block relies on — reordering these two rules
-   silently stops the column narrowing. `overflow-y: hidden` because a 48px
-   column has nothing to scroll and a scrollbar in it would be most of it. */
+   silently stops the column narrowing. It declares the width alone since Story
+   #347: the `overflow-y: hidden` it used to add is what the rule above now says
+   for both states, and a 48px column has nothing to scroll either way. */
 .assistant-profile-collapsed {
   width: var(--assistant-profile-rail-width);
-  overflow-y: hidden;
 }
 
 /* The column's own head: the view's `<h1>` drawn as the design's accent eyebrow,
    with the control that folds the column beside it. No rule under it — the
-   design draws none, and the profile's own title starts the block below. */
+   design draws none, and the profile's own title starts the block below, which
+   is why the bottom gutter here is the design's own 4px rather than a band:
+   the eyebrow and the title are one head split across two components (the
+   eyebrow is the view's, the title the profile's), and the seam must not read
+   as a gap. */
 .assistant-column-head {
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
-  padding: var(--space-7) var(--space-7) var(--space-5);
+  padding: var(--space-7) var(--space-7) var(--space-1);
 }
 
 /* The eyebrow (Story #343, DDR-0115 amendment 1). Story #185 dropped `.eyebrow`
@@ -4326,20 +4362,120 @@ html {
 
 /* The column's name, which the group `Collapsible`'s trigger used to carry. The
    column is the disclosure now, so the heading is a plain one at the same level
-   the trigger rendered (DDR-0106, DDR-0115). */
+   the trigger rendered (DDR-0106, DDR-0115).
+
+   The design draws it at 22px against the chat column's 18px, and this app puts
+   type on the scale rather than on the design's own numbers — Story #346 landed
+   that 18px on `--text-md`, so the step above it is what keeps the difference
+   the design draws between the two column titles (DDR-0031). 700 is the
+   design's weight and heavier than the app's default heading. */
 .profile-column-title {
   margin: 0;
-  font-size: var(--text-md);
+  font-size: var(--text-lg);
+  font-weight: 700;
   line-height: var(--leading-tight);
 }
 
-/* Everything the profile draws, inside the scrolling column rather than inside a
-   disclosure panel. The gap is `.profile-group`'s, which moved here with it. */
+/* Everything the profile draws, inside the column rather than inside a
+   disclosure panel — and since Story #347, **two bands rather than one list**:
+   a head that stays put and the sections that scroll under it. `min-height: 0`
+   is the load-bearing half, exactly as on `.assistant-transcript`: a flex item
+   will not shrink below its content unless told to, so without it the sections
+   grow the column and the head leaves the window instead of the list
+   scrolling. */
 .profile-column-body {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--space-7);
-  padding: 0 var(--space-7) var(--space-7);
+}
+
+/* The head. `flex-shrink: 0` for the reason `.assistant-chat-head` carries it:
+   a long form must scroll *under* the button that stores it rather than
+   squeezing it out of the window. The gutters are the design's `22px 22px`,
+   and the bottom one is the band between the head and the first section. */
+.profile-column-head {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: 0 var(--space-7) var(--space-6);
+}
+
+/* The only thing in this column with a scrollbar. The gap is the design's 10px
+   between the section boxes, on the nearest step; the gutters are its
+   `0 20px 28px`. */
+.profile-column-sections {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: 0 var(--space-6) var(--space-8);
+}
+
+/* Clearing the profile, as the design's negative-bordered row rather than a
+   sixth disclosure (`figma_design/src/App.tsx:2084-2120`). The five above fold
+   because each holds a form; this holds one button, so a fold would hide a
+   control behind a click that reveals nothing else.
+
+   The edge is the toned border Story #257 measured for the toned badges —
+   `--neg` mixed halfway into `--border`, which is the *fill* half of the loss
+   split and the right one for a box (DDR-0046, DDR-0054). The design's
+   `--negative-dim` is a token this app does not have, and a tone picked by eye
+   is what `lib/contrast.ts` exists to refuse. Same arithmetic, same ground, so
+   it is named in that entry rather than measured twice. */
+.profile-clear-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  /* The confirm expands in place into a warning and two buttons (DDR-0012), which
+     is more than a 420px column can hold beside a paragraph — so the armed state
+     drops below the copy rather than squeezing it, the same degradation
+     `.assistant-chat-head` takes for its chip row. */
+  flex-wrap: wrap;
+  gap: var(--space-5);
+  padding: var(--surface-pad-sm);
+  border: 1px solid color-mix(in srgb, var(--neg) 50%, var(--border));
+  border-radius: var(--radius-lg);
+  background: var(--card);
+}
+
+/* The basis is **measured on screen, not reasoned about** — the same call
+   `--sources-width` records, and for the same reason: a glyph advance is not
+   something a comment can promise. The row leaves 329px inside its padding and
+   the trigger renders 128.6px, so with the --space-5 gap the copy has 184.4px
+   before the button wraps under the paragraph instead of sitting at its right
+   where the design draws it. 14rem and 12rem both wrapped; 11rem clears it with
+   room, and `flex-grow` still hands the copy every pixel the trigger leaves.
+
+   The wrap itself is kept for the *armed* state, which is much wider than any
+   basis would save. */
+.profile-clear-copy {
+  flex: 1 1 11rem;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+/* A `<p>` at the card title's treatment rather than a heading: the five
+   sections above it are headings because each names a part of the profile, and
+   this names an action. A sixth `<h3>` in the outline would say the profile has
+   a "Clear the profile" part. */
+.profile-clear-title {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.profile-clear-note {
+  margin: 0;
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+  color: var(--muted);
 }
 
 /* Load-bearing, and the same trap `.collapsible-panel[hidden]` records (DDR-0106): the block's

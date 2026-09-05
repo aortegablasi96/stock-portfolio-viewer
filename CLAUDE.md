@@ -68,25 +68,25 @@ Each exists end-to-end and is the reference pattern for its shape.
   predicate** (`limit` a *count*, `period` a *key*, `series` a *choice*, `query` an *identity*), a
   state is **never an empty report**, gaps carry targets *and* baseline in one payload (DDR-0111).
   `get_position` reaches past every cap and resolves **in the service, by conid** — identity, exact
-  ticker, exact name, then a 2+ char substring, **first tier winning**, so a ticker typed exactly is
+  ticker, exact name, then a 2+ char substring, **first tier winning**, so an exact ticker is
   never ambiguous against the names containing it. **Ambiguous lists candidates and never guesses**;
-  *not held* carries the unverified-training-data marking, and is **not** what a gateway that never
+  *not held* is **not** what a gateway that never
   answered returns. Its figure beside the weight is the gain as a **percent of cost** — IBKR's own
   `unrealizedPnl` over a per-share `avgCost` (DDR-0087), needing no rate, so it survives a holding
-  that has no weight — because no money may appear in a `holdings`/`weights` report (#328). The
+  that has no weight — no money may appear in a `holdings`/`weights` report (#328). The
   renderer assembles **nothing**; the empty context and its bound stay.
   **Two denominators**: the overview's weights **exclude cash**, drift's **include
   it** — each says which. Figures go through **`@shared/format`** at **`APP_LOCALE`, never the
   host's** — two processes resolve `undefined` differently, in silence (DDR-0111).
   A section is **absent, never empty**; no money goes in one declared as
   names or percentages; each names its store *and clock* — composition is Flex, drift live
-  (DDR-0098). A **period report** keeps return and value apart, return first — the curve is
-  TWR, so a deposit moves value alone; the period is anchored to `extent.to`, an overlapping
+  (DDR-0098). A **period report** keeps return and value apart, return first; the period is
+  anchored to `extent.to`, an overlapping
   statement row is summed **whole** and names its span, an empty window is a *state* not a flat
   period, and no cause is ever offered (DDR-0099). What the app **does not** compute leads
   **every** prompt, **never a tool**: a fact the model may decline to fetch holds no rule
-  (`BASE_CONTEXT`, `assistantAbsences.ts`): no annualised figure, no benchmark, no risk statistic,
-  the baseline's silences, the currency reading, **two stores, two clocks**. A report restates its
+  (`BASE_CONTEXT`, `assistantAbsences.ts` — annualised, benchmark, risk, the baseline's silences,
+  the currency reading, **two stores, two clocks**). A report restates its
   own — belt-and-braces, not the binding (DDR-0101). There is **no period control**: a picker asks
   what free text already said (DDR-0102). **Every standard period is precomputed**
   (`@shared/domain/standardPeriods`, windowing in `performanceWindow`; the renderer's libs
@@ -96,13 +96,13 @@ Each exists end-to-end and is the reference pattern for its shape.
   `2025` is the ambiguity. Only **consecutive same-kind** differences are computed; every other is
   forbidden in the text. `get_portfolio_history` returns **value or composition, never both**
   (DDR-0013), downsampled to a stated cap. `get_dividend_income`'s windows come off the **dividend
-  history's own extent** (`dividendPeriods.ts` over `standardWindows`) — one method per tool, so it
+  history's own extent** (`dividendPeriods.ts` over `standardWindows`), so it
   cannot borrow the performance set: a key that exists there may **not** exist here, and an
   **undated** cash event is in no window, `all` included, and is counted out loud (#329).
   `get_realized_gains` quotes the **service's** totals, never a sum of its capped rows, and lists
   **both ends** — a top-N by realised P&L is all winners. `get_data_coverage` **always answers**
-  (nothing imported *is* the coverage, never `needs_import`), is **one service** because a tool may
-  not span two, and reads snapshots with **no display currency** so it needs no gateway. `coverage`
+  (nothing imported *is* the coverage, never `needs_import`) and reads snapshots with **no display
+  currency**, so it needs no gateway. `coverage`
   is a **sixth disclosure category**: something new to send is declared, never squeezed under an
   existing one. A drift-closing **move** hangs off `DriftBand.move`
   (`driftMoves.ts`), non-`null` **exactly** when the band is outside its range: **proportional, not
@@ -119,7 +119,7 @@ Each exists end-to-end and is the reference pattern for its shape.
   `no_profile`/`no_targets` are **gone**, `balanced` is **nullable** (vacuous `true` is what a model calls balanced).
   `promptBudget.test.ts` measures the **conversation**, over **two** fixtures since a profile that
   lengthens the drift shortens the baseline (DDR-0103). The **85% gate binds the first round plus
-  the largest single report** (~28%), not the exhaustive case — all twelve at once is ~80% and fits; a
+  the largest single report** (~28%), not the exhaustive case; a
   *repeated* report is what the ceiling rations, and crossing it mid-loop is `incomplete`.
   **Measure before adding to a report, a description or the base context** (DDR-0112).
   **A question carries the conversation** (DDR-0113): the turns before it, each **two messages** —
@@ -146,8 +146,8 @@ Each exists end-to-end and is the reference pattern for its shape.
   paragraph. Marks are a **set**, not an inline tree; emphasis opens on neither a following space
   (`5 * 3` is arithmetic) nor mid-word, and the closer tracks **what the opener left behind**.
   `.assistant-answer code` **joins the figure role** (a second `--font-figure` rule throws) on
-  `--bg`, not the raised surface. A `#` starts at **`h3`**
-  and the type step falls between **`h4`/`h5`**, because the prompt's own register is `##`/`###`.
+  `--bg`, not the raised surface. A `#` starts at **`h3`**, the type step between **`h4`/`h5`** —
+  the prompt's own register is `##`/`###`.
   The alignment classes are **scoped** or `.assistant-answer th` out-specifies them. What the next
   turn remembers is the **raw** string (DDR-0113): formatting is a render concern.
   **The view is two columns, not a page** (#343, DDR-0115): the profile at **420px**, folding to a
@@ -155,8 +155,8 @@ Each exists end-to-end and is the reference pattern for its shape.
   three bands with only the transcript scrolling. No `PageHeader`, and the eyebrow is the `<h1>`,
   taking **`.sr-only`** rather than leaving the tree when the column folds.
   **`.profile-column-body[hidden]` is load-bearing** — its own `display` defeats the attribute
-  (DDR-0106's trap again), and without it the folded form stays laid out and tabbable behind a
-  48px rail. **Three rules escape the duration scale** — the column's raw 0.22s, the transcript's
+  (DDR-0106's trap again): without it the folded form stays laid out and tabbable.
+  **Three rules escape the duration scale** — the column's raw 0.22s, the transcript's
   `scroll-behavior` (motion with *no* time in it, so `scrollIntoView` names no `behavior`), and the
   dots' raw 1.2s. Each is a `motionTokens.ts` exemption **paired** with a reduced-motion rule whose
   selector is **doubled**: that block sits ~4,000 lines above them and loses on source order. The
@@ -166,19 +166,23 @@ Each exists end-to-end and is the reference pattern for its shape.
   **newest-first** — `rememberedTurns` walks it backwards, the trim drops from the oldest end — and
   only `transcriptOrder` reverses it for drawing; reversing the stored array inverts the memory in
   silence. The `WHO · TIME` marking is **new state that reaches no request**. The owner's bubble is
-  **`--accent-strong`**, never `--accent` — white on the text half is 4.47:1, DDR-0046's split
-  applied to the accent.
+  **`--accent-strong`** — white on `--accent` is 4.47:1.
   **The composer is one path** (#345): Enter submits the **form**, so the key and the button share
   `isAskable`/`pending`; `preventDefault` stops the newline too, and a **composing** IME's Enter is
-  not a send. The clipped label made `.sr-only` a **selector list**, moving `tokenAdoption`'s
-  `-1px` key. The suggestions toggle ships **disabled** (#348).
+  not a send. The suggestions toggle ships **disabled** (#348).
   **The header says the state and one line says the cost** (#346): `groundingNotices`' `<ul>` is
   gone, folded into a chip row and one line above the composer, **both from that function** so they
   cannot disagree. Its reading is the **drift** report's, never the rail's `getOverview` (DDR-0056
   vs DDR-0095) — two clocks, each right; don't unify them, and nothing polls. The chips are
-  `--surface-raised`'s **fourth** adopter (the count moves, seven pairings join `contrast.ts`, the
+  `--surface-raised`'s **fourth** adopter (seven pairings join `contrast.ts`, the
   **hover** among them); a control chip is a `<button>`, and **Clear chat has no confirm** —
   nothing is stored, so `disabled` is the whole guard.
+  **The profile column is a head over a scroller** (#347): Save, Discard and the `role="status"`
+  notice move **together** (#310's bug, one scroll further down), and the column is
+  `overflow: hidden` or the head rides up. Four of five arrive **closed** — a call site, not the
+  primitive; **Clear the profile is no longer one** and keeps `ConfirmAction`, which amendment 5
+  freed for *chat* alone. `.profile-empty` is `--surface-raised`'s **fifth**; the pill reuses
+  #346's chip, so it adds none.
 - **classification** — sector/industry. `classificationRepository` fronts *both* the mutable
   SQLite cache and `ibkrGateway`; `analytics:classifyInstruments` is the only analytics channel
   reaching IBKR. Refreshes are **resumable, not transactional** — a run that dies at 30 of 40 keeps
@@ -459,8 +463,8 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
   row is **absent, not empty**, where there is nothing to refresh. `lib/analyticsShell.ts` holds
   the branch mapping; its test fails if a view re-declares the guard, wrapper, or header.
 - **A row of two cards takes its height from the row, not from either card** — `.dashboard-sources`
-  is `align-items: stretch` (DDR-0093): its two contents can never agree, so `start` left whichever
-  was shorter above the row. The contents stay blocks — a flex card or a `height: 100%` content
+  is `align-items: stretch` (DDR-0093), or `start` leaves the shorter one floating above the
+  row. The contents stay blocks — a flex card or a `height: 100%` content
   spreads the slack *through* the controls instead of below them. `.performance-charts` keeps
   `start`; four identical charts already agree.
 - **The range presets are one vocabulary** (DDR-0085): `RangeFilter` renders `RANGE_OPTIONS`

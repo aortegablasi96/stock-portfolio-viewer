@@ -57,11 +57,15 @@ export function headingFor(level: CollapsibleLevel = DEFAULT_COLLAPSIBLE_LEVEL):
 /**
  * The parts a collapsible draws, each of which has a rule and none of which varies by level.
  *
- * `action` is the one that needs saying. Two of #310's five sections carry a control in their card
- * head today — "Add a limit" and the profile's `ConfirmAction` — and a control inside the trigger
- * would be a button inside a button, which is invalid markup that renders and then swallows one of
- * the two clicks. The slot puts it *beside* the trigger, so the primitive makes that mistake
+ * `action` is the one that needs saying. Four of #310's five sections carry a control in their card
+ * head since Story #347 — the three "+ Add target"s and "+ Add limit" — and a control inside the
+ * trigger would be a button inside a button, which is invalid markup that renders and then swallows
+ * one of the two clicks. The slot puts it *beside* the trigger, so the primitive makes that mistake
  * unavailable rather than leaving it to a call site to remember.
+ *
+ * The profile's `ConfirmAction` was the fifth until #347 took the clear out of a disclosure
+ * altogether: the five that fold each hold a form, and a fold over one button would have hidden a
+ * control behind a click revealing nothing else (DDR-0115).
  */
 export const COLLAPSIBLE_PARTS = ['head', 'heading', 'trigger', 'action', 'panel'] as const
 

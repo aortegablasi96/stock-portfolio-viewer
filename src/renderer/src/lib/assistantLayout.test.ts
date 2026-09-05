@@ -277,14 +277,31 @@ describe('the profile is a column, not a disclosure', () => {
    */
   it('drops the group Collapsible and keeps the section ones', () => {
     expect(SECTION).not.toContain('level="group"')
-    expect(SECTION).not.toContain('defaultOpen')
-    expect([...SECTION.matchAll(/<Collapsible\b/g)]).toHaveLength(3)
+    // Two here and one in `ProfileTargets` since Story #347: Clear the profile became the design's
+    // bordered row rather than a sixth disclosure, and the three target sections are still the one
+    // component drawn three times. `profileColumn.test.ts` owns which of them arrive open.
+    expect([...SECTION.matchAll(/<Collapsible\b/g)]).toHaveLength(2)
     expect([...source('components/ProfileTargets.tsx').matchAll(/<Collapsible\b/g)]).toHaveLength(1)
   })
 
   /** The heading the group's trigger used to carry is now the column's own, at the same level. */
   it('states the column’s name as an h2', () => {
-    expect(SECTION).toMatch(/<h2 className="profile-column-title">Investor Profile<\/h2>/)
+    expect(SECTION).toMatch(/<h2 className="profile-column-title">\{PROFILE_COLUMN_TITLE\}<\/h2>/)
+  })
+
+  /**
+   * The column is three bands, exactly as the chat column beside it is, and only the last of them
+   * scrolls (Story #347). The column itself must *not* — a box that scrolls itself gives its
+   * children no height to be bounded by, so the head would ride up with the sections and Save
+   * would leave the window rather than staying where the owner left it.
+   */
+  it('scrolls the sections alone, not the column', () => {
+    expect(rule(PROFILE_COLUMN_CLASS)).toContain('overflow: hidden')
+    expect(rule(PROFILE_COLUMN_CLASS)).not.toContain('overflow-y: auto')
+    expect(rule('assistant-column-head')).toContain('flex-shrink: 0')
+    expect(rule('profile-column-head')).toContain('flex-shrink: 0')
+    expect(rule('profile-column-sections')).toContain('overflow-y: auto')
+    expect(rule('profile-column-sections')).toContain('min-height: 0')
   })
 
   /**

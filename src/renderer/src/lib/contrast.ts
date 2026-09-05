@@ -637,14 +637,20 @@ export const PAIRINGS: readonly Pairing[] = [
       'it from being read as the signed figure four columns away. 3.12:1, the louder of the pair.',
   },
   {
-    where: '.badge-negative’s border — the loss chip’s box, mixed 50% into --border',
+    where:
+      '.badge-negative’s border — the loss chip’s box, mixed 50% into --border, and ' +
+      '.profile-clear-row’s edge, which is the same mix on the same ground',
     foreground: { mix: { token: '--neg', percent: 50, over: '--border' } },
     background: { token: '--card' },
     minimum: SURFACE_EDGE,
     reason:
       'The tighter half, at 1.97:1 — --neg is the darker token, so the loss chip’s box is the ' +
       'first thing a dimmed border or a lighter card would break. Still louder than the 1.25:1 ' +
-      'neutral border this column wore before, which is why the toned box is not a loss of edge.',
+      'neutral border this column wore before, which is why the toned box is not a loss of edge. ' +
+      'Story #347 widens the reach rather than adding an entry beside it: the profile’s clear row ' +
+      'takes the design’s negative frame through this same mix on this same fill, so a copy would ' +
+      'measure identical arithmetic under a second name (the argument the Trades side badge is ' +
+      'named under, above).',
   },
   /**
    * The two pairings Story #229 added: the gain and loss tones as **marks** on a chart card
@@ -803,6 +809,35 @@ export const PAIRINGS: readonly Pairing[] = [
       'A control’s boundary where the boundary is what says the control has turned destructive, ' +
       'so 1.4.11 rather than SURFACE_EDGE: 4.17:1. The fill half of the split is right here — ' +
       'this is a border, not a word.',
+  },
+  /**
+   * The pairing Story #347 added: the profile column's empty-state box, on `--surface-raised`'s
+   * **fifth** adoption (DDR-0069, DDR-0070).
+   *
+   * `--muted` on that fill appears three times above already — the gateway chip's micro-label, the
+   * display-currency field's, and the chat header's chip — and this is listed beside them for the
+   * reason each of those is listed beside the others: they are different rules, and deleting the
+   * sidebar or the chat header must not take the profile's measurement with it. What is genuinely
+   * new is the *reach*: this is the ink four boxes render, one per unstated dimension, and it is
+   * the state a fresh clone opens on.
+   *
+   * The box's own **edge** is not listed. `--border` on `--card` is the widest-reaching entry in
+   * this list, near the gateway chip above, and these boxes sit inside a card.
+   *
+   * The **clear row's** negative edge is not listed either, and that is the same call Story #257
+   * made for the Trades side badge: `--neg` mixed 50% into `--border` against `--card` is measured
+   * two entries below at 1.97:1, and a copy would measure identical arithmetic under a second
+   * name and could never fail on its own. It is named there instead.
+   */
+  {
+    where: '.profile-empty — “no policy stated here”, muted italic on the raised fill',
+    foreground: { token: '--muted' },
+    background: { token: '--surface-raised' },
+    minimum: AA_NORMAL,
+    reason:
+      'The faintest ink the profile column renders, at --text-xs and in italic, on the app’s one ' +
+      'surface step that goes up: 5.35:1 against 5.80:1 on --card. Four boxes carry it — one per ' +
+      'dimension the owner has stated no policy for — which is what a fresh clone opens on.',
   },
   {
     where: '.chart-axis-label — SVG <text> on a chart card',

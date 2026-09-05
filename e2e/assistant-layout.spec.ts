@@ -219,8 +219,8 @@ test('keeps the eyebrow as the panel’s h1 in both states, and draws no page he
  * typed survives the fold even though it cannot be reached during it.
  */
 test('takes the profile’s controls out of reach while folded, and keeps what was typed', async () => {
-  // The five sections keep the primitive's own default, which is open (DDR-0106) — nothing has to
-  // be unfolded to reach a style tag now that the group `Collapsible` is gone.
+  // Investing style is the one section that arrives open since Story #347, so nothing has to be
+  // unfolded to reach a style tag — which is part of why it is the one left open (DDR-0106).
   await page.getByRole('button', { name: 'Dividend income' }).click()
   await expect(page.getByRole('button', { name: 'Save profile' })).toBeEnabled()
 

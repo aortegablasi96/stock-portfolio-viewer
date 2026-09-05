@@ -158,8 +158,14 @@ describe('the status dot is a second channel, and a tokenised one', () => {
        header draws a row of pill chips on the same raised fill (DDR-0115 amendment 6), and it
        owes seven pairings — the muted label, the positive state's ink, the three dots at
        `NON_TEXT`, and Clear chat's negative **hover**, which is the state axe never tests
-       (DDR-0064). A fifth adopter owes its own too. */
-    expect(CSS.match(/var\(--surface-raised\)/g)).toHaveLength(4)
+       (DDR-0064).
+
+       **Story #347 is the fifth**, in the other column: `.profile-empty` becomes the design's
+       boxed italic line, drawn once per dimension the owner has stated no policy for, and it owes
+       one pairing — its muted ink, re-pointed off `--card`. The style-tag pill beside the column's
+       title adds none, because it *is* #346's chip: one rule, reused a column over rather than
+       copied, which is what keeps that rule's inks measured once. A sixth adopter owes its own. */
+    expect(CSS.match(/var\(--surface-raised\)/g)).toHaveLength(5)
   })
 
   it('is not announced as a live region', () => {
