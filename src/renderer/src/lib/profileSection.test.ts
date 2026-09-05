@@ -147,19 +147,32 @@ describe('it folds through the one disclosure primitive', () => {
     const inSection = [...SECTION.matchAll(/<Collapsible\b/g)].length
     const inTargets = [...TARGETS.matchAll(/<Collapsible\b/g)].length
     // Three of the five sections are the one `ProfileTargets` component, drawn three times.
-    expect(inSection).toBe(3)
+    // **Two here rather than three since Story #347**: Clear the profile stopped being a
+    // disclosure. The five that fold each hold a form; that one holds a button, so a fold would
+    // have hidden a control behind a click revealing nothing else.
+    expect(inSection).toBe(2)
     expect(inTargets).toBe(1)
     expect(SECTION).not.toContain('level="group"')
   })
 
   /**
-   * Every section keeps the primitive's own default, whose stated reason is that a section hiding
-   * its content unasked is lost. Nothing here opts out of it any more: the one `defaultOpen` in
-   * this file closed the group, and the group is gone.
+   * **Four of the five arrive closed since Story #347**, which is the design's own reading: five
+   * open disclosures in a 420px column is a scroller that has to be walked before the shape of the
+   * profile is visible. `Collapsible`'s default is untouched — these are *call sites* opting out
+   * of it, which is what the `defaultOpen` prop is for (DDR-0106) — and the one they opt out of it
+   * through is a constant rather than a literal, so the four cannot drift apart.
+   *
+   * Investing style is the exception and takes no prop at all: a tag is one click and needs
+   * nothing typed, and it is the part of the profile the head's pill and the rail's dot report.
    */
-  it('leaves every section at the primitive’s default', () => {
-    expect(SECTION).not.toContain('defaultOpen')
-    expect(TARGETS).not.toContain('defaultOpen')
+  it('opens Investing style alone, through one named constant', () => {
+    expect(SECTION).not.toContain('defaultOpen={true}')
+    expect(TARGETS).not.toContain('defaultOpen={true}')
+    expect([...SECTION.matchAll(/defaultOpen=\{SECTION_OPEN_ON_ARRIVAL\}/g)]).toHaveLength(1)
+    expect([...TARGETS.matchAll(/defaultOpen=\{SECTION_OPEN_ON_ARRIVAL\}/g)]).toHaveLength(1)
+    // The two `Collapsible`s in this file are Investing style and the position band; the band is
+    // the one carrying the prop, so the style section is the one that does not.
+    expect(SECTION).toMatch(/<Collapsible label="Investing style">/)
   })
 
   /**
@@ -180,7 +193,6 @@ describe('it folds through the one disclosure primitive', () => {
   it('puts each section’s own control in the action slot', () => {
     expect(TARGETS).toMatch(/action=\{\s*<Button size="sm"/)
     expect(SECTION).toMatch(/action=\{\s*<Button\s+size="sm"/)
-    expect(SECTION).toMatch(/action=\{\s*<ConfirmAction/)
     expect(SECTION).not.toContain('<CardHeader')
     expect(TARGETS).not.toContain('<CardHeader')
   })
@@ -193,16 +205,24 @@ describe('it folds through the one disclosure primitive', () => {
    *
    * That was the group panel until Story #343 and is the whole column now, which makes the claim
    * *stronger* rather than weaker: the fold takes the buttons and their notice together, so there
-   * is no head row left that stays pressable while the panel under it is shut. What the summary
-   * loses is its `action` slot — it sits under the column's title, where the design draws it —
-   * and what it keeps is being ahead of the controls it describes.
+   * is no head row left that stays pressable while the panel under it is shut.
+   *
+   * **Story #347 raises both into the head and they move together**, which is the half that would
+   * have been easy to get wrong. A head that kept the buttons while leaving their answer down in
+   * the scroller is #310's bug with a longer scroll in front of it — so the assertion is that the
+   * notice is in `.profile-column-head`, above the scroller, and not merely somewhere in the file.
    */
-  it('folds Save, Discard and the notice away with the form, the summary above them', () => {
+  it('folds Save, Discard and the notice away with the form, and keeps the three together', () => {
     expect(SECTION).toMatch(/<div className="profile-column-body" hidden=\{hidden\}>/)
-    expect(SECTION).not.toMatch(/action=\{<p className="profile-summary">/)
-    const head = SECTION.indexOf('className="profile-summary"')
+    const head = SECTION.indexOf('className="profile-column-head"')
+    const scroller = SECTION.indexOf('className="profile-column-sections"')
     expect(head).toBeGreaterThan(0)
-    expect(SECTION.indexOf('className="profile-actions"')).toBeGreaterThan(head)
+    expect(scroller).toBeGreaterThan(head)
+    for (const part of ['className="profile-actions"', 'profile-notice']) {
+      const at = SECTION.indexOf(part)
+      expect(at, part).toBeGreaterThan(head)
+      expect(at, part).toBeLessThan(scroller)
+    }
     expect(SECTION).toMatch(/className=\{`profile-notice[\s\S]{0,120}?role="status"/)
   })
 })

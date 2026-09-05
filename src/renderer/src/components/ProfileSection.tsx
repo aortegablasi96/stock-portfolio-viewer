@@ -5,10 +5,21 @@ import {
   isFormDirty,
   isFormValid,
   positionIssue,
-  profileSummary,
   type ProfileFormState,
   type TargetRowDraft,
 } from '../lib/investorProfile'
+import {
+  ADD_LIMIT_LABEL,
+  CLEAR_ROW,
+  EMPTY_POSITION_TEXT,
+  PROFILE_COLUMN_TITLE,
+  REMOVE_LIMIT_LABEL,
+  SECTION_OPEN_ON_ARRIVAL,
+  saveLabel,
+  saveVariant,
+  styleTagPillClassName,
+  styleTagPillLabel,
+} from '../lib/profileColumn'
 import { vocabularyFrom } from '../lib/profileVocabulary'
 import {
   EMPTY_INVESTOR_PROFILE,
@@ -20,7 +31,7 @@ import {
 import type { AllocationReport, AllocationResult } from '@shared/domain/allocation'
 import { useAnalytics } from './analytics/useAnalytics'
 import { ConfirmAction } from './ConfirmAction'
-import { ProfileTargets } from './ProfileTargets'
+import { AddMark, ProfileTargets } from './ProfileTargets'
 import { Button } from './ui/Button'
 import { Card, CardContent } from './ui/Card'
 import { Collapsible } from './ui/Collapsible'
@@ -54,18 +65,28 @@ import { ToggleGroup } from './ui/ToggleGroup'
  * the same gesture the trigger was. The heading the trigger carried is a plain `<h2>` at the same
  * level, and the summary beside it moved under it.
  *
+ * **Story #347 splits it into a head and a scroller.** Until now the title, the intro, Save,
+ * Discard and the five sections were one block inside one scrolling column, so editing a target
+ * three sections down meant scrolling back up to find the button that would store it. The design
+ * pins the head and scrolls the sections under it, which is why this component returns two boxes
+ * inside one `hidden` wrapper rather than one list: `.profile-column-head` does not shrink, and
+ * `.profile-column-sections` is the only thing here with a scrollbar.
+ *
  * **Its five `section` `Collapsible`s are untouched** (DDR-0106) — the parts of the profile still
  * open and close one at a time, `hidden` and never unmounted, so folding one away does not
  * discard what has been typed into it. That is the same decision the tab shell makes for a view
  * (DDR-0027), and the fold of the whole column now makes it a third time: `hidden` on this
- * block, so the form survives and its controls leave the tab order together.
+ * block, so the form survives and its controls leave the tab order together. What #347 changes is
+ * only which of them arrive open: the design opens *Investing style* alone, and the other four
+ * are call sites opting out of the primitive's default rather than a change to it.
  *
  * **Everything the owner can *do* to the profile sits with the form it acts on**, so a write can
  * only be started from a place where its reply can be read. `role="status"` inside a `hidden`
  * subtree announces nothing, and a Save button pressable while its answer was hidden would make
  * exactly that — which is why the fold takes the buttons with it rather than leaving a head row
- * that can still be pressed. (#347 moves Save and Discard to the top of the column, where the
- * design puts them and where they are still inside the same `hidden` subtree.)
+ * that can still be pressed. #347 moves them to the head, and the notice **moves with them**: that
+ * is the whole of #310's finding, and a head that keeps the buttons while leaving their answer
+ * down in the scroller would be the same bug with a longer scroll in front of it.
  *
  * The five cards lose the ruled header strip they carried as static cards, and that follows
  * DDR-0059's own rule rather than departing from it: the strip divides a head from the body under
@@ -224,32 +245,67 @@ export function ProfileSection({
   return (
     /* The column *is* the disclosure now (Story #343, DDR-0115), so the outer `group`
        `Collapsible` is gone and this is a plain block. What it keeps is the class it wore for
-       placement — the `--space-7` rhythm between the cards below — plus the padding the panel used
-       to supply, and the `hidden` the fold sets. Its five `section` `Collapsible`s are untouched:
-       a fold inside a fold is what two nested ones would be. */
+       placement and the `hidden` the fold sets; what Story #347 gives it is two children rather
+       than seven, because the head has to stay put while the sections scroll under it. Its five
+       `section` `Collapsible`s are untouched: a fold inside a fold is what two nested ones would
+       be. */
     <div className="profile-column-body" hidden={hidden}>
-      {/* The name the group's trigger used to carry, at the level it rendered. The design draws
-          it under the eyebrow with what the stored profile currently says beneath (#347 gives the
-          row its style-tag count badge). */}
-      <div className="profile-column-title-block">
-        <h2 className="profile-column-title">Investor Profile</h2>
-        <p className="profile-summary">{profileSummary(stored)}</p>
-      </div>
+      {/* Everything that is true of the profile as a whole, and everything the owner can do to
+          it — pinned, so a target typed three sections down is stored without scrolling back
+          (Story #347). */}
+      <div className="profile-column-head">
+        {/* The name the group's trigger used to carry, at the level it rendered, with the count
+            of what the *stored* profile says beside it. The pill is a count and never a score:
+            an owner who has stated nothing has stated nothing, which the app answers from its own
+            published baseline (ADR-0009, ADR-0012, DDR-0109). */}
+        <div className="profile-column-title-row">
+          <h2 className="profile-column-title">{PROFILE_COLUMN_TITLE}</h2>
+          <span className={styleTagPillClassName(stored.styleTags.length)}>
+            {styleTagPillLabel(stored.styleTags.length)}
+          </span>
+        </div>
 
-      {/* What this section is, what it offers to do, and how the last write went — one block,
-          because all three are statements about the profile as a whole rather than about any
-          section below. */}
-      <div className="profile-intro-block">
         {/* It says "you" three times on purpose: the standard is the owner's, and the app
             measuring against a standard it invented is the one thing ADR-0009 does not
             license. */}
         <p className="profile-intro">
           Your own policy for how this portfolio should be invested. Nothing here is required —
           state only what you have a view on, and the parts you leave blank stay unmeasured. The
-          assistant below compares your holdings against what you set here; the app never proposes
-          a policy of its own.
+          assistant beside this compares your holdings against what you set here; the app never
+          proposes a policy of its own.
         </p>
+
         <div className="profile-actions">
+          <Button
+            variant={saveVariant(dirty)}
+            size="sm"
+            disabled={busy || !dirty || !valid}
+            onClick={() => void save()}
+          >
+            {/* The check is a glyph beside the word rather than inside it: an accessible name of
+                "✓ Saved" is a reader being told "check mark saved", and the word alone is the
+                whole of the state. Drawn only in the resting half, where it is the answer to
+                "did that land". */}
+            {!dirty && !busy && (
+              <svg
+                className="profile-save-glyph"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+                focusable="false"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            )}
+            {busy ? 'Saving…' : saveLabel(dirty)}
+          </Button>
+          {/* Only while there is something to discard, which is the design's own guard and the
+              honest one: a control that would undo nothing is a control that says there is
+              something to undo. */}
           {dirty && (
             <Button
               variant="secondary"
@@ -257,23 +313,17 @@ export function ProfileSection({
               disabled={busy}
               onClick={() => setForm(formFromProfile(stored))}
             >
-              Discard changes
+              Discard
             </Button>
           )}
-          <Button
-            variant="primary"
-            size="sm"
-            disabled={busy || !dirty || !valid}
-            onClick={() => void save()}
-          >
-            {busy ? 'Saving…' : 'Save profile'}
-          </Button>
         </div>
+
         {/* The write's outcome, announced. `role="status"` rather than `alert` even for a
             failure: the owner pressed Save and is looking at the button, so this is a reply
-            rather than an interruption. It sits beside the buttons for a second reason since
-            #310 — a live region inside a closed panel announces nothing, so the press and its
-            answer have to be in the same panel. */}
+            rather than an interruption. It moved to the head *with* the buttons, which is #310's
+            finding rather than a departure from it — a live region the press cannot reach is a
+            press whose answer is never read, and leaving it in the scroller while the button rose
+            would have been that bug with a longer scroll in front of it. */}
         <p
           className={`profile-notice ${notice?.tone === 'error' ? 'profile-notice-error' : ''}`}
           role="status"
@@ -282,138 +332,149 @@ export function ProfileSection({
         </p>
       </div>
 
-      <Card>
-        <Collapsible label="Investing style">
-          <CardContent>
-            <p className="profile-lede">
-              How you think about this portfolio, in the owner’s own five words. Pick any number,
-              or none — these describe intent, and the targets below are what make it measurable.
-            </p>
-            <ToggleGroup
-              label="Investing style tags"
-              mode="multiple"
-              value={form.styleTags}
-              options={STYLE_TAGS.map((tag) => ({ id: tag, label: STYLE_TAG_LABELS[tag] }))}
-              onSelect={toggleTag}
-            />
-          </CardContent>
-        </Collapsible>
-      </Card>
+      {/* The only thing in this column with a scrollbar. */}
+      <div className="profile-column-sections">
+        <Card>
+          {/* The one section that arrives open: a tag is one click and needs nothing typed, and
+              it is the part of the profile both the head's pill and the rail's dot report. */}
+          <Collapsible label="Investing style">
+            <CardContent>
+              <p className="profile-lede">
+                How you think about this portfolio, in the owner’s own five words. Pick any number,
+                or none — these describe intent, and the targets below are what make it measurable.
+              </p>
+              <ToggleGroup
+                label="Investing style tags"
+                mode="multiple"
+                value={form.styleTags}
+                options={STYLE_TAGS.map((tag) => ({ id: tag, label: STYLE_TAG_LABELS[tag] }))}
+                onSelect={toggleTag}
+              />
+            </CardContent>
+          </Collapsible>
+        </Card>
 
-      <ProfileTargets
-        dimension="currency"
-        rows={form.currency}
-        terms={vocabulary.currency}
-        onChange={(rows) => setRows('currency', rows)}
-        lede="What share of the portfolio you want denominated in each currency. Currencies you already hold are offered; you can add one you intend to hold."
-      />
+        <ProfileTargets
+          dimension="currency"
+          rows={form.currency}
+          terms={vocabulary.currency}
+          onChange={(rows) => setRows('currency', rows)}
+          lede="What share of the portfolio you want denominated in each currency. Currencies you already hold are offered; you can add one you intend to hold."
+        />
 
-      <ProfileTargets
-        dimension="sector"
-        rows={form.sector}
-        terms={vocabulary.sector}
-        onChange={(rows) => setRows('sector', rows)}
-        lede="What share of the portfolio you want in each sector. The list comes from the sectors your holdings have been classified into."
-      />
+        <ProfileTargets
+          dimension="sector"
+          rows={form.sector}
+          terms={vocabulary.sector}
+          onChange={(rows) => setRows('sector', rows)}
+          lede="What share of the portfolio you want in each sector. The list comes from the sectors your holdings have been classified into."
+        />
 
-      <ProfileTargets
-        dimension="assetClass"
-        rows={form.assetClass}
-        terms={vocabulary.assetClass}
-        onChange={(rows) => setRows('assetClass', rows)}
-        lede="What share of the portfolio you want in each asset class, cash included."
-      />
+        <ProfileTargets
+          dimension="assetClass"
+          rows={form.assetClass}
+          terms={vocabulary.assetClass}
+          onChange={(rows) => setRows('assetClass', rows)}
+          lede="What share of the portfolio you want in each asset class, cash included."
+        />
 
-      <Card>
-        <Collapsible
-          label="Single position size"
-          /* Beside the trigger and never inside it: a control within the trigger would be a
-             button inside a button, which is invalid markup that renders and then swallows one
-             of the two clicks (DDR-0106). */
-          action={
-            <Button
-              size="sm"
-              onClick={() =>
-                setForm((prev) => ({
-                  ...prev,
-                  positionSize: prev.positionSize === null ? { low: '', high: '' } : null,
-                }))
-              }
-            >
-              {band === null ? 'Add a limit' : 'Remove the limit'}
-            </Button>
-          }
-        >
-          <CardContent>
-            <p className="profile-lede">
-              How large any one holding may grow, as a share of the portfolio. The maximum is the
-              concentration ceiling; leave the minimum at 0 if that is all you want to state.
-            </p>
-            {band === null ? (
-              <p className="profile-empty">No position limit — no policy stated here.</p>
-            ) : (
-              <div className="profile-target">
-                <div className="profile-target-row">
-                  <Field label="At least %">
-                    {(id) => (
-                      <PercentInput
-                        id={id}
-                        value={band.low}
-                        onChange={(e) =>
-                          setForm((prev) => ({
-                            ...prev,
-                            positionSize: { low: e.target.value, high: band.high },
-                          }))
-                        }
-                      />
-                    )}
-                  </Field>
-                  <Field label="At most %">
-                    {(id) => (
-                      <PercentInput
-                        id={id}
-                        value={band.high}
-                        onChange={(e) =>
-                          setForm((prev) => ({
-                            ...prev,
-                            positionSize: { low: band.low, high: e.target.value },
-                          }))
-                        }
-                      />
-                    )}
-                  </Field>
+        <Card>
+          <Collapsible
+            label="Single position size"
+            defaultOpen={SECTION_OPEN_ON_ARRIVAL}
+            /* Beside the trigger and never inside it: a control within the trigger would be a
+               button inside a button, which is invalid markup that renders and then swallows one
+               of the two clicks (DDR-0106). */
+            action={
+              <Button
+                size="sm"
+                onClick={() =>
+                  setForm((prev) => ({
+                    ...prev,
+                    positionSize: prev.positionSize === null ? { low: '', high: '' } : null,
+                  }))
+                }
+              >
+                {band === null ? (
+                  <>
+                    <AddMark />
+                    {ADD_LIMIT_LABEL}
+                  </>
+                ) : (
+                  REMOVE_LIMIT_LABEL
+                )}
+              </Button>
+            }
+          >
+            <CardContent>
+              <p className="profile-lede">
+                How large any one holding may grow, as a share of the portfolio. The maximum is the
+                concentration ceiling; leave the minimum at 0 if that is all you want to state.
+              </p>
+              {band === null ? (
+                <p className="profile-empty">{EMPTY_POSITION_TEXT}</p>
+              ) : (
+                <div className="profile-target">
+                  <div className="profile-target-row">
+                    <Field label="At least %">
+                      {(id) => (
+                        <PercentInput
+                          id={id}
+                          value={band.low}
+                          onChange={(e) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              positionSize: { low: e.target.value, high: band.high },
+                            }))
+                          }
+                        />
+                      )}
+                    </Field>
+                    <Field label="At most %">
+                      {(id) => (
+                        <PercentInput
+                          id={id}
+                          value={band.high}
+                          onChange={(e) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              positionSize: { low: band.low, high: e.target.value },
+                            }))
+                          }
+                        />
+                      )}
+                    </Field>
+                  </div>
+                  {bandIssue && <p className="profile-target-issue">{bandIssue}</p>}
                 </div>
-                {bandIssue && <p className="profile-target-issue">{bandIssue}</p>}
-              </div>
-            )}
-          </CardContent>
-        </Collapsible>
-      </Card>
+              )}
+            </CardContent>
+          </Collapsible>
+        </Card>
 
-      <Card>
-        <Collapsible
-          label="Clear the profile"
-          /* The in-place confirm the app uses for every destructive action — no modal, no
-             `window.confirm` (DDR-0012). It is not ADR-0006's sanctioned reset: nothing
-             append-only is touched, because a profile is a setting rather than history. */
-          action={
-            <ConfirmAction
-              label="Clear profile"
-              confirmLabel="Yes, clear my profile"
-              busyLabel="Clearing…"
-              warning="This removes every style tag and target. Your holdings, snapshots and imported statements are untouched."
-              onConfirm={clear}
-            />
-          }
-        >
-          <CardContent>
-            <p className="profile-lede">
-              Leaves the app with no standard to measure your portfolio against, which is where it
-              started. You can state a new one at any time.
-            </p>
-          </CardContent>
-        </Collapsible>
-      </Card>
+        {/* Not a disclosure, and that is the design's reading rather than a shortcut: the five
+            above fold because each holds a form, and this holds one button — a fold would hide a
+            control behind a click that reveals nothing else.
+
+            What it keeps is the in-place confirm the app uses for every destructive action — no
+            modal, no `window.confirm` (DDR-0012). DDR-0115 amendment 5 took the confirm off Clear
+            chat because a transcript is session state; a profile is **stored**, so this one stays.
+            It is still not ADR-0006's sanctioned reset: nothing append-only is touched, because a
+            profile is a setting rather than history. */}
+        <div className="profile-clear-row">
+          <div className="profile-clear-copy">
+            <p className="profile-clear-title">{CLEAR_ROW.title}</p>
+            <p className="profile-clear-note">{CLEAR_ROW.explanation}</p>
+          </div>
+          <ConfirmAction
+            label={CLEAR_ROW.action}
+            confirmLabel={CLEAR_ROW.confirm}
+            busyLabel={CLEAR_ROW.busy}
+            warning={CLEAR_ROW.warning}
+            onConfirm={clear}
+          />
+        </div>
+      </div>
     </div>
   )
 }

@@ -4,6 +4,12 @@ import {
   rowMessage,
   type TargetRowDraft,
 } from '../lib/investorProfile'
+import {
+  ADD_MARK,
+  ADD_TARGET_LABEL,
+  SECTION_OPEN_ON_ARRIVAL,
+  emptyTargetsText,
+} from '../lib/profileColumn'
 import { availableTerms, type VocabularyTerm } from '../lib/profileVocabulary'
 import {
   TARGET_DIMENSION_HEADINGS,
@@ -63,16 +69,21 @@ export function ProfileTargets({
   /** One sentence saying what a target in this dimension means. */
   lede: string
 }): React.JSX.Element {
-  const noun = TARGET_DIMENSION_LABELS[dimension]
   const duplicates = duplicateRowIds(rows)
 
   return (
     <Card>
       <Collapsible
         label={TARGET_DIMENSION_HEADINGS[dimension]}
+        /* Closed on arrival since Story #347: the design opens *Investing style* alone, and five
+           open disclosures in a 420px column is a scroller that has to be walked before the shape
+           of the profile is visible at all. The primitive's default is untouched — this is a call
+           site opting out of it (DDR-0106). */
+        defaultOpen={SECTION_OPEN_ON_ARRIVAL}
         action={
           <Button size="sm" onClick={() => onChange([...rows, newTargetRow()])}>
-            Add target
+            <AddMark />
+            {ADD_TARGET_LABEL}
           </Button>
         }
       >
@@ -82,7 +93,7 @@ export function ProfileTargets({
           {rows.length === 0 ? (
             /* Not a `StatePanel`: nothing failed and nothing is missing. An unset dimension is a
                valid profile, so the line says what it means rather than prompting a fix. */
-            <p className="profile-empty">No {noun.toLowerCase()} targets — no policy stated here.</p>
+            <p className="profile-empty">{emptyTargetsText(dimension)}</p>
           ) : (
             <ul className="profile-targets">
               {rows.map((row) => (
@@ -184,5 +195,25 @@ function TargetRow({
       </div>
       {message && <p className="profile-target-issue">{message}</p>}
     </li>
+  )
+}
+
+/**
+ * The design's `+` in front of an add control (`figma_design/src/App.tsx:1999`, `2065`).
+ *
+ * `aria-hidden`, so the button's accessible name stays "Add target" rather than "plus add target"
+ * — the same call the check mark on Save makes, and the reason both marks are drawn beside their
+ * word rather than written into it. A `<span>` and not an SVG: it is a character the font already
+ * draws, and a glyph the app has no reason to own.
+ *
+ * It lives here rather than beside the head it is drawn in, because this file renders three of
+ * the four add controls and `ProfileSection` already imports it — the other direction would be a
+ * cycle.
+ */
+export function AddMark(): React.JSX.Element {
+  return (
+    <span className="profile-add-mark" aria-hidden="true">
+      {ADD_MARK}
+    </span>
   )
 }

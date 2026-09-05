@@ -116,7 +116,10 @@ test('puts nothing in front of the chat once there is a key', async () => {
  */
 test('carries the investor profile beside the chat, open', async () => {
   await expect(profileToggle(false)).toHaveAttribute('aria-expanded', 'true')
-  await expect(view().getByText(/^No profile set/)).toBeVisible()
+  // What the column says about a fresh store is a **count**, in the pill beside its title (Story
+  // #347). It is deliberately not a verdict: an owner who has stated nothing has stated nothing,
+  // and the app answers those dimensions from its own baseline (ADR-0009, ADR-0012).
+  await expect(view().getByText('0 style tags')).toBeVisible()
   await expect(view().getByRole('button', { name: 'Dividend income' })).toBeVisible()
 
   await profileToggle(false).click()
@@ -169,12 +172,16 @@ test('opens the box once there is something to ground an answer in', async () =>
  * names a particular one, because which of the five arrives is the gateway's business.
  */
 test('draws the chip row, and reads the gateway from the drift report rather than the rail', async () => {
-  const chips = view().locator('.assistant-chip')
+  // Scoped to the header's own row since Story #347: `.assistant-chip` is the Assistant's chip,
+  // not the chat header's, and the profile column's style-tag pill wears it a column over
+  // (DDR-0115 amendment 6). One rule, two call sites — so a test about *this* row has to say which
+  // row it means.
+  const chips = view().locator('.assistant-chip-row .assistant-chip')
   await expect(chips.first()).toBeVisible()
 
   // The state chips are not controls: only Clear chat and Edit profile are buttons (DDR-0115
   // amendment 6), and Edit profile is absent while the column is open.
-  await expect(view().locator('button.assistant-chip')).toHaveCount(1)
+  await expect(view().locator('.assistant-chip-row button.assistant-chip')).toHaveCount(1)
   await expect(view().getByRole('button', { name: 'Clear chat' })).toBeDisabled()
   await expect(view().getByRole('button', { name: 'Edit profile' })).toHaveCount(0)
 
@@ -366,13 +373,19 @@ test('each profile section opens and closes on its own', async () => {
   const style = view().getByRole('button', { name: 'Investing style' })
   const limit = view().getByRole('button', { name: 'Single position size' })
 
+  // Investing style alone arrives open since Story #347 — the design's own reading, and a call
+  // site opting out of `Collapsible`'s default rather than a change to it (DDR-0106).
   await expect(style).toHaveAttribute('aria-expanded', 'true')
+  await expect(limit).toHaveAttribute('aria-expanded', 'false')
+
+  await limit.click()
   await expect(limit).toHaveAttribute('aria-expanded', 'true')
+  // Opening or closing one says nothing about its siblings: this is the disclosure pattern, not
+  // an accordion.
+  await expect(style).toHaveAttribute('aria-expanded', 'true')
 
   await style.click()
   await expect(style).toHaveAttribute('aria-expanded', 'false')
-  // Opening or closing one says nothing about its siblings: this is the disclosure pattern, not
-  // an accordion.
   await expect(limit).toHaveAttribute('aria-expanded', 'true')
   await expect(view().getByRole('button', { name: 'Dividend income' })).toBeHidden()
 
@@ -382,7 +395,10 @@ test('each profile section opens and closes on its own', async () => {
 
 test('an unsaved edit survives folding the section away, and leaving the view', async () => {
   const limit = view().getByRole('button', { name: 'Single position size' })
-  await view().getByRole('button', { name: 'Add a limit' }).click()
+  // The add control lives in the disclosure's `action` slot, beside the trigger rather than
+  // inside the panel (DDR-0106) — so it is reachable either way, and the section was left open by
+  // the test above.
+  await view().getByRole('button', { name: 'Add limit' }).click()
   // A band, so a half-typed one is not a policy and Save stays unavailable until both ends are
   // stated — the rule `investor-profile.spec.ts` owns, relied on here to make the form dirty.
   await view().getByLabel('At least %').fill('0')
