@@ -164,7 +164,12 @@ describe('the status dot is a second channel, and a tokenised one', () => {
        boxed italic line, drawn once per dimension the owner has stated no policy for, and it owes
        one pairing — its muted ink, re-pointed off `--card`. The style-tag pill beside the column's
        title adds none, because it *is* #346's chip: one rule, reused a column over rather than
-       copied, which is what keeps that rule's inks measured once. A sixth adopter owes its own. */
+       copied, which is what keeps that rule's inks measured once.
+
+       **Story #348 adds none either, and for the same reason**: the four suggested questions above
+       the composer wear `.assistant-chip` too, a band lower. What it owes is one pairing rather
+       than five — the accent **hover** that rule does not have, measured on this same fill. A sixth
+       adopter owes its own. */
     expect(CSS.match(/var\(--surface-raised\)/g)).toHaveLength(5)
   })
 

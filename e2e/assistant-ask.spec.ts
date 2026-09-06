@@ -120,13 +120,17 @@ test('carries the investor profile beside the chat, open', async () => {
   // #347). It is deliberately not a verdict: an owner who has stated nothing has stated nothing,
   // and the app answers those dimensions from its own baseline (ADR-0009, ADR-0012).
   await expect(view().getByText('0 style tags')).toBeVisible()
-  await expect(view().getByRole('button', { name: 'Dividend income' })).toBeVisible()
+  // `exact` since Story #348, here and in four other specs: a name matches by *substring*, and the
+  // suggestion chip "Summarise my dividend income vs. growth balance." is a button in this same
+  // panel. Without it this locator is ambiguous the moment the chips are open, which is most of
+  // the time — the row opens when the box takes focus.
+  await expect(view().getByRole('button', { name: 'Dividend income', exact: true })).toBeVisible()
 
   await profileToggle(false).click()
   await expect(profileToggle(true)).toHaveAttribute('aria-expanded', 'false')
-  await expect(view().getByRole('button', { name: 'Dividend income' })).toBeHidden()
+  await expect(view().getByRole('button', { name: 'Dividend income', exact: true })).toBeHidden()
   await profileToggle(true).click()
-  await expect(view().getByRole('button', { name: 'Dividend income' })).toBeVisible()
+  await expect(view().getByRole('button', { name: 'Dividend income', exact: true })).toBeVisible()
 })
 
 /**
@@ -149,7 +153,7 @@ test('with nothing to ground an answer in, says so instead of offering the box',
 test('opens the box once there is something to ground an answer in', async () => {
   // Stated and saved without leaving the view, which is the merge's own criterion: a profile
   // written here reaches the grounding beside it with no restart and no trip through a second row.
-  await view().getByRole('button', { name: 'Dividend income' }).click()
+  await view().getByRole('button', { name: 'Dividend income', exact: true }).click()
   await view().getByRole('button', { name: 'Save profile' }).click()
   await expect(view().getByText(/^Profile saved/)).toBeVisible()
 
@@ -206,6 +210,56 @@ test('offers Edit profile only while the profile column is folded, and expands i
 
   await expect(profileToggle(false)).toHaveAttribute('aria-expanded', 'true')
   await expect(view().getByRole('button', { name: 'Edit profile' })).toHaveCount(0)
+})
+
+/**
+ * The four suggested questions (Story #348, `figma_design/src/App.tsx:2335-2361`).
+ *
+ * `lib/assistantSuggestions.test.ts` holds the list, why those four are safe to offer and which
+ * string a submission carries. What needs a real window is the part that is a *cascade and a tree*:
+ * that the row is shut on arrival, that focusing the box opens it, that the toggle shuts it again,
+ * and — the one worth most of this test — that a shut row takes its four buttons out of the tree
+ * rather than leaving them laid out and reachable, which is `[hidden]` beating the rule's own
+ * `display: flex` (DDR-0106's trap, met a third time).
+ *
+ * **It runs here, before anything has focused the box.** Every test below this one either types
+ * into it or focuses it, and focus is one of the row's two openers — so this is the last moment at
+ * which "shut on arrival" is a fact rather than an assumption. It leaves the row shut behind it.
+ *
+ * **Nothing is clicked.** This suite's premise is that no question ever leaves it, and a chip is a
+ * submit control — so the click that sends one is `assistant-memory.spec.ts`'s, where a local stub
+ * is listening.
+ */
+test('offers four suggested questions, opened by the box and shut by the toggle', async () => {
+  const suggest = view().getByRole('button', { name: 'Show suggested questions' })
+  const row = view().getByRole('group', { name: 'Suggested questions' })
+  const chips = row.getByRole('button')
+
+  // Shut on arrival: in the document, so the toggle's `aria-controls` names something, and out of
+  // the tree so nothing in it can be reached or read.
+  await expect(suggest).toHaveAttribute('aria-expanded', 'false')
+  await expect(row).toBeHidden()
+  await expect(chips).toHaveCount(0)
+
+  await questionBox().focus()
+  await expect(suggest).toHaveAttribute('aria-expanded', 'true')
+  await expect(chips).toHaveCount(4)
+  await expect(chips.first()).toHaveText(
+    'What is my largest position, and how does it sit against my profile?',
+  )
+
+  // Each is a submit control of the composer's own form, which is what makes a click the same
+  // submission a typed question is rather than a second way to ask.
+  await expect(chips.first()).toHaveAttribute('type', 'submit')
+  await expect(chips.first()).toHaveAttribute('name', 'suggestion')
+
+  // Opening took nothing from the box: focus is still where the owner put it, and the chips are
+  // reachable from there in the order they are drawn.
+  expect(await focusedId()).toBe(await questionBox().getAttribute('id'))
+
+  await suggest.click()
+  await expect(suggest).toHaveAttribute('aria-expanded', 'false')
+  await expect(chips).toHaveCount(0)
 })
 
 /**
@@ -357,9 +411,9 @@ test('the composer offers a named send control and a named suggestions toggle', 
     expect(box?.height).toBeCloseTo(44, 0)
   }
 
-  // The toggle ships inert until #348 gives it chips to open, and `disabled` is that state said
-  // out loud rather than a control that swallows a click.
-  await expect(suggest).toBeDisabled()
+  // It shipped inert in #345, with nothing to open. #348 gave it the four chips and removed the
+  // attribute, which was the whole of what that story changed about this control.
+  await expect(suggest).toBeEnabled()
 })
 
 /**
@@ -387,10 +441,10 @@ test('each profile section opens and closes on its own', async () => {
   await style.click()
   await expect(style).toHaveAttribute('aria-expanded', 'false')
   await expect(limit).toHaveAttribute('aria-expanded', 'true')
-  await expect(view().getByRole('button', { name: 'Dividend income' })).toBeHidden()
+  await expect(view().getByRole('button', { name: 'Dividend income', exact: true })).toBeHidden()
 
   await style.click()
-  await expect(view().getByRole('button', { name: 'Dividend income' })).toBeVisible()
+  await expect(view().getByRole('button', { name: 'Dividend income', exact: true })).toBeVisible()
 })
 
 test('an unsaved edit survives folding the section away, and leaving the view', async () => {

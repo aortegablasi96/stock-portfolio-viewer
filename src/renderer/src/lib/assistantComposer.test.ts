@@ -106,8 +106,10 @@ describe('the key press and the button are one path', () => {
   it('submits the form rather than calling ask directly', () => {
     expect(CODE).toContain('event.currentTarget.form?.requestSubmit()')
     expect(CODE).toContain('event.preventDefault()')
-    // The one `ask()` call site is still the form's own submit handler.
-    expect([...CODE.matchAll(/void ask\(\)/g)]).toHaveLength(1)
+    // The one `ask(...)` call site is still the form's own submit handler. Story #348 gave `ask` a
+    // parameter — which of two strings the submission carried — and did *not* give it a second
+    // caller: the suggestion chips are submit buttons of this same form, so they arrive here.
+    expect([...CODE.matchAll(/void ask\(/g)]).toHaveLength(1)
   })
 
   /** Both the button and the key are gated by the same two conditions. */
@@ -125,12 +127,14 @@ describe('the two icon buttons', () => {
   })
 
   /**
-   * Inert until #348 gives it chips to open. `disabled` is the honest form of that — the one state
-   * a control can be in that does not invite a click it will not answer.
+   * It shipped `disabled` here and Story #348 removed the attribute, which was the whole of what
+   * that story changed about this control. Asserted as an absence so the inert state cannot come
+   * back by accident, with the row it opens left drawn and unopenable.
    */
-  it('ships the suggestions toggle disabled, pending #348', () => {
+  it('no longer ships the suggestions toggle inert, now that it opens something', () => {
     const toggle = CODE.slice(CODE.indexOf('aria-label={SUGGESTIONS_LABEL}'))
-    expect(toggle.slice(0, 200)).toContain('disabled')
+    expect(toggle.slice(0, 300)).not.toContain('disabled')
+    expect(toggle.slice(0, 300)).toContain('aria-expanded={showSuggestions}')
   })
 
   /**

@@ -745,13 +745,17 @@ export const PAIRINGS: readonly Pairing[] = [
    * at 1.32:1, and this row renders on the same ground.
    */
   {
-    where: '.assistant-chip — the header chip’s label, muted on the raised fill',
+    where:
+      '.assistant-chip — the header chip’s label, muted on the raised fill, and the four ' +
+      'suggested questions below, which wear the same rule',
     foreground: { token: '--muted' },
     background: { token: '--surface-raised' },
     minimum: AA_NORMAL,
     reason:
       'The row’s resting ink at --text-2xs, the smallest step the app has: 5.35:1, the same ' +
-      'arithmetic as the gateway chip’s micro-label and a different rule from it.',
+      'arithmetic as the gateway chip’s micro-label and a different rule from it. Story #348 ' +
+      'widens the reach rather than adding an entry beside it — the suggestion chips are this ' +
+      'chip, so a copy would measure identical arithmetic under a second name.',
   },
   {
     where: '.assistant-chip-live — “IBKR live” and “Profile active”, the toned state’s label',
@@ -809,6 +813,44 @@ export const PAIRINGS: readonly Pairing[] = [
       'A control’s boundary where the boundary is what says the control has turned destructive, ' +
       'so 1.4.11 rather than SURFACE_EDGE: 4.17:1. The fill half of the split is right here — ' +
       'this is a border, not a word.',
+  },
+  /**
+   * The two pairings Story #348 added: the suggestion chips' hover, and the toggle that opens them
+   * (DDR-0115 amendment 6).
+   *
+   * **Neither is a sixth adoption of `--surface-raised`.** The chips *are* Story #346's chip — one
+   * rule, reused a band lower, which is the same move #347 made with the style-tag pill — so the
+   * row's resting label is the `.assistant-chip` entry above and `sidebarRail.test.ts`'s count does
+   * not move. What is new is the **hover**, and it is new in the way this list keeps being caught
+   * by: axe tests the resting state only (DDR-0064), so a tone a pointer produces is measured here
+   * or nowhere.
+   *
+   * The toggle's is the second wash in the app after the sidebar's active row, and it is measured
+   * for that entry's exact reason: the ink and the ground are the same hue, so the tint decides
+   * whether the label survives. 16% over `--bg` is 5.34:1 — a little more headroom than the
+   * sidebar's 4.95:1, because this column's ground is the darker of the two — and 22% would be
+   * 4.86:1 here where it is a failure there, which is precisely why the number is measured on the
+   * ground it renders on rather than carried over.
+   */
+  {
+    where: '.assistant-suggestion:hover — a suggested question’s ink under the pointer',
+    foreground: { token: '--accent' },
+    background: { token: '--surface-raised' },
+    minimum: AA_NORMAL,
+    reason:
+      'The design’s accent hover, in this app’s --accent rather than an --accent-bright it does ' +
+      'not have: 5.72:1 on the chip’s own fill, against 6.57:1 on the row’s ground. The chip’s ' +
+      'edge takes the same token, so it is not listed twice.',
+  },
+  {
+    where: '.assistant-suggestions-toggle[aria-expanded=true] — the open toggle’s glyph on its wash',
+    foreground: { token: '--accent' },
+    background: { mix: { token: '--accent', percent: 16, over: '--bg' } },
+    minimum: AA_NORMAL,
+    reason:
+      'Accent on a dilute wash of itself, which is the pairing a tinted "on" control always ' +
+      'creates and the one the sidebar’s active row is measured for. 5.34:1 over --bg, and the ' +
+      'wash is where the headroom goes: nothing else in this control moves.',
   },
   /**
    * The pairing Story #347 added: the profile column's empty-state box, on `--surface-raised`'s
