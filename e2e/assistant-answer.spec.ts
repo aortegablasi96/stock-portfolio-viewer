@@ -112,7 +112,7 @@ test.beforeAll(async () => {
   // the question box (`askGate`'s `no_grounding`).
   await page.getByRole('tab', { name: /^Assistant/ }).click()
   await expect(view().getByRole('heading', { level: 1, name: 'AI Assistant' })).toBeVisible()
-  await view().getByRole('button', { name: 'Dividend income' }).click()
+  await view().getByRole('button', { name: 'Dividend income', exact: true }).click()
   await view().getByRole('button', { name: 'Save profile' }).click()
 
   sent = []

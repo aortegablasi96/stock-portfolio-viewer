@@ -107,7 +107,7 @@ test.beforeAll(async () => {
   // the question box (`askGate`'s `no_grounding`).
   await page.getByRole('tab', { name: /^Assistant/ }).click()
   await expect(view().getByRole('heading', { level: 1, name: 'AI Assistant' })).toBeVisible()
-  await view().getByRole('button', { name: 'Dividend income' }).click()
+  await view().getByRole('button', { name: 'Dividend income', exact: true }).click()
   await view().getByRole('button', { name: 'Save profile' }).click()
   await expect(questionBox()).toBeVisible()
 })
@@ -267,4 +267,47 @@ test('Enter sends the question, through the same path the button uses', async ()
   // `preventDefault` is load-bearing, and its absence would show up as both.
   await expect(questionBox()).toHaveValue('')
   expect(turns[0]!.content).not.toContain('Does Enter send this?\n')
+})
+
+/**
+ * **A suggested question is an ordinary one** (Story #348), and this is the only suite that can
+ * prove it: clicking a chip asks a real question, so it needs the stub on `127.0.0.1`.
+ * `lib/assistantSuggestions.test.ts` holds the list and the resolver; what needs a window is that
+ * the click reaches the **wire** carrying the chip's own text, unaltered — a chip is a submit
+ * control of the composer's own form, so what arrives is shaped exactly like a typed question.
+ *
+ * The draft left in the box is the second half of the test and the one that is a decision: the row
+ * opens when the box takes focus, so a half-written question is what is on screen when a chip is
+ * clicked, and the design's own unconditional clear would have discarded it.
+ */
+test('a suggested question is sent as the question, and leaves a draft alone', async () => {
+  await view().getByRole('button', { name: 'Clear chat' }).click()
+  sent = []
+  replies = ['Rio Tinto, at 31% of the portfolio.']
+
+  // Focus opens the row — the toggle is the other opener, and neither is a second way to ask.
+  await questionBox().fill('Half a question I am still')
+  const chips = view().getByRole('group', { name: 'Suggested questions' }).getByRole('button')
+  await expect(chips).toHaveCount(4)
+
+  await chips.first().click()
+  await expect(view().locator('.assistant-thinking')).toHaveCount(0)
+
+  expect(sent).toHaveLength(1)
+  const turns = conversation(0)
+  expect(turns).toHaveLength(1)
+  expect(turns[0]!.role).toBe('user')
+  expect(turns[0]!.content).toContain(
+    'What is my largest position, and how does it sit against my profile?',
+  )
+
+  // On screen it is a turn like any other, and asking closed the row behind it.
+  await expect(view().locator('.assistant-turn')).toHaveCount(1)
+  await expect(view().locator('.assistant-bubble-you')).toHaveText(
+    'What is my largest position, and how does it sit against my profile?',
+  )
+  await expect(chips).toHaveCount(0)
+
+  // The draft is still there, because it is not what was asked.
+  await expect(questionBox()).toHaveValue('Half a question I am still')
 })

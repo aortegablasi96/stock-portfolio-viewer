@@ -221,7 +221,7 @@ test('keeps the eyebrow as the panel’s h1 in both states, and draws no page he
 test('takes the profile’s controls out of reach while folded, and keeps what was typed', async () => {
   // Investing style is the one section that arrives open since Story #347, so nothing has to be
   // unfolded to reach a style tag — which is part of why it is the one left open (DDR-0106).
-  await page.getByRole('button', { name: 'Dividend income' }).click()
+  await page.getByRole('button', { name: 'Dividend income', exact: true }).click()
   await expect(page.getByRole('button', { name: 'Save profile' })).toBeEnabled()
 
   await toggle(false).click()
@@ -231,7 +231,7 @@ test('takes the profile’s controls out of reach while folded, and keeps what w
   await toggle(true).click()
   await expect.poll(() => columnWidth()).toBe(420)
   // Unsaved and still selected: the subtree was hidden, not discarded.
-  await expect(page.getByRole('button', { name: 'Dividend income' })).toHaveAttribute(
+  await expect(page.getByRole('button', { name: 'Dividend income', exact: true })).toHaveAttribute(
     'aria-pressed',
     'true',
   )

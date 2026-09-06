@@ -59,9 +59,12 @@ export const COMPOSER_PLACEHOLDER =
  * The suggestions toggle's accessible name.
  *
  * `size="icon"` is a shape and not an exemption from being named (DDR-0032), and a glyph is not a
- * name. The control **ships inert** until #348 gives it chips to open, which the story leaves as a
- * choice between that and holding it back: `disabled` is the honest form of inert, because it is
- * the one state a control can be in that does not invite a click it will not answer.
+ * name. It shipped `disabled` in this story, which was the honest form of a control with nothing to
+ * open; #348 gave it the four chips and removed the attribute, and nothing else about it changed.
+ *
+ * The name states the **action**, not the state: `aria-expanded` on the button already carries
+ * whether the row is open, and a name that said it too would say it twice — `profileToggleLabel`'s
+ * argument, one column over.
  */
 export const SUGGESTIONS_LABEL = 'Show suggested questions'
 

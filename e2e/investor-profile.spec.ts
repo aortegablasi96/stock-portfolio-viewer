@@ -130,8 +130,8 @@ test.describe('within one launch', () => {
    * nothing else is a profile the app must store.
    */
   test('a style tag alone is enough to save', async () => {
-    await view(page).getByRole('button', { name: 'Dividend income' }).click()
-    await expect(view(page).getByRole('button', { name: 'Dividend income' })).toHaveAttribute(
+    await view(page).getByRole('button', { name: 'Dividend income', exact: true }).click()
+    await expect(view(page).getByRole('button', { name: 'Dividend income', exact: true })).toHaveAttribute(
       'aria-pressed',
       'true',
     )

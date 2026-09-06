@@ -62,8 +62,7 @@ Each exists end-to-end and is the reference pattern for its shape.
   built in main never crosses the boundary that drops an undeclared section, so the registry test
   is that half. The key field shows **only with no working key**; there is **no remove, replace or
   rotate, not even a channel**. `assistant:ask` is the **one outbound channel**. **Twelve tools run
-  in main** (`assistantTools.ts`; prose in `toolReports.ts`, `performanceReports.ts`,
-  `storeReports.ts`): one
+  in main** (`assistantTools.ts`): one
   read-only method each — many share one, **none spans two** — **no argument is a
   predicate** (`limit` a *count*, `period` a *key*, `series` a *choice*, `query` an *identity*), a
   state is **never an empty report**, gaps carry targets *and* baseline in one payload (DDR-0111).
@@ -96,8 +95,7 @@ Each exists end-to-end and is the reference pattern for its shape.
   `2025` is the ambiguity. Only **consecutive same-kind** differences are computed; every other is
   forbidden in the text. `get_portfolio_history` returns **value or composition, never both**
   (DDR-0013), downsampled to a stated cap. `get_dividend_income`'s windows come off the **dividend
-  history's own extent** (`dividendPeriods.ts` over `standardWindows`), so it
-  cannot borrow the performance set: a key that exists there may **not** exist here, and an
+  history's own extent** (`dividendPeriods.ts`), so it cannot borrow the performance set: a key that exists there may **not** exist here, and an
   **undated** cash event is in no window, `all` included, and is counted out loud (#329).
   `get_realized_gains` quotes the **service's** totals, never a sum of its capped rows, and lists
   **both ends** — a top-N by realised P&L is all winners. `get_data_coverage` **always answers**
@@ -157,25 +155,27 @@ Each exists end-to-end and is the reference pattern for its shape.
   **`.profile-column-body[hidden]` is load-bearing** — its own `display` defeats the attribute
   (DDR-0106's trap again): without it the folded form stays laid out and tabbable.
   **Three rules escape the duration scale** — the column's raw 0.22s, the transcript's
-  `scroll-behavior` (motion with *no* time in it, so `scrollIntoView` names no `behavior`), and the
+  `scroll-behavior` (motion with *no* time in it, so no `behavior` is ever passed), and the
   dots' raw 1.2s. Each is a `motionTokens.ts` exemption **paired** with a reduced-motion rule whose
   selector is **doubled**: that block sits ~4,000 lines above them and loses on source order. The
   dots stop with **`animation: none`, never a zeroed duration** — zero holds the 0% keyframe, which
-  is *frozen* (0.3 opacity, 0.85 scale), not settled.
+  is *frozen*, not settled.
   **A turn is two bubbles, and the two orders are not one order** (#344): the array stays
-  **newest-first** — `rememberedTurns` walks it backwards, the trim drops from the oldest end — and
-  only `transcriptOrder` reverses it for drawing; reversing the stored array inverts the memory in
-  silence. The `WHO · TIME` marking is **new state that reaches no request**. The owner's bubble is
+  **newest-first**, and only `transcriptOrder` reverses it for drawing; reversing the stored array
+  inverts the memory in silence. The `WHO · TIME` marking is **new state that reaches no request**. The owner's bubble is
   **`--accent-strong`** — white on `--accent` is 4.47:1.
-  **The composer is one path** (#345): Enter submits the **form**, so the key and the button share
-  `isAskable`/`pending`; `preventDefault` stops the newline too, and a **composing** IME's Enter is
-  not a send. The suggestions toggle ships **disabled** (#348).
-  **The header says the state and one line says the cost** (#346): `groundingNotices`' `<ul>` is
-  gone, folded into a chip row and one line above the composer, **both from that function** so they
+  **The composer is one path** (#345, #348): Enter submits the **form**, and a suggestion chip is
+  that form's `type="submit"` submitter carrying its text as `value` — so the key, the button and
+  `assistantSuggestions.ts`'s four chips share `isAskable`/`pending` and `ask` keeps **one call
+  site**. `preventDefault` stops the newline too, a **composing** IME's Enter is not a send, the row
+  opens on focus and closes on ask, its `[hidden]` needs a `display` rule, and the chips reuse
+  #346's chip — no sixth adopter, one accent **hover** to measure.
+  **The header says the state and one line says the cost** (#346): `groundingNotices` feeds a chip
+  row and a line above the composer, **both from that function** so they
   cannot disagree. Its reading is the **drift** report's, never the rail's `getOverview` (DDR-0056
   vs DDR-0095) — two clocks, each right; don't unify them, and nothing polls. The chips are
-  `--surface-raised`'s **fourth** adopter (seven pairings join `contrast.ts`, the
-  **hover** among them); a control chip is a `<button>`, and **Clear chat has no confirm** —
+  `--surface-raised`'s **fourth** adopter (every ink measured there); a control chip is a
+  `<button>`, and **Clear chat has no confirm** —
   nothing is stored, so `disabled` is the whole guard.
   **The profile column is a head over a scroller** (#347): Save, Discard and the `role="status"`
   notice move **together** (#310's bug, one scroll further down), and the column is

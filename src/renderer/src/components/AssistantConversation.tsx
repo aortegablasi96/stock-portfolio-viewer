@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore } from 'react'
 import {
   askGate,
   askLabel,
@@ -27,6 +27,15 @@ import {
   SUGGESTIONS_LABEL,
   THINKING_NOTE,
 } from '../lib/assistantComposer'
+import {
+  boxAfterAsking,
+  SUGGESTED_QUESTIONS,
+  SUGGESTION_CHIP_CLASS,
+  SUGGESTION_FIELD,
+  SUGGESTIONS_ROW_LABEL,
+  SUGGESTIONS_TOGGLE_CLASS,
+  submittedQuestion,
+} from '../lib/assistantSuggestions'
 import {
   blockClassName,
   bubbleClassName,
@@ -102,6 +111,13 @@ import { StatePanel } from './ui/StatePanel'
  * `behavior` option here, because a reader who asked for less motion has to be able to turn it off
  * and CSS is where this app answers that (DDR-0044, DDR-0115 amendment 4).
  *
+ * **A suggested question is a submission of this form, not a second way to ask** (Story #348). The
+ * four chips are `type="submit"` buttons owned by the composer's form through the `form` attribute,
+ * each carrying its own text as the submitter's `value` — so `ask` still has exactly one call site
+ * and one set of guards, which is what Story #345 built when it routed the Enter key through
+ * `requestSubmit()` rather than calling `ask` directly. `lib/assistantSuggestions.ts` holds the list
+ * itself, why those four are safe to offer, and which of two strings a submission carries.
+ *
  * **The header says the state and the composer's own line says the cost** (Story #346, DDR-0115
  * amendment 3). The `assistant-notices` `<ul>` that used to sit above the box was a *third* wording
  * of facts the design already draws twice; it is gone, and `lib/assistantHeader.ts` builds both
@@ -131,6 +147,18 @@ export function AssistantConversation({
   const [question, setQuestion] = useState('')
   const [turns, setTurns] = useState<readonly Turn[]>([])
   const [pending, setPending] = useState(false)
+  /**
+   * Whether the four suggestion chips are drawn (Story #348).
+   *
+   * Shut on arrival, opened by focusing the box or by the toggle, and closed by the toggle or by
+   * asking — **never by a blur**. The design opens on focus and never closes on it, which is the
+   * safe half of that pair: a row that vanished when focus left the box would take four buttons out
+   * from under a keyboard on the way to reaching them.
+   */
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  /** The composer's form, named so a chip outside it can be one of its submit controls. */
+  const formId = useId()
+  const suggestionsId = useId()
   // Turn ids are the list's keys and must not repeat within a session; a ref rather than
   // `turns.length`, which would collide if a turn were ever removed.
   const nextId = useRef(1)
@@ -182,10 +210,17 @@ export function AssistantConversation({
     if (band !== null) band.scrollTop = band.scrollHeight
   }, [turns])
 
-  const ask = useCallback(async (): Promise<void> => {
-    if (reports === null || !isAskable(question)) return
+  /**
+   * Send one question — whichever of the two the form's submission carried (Story #348).
+   *
+   * The parameter is what keeps a clicked chip and a typed question one path rather than two: the
+   * form's `onSubmit` resolves which string was submitted and hands it here, so every guard below
+   * this line runs once, for both, and a later story adding one cannot reach only half of them.
+   */
+  const ask = useCallback(async (submitted: string): Promise<void> => {
+    if (reports === null || !isAskable(submitted)) return
 
-    const asked = question.trim()
+    const asked = submitted.trim()
     // The conversation so far, read **before** this turn joins it (Story #320, DDR-0113). Answered
     // turns only, stale ones dropped, newest kept to the caps — every rule of that is
     // `rememberedTurns`, which is where a Node-only suite can reach it.
@@ -205,7 +240,12 @@ export function AssistantConversation({
       },
       ...prev,
     ])
-    setQuestion('')
+    // Emptied when the box is what was asked, kept when a chip was (Story #348): the row opens on
+    // focus, so a half-written question is exactly what is on screen when a chip is clicked.
+    setQuestion((typed) => boxAfterAsking(typed, asked))
+    // Asking closes the row, which is the design's own rule. The chips are an opener for a
+    // conversation, not a rail that stands beside one.
+    setShowSuggestions(false)
     setPending(true)
 
     try {
@@ -234,7 +274,7 @@ export function AssistantConversation({
     } finally {
       setPending(false)
     }
-  }, [displayCurrency, question, reports, turns, version])
+  }, [displayCurrency, reports, turns, version])
 
   /**
    * Discard the conversation, so the next question starts one (DDR-0113 decision 7, amended by
@@ -336,6 +376,41 @@ export function AssistantConversation({
         </ol>
       </div>
 
+      {/* The four suggestions, above the composer's rule where the design draws them
+          (`figma_design/src/App.tsx:2335-2361`) — so they read as an offer *about* the
+          conversation rather than as part of the box. Each is a submit control of the form below
+          through `form`, which is what lets them sit outside it and still be the same submission
+          (Story #348). Absent while a blocker stands in the box's place: there would be no form to
+          submit to, and offering a question that cannot be asked is worse than offering none. */}
+      {gate.blocker === null && (
+        <div
+          id={suggestionsId}
+          className="assistant-suggestions"
+          role="group"
+          aria-label={SUGGESTIONS_ROW_LABEL}
+          /* `hidden` rather than unmounted, so the toggle's `aria-controls` names an element that
+             is in the document in both states — and so the four buttons leave the tab order when
+             the row is shut. `.assistant-suggestions[hidden]` is load-bearing: this rule's own
+             `display: flex` defeats the attribute without it, which is DDR-0106's trap and the
+             profile column's (#347), met here a third time. */
+          hidden={!showSuggestions}
+        >
+          {SUGGESTED_QUESTIONS.map((suggestion) => (
+            <button
+              key={suggestion}
+              type="submit"
+              form={formId}
+              name={SUGGESTION_FIELD}
+              value={suggestion}
+              className={SUGGESTION_CHIP_CLASS}
+              disabled={pending}
+            >
+              {suggestion}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="assistant-composer">
         {/* What an answer will be missing, in one line directly above the box that types the
             question (`figma_design/src/App.tsx:2371-2386`). The header's chips carry the *state*;
@@ -357,10 +432,22 @@ export function AssistantConversation({
           </StatePanel>
         ) : (
           <form
+            id={formId}
             className="assistant-ask"
             onSubmit={(event) => {
               event.preventDefault()
-              void ask()
+              // Which of the two strings this submission is for (Story #348). A chip is a submit
+              // button carrying its own text; Enter and the send button both arrive with no
+              // suggestion name, so they read the box. One handler, one `ask`, one set of guards.
+              const submitter = (event.nativeEvent as SubmitEvent).submitter
+              void ask(
+                submittedQuestion(
+                  submitter instanceof HTMLButtonElement
+                    ? { name: submitter.name, value: submitter.value }
+                    : null,
+                  question,
+                ),
+              )
             }}
           >
             {/* The box and the two square controls, on one row (Story #345). No period control,
@@ -382,6 +469,9 @@ export function AssistantConversation({
                     rows={3}
                     disabled={pending}
                     placeholder={COMPOSER_PLACEHOLDER}
+                    // Opened by focus and never closed by blur (Story #348): closing on the way
+                    // out would take four buttons from under a keyboard reaching for them.
+                    onFocus={() => setShowSuggestions(true)}
                     onChange={(event) => setQuestion(event.target.value)}
                     onKeyDown={(event) => {
                       if (!sendsOnEnter(event.nativeEvent)) return
@@ -409,14 +499,19 @@ export function AssistantConversation({
                 >
                   <SendGlyph />
                 </Button>
-                {/* Inert until #348 gives it chips to open, and `disabled` is the honest form of
-                    that: the one state a control can be in that does not invite a click it will
-                    not answer. #348 removes the attribute and nothing else. */}
+                {/* The row's second opener, and the only thing that closes it (Story #348). It
+                    shipped `disabled` in #345 because there was nothing to open; the attribute is
+                    the whole of what this story removes from it. `aria-expanded` carries the
+                    state, so the name states the action and does not say it twice — the argument
+                    `profileToggleLabel` makes one column over. */}
                 <Button
                   variant="secondary"
+                  className={SUGGESTIONS_TOGGLE_CLASS}
                   aria-label={SUGGESTIONS_LABEL}
                   title={SUGGESTIONS_LABEL}
-                  disabled
+                  aria-expanded={showSuggestions}
+                  aria-controls={suggestionsId}
+                  onClick={() => setShowSuggestions((open) => !open)}
                 >
                   <SuggestionsGlyph />
                 </Button>

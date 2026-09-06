@@ -4704,6 +4704,52 @@ html {
   font-size: var(--text-xs);
 }
 
+/* The four suggested questions (Story #348, `figma_design/src/App.tsx:2337`).
+
+   Above the composer's rule rather than inside its band, which is where the design puts
+   them: they are an offer *about* the conversation, not part of the box. The inline
+   padding is the transcript's and the composer's own `--space-8`, so the chips start on
+   the same edge the bubbles and the question box do.
+
+   **`[hidden]` needs its own rule here**, because the `display: flex` above defeats the
+   attribute — DDR-0106's trap, met a third time after `.collapsible-panel` and
+   `.profile-column-body` (#347). Without it a shut row stays laid out and its four
+   buttons stay in the tab order, which is exactly the failure `aria-expanded` would then
+   be lying about. */
+.assistant-suggestions {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: 0 var(--space-8) var(--space-4);
+}
+
+.assistant-suggestions[hidden] {
+  display: none;
+}
+
+/* A chip that is a whole question, so the one thing #346's rule cannot give it is the
+   right wrapping: `.assistant-chip` is `nowrap` for a two-word state, and a sentence at
+   that width would push the row into a horizontal scroll. Everything else — the fill, the
+   pill corner, the edge, the type step, the pointer and the disabled treatment — is that
+   rule and `.assistant-chip-action`, reused rather than copied. That is what keeps this
+   row off `sidebarRail.test.ts`'s `--surface-raised` count: it adds no adopter, only inks
+   measured on a fill that already has five.
+
+   The hover is the design's own accent move (`figma_design/src/App.tsx:2354`), with this
+   app's `--accent` in place of a `--accent-bright` it does not have. Both halves are
+   measured in `lib/contrast.ts` on the chip's own fill — a hover is the state axe never
+   reaches (DDR-0064). No focus rule: the `:where(...)` base rings all four (DDR-0026). */
+.assistant-suggestion {
+  white-space: normal;
+  text-align: left;
+}
+
+.assistant-suggestion:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 /* Pinned to the bottom (Story #343; #345 gives it Enter-to-send and its icon
    buttons). Ruled off from the transcript above rather than floating over it —
    the boundary is where the reading stops and the writing starts. */
@@ -4826,6 +4872,24 @@ html {
   inline-size: var(--assistant-composer-button);
   block-size: var(--assistant-composer-button);
   border-radius: var(--assistant-composer-radius);
+}
+
+/* The toggle while the row it opens is open (Story #348,
+   `figma_design/src/App.tsx:2448-2449`). The design's `--accent-dim` fill and
+   `--accent-bright` ink are two tokens this app does not have, so the fill is the wash
+   the sidebar's active row already uses — `--accent` at 16%, over this column's own `--bg`
+   rather than the sidebar's `--card` — and the ink is `--accent` itself. Measured in
+   `lib/contrast.ts` on that composite, which is the whole reason the tint is a `color-mix`
+   of a token rather than a colour picked on screen (DDR-0054, DDR-0064).
+
+   Compound with `.btn` on purpose: `.btn-secondary:hover:not(:disabled)` is (0,3,0) and
+   would otherwise pull an *open* toggle back to `--text` under the pointer. This rule ties
+   with it and sits below it, so source order settles it — the same mechanism
+   `.data-table-row-active` relies on (DDR-0059). */
+.btn.assistant-suggestions-toggle[aria-expanded='true'] {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, var(--bg));
 }
 
 /* Sized off the button's own type step rather than in px, for the reason
