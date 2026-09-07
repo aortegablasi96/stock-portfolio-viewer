@@ -84,8 +84,8 @@ Each exists end-to-end and is the reference pattern for its shape.
   statement row is summed **whole** and names its span, an empty window is a *state* not a flat
   period, and no cause is ever offered (DDR-0099). What the app **does not** compute leads
   **every** prompt, **never a tool**: a fact the model may decline to fetch holds no rule
-  (`BASE_CONTEXT`, `assistantAbsences.ts` — annualised, benchmark, risk, the baseline's silences,
-  the currency reading, **two stores, two clocks**). A report restates its
+  (`BASE_CONTEXT`, `assistantAbsences.ts` — annualised, benchmark, risk, **two stores, two
+  clocks**). A report restates its
   own — belt-and-braces, not the binding (DDR-0101). There is **no period control**: a picker asks
   what free text already said (DDR-0102). **Every standard period is precomputed**
   (`@shared/domain/standardPeriods`, windowing in `performanceWindow`; the renderer's libs
@@ -122,7 +122,7 @@ Each exists end-to-end and is the reference pattern for its shape.
   **Measure before adding to a report, a description or the base context** (DDR-0112).
   **A question carries the conversation** (DDR-0113): the turns before it, each **two messages** —
   the owner's `user`, the model's answer `assistant`, and **the role is the marking**, so ADR-0009's
-  seam is the array's shape rather than a prompt rule DDR-0104 says can only be asserted *present*.
+  seam is the array's shape, never a prompt rule (DDR-0104).
   **No tool call or result ever crosses a turn**, so a figure survives only inside a sentence
   attributed to the model and must be fetched again to be a *fact*; the grounding block appears
   **once**, on the question asked, and a remembered question is **bare text**. Three turns and 8,000
@@ -137,52 +137,8 @@ Each exists end-to-end and is the reference pattern for its shape.
   has **no context half** (DDR-0104). Cause, risk statistic and benchmark are **conditional**
   on the absence blocks; each is bound to its sentence by test, so trimming one fails rather than
   unbinding a rule in silence. **A forecast is the model's only where the app computed one.**
-  **An answer is rendered, never quoted** (DDR-0114): `assistantMarkdown.ts` parses to blocks and
-  `AssistantAnswer.tsx` switches over them — `dangerouslySetInnerHTML` is guarded across **all of
-  `src/`**, and a block kind with no `case` renders as nothing. **Nothing is dropped**: an unterminated marker is its own characters, a short
-  table row is padded and a long one's surplus **folded into the last cell**, a bare `#` is a
-  paragraph. Marks are a **set**, not an inline tree; emphasis opens on neither a following space
-  (`5 * 3` is arithmetic) nor mid-word, and the closer tracks **what the opener left behind**.
-  `.assistant-answer code` **joins the figure role** (a second `--font-figure` rule throws) on
-  `--bg`, not the raised surface. A `#` starts at **`h3`**, the type step between **`h4`/`h5`** —
-  the prompt's own register is `##`/`###`.
-  The alignment classes are **scoped** or `.assistant-answer th` out-specifies them. What the next
-  turn remembers is the **raw** string (DDR-0113): formatting is a render concern.
-  **The view is two columns, not a page** (#343, DDR-0115): the profile at **420px**, folding to a
-  **48px** rail — **never** the nav's 56px; two edges, two constants — beside a chat column of
-  three bands with only the transcript scrolling. No `PageHeader`, and the eyebrow is the `<h1>`,
-  taking **`.sr-only`** rather than leaving the tree when the column folds.
-  **`.profile-column-body[hidden]` is load-bearing** — its own `display` defeats the attribute
-  (DDR-0106's trap again): without it the folded form stays laid out and tabbable.
-  **Three rules escape the duration scale** — the column's raw 0.22s, the transcript's
-  `scroll-behavior` (motion with *no* time in it, so no `behavior` is ever passed), and the
-  dots' raw 1.2s. Each is a `motionTokens.ts` exemption **paired** with a reduced-motion rule whose
-  selector is **doubled**: that block sits ~4,000 lines above them and loses on source order. The
-  dots stop with **`animation: none`, never a zeroed duration** — zero holds the 0% keyframe, which
-  is *frozen*, not settled.
-  **A turn is two bubbles, and the two orders are not one order** (#344): the array stays
-  **newest-first**, and only `transcriptOrder` reverses it for drawing; reversing the stored array
-  inverts the memory in silence. The `WHO · TIME` marking is **new state that reaches no request**. The owner's bubble is
-  **`--accent-strong`** — white on `--accent` is 4.47:1.
-  **The composer is one path** (#345, #348): Enter submits the **form**, and a suggestion chip is
-  that form's `type="submit"` submitter carrying its text as `value` — so the key, the button and
-  `assistantSuggestions.ts`'s four chips share `isAskable`/`pending` and `ask` keeps **one call
-  site**. `preventDefault` stops the newline too, a **composing** IME's Enter is not a send, the row
-  opens on focus and closes on ask, its `[hidden]` needs a `display` rule, and the chips reuse
-  #346's chip — no sixth adopter, one accent **hover** to measure.
-  **The header says the state and one line says the cost** (#346): `groundingNotices` feeds a chip
-  row and a line above the composer, **both from that function** so they
-  cannot disagree. Its reading is the **drift** report's, never the rail's `getOverview` (DDR-0056
-  vs DDR-0095) — two clocks, each right; don't unify them, and nothing polls. The chips are
-  `--surface-raised`'s **fourth** adopter (every ink measured there); a control chip is a
-  `<button>`, and **Clear chat has no confirm** —
-  nothing is stored, so `disabled` is the whole guard.
-  **The profile column is a head over a scroller** (#347): Save, Discard and the `role="status"`
-  notice move **together** (#310's bug, one scroll further down), and the column is
-  `overflow: hidden` or the head rides up. Four of five arrive **closed** — a call site, not the
-  primitive; **Clear the profile is no longer one** and keeps `ConfirmAction`, which amendment 5
-  freed for *chat* alone. `.profile-empty` is `--surface-raised`'s **fifth**; the pill reuses
-  #346's chip, so it adds none.
+  Its **view** — the answer's rendering, the two columns, the transcript, the composer and the
+  grounding notices — is under *Renderer: structure and behaviour*.
 - **classification** — sector/industry. `classificationRepository` fronts *both* the mutable
   SQLite cache and `ibkrGateway`; `analytics:classifyInstruments` is the only analytics channel
   reaching IBKR. Refreshes are **resumable, not transactional** — a run that dies at 30 of 40 keeps
@@ -563,6 +519,55 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
   `allocationLayout.test.ts` has the arithmetic (DDR-0063).
 - **The basemap and the weight donut's track are one decision** (DDR-0063): the track was `--card`
   at 42%, a grey ring *only over a white map*, and vanishes on `dark-v11`. Move both or neither.
+- **An answer is rendered, never quoted** (DDR-0114): `assistantMarkdown.ts` parses to blocks and
+  `AssistantAnswer.tsx` switches over them — `dangerouslySetInnerHTML` is guarded across **all of
+  `src/`**, and a block kind with no `case` renders as nothing. **Nothing is dropped**: an
+  unterminated marker is its own characters, a short
+  table row is padded and a long one's surplus **folded into the last cell**, a bare `#` is a
+  paragraph. Marks are a **set**, not an inline tree; emphasis opens on neither a following space
+  (`5 * 3` is arithmetic) nor mid-word, and the closer tracks **what the opener left behind**.
+  `.assistant-answer code` **joins the figure role** on
+  `--bg`, not the raised surface. A `#` starts at **`h3`**, the type step between **`h4`/`h5`** —
+  the prompt's own register is `##`/`###`.
+  The alignment classes are **scoped** or `.assistant-answer th` out-specifies them. What the next
+  turn remembers is the **raw** string (DDR-0113): formatting is a render concern.
+- **The Assistant view is two columns, not a page** (#343, DDR-0115): the profile at **420px**,
+  folding to a
+  **48px** rail — **never** the nav's 56px; two edges, two constants — beside a chat column of
+  three bands with only the transcript scrolling. No `PageHeader`, and the eyebrow is the `<h1>`,
+  taking **`.sr-only`** rather than leaving the tree when the column folds.
+  **`.profile-column-body[hidden]` is load-bearing** — DDR-0106's trap again, and without it the
+  folded form stays laid out and tabbable.
+  **Three rules escape the duration scale** — the column's raw 0.22s, the transcript's
+  `scroll-behavior` (motion with *no* time in it, so no `behavior` is ever passed), and the
+  dots' raw 1.2s. Each is a `motionTokens.ts` exemption **paired** with a reduced-motion rule whose
+  selector is **doubled**: that block sits ~4,000 lines above them and loses on source order. The
+  dots stop with **`animation: none`, never a zeroed duration** — zero holds the 0% keyframe, which
+  is *frozen*, not settled.
+- **A turn is two bubbles, and the two orders are not one order** (#344): the array stays
+  **newest-first**, and only `transcriptOrder` reverses it for drawing; reversing the stored array
+  inverts the memory in silence. The `WHO · TIME` marking is **new state that reaches no request**.
+  The owner's bubble is
+  **`--accent-strong`** — white on `--accent` is 4.47:1.
+- **The composer is one path** (#345, #348): Enter submits the **form**, and a suggestion chip is
+  that form's `type="submit"` submitter carrying its text as `value` — so the key, the button and
+  `assistantSuggestions.ts`'s four chips share `isAskable`/`pending` and `ask` keeps **one call
+  site**. `preventDefault` stops the newline too, a **composing** IME's Enter is not a send, the row
+  opens on focus and closes on ask, its `[hidden]` needs a `display` rule, and the chips reuse
+  #346's chip — no sixth adopter, one accent **hover** to measure.
+- **The header says the state and one line says the cost** (#346): `groundingNotices` feeds a chip
+  row and a line above the composer, **both from that function** so they
+  cannot disagree. Its reading is the **drift** report's, never the rail's `getOverview` (DDR-0056
+  vs DDR-0095) — two clocks, each right; don't unify them, and nothing polls. The chips are
+  `--surface-raised`'s **fourth** adopter (every ink measured there); a control chip is a
+  `<button>`, and **Clear chat has no confirm** —
+  nothing is stored, so `disabled` is the whole guard.
+- **The profile column is a head over a scroller** (#347): Save, Discard and the `role="status"`
+  notice move **together** (#310's bug, one scroll further down), and the column is
+  `overflow: hidden` or the head rides up. Four of five arrive **closed** — a call site, not the
+  primitive; **Clear the profile is no longer one** and keeps `ConfirmAction`, which amendment 5
+  freed for *chat* alone. `.profile-empty` is `--surface-raised`'s **fifth**; the pill reuses
+  #346's chip, so it adds none.
 
 ### UI primitives (`components/ui/`, Epic #125)
 
