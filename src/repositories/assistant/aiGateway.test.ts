@@ -48,8 +48,48 @@ let received: { body: string; headers: IncomingMessage['headers'] }[] = []
 
 type Handler = (req: IncomingMessage, res: ServerResponse, body: string) => void
 
-/** Start a local stand-in on a short deadline and point the gateway at it. */
-async function startProvider(handler: Handler, timeoutMs = 120): Promise<void> {
+/**
+ * The transport deadline a case takes when the deadline is **not** what it is about (Bug #358).
+ *
+ * It was written for the loop cases and is the rule for every case that is not a stall. A loop test
+ * issues up to five requests and runs a test double between them; a mapping test issues one and
+ * asserts what came back. Neither is measuring the bound, so for both a 120ms per-request deadline
+ * is close enough to a loaded machine's jitter to turn "the provider declined" into "the provider
+ * did not answer" — a green suite that fails once a week and teaches the next reader to re-run it.
+ * Worse, the state it fails into is `not_responding`, so the failure reads as a regression in the
+ * mapping DDR-0022 and DDR-0111 exist to keep sharp rather than as the jitter it is.
+ *
+ * Two seconds is wide enough that a localhost round trip cannot plausibly fill it, and it is not a
+ * bound any of these tests can reach on purpose: nothing under it stalls.
+ */
+const REQUEST_TIMEOUT_MS = 2_000
+
+/**
+ * The short bound the four cases that are *about* a stall impose, so their deadline is the thing
+ * that fires (Bug #358).
+ *
+ * Four call sites name it, and for each the deadline firing **is** the assertion: a connection
+ * accepted and then never answered, a body that starts and stalls mid-stream, the single-attempt
+ * count under a stall, and the loop's round that stalls. They are short because each one *waits*
+ * this out — `REQUEST_TIMEOUT_MS` four times over is eight seconds of suite spent proving a bound
+ * fires — and no shorter than this because the last of the four **answers a round before stalling
+ * one**, so a localhost round trip has to fit inside the same bound the next round overruns. That
+ * margin is what 120ms did not leave: it is the width the mapping cases were losing on.
+ */
+const STALL_TIMEOUT_MS = 500
+
+/**
+ * Start a local stand-in and point the gateway at it.
+ *
+ * The deadline **defaults to the bound that cannot fire** (Bug #358). It used to default to the
+ * stall cases' 120ms, which is the right bound for the handful of tests that are *about* the
+ * deadline and silently wrong for the other fifty: a mapping test that inherited it could only
+ * lose by it, reporting `not_responding` instead of the state it asserts whenever a localhost round
+ * trip overran 120ms on a loaded machine. A call site that says nothing about its transport bound
+ * is now saying "this is not what I am about"; the four that *are* about it name
+ * `STALL_TIMEOUT_MS`. Nothing else may pass a bound a stand-in can lose to.
+ */
+async function startProvider(handler: Handler, timeoutMs = REQUEST_TIMEOUT_MS): Promise<void> {
   server = createServer((req, res) => {
     const chunks: Buffer[] = []
     req.on('data', (chunk: Buffer) => chunks.push(chunk))
@@ -65,17 +105,6 @@ async function startProvider(handler: Handler, timeoutMs = 120): Promise<void> {
   process.env['OPENAI_BASE_URL'] = `http://127.0.0.1:${address.port}`
   process.env['OPENAI_TIMEOUT_MS'] = String(timeoutMs)
 }
-
-/**
- * The transport deadline the **loop** cases run under, which is not the stall cases' 120ms.
- *
- * A loop test issues up to five requests and runs a test double between them, so a 120ms
- * per-request bound is close enough to a loaded CI machine's jitter to turn "the loop stopped at
- * its round cap" into "a round timed out" — a green suite that fails once a week and teaches the
- * next reader to re-run it. The cases that are *about* a stall keep the short bound; these are
- * about counting rounds, so their transport deadline should never be the thing that fires.
- */
-const LOOP_TIMEOUT_MS = 2_000
 
 /**
  * The whole-question deadline the one case about that bound imposes (Bug #352).
@@ -94,7 +123,8 @@ const LOOP_TIMEOUT_MS = 2_000
  * `not_responding`. A second is wide enough that a localhost round trip cannot plausibly fill it,
  * and the tool double below **measures** instead of sleeping, so the loop is out of time when it
  * returns however loaded the machine is. Neither bound is weakened: the transport deadline stays
- * `LOOP_TIMEOUT_MS`, still the larger of the two and still the one the stall cases fire.
+ * `REQUEST_TIMEOUT_MS` — `startProvider`'s default since #358 — still the larger of the two, and
+ * still the one the stall cases fire.
  */
 const QUESTION_DEADLINE_MS = 1_000
 
@@ -540,7 +570,7 @@ describe('a provider that produces no answer', () => {
   it('gives up on a connection that is accepted and then never answers', async () => {
     await startProvider(() => {
       /* accept the request, write nothing, never end the response */
-    })
+    }, STALL_TIMEOUT_MS)
 
     const result = await ask()
     expect(result.status).toBe('not_responding')
@@ -556,7 +586,7 @@ describe('a provider that produces no answer', () => {
       res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Length': '512' })
       res.write('{"choices":[{"message":{"content":"')
       // deliberately never completed
-    })
+    }, STALL_TIMEOUT_MS)
 
     expect((await ask()).status).toBe('not_responding')
   })
@@ -574,10 +604,14 @@ describe('a provider that produces no answer', () => {
     expect((await ask()).status).toBe('not_responding')
   })
 
-  /** A host that is simply not there. Nothing is listening on this port. */
+  /**
+   * A host that is simply not there. Nothing is listening on this port, so the connection is
+   * refused at once and the bound is never approached — it is set only so the default 60s cannot
+   * become this test's wait if the refusal ever stops being immediate.
+   */
   it('reports an unreachable provider as not responding', async () => {
     process.env['OPENAI_BASE_URL'] = 'http://127.0.0.1:1'
-    process.env['OPENAI_TIMEOUT_MS'] = '2000'
+    process.env['OPENAI_TIMEOUT_MS'] = String(REQUEST_TIMEOUT_MS)
 
     const result = await ask()
     expect(result.status).toBe('not_responding')
@@ -639,7 +673,7 @@ describe('one bounded attempt, never a retry loop', () => {
   it('makes exactly one request when the provider stalls', async () => {
     await startProvider(() => {
       /* stall */
-    })
+    }, STALL_TIMEOUT_MS)
     await ask()
 
     expect(received).toHaveLength(1)
@@ -686,6 +720,8 @@ describe('the deadline', () => {
     ['zero', '0'],
     ['negative', '-1'],
   ])('still bounds the request when OPENAI_TIMEOUT_MS is %s', async (_case, value) => {
+    // Whatever bound `startProvider` set is replaced on the next line: this case is about the
+    // value the *gateway* falls back to, so it names no bound of its own (Bug #358).
     await startProvider(() => {
       /* stall */
     })
@@ -780,7 +816,7 @@ describe('a question the model asks for reports before answering', () => {
   })
 
   it('runs the call, sends the answer back, and returns what the model then said', async () => {
-    await startProvider(asksThenAnswers(), LOOP_TIMEOUT_MS)
+    await startProvider(asksThenAnswers())
 
     const result = await askWithTools()
 
@@ -800,7 +836,7 @@ describe('a question the model asks for reports before answering', () => {
    * the request, and the failure reads as a malformed round rather than as the missing pairing.
    */
   it('sends the call and its answer back as two turns, paired by id', async () => {
-    await startProvider(asksThenAnswers(), LOOP_TIMEOUT_MS)
+    await startProvider(asksThenAnswers())
     await askWithTools()
 
     const second = JSON.parse(received[1]!.body).messages
@@ -825,7 +861,7 @@ describe('a question the model asks for reports before answering', () => {
 
   /** Declared by the caller and passed through untouched - the gateway holds no inventory. */
   it('declares the caller’s tools on the wire, and none when there are none', async () => {
-    await startProvider(asksThenAnswers(), LOOP_TIMEOUT_MS)
+    await startProvider(asksThenAnswers())
     await askWithTools()
 
     expect(JSON.parse(received[0]!.body).tools).toEqual([
@@ -853,7 +889,6 @@ describe('a question the model asks for reports before answering', () => {
             callFor('get_performance', '{"period":"2024"}', 'call_b'),
           )(req, res, body)
         : answering('Both years are in.')(req, res, body),
-      LOOP_TIMEOUT_MS,
     )
 
     const result = await askWithTools()
@@ -878,7 +913,7 @@ describe('a question the model asks for reports before answering', () => {
    * is the half of this that matters: the check is before the call, not after it.
    */
   it('reports a call for a tool that does not exist as invalid, and runs nothing', async () => {
-    await startProvider(asking(callFor('execute_query')), LOOP_TIMEOUT_MS)
+    await startProvider(asking(callFor('execute_query')))
 
     const result = await askWithTools()
 
@@ -889,7 +924,7 @@ describe('a question the model asks for reports before answering', () => {
   })
 
   it('reports a call as invalid when the caller declared no tools at all', async () => {
-    await startProvider(asking(callFor('get_performance')), LOOP_TIMEOUT_MS)
+    await startProvider(asking(callFor('get_performance')))
 
     const result = await aiGateway.complete({
       messages: [{ role: 'user', content: 'How did 2025 go?' }],
@@ -903,7 +938,7 @@ describe('a question the model asks for reports before answering', () => {
    * escape would be the one outcome this union could not name.
    */
   it('turns a failing executor into a state rather than a rejection', async () => {
-    await startProvider(asksThenAnswers(), LOOP_TIMEOUT_MS)
+    await startProvider(asksThenAnswers())
     runTool.mockRejectedValueOnce(new Error('the repository is closed'))
 
     const result = await askWithTools()
@@ -957,7 +992,7 @@ describe('the bounds on a question', () => {
    * asserted at the wire, because rounds are what a metered endpoint bills for.
    */
   it('stops after the declared number of rounds, in a named state', async () => {
-    await startProvider(alwaysAsking, LOOP_TIMEOUT_MS)
+    await startProvider(alwaysAsking)
 
     const result = await looping(async () => 'a report')
 
@@ -972,7 +1007,7 @@ describe('the bounds on a question', () => {
    * tell the owner their portfolio never left the machine when it had.
    */
   it('reports a conversation that outgrows the ceiling mid-loop as incomplete, not too_large', async () => {
-    await startProvider(alwaysAsking, LOOP_TIMEOUT_MS)
+    await startProvider(alwaysAsking)
 
     const result = await looping(async () => 'x'.repeat(MAX_PROMPT_CHARS))
 
@@ -985,7 +1020,7 @@ describe('the bounds on a question', () => {
 
   /** And the first round is still the other state, with nothing sent at all. */
   it('still reports a question that is too large before the first round as too_large', async () => {
-    await startProvider(alwaysAsking, LOOP_TIMEOUT_MS)
+    await startProvider(alwaysAsking)
 
     const result = await aiGateway.complete({
       messages: [{ role: 'user', content: 'x'.repeat(MAX_PROMPT_CHARS + 1) }],
@@ -1000,7 +1035,7 @@ describe('the bounds on a question', () => {
    * cannot bound a question that makes N requests; this one can, and says the total it bounded.
    */
   it('stops a loop that outlives the whole-question deadline, naming the wait', async () => {
-    await startProvider(alwaysAsking, LOOP_TIMEOUT_MS)
+    await startProvider(alwaysAsking)
     process.env['OPENAI_QUESTION_TIMEOUT_MS'] = String(QUESTION_DEADLINE_MS)
 
     const askedAt = Date.now()
@@ -1029,7 +1064,7 @@ describe('the bounds on a question', () => {
       if (received.length === 1) return alwaysAsking(req, res, body)
       res.writeHead(429)
       res.end('{"error":{"message":"slow down"}}')
-    }, LOOP_TIMEOUT_MS)
+    })
 
     const result = await looping(async () => 'a report')
 
@@ -1041,7 +1076,7 @@ describe('the bounds on a question', () => {
     await startProvider((req, res, body) => {
       if (received.length === 1) return alwaysAsking(req, res, body)
       /* accept the second round and never answer it */
-    })
+    }, STALL_TIMEOUT_MS)
 
     const result = await looping(async () => 'a report')
 
@@ -1051,7 +1086,7 @@ describe('the bounds on a question', () => {
 
   /** A bound reached is never an answer. There is no partial text to mistake for one. */
   it('presents no partial answer when it stops', async () => {
-    await startProvider(alwaysAsking, LOOP_TIMEOUT_MS)
+    await startProvider(alwaysAsking)
 
     const result = await looping(async () => 'a report')
 
@@ -1103,7 +1138,6 @@ describe('the usage a loop reports', () => {
       received.length === 1
         ? askingWith({ prompt_tokens: 100, completion_tokens: 20, total_tokens: 120 })(req, res, body)
         : answering('Done.')(req, res, body),
-      LOOP_TIMEOUT_MS,
     )
 
     // 100/20/120 from the asking round, 11/7/18 from the answering one.
@@ -1121,7 +1155,6 @@ describe('the usage a loop reports', () => {
       received.length === 1
         ? askingWith({ prompt_tokens: 100 })(req, res, body)
         : answering('Done.')(req, res, body),
-      LOOP_TIMEOUT_MS,
     )
 
     const result = await twoRounds()
