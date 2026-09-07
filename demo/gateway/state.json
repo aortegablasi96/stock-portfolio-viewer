@@ -1,0 +1,174 @@
+{
+  "generatedAt": "2026-09-04T00:00:00.000Z",
+  "accountId": "U7734120",
+  "baseCurrency": "EUR",
+  "rates": {
+    "EUR": 1,
+    "USD": 0.89544,
+    "CHF": 1.098254,
+    "GBP": 1.180541,
+    "CAD": 0.629258,
+    "JPY": 0.006422
+  },
+  "positions": [
+    {
+      "conid": 71004201,
+      "contractDesc": "ASML HOLDING NV",
+      "position": 13,
+      "mktPrice": 961.62,
+      "mktValue": 12501.06,
+      "avgCost": 790.932308,
+      "unrealizedPnl": 2218.94,
+      "currency": "EUR",
+      "industry": "Technology",
+      "category": "Semiconductors"
+    },
+    {
+      "conid": 71004202,
+      "contractDesc": "BANCO SANTANDER SA",
+      "position": 1200,
+      "mktPrice": 5.79,
+      "mktValue": 6948,
+      "avgCost": 4.5401,
+      "unrealizedPnl": 1499.88,
+      "currency": "EUR",
+      "industry": "Financial",
+      "category": "Banks"
+    },
+    {
+      "conid": 71004203,
+      "contractDesc": "APPLE INC",
+      "position": 61,
+      "mktPrice": 304.58,
+      "mktValue": 18579.38,
+      "avgCost": 288.685574,
+      "unrealizedPnl": 969.56,
+      "currency": "USD",
+      "industry": "Technology",
+      "category": "Computers"
+    },
+    {
+      "conid": 71004204,
+      "contractDesc": "RIO TINTO PLC",
+      "position": 70,
+      "mktPrice": 53.95,
+      "mktValue": 3776.5,
+      "avgCost": 48.577,
+      "unrealizedPnl": 376.11,
+      "currency": "GBP",
+      "industry": "Basic Materials",
+      "category": "Mining"
+    },
+    {
+      "conid": 71004205,
+      "contractDesc": "NESTLE SA",
+      "position": 90,
+      "mktPrice": 80.83,
+      "mktValue": 7274.7,
+      "avgCost": 87.047778,
+      "unrealizedPnl": -559.6,
+      "currency": "CHF",
+      "industry": "Consumer, Non-cyclical",
+      "category": "Food"
+    },
+    {
+      "conid": 71004206,
+      "contractDesc": "EXXON MOBIL CORP",
+      "position": 90,
+      "mktPrice": 97.09,
+      "mktValue": 8738.1,
+      "avgCost": 110.052222,
+      "unrealizedPnl": -1166.6,
+      "currency": "USD",
+      "industry": "Energy",
+      "category": "Oil&Gas"
+    },
+    {
+      "conid": 71004207,
+      "contractDesc": "BCE INC",
+      "position": 230,
+      "mktPrice": 49.38,
+      "mktValue": 11357.4,
+      "avgCost": 48.044348,
+      "unrealizedPnl": 307.2,
+      "currency": "CAD",
+      "industry": "Communications",
+      "category": "Telecommunications"
+    },
+    {
+      "conid": 71004208,
+      "contractDesc": "TOYOTA MOTOR CORP",
+      "position": 340,
+      "mktPrice": 3203,
+      "mktValue": 1089020,
+      "avgCost": 2911.411765,
+      "unrealizedPnl": 99140,
+      "currency": "JPY",
+      "industry": "Consumer, Cyclical",
+      "category": "Auto Manufacturers"
+    },
+    {
+      "conid": 71004209,
+      "contractDesc": "SCHNEIDER ELECTRIC SE",
+      "position": 60,
+      "mktPrice": 291.56,
+      "mktValue": 17493.6,
+      "avgCost": 262.435667,
+      "unrealizedPnl": 1747.46,
+      "currency": "EUR",
+      "industry": "Industrial",
+      "category": "Electrical Components"
+    }
+  ],
+  "ledger": {
+    "BASE": {
+      "currency": "BASE",
+      "cashbalance": 5601.11,
+      "stockmarketvalue": 87992.03,
+      "netliquidationvalue": 93660.95,
+      "exchangerate": 1
+    },
+    "EUR": {
+      "currency": "EUR",
+      "cashbalance": 2127.86,
+      "stockmarketvalue": 36942.66,
+      "netliquidationvalue": 39070.52,
+      "exchangerate": 1
+    },
+    "USD": {
+      "currency": "USD",
+      "cashbalance": 12.96,
+      "stockmarketvalue": 27317.48,
+      "netliquidationvalue": 27330.44,
+      "exchangerate": 0.89544
+    },
+    "CHF": {
+      "currency": "CHF",
+      "cashbalance": 178.43,
+      "stockmarketvalue": 7274.7,
+      "netliquidationvalue": 7453.13,
+      "exchangerate": 1.098254
+    },
+    "GBP": {
+      "currency": "GBP",
+      "cashbalance": 2394.1,
+      "stockmarketvalue": 3776.5,
+      "netliquidationvalue": 6170.6,
+      "exchangerate": 1.180541
+    },
+    "CAD": {
+      "currency": "CAD",
+      "cashbalance": 580.65,
+      "stockmarketvalue": 11357.4,
+      "netliquidationvalue": 11938.05,
+      "exchangerate": 0.629258
+    },
+    "JPY": {
+      "currency": "JPY",
+      "cashbalance": 11517.16,
+      "stockmarketvalue": 1089020,
+      "netliquidationvalue": 1100537.16,
+      "exchangerate": 0.006422
+    }
+  }
+}

@@ -31,6 +31,7 @@ export default tseslint.config(
       '*.{js,mjs,ts}',
       '.claude/skills/**/*.mjs',
       'build/**/*.mjs',
+      'scripts/**/*.mjs',
     ],
     languageOptions: {
       globals: { ...globals.node },
