@@ -19,7 +19,7 @@ import {
   relativeLuminance,
   withinRange,
 } from './contrast'
-import { stripComments } from './cssDeclarations'
+import { scanDeclarations, stripComments } from './cssDeclarations'
 
 /**
  * The contrast guard (Story #163).
@@ -358,10 +358,19 @@ describe('app.css contrast', () => {
        figures are text (Story #220, DDR-0070). So the rule is not "--neg-text never appears in a
        `fill`" but "it never fills a *shape*", and the exception is enumerated rather than
        pattern-matched — `.chart-tooltip-value-neg` is the one selector where the property means
-       ink, and a second one has to come here and say so. */
-    const negFills = [...CLEAN.matchAll(/([^{}]+)\{[^}]*fill:\s*var\(--neg-text\)/g)].map(
-      ([, selector]) => selector!.trim(),
-    )
+       ink, and a second one has to come here and say so.
+
+       Asked of `scanDeclarations` rather than of a regex (Bug #360). The regex this replaces was
+       `/([^{}]+)\{[^}]*fill:\s*var\(--neg-text\)/g`, and its leading `[^{}]+` backtracked across
+       every block that does *not* declare this fill — which is all but one of ~1,530. That cost
+       552ms of a 819ms test file, against vitest's undeclared 5s default, and twice in twenty
+       loaded runs the margin was gone. The scanner answers the same question in 30ms, and it is
+       the one `cssDeclarations.ts` was written for: "ask what `app.css` actually declares, rather
+       than trusting a regex per assertion". Nothing about *what* is asserted moves — the selector
+       is still the innermost one, so a rule nested in an at-rule still reports its own name. */
+    const negFills = scanDeclarations(CSS)
+      .filter(({ property, value }) => property === 'fill' && value.startsWith('var(--neg-text)'))
+      .map(({ context }) => context.split(' >> ').at(-1))
     expect(negFills).toEqual(['.chart-tooltip-value-neg'])
   })
 })
