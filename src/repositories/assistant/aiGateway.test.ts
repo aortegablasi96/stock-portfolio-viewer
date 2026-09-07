@@ -77,6 +77,37 @@ async function startProvider(handler: Handler, timeoutMs = 120): Promise<void> {
  */
 const LOOP_TIMEOUT_MS = 2_000
 
+/**
+ * The whole-question deadline the one case about that bound imposes (Bug #352).
+ *
+ * The number that matters is not the deadline itself but the **two margins around it**, because a
+ * round is sent under whichever of the transport bound and the question's remaining time is nearer
+ * (`aiGateway.ts`, `Math.min(timeoutMs(), remaining)`). So the deadline has to be wide enough that
+ * the first round finishes well inside it, *and* the loop has to be out of time by the time that
+ * round comes back — otherwise a second round goes out carrying the deadline's crumbs as its own
+ * transport bound, and a socket that loses that race settles as `not_responding`. That is the state
+ * this file exists to keep apart from `incomplete` (DDR-0022 divides them by recovery; DDR-0111
+ * adds `incomplete`), so the flake read as a regression in the mapping rather than as jitter.
+ *
+ * It was 120ms against a fixed 80ms sleep: **both** margins were 40ms, over a real socket, on a
+ * machine running the other 105 test files — roughly one full-suite run in four came back
+ * `not_responding`. A second is wide enough that a localhost round trip cannot plausibly fill it,
+ * and the tool double below **measures** instead of sleeping, so the loop is out of time when it
+ * returns however loaded the machine is. Neither bound is weakened: the transport deadline stays
+ * `LOOP_TIMEOUT_MS`, still the larger of the two and still the one the stall cases fire.
+ */
+const QUESTION_DEADLINE_MS = 1_000
+
+/**
+ * How far past the deadline the tool double waits before returning, and how often it looks.
+ *
+ * The overshoot covers the gap between the clock this test starts and the one `complete` starts —
+ * a key lookup and a URL parse, but a scheduling hiccup in there would otherwise come out of the
+ * margin rather than out of the deadline.
+ */
+const DEADLINE_OVERSHOOT_MS = 250
+const DEADLINE_POLL_MS = 25
+
 /** Reply with a well-formed completion carrying `text`. */
 const answering =
   (text: string, extra: Record<string, unknown> = {}): Handler =>
@@ -969,11 +1000,18 @@ describe('the bounds on a question', () => {
    * cannot bound a question that makes N requests; this one can, and says the total it bounded.
    */
   it('stops a loop that outlives the whole-question deadline, naming the wait', async () => {
-    await startProvider(alwaysAsking, 5_000)
-    process.env['OPENAI_QUESTION_TIMEOUT_MS'] = '120'
+    await startProvider(alwaysAsking, LOOP_TIMEOUT_MS)
+    process.env['OPENAI_QUESTION_TIMEOUT_MS'] = String(QUESTION_DEADLINE_MS)
 
+    const askedAt = Date.now()
     const result = await looping(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 80))
+      // Waiting **by measurement, not for a span** (Bug #352). What is being asserted is that a
+      // loop which outlives the deadline stops in a named state; a fixed sleep only *probably*
+      // outlives it once the CPU is contended, and the round that then goes out is bounded by
+      // whatever is left of the deadline rather than by the deadline itself.
+      while (Date.now() - askedAt < QUESTION_DEADLINE_MS + DEADLINE_OVERSHOOT_MS) {
+        await new Promise((resolve) => setTimeout(resolve, DEADLINE_POLL_MS))
+      }
       return 'a report'
     })
 
