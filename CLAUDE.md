@@ -253,7 +253,8 @@ import `@services`/`@repositories`/`@db`/`@main`/`electron`, services may not im
 - **`better-sqlite3` is native**, rebuilt for Electron by the `postinstall` hook. On an ABI
   mismatch: `npm install` or `npx electron-rebuild -f -w better-sqlite3`.
 - **Runtime DB vs tooling DB** — the app opens `app.getPath('userData')/portfolio.db` and applies
-  migrations on launch; drizzle-kit (`db:*`) runs *outside* Electron against `./local.dev.db`.
+  migrations on launch; drizzle-kit (`db:*`) runs *outside* Electron against `./local.dev.db`
+  (override: `DATABASE_URL`).
 - **A fresh clone needs `.env`** (copy `.env.example`), and **two mechanisms read it.**
   electron-vite inlines `MAIN_VITE_*` / `PRELOAD_VITE_*` / `RENDERER_VITE_*` at **build** time —
   its `loadEnv` reads *those prefixes and no others* and assigns nothing to `process.env`.
@@ -590,17 +591,9 @@ one external dependency is the IBKR Client Portal Gateway.
 
 **Avoid adding dependencies without clear long-term value.**
 
-## Commands
+## CI
 
-```bash
-# package.json lists the scripts, and they do what their names say. What it does NOT tell you:
-
-npm install            # postinstall: electron-rebuild for better-sqlite3 (native)
-npm run test:e2e       # builds first, then Playwright launches the built app
-npm run db:migrate     # applies to ./local.dev.db, NOT the app's DB (override: DATABASE_URL)
-```
-
-**CI** runs exactly `lint`, `typecheck`, `test` and `build` on every push to `main` and every PR (Node 24, Ubuntu); Playwright is **intentionally
+Runs exactly `lint`, `typecheck`, `test` and `build` on every push to `main` and every PR (Node 24, Ubuntu); Playwright is **intentionally
 excluded** (needs a display server). Run all four, plus `test:e2e` locally, before opening a PR.
 
 ## Testing
