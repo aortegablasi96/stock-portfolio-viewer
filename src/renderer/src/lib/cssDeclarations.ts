@@ -54,6 +54,11 @@ function normalize(text: string): string {
  * Quoted strings are skipped so a `content: '}'` or a `syntax: '<length>'` cannot desynchronise
  * the brace stack. `@property` and `@keyframes` bodies are walked like any other block — their
  * declarations are still declarations, and the keyframe selector (`86%`) becomes part of the key.
+ *
+ * A declaration is closed by `;` **or by its block's `}`**, because the semicolon is optional on
+ * the last one. `app.css` currently writes all 1,530 of them with it, so this scanner's answer is
+ * unchanged today; what it buys is that a rule added without one cannot slip past a guard in
+ * silence (Bug #360).
  */
 export function scanDeclarations(css: string): CssDeclaration[] {
   const source = stripComments(css)
@@ -88,6 +93,11 @@ export function scanDeclarations(css: string): CssDeclaration[] {
     }
 
     if (char === '}') {
+      // A block's last declaration may leave its semicolon off — CSS does not require one, and a
+      // guard built on this scanner would then stop seeing that declaration while still passing
+      // (Bug #360). Emitted before the stack pops, so it is named by the block it was written in.
+      const last = toDeclaration(buffer, stack, line)
+      if (last !== null) declarations.push(last)
       stack.pop()
       buffer = ''
       continue

@@ -91,4 +91,42 @@ describe('scanDeclarations', () => {
   it('finds no declarations in a stylesheet of only comments', () => {
     expect(scanDeclarations('/* gap: 1rem; */')).toEqual([])
   })
+
+  /**
+   * The semicolon is optional on a block's last declaration, and a guard that cannot see one is a
+   * guard that passes while the thing it protects has moved (Bug #360).
+   *
+   * `app.css` writes all 1,530 of its declarations with the semicolon, so this changes nothing
+   * about what the stylesheet reports today — which is exactly why it needs its own test rather
+   * than relying on the real file to exercise it. Verified against the case that found it: with
+   * this dropped, `contrast.test.ts`'s `--neg-text` guard passes on a rule declaring
+   * `fill: var(--neg-text)` with no trailing semicolon.
+   */
+  it('reads a last declaration that leaves its semicolon off', () => {
+    expect(scanDeclarations('.a {\n  fill: var(--neg-text)\n}')).toEqual([
+      {
+        context: '.a',
+        property: 'fill',
+        value: 'var(--neg-text)',
+        line: 3,
+        key: '.a | fill',
+      },
+    ])
+  })
+
+  it('reads both declarations when only the last one omits its semicolon', () => {
+    const declarations = scanDeclarations('.a {\n  color: red;\n  fill: blue\n}')
+    expect(declarations.map((d) => d.key)).toEqual(['.a | color', '.a | fill'])
+  })
+
+  /** The closing brace of a block that ended properly must not invent an extra declaration. */
+  it('adds nothing at a brace that closes an already-terminated declaration', () => {
+    expect(scanDeclarations('.a {\n  color: red;\n}')).toHaveLength(1)
+  })
+
+  /** A nested block's `}` closes the inner declaration, and names it by the inner selector. */
+  it('names a semicolon-less declaration by the block it was written in', () => {
+    const declarations = scanDeclarations('@media (min-width: 40rem) {\n  .a {\n    gap: 1rem\n  }\n}')
+    expect(declarations.map((d) => d.key)).toEqual(['@media (min-width: 40rem) >> .a | gap'])
+  })
 })
