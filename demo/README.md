@@ -77,8 +77,14 @@ views read them by, and runs in CI: the demo cannot silently rot.
 
 ## What the demo portfolio shows
 
-A EUR-based account opened in October 2024 and funded with about €84,900 over seven
-contributions, worth roughly €93,700 at the end of the last statement.
+A EUR-based account that arrives **already funded**: €68,000 in cash the day before the first
+statement opens, the way a transferred-in account does, then four top-ups of €24,500 between
+them. Worth roughly €107,900 at the end of the last statement.
+
+The opening balance is deliberate. An account that opens at zero gives the app's headline
+"value change %" no denominator, and the tile reads as an em dash. It also has to *dominate* the
+later contributions: that percentage is measured against the opening value, so an account funded
+mostly by top-ups reports a figure that is mathematically true and reads as nonsense.
 
 Nine open positions, spread deliberately wide so every view has something to draw — **eight IBKR
 sectors, six currencies and eight countries**:

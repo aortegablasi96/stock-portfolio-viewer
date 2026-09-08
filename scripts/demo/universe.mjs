@@ -415,13 +415,19 @@ export const INSTRUMENTS = [
  * deliberately ignores — which is the point of having both charts.
  */
 export const DEPOSITS = [
-  { date: '2024-10-01', amount: 22600 },
-  { date: '2025-01-03', amount: 8000 },
-  { date: '2025-05-14', amount: 9000 },
-  { date: '2025-10-02', amount: 14700 },
-  { date: '2025-11-10', amount: 7000 },
-  { date: '2026-02-11', amount: 19600 },
-  { date: '2026-06-15', amount: 4000 },
+  // The opening balance, dated the day BEFORE the first statement, so the account is already
+  // funded when the imported history begins. It is therefore not a transaction in any statement
+  // -- it is the first statement's `startingValue`, which is what IBKR reports for an account
+  // that existed before the export's period. An account that opens at zero leaves the app's
+  // "value change %" with no denominator, and the tile reads as an em dash.
+  { date: '2024-09-30', amount: 68000 },
+  // Top-ups afterwards. Deliberately a small fraction of the opening balance: the headline
+  // value change is measured against that opening, so an account funded mostly by later
+  // contributions reports a percentage that is mathematically true and reads as nonsense.
+  { date: '2025-05-14', amount: 5000 },
+  { date: '2025-10-02', amount: 5000 },
+  { date: '2025-11-10', amount: 5000 },
+  { date: '2026-02-11', amount: 9500 },
 ]
 
 /**
@@ -437,24 +443,24 @@ export const DEPOSITS = [
  * same euro amount. This is not a model portfolio and not advice.
  */
 export const TRADES = [
-  { date: '2024-10-02', symbol: 'ASML', quantity: 8 },
-  { date: '2024-10-02', symbol: 'SAN', quantity: 1200 },
-  { date: '2024-10-03', symbol: 'AAPL', quantity: 25 },
-  { date: '2024-10-04', symbol: 'RIO', quantity: 100 },
-  { date: '2025-02-20', symbol: 'NVDA', quantity: 45 },
-  { date: '2025-05-16', symbol: 'NESN', quantity: 55 },
-  { date: '2025-05-16', symbol: 'XOM', quantity: 45 },
-  { date: '2025-09-04', symbol: 'NVDA', quantity: -45 },
-  { date: '2025-10-06', symbol: 'BCE', quantity: 230 },
-  { date: '2025-10-07', symbol: '7203', quantity: 340 },
-  { date: '2025-11-12', symbol: 'BAYN', quantity: 200 },
-  { date: '2025-12-04', symbol: 'NESN', quantity: 35 },
-  { date: '2026-02-12', symbol: 'SU', quantity: 60 },
-  { date: '2026-03-05', symbol: 'ASML', quantity: 5 },
-  { date: '2026-04-21', symbol: 'BAYN', quantity: -200 },
+  { date: '2024-10-02', symbol: 'ASML', quantity: 13 },
+  { date: '2024-10-02', symbol: 'SAN', quantity: 2450 },
+  { date: '2024-10-03', symbol: 'AAPL', quantity: 40 },
+  { date: '2024-10-04', symbol: 'RIO', quantity: 200 },
+  { date: '2025-02-20', symbol: 'NVDA', quantity: 40 },
+  { date: '2025-05-16', symbol: 'NESN', quantity: 60 },
+  { date: '2025-05-16', symbol: 'XOM', quantity: 60 },
+  { date: '2025-09-04', symbol: 'NVDA', quantity: -40 },
+  { date: '2025-10-06', symbol: 'BCE', quantity: 250 },
+  { date: '2025-10-07', symbol: '7203', quantity: 400 },
+  { date: '2025-11-12', symbol: 'BAYN', quantity: 250 },
+  { date: '2025-12-04', symbol: 'NESN', quantity: 30 },
+  { date: '2026-02-12', symbol: 'SU', quantity: 30 },
+  { date: '2026-03-05', symbol: 'ASML', quantity: 4 },
+  { date: '2026-04-21', symbol: 'BAYN', quantity: -250 },
   { date: '2026-05-13', symbol: 'RIO', quantity: -30 },
-  { date: '2026-06-16', symbol: 'AAPL', quantity: 36 },
-  { date: '2026-07-08', symbol: 'XOM', quantity: 45 },
+  { date: '2026-06-16', symbol: 'AAPL', quantity: 15 },
+  { date: '2026-07-08', symbol: 'XOM', quantity: 40 },
 ]
 
 /** IBKR's per-trade commission, in the trade's currency — a flat fee is close enough. */
