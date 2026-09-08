@@ -31,15 +31,15 @@ export default tseslint.config(
       '*.{js,mjs,ts}',
       '.claude/skills/**/*.mjs',
       'build/**/*.mjs',
-      'scripts/**/*.mjs',
     ],
     languageOptions: {
       globals: { ...globals.node },
     },
   },
   {
-    // Playwright E2E runs in Node; its page.evaluate callbacks touch window.
-    files: ['e2e/**/*.{ts,tsx}'],
+    // Playwright E2E runs in Node; its page.evaluate callbacks touch window. So does the demo
+    // seeder, which drives the built app the same way to load its data without a human clicking.
+    files: ['e2e/**/*.{ts,tsx}', 'scripts/**/*.mjs'],
     languageOptions: {
       globals: { ...globals.node, ...globals.browser },
     },

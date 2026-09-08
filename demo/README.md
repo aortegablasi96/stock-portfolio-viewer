@@ -48,17 +48,27 @@ IBKR_GATEWAY_URL=http://localhost:5055 npm run dev
 For a longer-lived setup, put `IBKR_GATEWAY_URL=http://localhost:5055` in `.env` instead and
 restart the app. A real OS environment variable wins over the file either way.
 
-**4 — Import the history.** Flex → Import, and choose **all three** files from `demo/flex/`
-(the picker is multi-select). Order does not matter to the app, but oldest-first is the owner's
-own workflow.
+**4 — Load the data.** One command does the lot — import, sectors, and the investor profile:
 
-The 2024 quarter is small and easy to skip; don't. It holds the opening purchases, and the
-Dividends view reconstructs share counts from imported trades — without it, a payment is divided
-by only the shares bought later and the per-share figure it prints is one that never existed.
+```bash
+npm run build          # the seeder drives the built app, not the dev server
+npm run demo:seed      # add -- --replace to overwrite an existing database
+```
 
-**5 — Fill in sectors.** Allocation → Sector → **Classify from IBKR**. Sectors are not in a Flex
-export; the app reads them from the gateway on demand and caches them, so this is one click
-against the fake gateway and then it stays done.
+It refuses to overwrite a database that is already there, and it ends any running Electron
+instance (driving the app from Playwright does that — see the `run-app` skill), so seed first and
+launch second.
+
+By hand instead, if you prefer to show the import itself:
+
+- **Flex → Import**, and choose **all three** files from `demo/flex/` (the picker is
+  multi-select). Order does not matter to the app, but oldest-first is the owner's own workflow.
+  The 2024 quarter is small and easy to skip; don't. It holds the opening purchases, and the
+  Dividends view reconstructs share counts from imported trades — without it a payment is divided
+  by only the shares bought later, and the per-share figure it prints is one that never existed.
+- **Allocation → Sector → Classify from IBKR.** Sectors are not in a Flex export; the app reads
+  them from the gateway on demand and caches them, so this is one click and then it stays done.
+- **The investor profile** is thirteen ranges in a form. That one is worth letting the seeder do.
 
 ## Regenerating
 
@@ -100,6 +110,30 @@ sectors, six currencies and eight countries**:
 | BCE | Communications | CAD | CA |
 | Toyota Motor | Consumer, Cyclical | JPY | JP |
 | Schneider Electric | Industrial | EUR | FR |
+
+### The investor profile
+
+The demo ships with a profile already saved (`scripts/demo/profile.mjs`), because "is this
+portfolio balanced?" has no answer without one — balance is a relation between a portfolio and an
+intent, and the app never invents the intent.
+
+It is written to sit **mostly** on top of the portfolio, with a few deliberate gaps. A profile
+that matched every weight would say "balanced" eight times and leave the assistant nothing to
+discuss; one that matched nothing would make the app look like it disapproves of the portfolio it
+was handed. What is left over:
+
+| | |
+| --- | --- |
+| **Technology 29% against a 18–25% target** | the two largest holdings are both tech; the app proposes trimming 4.0pp across ASML and Apple, proportionally |
+| **Consumer, Non-cyclical 7% against 10–16%** | underweight defensives, which contradicts the owner's own "defensive sectors" style tag — the other half of the same conversation |
+| **GBP 13% against 5–12%** | one mining holding grew into more sterling than intended, the kind of drift nobody notices because nothing about the position changed |
+| **Communications has no target at all** | not a target of zero — no policy, so its 7% surfaces as untargeted rather than as a breach |
+
+Asset class and position size are left blank on purpose, so the **app's own baseline** speaks for
+them and the demo shows both standards side by side, each attributed: cash at 9% inside the
+baseline's 15% ceiling, ASML at 15% above its 10% position ceiling, no bonds held — and the
+baseline's sector check *stood down*, because the owner set sector targets there. Three checks
+applied, one deferred, is ADR-0012 on one screen.
 
 Two more were closed — one at a gain in 2025, one at a loss in 2026 — and a partial sale is held
 long enough to realise as a long-term gain, so the realized-gains report has both ends to list.

@@ -18,6 +18,7 @@
     "db:studio": "drizzle-kit studio",
     "demo:generate": "node scripts/demo/generate.mjs",
     "demo:gateway": "node scripts/demo/gateway.mjs",
+    "demo:seed": "node scripts/demo/seed.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "npm run build && playwright test",
