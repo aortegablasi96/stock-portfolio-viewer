@@ -18,6 +18,9 @@ import {
   CURRENCIES,
   DEPOSITS,
   INSTRUMENTS,
+  MARKET_BETA_REFERENCE,
+  MARKET_DIPS,
+  MAX_SEGMENT_DAYS,
   PRICE_EPOCH,
   STATEMENTS,
   TRADES,
@@ -103,13 +106,14 @@ export function simulate() {
     const noise = [0]
     for (let i = 1; i < days.length; i += 1) noise.push(noise[i - 1] + step * normal(rand))
 
-    const controls = [
+    const declared = [
       { index: 0, logReturn: 0 },
       ...spec.path.map((point) => ({
         index: dayIndex.get(onOrAfter(day(point.date))) ?? days.length - 1,
         logReturn: Math.log(1 + point.return),
       })),
     ]
+    const controls = pinDown(withMarketShape(declared, spec.beta ?? 0))
 
     const path = new Map()
     path.set(days[0], round(spec.start, dp))
@@ -130,6 +134,64 @@ export function simulate() {
     return path
   }
 
+  /** Linear interpolation of a control list's log-return at an arbitrary trading-day index. */
+  function interpolate(controls, index) {
+    for (let c = 1; c < controls.length; c += 1) {
+      const a = controls[c - 1]
+      const b = controls[c]
+      if (index > b.index) continue
+      const span = b.index - a.index
+      const frac = span > 0 ? (index - a.index) / span : 1
+      return a.logReturn + (b.logReturn - a.logReturn) * frac
+    }
+    return controls[controls.length - 1].logReturn
+  }
+
+  /**
+   * Bend every path through the same market-wide dips (`MARKET_DIPS`), scaled by the
+   * instrument's own volatility so a defensive name falls less than a cyclical one.
+   *
+   * The dips are *declared* rather than left to the noise, and that is the whole point. The
+   * app's return curve is not drawn from the value series: within each statement period it
+   * takes the shape of the daily MTM series and stretches it onto IBKR's reported TWR for that
+   * period (`buildReturnSeries`). Anything the MTM path does that the period total does not is
+   * therefore amplified — a wander that peaks at twice its own endpoint draws a curve that
+   * overshoots to twice the period's return and falls back. Undeclared noise is exactly such a
+   * wander. Declared shape is not: it is in both series, so the two charts agree.
+   */
+  function withMarketShape(controls, beta) {
+    if (beta === 0 || MARKET_DIPS.length === 0) return controls
+    const dips = MARKET_DIPS.map((dip) => {
+      const index = dayIndex.get(onOrAfter(day(dip.date))) ?? days.length - 1
+      return { index, logReturn: interpolate(controls, index) + Math.log(1 + dip.depth * beta) }
+    }).filter((dip) => dip.index > 0 && dip.index < days.length - 1)
+
+    return [...controls, ...dips].sort((a, b) => a.index - b.index)
+  }
+
+  /**
+   * Split any control segment longer than a month, interpolating the targets.
+   *
+   * The noise between two control points is a bridge, so its wander grows with the gap: over a
+   * year it drifts far from the trend and, for the reason above, the return curve amplifies
+   * that drift. Pinning the path down monthly bounds the wander to a month's worth without
+   * flattening it — the daily texture is untouched, only its ability to accumulate.
+   */
+  function pinDown(controls) {
+    const out = [controls[0]]
+    for (let c = 1; c < controls.length; c += 1) {
+      const a = controls[c - 1]
+      const b = controls[c]
+      const pieces = Math.max(1, Math.ceil((b.index - a.index) / MAX_SEGMENT_DAYS))
+      for (let p = 1; p < pieces; p += 1) {
+        const index = a.index + Math.round(((b.index - a.index) * p) / pieces)
+        out.push({ index, logReturn: a.logReturn + ((b.logReturn - a.logReturn) * p) / pieces })
+      }
+      out.push(b)
+    }
+    return out
+  }
+
   /** currency → day → rate into base. */
   const fx = new Map()
   for (const [code, spec] of Object.entries(CURRENCIES)) {
@@ -147,7 +209,7 @@ export function simulate() {
     prices.set(
       inst.symbol,
       bridge(
-        { ...inst, start: inst.price },
+        { ...inst, start: inst.price, beta: inst.vol / MARKET_BETA_REFERENCE },
         hash(`px:${inst.symbol}`),
         tick(inst.currency),
         currencyFloor(inst.currency),

@@ -71,6 +71,7 @@ function reading() {
     const value = round(p.position * price, 2)
     return {
       conid: p.conid,
+      ticker: p.ticker,
       contractDesc: p.contractDesc,
       position: p.position,
       mktPrice: price,

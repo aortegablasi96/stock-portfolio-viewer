@@ -631,9 +631,12 @@ function buildGatewayState() {
     const cost = h.lots.reduce((s, l) => s + l.quantity * l.costPerShare, 0)
     return {
       conid: h.instrument.conid,
-      // No `ticker`: this gateway build does not send one, so `symbol` and `description` both
-      // fall back to `contractDesc` (DDR-0066/0088). The fake gateway reproduces that rather
-      // than being more generous than the real one.
+      // `ticker` and `contractDesc` are sent as two different things, so the holdings table has
+      // a symbol for its ticker column and a name for its company column. The owner's own
+      // gateway build sends no `ticker`, which makes `symbol` fall back to `contractDesc` and
+      // leaves the company column empty (DDR-0066/0088) — faithful, and a worse demo. IBKR's
+      // API does carry the field; this reproduces a gateway that populates it.
+      ticker: h.instrument.symbol,
       contractDesc: h.instrument.name,
       position: h.quantity,
       mktPrice: round(h.price, 4),

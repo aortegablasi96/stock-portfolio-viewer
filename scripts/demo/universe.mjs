@@ -62,7 +62,45 @@ export const PRICE_EPOCH = '2024-09-30'
  * final statement's end date, so nothing is left to drift.
  *
  * The targets are invented, and deliberately not a replay of what these companies did.
+ *
+ * Two constants below bound how far the noise may wander between those points, and they exist
+ * because of how the app draws its **return** curve. That curve is not the value series: inside
+ * each statement period the app takes the shape of the daily mark-to-market series and stretches
+ * it onto IBKR's reported TWR for the period. So any excursion the MTM path makes that the
+ * period total does not is amplified — a path that peaks at twice its own endpoint draws a
+ * return curve that overshoots to twice the period's return and falls back, and daily noise
+ * that accumulates over a year draws a curve that jitters by more than the year's return. The
+ * demo shipped like that once and it read as a broken chart.
  */
+
+/**
+ * The longest run of trading days a path may go without being pinned to a target. A month, so
+ * the bridge's wander is a month's worth rather than a year's, without touching daily texture.
+ */
+export const MAX_SEGMENT_DAYS = 21
+
+/**
+ * Market-wide setbacks every instrument bends through, as a fraction below the trend it would
+ * otherwise have followed on that date. Declared rather than left to the noise: a drawdown in
+ * the data is in *both* the value curve and the MTM series, so the two charts agree about it.
+ *
+ * Each is written as three points — a slide, a trough, and most of a recovery — because a
+ * single point would draw a V, and drawdowns are not V-shaped.
+ */
+export const MARKET_DIPS = [
+  { date: '2025-04-30', depth: -0.03 },
+  { date: '2025-06-27', depth: -0.09 },
+  { date: '2025-08-15', depth: -0.03 },
+  { date: '2026-05-29', depth: -0.03 },
+  { date: '2026-07-15', depth: -0.06 },
+  { date: '2026-08-14', depth: -0.02 },
+]
+
+/**
+ * The volatility a dip's declared depth is quoted against. An instrument bends by
+ * `depth × vol / MARKET_BETA_REFERENCE`, so Nestlé gives up less than ASML in the same week.
+ */
+export const MARKET_BETA_REFERENCE = 0.16
 
 /**
  * Currencies held, and how each moves against the base. `rate` is units of base (EUR) per unit
@@ -73,7 +111,7 @@ export const CURRENCIES = {
   EUR: { rate: 1, vol: 0, path: [] },
   USD: {
     rate: 0.9184,
-    vol: 0.06,
+    vol: 0.036,
     path: [
       { date: '2024-12-31', return: 0.008 },
       { date: '2025-12-31', return: -0.012 },
@@ -82,7 +120,7 @@ export const CURRENCIES = {
   },
   CHF: {
     rate: 1.0642,
-    vol: 0.045,
+    vol: 0.027,
     path: [
       { date: '2024-12-31', return: 0.004 },
       { date: '2025-12-31', return: 0.018 },
@@ -91,7 +129,7 @@ export const CURRENCIES = {
   },
   GBP: {
     rate: 1.1735,
-    vol: 0.05,
+    vol: 0.03,
     path: [
       { date: '2024-12-31', return: 0.002 },
       { date: '2025-12-31', return: -0.004 },
@@ -100,7 +138,7 @@ export const CURRENCIES = {
   },
   CAD: {
     rate: 0.6421,
-    vol: 0.05,
+    vol: 0.03,
     path: [
       { date: '2024-12-31', return: -0.005 },
       { date: '2025-12-31', return: -0.014 },
@@ -109,7 +147,7 @@ export const CURRENCIES = {
   },
   JPY: {
     rate: 0.006134,
-    vol: 0.08,
+    vol: 0.048,
     path: [
       { date: '2024-12-31', return: 0.01 },
       { date: '2025-12-31', return: 0.026 },
@@ -163,7 +201,7 @@ export const INSTRUMENTS = [
     industry: 'Technology',
     category: 'Semiconductors',
     price: 682,
-    vol: 0.31,
+    vol: 0.186,
     path: [
       { date: '2024-12-31', return: 0.05 },
       { date: '2025-12-31', return: 0.22 },
@@ -182,7 +220,7 @@ export const INSTRUMENTS = [
     industry: 'Financial',
     category: 'Banks',
     price: 4.52,
-    vol: 0.22,
+    vol: 0.132,
     path: [
       { date: '2024-12-31', return: -0.02 },
       { date: '2025-12-31', return: 0.19 },
@@ -201,7 +239,7 @@ export const INSTRUMENTS = [
     industry: 'Technology',
     category: 'Computers',
     price: 232.5,
-    vol: 0.24,
+    vol: 0.144,
     path: [
       { date: '2024-12-31', return: 0.06 },
       { date: '2025-12-31', return: 0.18 },
@@ -220,7 +258,7 @@ export const INSTRUMENTS = [
     industry: 'Basic Materials',
     category: 'Mining',
     price: 48.6,
-    vol: 0.23,
+    vol: 0.138,
     path: [
       { date: '2024-12-31', return: 0.03 },
       { date: '2025-12-31', return: 0.05 },
@@ -239,7 +277,7 @@ export const INSTRUMENTS = [
     industry: 'Consumer, Non-cyclical',
     category: 'Food',
     price: 84.2,
-    vol: 0.15,
+    vol: 0.09,
     path: [
       { date: '2024-12-31', return: 0.01 },
       { date: '2025-12-31', return: 0.02 },
@@ -258,7 +296,7 @@ export const INSTRUMENTS = [
     industry: 'Energy',
     category: 'Oil&Gas',
     price: 118.4,
-    vol: 0.22,
+    vol: 0.132,
     path: [
       { date: '2024-12-31', return: -0.04 },
       { date: '2025-12-31', return: -0.1 },
@@ -279,7 +317,7 @@ export const INSTRUMENTS = [
     industry: 'Communications',
     category: 'Telecommunications',
     price: 45.3,
-    vol: 0.19,
+    vol: 0.114,
     path: [
       { date: '2024-12-31', return: 0.04 },
       { date: '2025-12-31', return: 0.06 },
@@ -300,7 +338,7 @@ export const INSTRUMENTS = [
     industry: 'Consumer, Cyclical',
     category: 'Auto Manufacturers',
     price: 2604,
-    vol: 0.2,
+    vol: 0.12,
     path: [
       { date: '2024-12-31', return: 0.02 },
       { date: '2025-12-31', return: 0.14 },
@@ -319,7 +357,7 @@ export const INSTRUMENTS = [
     industry: 'Industrial',
     category: 'Electrical Components',
     price: 231.4,
-    vol: 0.21,
+    vol: 0.126,
     path: [
       { date: '2024-12-31', return: 0.03 },
       { date: '2025-12-31', return: 0.12 },
