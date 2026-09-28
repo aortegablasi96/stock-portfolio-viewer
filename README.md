@@ -30,6 +30,24 @@ is (ADR-0009, ADR-0012).
 **The model never produces a figure.** Every number in an answer is computed by a service and only
 *phrased* by the model (DDR-0111).
 
+## Tech stack
+
+| Area | Technology |
+| --- | --- |
+| Desktop shell | Electron 33 (sandboxed, context-isolated, frameless) on Node ≥ 22.12 |
+| Build & packaging | electron-vite 2 on Vite 5, electron-builder |
+| Language | TypeScript 5.7 |
+| UI | React 18, in-house primitives modelled on shadcn/ui's API (the package itself was declined, ADR-0008), plain CSS with design tokens |
+| Charts & maps | dependency-free inline SVG charts; mapbox-gl 3 for the Allocation map |
+| Storage | SQLite via better-sqlite3, Drizzle ORM, drizzle-kit migrations |
+| Validation & IPC | Zod schemas as the single contract between main, preload and renderer |
+| Data sources | IBKR Client Portal Gateway (live); IBKR Flex Query XML, parsed with fast-xml-parser (history) |
+| AI assistant | OpenAI `gpt-4.1-mini`, over plain HTTPS from the main process only |
+| Quality | ESLint 9 + typescript-eslint, Vitest 4 (unit), Playwright (end-to-end) |
+| CI | GitHub Actions: lint, typecheck, test and build on every push and PR |
+
+There are only seven runtime dependencies, and adding more is **deliberately avoided**.
+
 ## Getting started
 
 Requires **Node ≥ 22.12** (CI runs 24 — `@electron/rebuild` and `node-abi` need it).
